@@ -40,7 +40,7 @@ export default function Sidebar() {
 
                         <NavLink to="/crm" className={linkClass}>
                             <Users size={18} />
-                            CRM – No Conformidades
+                            Gestión de las Reclamaciones
                         </NavLink>
 
                         <NavLink to="/safety" className={linkClass}>

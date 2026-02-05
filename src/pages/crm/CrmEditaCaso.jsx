@@ -151,9 +151,6 @@ export default function CrmEditaCaso() {
                     <section className="rounded-3xl border border-white/10 bg-neutral-100 p-6 shadow-lg text-neutral-800">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-semibold">Datos generales</h2>
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide text-neutral-800">
-                                Identificación
-                            </span>
                         </div>
                         <div className="grid gap-4 md:grid-cols-3 text-neutral-900">
                             <Field label="Chasis" disabled value={form.chasis} />
@@ -191,28 +188,13 @@ export default function CrmEditaCaso() {
                     <section className="rounded-3xl border border-white/10 bg-neutral-100 p-6 shadow-lg">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-semibold">Fechas y origen</h2>
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide text-neutral-800">
-                                Seguimiento
-                            </span>
                         </div>
                         <div className="grid gap-4 md:grid-cols-3">
                             <Field
-                                label="Fecha"
+                                label="Fecha Atencion"
                                 type="date"
                                 value={form.fecha}
                                 onChange={(v) => handleChange("fecha", v)}
-                            />
-                            <Field
-                                label="Fecha servicio"
-                                type="date"
-                                value={form.fecha_serv}
-                                onChange={(v) => handleChange("fecha_serv", v)}
-                            />
-                            <Field
-                                label="Fecha entrega"
-                                type="date"
-                                value={form.fecha_entrega}
-                                onChange={(v) => handleChange("fecha_entrega", v)}
                             />
                             <Field
                                 label="Fecha reclamación"
@@ -232,6 +214,11 @@ export default function CrmEditaCaso() {
                                 options={recopTipos}
                                 onChange={(v) => handleChange("recop", v)}
                             />
+
+                            <Field
+                                label="Evidencia"
+                                type="file"
+                            />
                         </div>
                     </section>
 
@@ -239,9 +226,6 @@ export default function CrmEditaCaso() {
                     <section className="rounded-3xl border border-white/10 bg-neutral-100 p-6 shadow-lg">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-semibold">Análisis</h2>
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide text-neutral-800">
-                                RCA
-                            </span>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
                             <Field
@@ -256,7 +240,7 @@ export default function CrmEditaCaso() {
                                 onChange={(v) => handleChange("causa", v)}
                             />
                             <Select
-                                label="Raíz (depende de causa)"
+                                label="Raíz"
                                 value={form.raiz}
                                 options={raicesDisponibles}
                                 placeholder={
@@ -276,9 +260,6 @@ export default function CrmEditaCaso() {
                     <section className="rounded-3xl border border-white/10 bg-neutral-100 p-6 shadow-lg">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-semibold">Contactos</h2>
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide text-neutral-800">
-                                Comunicación
-                            </span>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
                             <Field

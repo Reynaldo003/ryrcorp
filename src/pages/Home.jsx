@@ -37,7 +37,7 @@ export default function Home() {
             <div className="grid gap-4 md:grid-cols-3">
                 <Card
                     icon={ClipboardList}
-                    title="CRM – No Conformidades"
+                    title="Gestión de las Reclamaciones"
                     desc="Registro y seguimiento de clientes no satisfechos, casos, responsables y evidencias."
                     to="/crm"
                 />
