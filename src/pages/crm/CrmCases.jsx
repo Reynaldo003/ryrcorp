@@ -94,10 +94,10 @@ export default function CrmCases() {
             causa: "Gestion de Clientes",
             raiz: "Falta de comunicación proactiva con los clientes",
             descripcion: "Cliente reporta ruido al encender.",
-            contacto1: "Ana Pérez",
-            contacto2: "—",
+            contacto1: "03/02/2026 Sin respuesta",
+            contacto2: "08/02/2026 Proximo a contactar",
             contacto3: "—",
-            contacto_cierre: "Carlos Ruiz",
+            contacto_cierre: "",
         },
         {
             chasis: "NC-00123",
@@ -116,7 +116,7 @@ export default function CrmCases() {
             causa: "Metodo",
             raiz: "Procesos complejos",
             descripcion: "Retraso en la entrega del vehículo.",
-            contacto1: "Luis Gómez",
+            contacto1: "28/01/2026 Satisfactorio",
             contacto2: "—",
             contacto3: "—",
             contacto_cierre: "—",
@@ -138,8 +138,8 @@ export default function CrmCases() {
             causa: "Gestion de Clientes",
             raiz: "Mal uso de CRM",
             descripcion: "Se entregó sin papeles completos.",
-            contacto1: "María López",
-            contacto2: "—",
+            contacto1: "30/01/2026 Sin respuesta",
+            contacto2: "05/02/2026 Finalizado",
             contacto3: "—",
             contacto_cierre: "—",
         }
@@ -187,7 +187,7 @@ export default function CrmCases() {
                         </p>
                     </div>
 
-                    <button className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+                    <button className="rounded-2xl bg-[#131E5C] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
                         + Nuevo caso
                     </button>
                 </div>
@@ -253,9 +253,7 @@ export default function CrmCases() {
                             const raiz = selectedRaices[x.chasis] || "Selecciona raíz";
                             const raizOpciones = opciones_raiz[causa] || [];
                             return (
-                                <tr key={x.chasis}
-                                    onClick={() => handleRowClick(x)}
-                                    className="hover:bg-slate-100 cursor-pointer">
+                                <tr key={x.chasis} onDoubleClick={() => handleRowClick(x)} className="hover:bg-slate-100 cursor-pointer">
                                     <td className="px-4 py-3 font-medium">{x.chasis}</td>
                                     <td className="px-4 py-3">{x.cliente}</td>
 
