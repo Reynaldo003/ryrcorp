@@ -118,7 +118,7 @@ export default function CrmEditaCaso() {
                 <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
                     <div className="text-neutral-100">
                         <p className="text-xs uppercase tracking-[0.2em]">
-                            CRM · No Conformidades
+                            Gestión de las Reclamaciones
                         </p>
                         <h1 className="text-2xl font-semibold">Editar caso {form.chasis}</h1>
                     </div>
