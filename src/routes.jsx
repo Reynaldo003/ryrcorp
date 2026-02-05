@@ -1,4 +1,3 @@
-// src/routes.jsx
 import React from "react";
 import { createBrowserRouter } from "react-router-dom";
 
@@ -8,12 +7,11 @@ import SafetyDashboard from "./pages/SafetyDashboard";
 import ProjectsDashboard from "./pages/ProjectsDashboard";
 import NotFound from "./pages/NotFound";
 
-// CRM layout + pages
 import CrmLayout from "./pages/crm/CrmLayout";
 import CrmOverview from "./pages/crm/CrmOverview";
 import CrmCases from "./pages/crm/CrmCases";
 import CrmClients from "./pages/crm/CrmClients";
-import CrmActions from "./pages/crm/CrmActions";
+import CrmEditaCaso from "./pages/crm/CrmEditaCaso";
 import CrmSettings from "./pages/crm/CrmSettings";
 
 export const router = createBrowserRouter([
@@ -27,12 +25,8 @@ export const router = createBrowserRouter([
                 path: "crm",
                 element: <CrmLayout />,
                 children: [
-                    { index: true, element: <CrmOverview /> },
-                    { path: "casos", element: <CrmCases /> },
-                    { path: "clientes", element: <CrmClients /> },
-                    { path: "clientesVir", element: <CrmClients /> },
-                    //  { path: "acciones", element: <CrmActions /> },
-                    // { path: "configuracion", element: <CrmSettings /> },
+                    { index: true, element: <CrmCases /> },
+                    { path: "resumen", element: <CrmOverview /> },
                 ],
             },
             { path: "safety", element: <SafetyDashboard /> },
@@ -41,6 +35,7 @@ export const router = createBrowserRouter([
             { path: "*", element: <NotFound /> },
         ],
     },
+    { path: "/crm/casos/:chasis/editar", element: <CrmEditaCaso /> },
 
     { path: "*", element: <NotFound /> },
 ]);

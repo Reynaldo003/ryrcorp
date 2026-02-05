@@ -60,7 +60,6 @@ const PIE_COLORS = ["#0f172a", "#334155", "#64748b", "#94a3b8"];
 function KpiCard({ label, value, delta, up }) {
     return (
         <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            {/* Destello visual (impacto) */}
             <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-slate-900/10 blur-3xl" />
             <div className="pointer-events-none absolute -left-24 -bottom-24 h-56 w-56 rounded-full bg-slate-500/10 blur-3xl" />
 
@@ -116,25 +115,6 @@ export default function CrmOverview() {
     return (
 
         <div className="space-y-4">
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-[#0f2866] p-6 text-white shadow-sm">
-                <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-                <div className="pointer-events-none absolute -left-24 -bottom-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs">
-                            <Sparkles size={14} />
-                            Dashboard operativo
-                        </div>
-                        <h2 className="mt-3 text-xl font-semibold">Visión rápida del CRM</h2>
-                        <p className="mt-2 max-w-2xl text-sm text-white/80">
-                            KPIs para tomar decisiones sin entrar a reportes pesados.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* KPIs */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {kpis.map((k) => (
                     <KpiCard key={k.label} {...k} />

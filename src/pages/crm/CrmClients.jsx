@@ -72,7 +72,6 @@ export default function CrmClients() {
 
     return (
         <div className="grid gap-4 lg:grid-cols-3">
-            {/* Lista */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
