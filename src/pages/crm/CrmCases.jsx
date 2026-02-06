@@ -490,9 +490,6 @@ function Modal({ open, title, onClose, children, footer }) {
                             <div className="truncate text-base font-extrabold text-white">
                                 {title}
                             </div>
-                            <div className="text-xs text-white/75">
-                                Edita la información del caso sin salir de la tabla.
-                            </div>
                         </div>
 
                         <button
