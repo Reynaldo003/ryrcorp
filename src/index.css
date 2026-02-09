@@ -6,13 +6,13 @@
 
 @font-face {
   font-family: "fuenteVW";
-  src: url("fonts/VWText-Light.otf") format("opentype");
+  src: url("/public/fonts/VWText-Light.otf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: "fuenteVW_Header";
-  src: url("fonts/VWHead-Bold.otf") format("opentype");
+  src: url("/public/fonts/VWHead-Bold.otf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
