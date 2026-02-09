@@ -6,11 +6,11 @@ import Home from "./pages/Home";
 import SafetyDashboard from "./pages/SafetyDashboard";
 import ProjectsDashboard from "./pages/ProjectsDashboard";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/LoginRegistro/LoginRegistro";
 
 import CrmLayout from "./pages/crm/CrmLayout";
 import CrmOverview from "./pages/crm/CrmOverview";
 import CrmCases from "./pages/crm/CrmCases";
-import CrmClients from "./pages/crm/CrmClients";
 import CrmEditaCaso from "./pages/crm/CrmEditaCaso";
 import CrmSettings from "./pages/crm/CrmSettings";
 
@@ -36,6 +36,6 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "/crm/casos/:chasis/editar", element: <CrmEditaCaso /> },
-
+    { path: "/login", element: <Login /> },
     { path: "*", element: <NotFound /> },
 ]);

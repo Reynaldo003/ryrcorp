@@ -21,7 +21,7 @@ export default function CrmTopNav() {
     return (
         <header className="w-full">
             <div
-                className="relative overflow-hidden rounded-3xl shadow-lg"
+                className="relative overflow-hidden rounded-lg shadow-lg"
                 style={{ backgroundColor: BRAND_BLUE }}
             >
                 <div className="pointer-events-none absolute inset-0">
@@ -43,9 +43,7 @@ export default function CrmTopNav() {
                             </p>
                         </div>
 
-                        {/* Tabs + Logos */}
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
-                            {/* Tabs */}
                             <nav className="flex w-full gap-2 sm:w-auto">
                                 {tabs.map((t) => {
                                     const Icon = t.icon;
@@ -55,7 +53,7 @@ export default function CrmTopNav() {
                                             key={t.href}
                                             to={t.href}
                                             className={[
-                                                "group inline-flex flex-1 items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition",
+                                                "group inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
                                                 "border",
                                                 active
                                                     ? "border-white/35 bg-white/20 text-white shadow-sm"
@@ -74,13 +72,13 @@ export default function CrmTopNav() {
                                 <img
                                     src="/vw_white.png"
                                     alt="VW"
-                                    className="h-8 w-auto opacity-95"
+                                    className="h-10 w-auto opacity-95"
                                     loading="lazy"
                                 />
                                 <img
                                     src="/ryr.png"
                                     alt="RYR"
-                                    className="h-8 w-auto opacity-95"
+                                    className="h-10 w-auto opacity-95"
                                     loading="lazy"
                                 />
                             </div>
