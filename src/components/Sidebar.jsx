@@ -1,9 +1,9 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Building2, LayoutDashboard, ShieldCheck, KanbanSquare, Users } from "lucide-react";
+import { Globe, LayoutDashboard, ShieldCheck, KanbanSquare, Users } from "lucide-react";
 
 const linkBase =
-    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition";
+    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition";
 
 const linkClass = ({ isActive }) =>
     isActive
@@ -20,7 +20,7 @@ export default function Sidebar() {
                             <img src="/ryr.png" alt="" />
                         </div>
                         <div className="font-vw-header leading-tight">
-                            <div className="text-sm font-semibold">Grupo Automotriz</div>
+                            <div className="text-sm font-semibold">Grupo Automotriz R&R</div>
                             <div className="text-xs text-slate-500">Volkswagen</div>
                         </div>
                     </div>
@@ -29,10 +29,10 @@ export default function Sidebar() {
                 {/* Nav */}
                 <nav className="px-4">
                     <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Módulos
+                        Herramientas
                     </div>
 
-                    <div className="font-vw-header flex flex-col gap-1">
+                    <div className="flex flex-col gap-1">
                         <NavLink to="/" end className={linkClass}>
                             <LayoutDashboard size={18} />
                             Inicio
@@ -41,6 +41,11 @@ export default function Sidebar() {
                         <NavLink to="/crm" className={linkClass}>
                             <Users size={18} />
                             Gestión de las Reclamaciones
+                        </NavLink>
+
+                        <NavLink to="/crm_digitales" className={linkClass}>
+                            <Globe size={18} />
+                            Gestión de Prospectos Digitales
                         </NavLink>
 
                         <NavLink to="/safety" className={linkClass}>

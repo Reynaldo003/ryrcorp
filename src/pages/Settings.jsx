@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { ArrowLeft, ClipboardList, ShieldCheck, KanbanSquare } from "lucide-react";
+import { Link } from "react-router-dom";
 
 function Section({ title, desc, children }) {
     return (
@@ -18,13 +20,19 @@ function Pill({ text }) {
     );
 }
 
-export default function CrmSettings() {
+export default function Settings() {
     const [states] = useState(["Nuevo", "En análisis", "En ejecución", "Cerrado"]);
     const [priorities] = useState(["Alta", "Media", "Baja"]);
     const [types] = useState(["Retraso", "Daño", "Calidad", "Atención", "Documentación"]);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-12 max-w-6xl mx-auto py-10 px-4 items-center justify-center">
+            <Link
+                to="/"
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+            >
+                <ArrowLeft size={14} /> Volver
+            </Link>
             <Section
                 title="Catálogos"
                 desc="Aquí se definen opciones que usan todos los usuarios. (Demo sin guardado)."

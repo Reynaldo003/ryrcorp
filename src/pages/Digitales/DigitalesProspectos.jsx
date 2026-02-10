@@ -1,6 +1,6 @@
 // src/pages/CrmCases.jsx
 import { useMemo, useState, useRef, useEffect } from "react";
-import { Plus, Search, X, Save, Star, User, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, Flag, FileText, Tag, Wrench, Car, Package, Building2, Building, FileImage, FileVideo, FileSpreadsheet, File, Eye, Trash2, UploadCloud, CheckCheckIcon } from "lucide-react";
+import { Plus, Search, X, Save, Star, User, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, MessageSquareShare, Flag, FileText, Tag, Wrench, Car, Package, Building2, Building, FileImage, FileVideo, FileSpreadsheet, File, Eye, Trash2, UploadCloud, CheckCheckIcon } from "lucide-react";
 import JDPOWER from "/jdpower.svg";
 import WAP from "/whatsapp.svg";
 import FB from "/facebook.svg";
@@ -606,7 +606,7 @@ function Field({ label, icon: Icon, children }) {
     );
 }
 
-export default function CrmCases() {
+export default function DigitalesProspectos() {
     const [cases, setCases] = useState([]);
     const DEALERS = [
         "VW Cordoba",
@@ -822,12 +822,15 @@ export default function CrmCases() {
                 raiz: draft.raiz,
                 obs_contacto_1: draft.obs_contacto_1,
                 fecha_contacto_1: draft.fecha_contacto_1 || null,
+
                 obs_contacto_2: draft.obs_contacto_2,
                 fecha_contacto_2: draft.fecha_contacto_2 || null,
+
                 obs_contacto_3: draft.obs_contacto_3,
                 fecha_contacto_3: draft.fecha_contacto_3 || null,
                 obs_contacto_cierre: draft.obs_contacto_cierre,
                 fecha_contacto_cierre: draft.fecha_contacto_cierre || null,
+
             };
 
             let saved;
@@ -840,9 +843,12 @@ export default function CrmCases() {
                 saved = await api.updateCaso(draft.id_exp, payload);
             }
 
+            // subir docs si hay
             if (localFiles.length) {
                 await api.uploadDocs(saved.id_exp, localFiles);
             }
+
+            // refrescar lista
             const updated = await api.listCasos();
             setCases(updated);
 
@@ -860,27 +866,26 @@ export default function CrmCases() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
-                        Casos
+                        Prospectos
                     </h2>
                     <p className="text-sm text-slate-400">
-                        Doble clic para editar el caso.
+                        Doble clic para editar la informacion del prospecto.
                     </p>
                 </div>
 
                 <button
                     onClick={openCreate}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm  text-white shadow-sm"
-                    style={{ backgroundColor: BRAND_BLUE }}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm bg-[#131E5C] hover:bg-[#131E5C]/80 text-white shadow-sm"
                 >
                     <Plus className="h-4 w-4" />
-                    Nuevo caso
+                    Nuevo Prospecto
                 </button>
             </div>
 
             <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03]  p-3">
                 <div className="grid gap-3 md:grid-cols-12">
                     <div className="md:col-span-4">
-                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#131E5C] px-3 py-2">
+                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#131E5C] hover:bg-[#131E5C]/90 px-3 py-2">
                             <Search className="h-4 w-4 text-white" />
                             <input
                                 value={filters.q}
@@ -891,7 +896,7 @@ export default function CrmCases() {
                             {filters.q ? (
                                 <button
                                     onClick={() => setFilters((p) => ({ ...p, q: "" }))}
-                                    className="rounded-lg p-1 bg-white text-[#131E5C] hover:bg-white/10 hover:text-white"
+                                    className="rounded-lg p-1 bg-white text-[#131E5C] hover:bg-white/80 hover:text-red-500"
                                     aria-label="Limpiar búsqueda"
                                 >
                                     <X className="h-4 w-4" />
@@ -904,7 +909,7 @@ export default function CrmCases() {
                         <select
                             value={filters.agencia}
                             onChange={(e) => setFilters((p) => ({ ...p, agencia: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-[#131E5C] px-3 py-2 text-sm text-white outline-none"
+                            className="w-full rounded-lg border border-white/10 bg-[#131E5C]  hover:bg-[#131E5C]/80 px-3 py-2 text-sm text-white outline-none"
                         >
                             {dealers.map((d) => (
                                 <option key={d} value={d} className="bg-neutral-100 text-[#131E5C]">
@@ -918,7 +923,7 @@ export default function CrmCases() {
                         <select
                             value={filters.estado}
                             onChange={(e) => setFilters((p) => ({ ...p, estado: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-[#131E5C] px-3 py-2 text-sm text-white outline-none"
+                            className="w-full rounded-lg border border-white/10 bg-[#131E5C] hover:bg-[#131E5C]/80 px-3 py-2 text-sm text-white outline-none"
                         >
                             {estados.map((s) => (
                                 <option key={s} value={s} className="bg-neutral-100 text-[#131E5C]">
@@ -965,12 +970,14 @@ export default function CrmCases() {
                                         onClick={() => toggleSort("fecha_reclamacion")}
                                         className="inline-flex items-center gap-1 text-xs font-bold"
                                     >
-                                        Fecha de Reclamacion
+                                        Fecha de Registro
                                         <span className="opacity-60">
                                             {sort.key === "fecha_reclamacion" ? (sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />) : <ArrowUpDown className="h-4" />}
                                         </span>
                                     </button>
                                 </th>
+                                <th className="px-4 py-3">Business</th>
+                                <th className="px-4 py-3">Asesor Digital</th>
                                 <th className="px-4 py-3">
                                     <button
                                         type="button"
@@ -985,6 +992,9 @@ export default function CrmCases() {
                                 </th>
 
                                 <th className="px-4 py-3">Descripción del Problema</th>
+                                <th className="px-4 py-3">
+                                    Contacto
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-black/30">
@@ -1008,6 +1018,16 @@ export default function CrmCases() {
                                     </td>
                                     <td className="px-4 py-3 text-[#131E5C]">
                                         <span className="line-clamp-2">{row.problema}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-[#131E5C]">
+                                        <span className="line-clamp-2">
+                                            {row.telefono}
+                                            <button
+                                                type="button"
+                                            >
+                                                <MessageSquareShare />
+                                            </button>
+                                        </span>
                                     </td>
                                 </tr>
                             ))}
@@ -1040,6 +1060,7 @@ export default function CrmCases() {
                     </table>
                 </div>
             </div>
+
             {/*Mobile */}
             <div className="grid gap-3 lg:hidden">
                 {sorted.map((row) => (

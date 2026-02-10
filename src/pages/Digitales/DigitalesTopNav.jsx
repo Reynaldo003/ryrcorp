@@ -1,17 +1,18 @@
-// src/components/CrmTopNav.jsx
+// src/pages/Digitales/DigitalesTopNav.jsx
 import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LayoutGrid, ClipboardList, Sparkles, ChartLine } from "lucide-react";
+import { LayoutGrid, Phone, Contact, ChartNoAxesCombined } from "lucide-react";
 
 const BRAND_BLUE = "#131E5C";
 
-export default function CrmTopNav() {
+export default function DigitalesTopNav() {
     const location = useLocation();
 
     const tabs = useMemo(
         () => [
-            { label: "Casos", href: "/crm", icon: ClipboardList },
-            { label: "Resumen", href: "/crm/resumen", icon: ChartLine },
+            { label: "Prospectos", href: "/crm_digitales", icon: Contact },
+            { label: "Contacto", href: "/crm_digitales/contacto", icon: Phone },
+            { label: "Resumen", href: "/crm_digitales/resumen", icon: ChartNoAxesCombined },
         ],
         []
     );
@@ -35,16 +36,16 @@ export default function CrmTopNav() {
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
                                 <h1 className="font-vw-header truncate text-lg font-extrabold text-white sm:text-xl">
-                                    Gestión de las Reclamaciones
+                                    Gestión de Prospectos Digitales
                                 </h1>
                             </div>
                             <p className="mt-1 text-sm text-white/80">
-                                Registro, seguimiento y cierre de casos de no conformidad.
+                                Registro y seguimiento de prospectos digitales.
                             </p>
                         </div>
 
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
-                            <nav className="flex w-full gap-2 sm:w-auto">
+                            <nav className="flex w-full gap-2 sm:w-auto overflow-x-auto">
                                 {tabs.map((t) => {
                                     const Icon = t.icon;
                                     const active = isActive(t.href);
@@ -53,7 +54,7 @@ export default function CrmTopNav() {
                                             key={t.href}
                                             to={t.href}
                                             className={[
-                                                "group inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                                                "group inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm transition",
                                                 "border",
                                                 active
                                                     ? "border-white/35 bg-white/20 text-white shadow-sm"

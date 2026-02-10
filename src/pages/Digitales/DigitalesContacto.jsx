@@ -606,7 +606,7 @@ function Field({ label, icon: Icon, children }) {
     );
 }
 
-export default function CrmCases() {
+export default function DigitalesProspectos() {
     const [cases, setCases] = useState([]);
     const DEALERS = [
         "VW Cordoba",
@@ -822,12 +822,15 @@ export default function CrmCases() {
                 raiz: draft.raiz,
                 obs_contacto_1: draft.obs_contacto_1,
                 fecha_contacto_1: draft.fecha_contacto_1 || null,
+
                 obs_contacto_2: draft.obs_contacto_2,
                 fecha_contacto_2: draft.fecha_contacto_2 || null,
+
                 obs_contacto_3: draft.obs_contacto_3,
                 fecha_contacto_3: draft.fecha_contacto_3 || null,
                 obs_contacto_cierre: draft.obs_contacto_cierre,
                 fecha_contacto_cierre: draft.fecha_contacto_cierre || null,
+
             };
 
             let saved;
@@ -840,9 +843,12 @@ export default function CrmCases() {
                 saved = await api.updateCaso(draft.id_exp, payload);
             }
 
+            // subir docs si hay
             if (localFiles.length) {
                 await api.uploadDocs(saved.id_exp, localFiles);
             }
+
+            // refrescar lista
             const updated = await api.listCasos();
             setCases(updated);
 
@@ -860,482 +866,19 @@ export default function CrmCases() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
-                        Casos
+                        Lista de Prospectos
                     </h2>
-                    <p className="text-sm text-slate-400">
-                        Doble clic para editar el caso.
-                    </p>
-                </div>
-
-                <button
-                    onClick={openCreate}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm  text-white shadow-sm"
-                    style={{ backgroundColor: BRAND_BLUE }}
-                >
-                    <Plus className="h-4 w-4" />
-                    Nuevo caso
-                </button>
-            </div>
-
-            <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03]  p-3">
-                <div className="grid gap-3 md:grid-cols-12">
-                    <div className="md:col-span-4">
-                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#131E5C] px-3 py-2">
-                            <Search className="h-4 w-4 text-white" />
-                            <input
-                                value={filters.q}
-                                onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
-                                placeholder="Buscar por dealer, cliente, estado o descripción…"
-                                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/70"
-                            />
-                            {filters.q ? (
-                                <button
-                                    onClick={() => setFilters((p) => ({ ...p, q: "" }))}
-                                    className="rounded-lg p-1 bg-white text-[#131E5C] hover:bg-white/10 hover:text-white"
-                                    aria-label="Limpiar búsqueda"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <select
-                            value={filters.agencia}
-                            onChange={(e) => setFilters((p) => ({ ...p, agencia: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-[#131E5C] px-3 py-2 text-sm text-white outline-none"
-                        >
-                            {dealers.map((d) => (
-                                <option key={d} value={d} className="bg-neutral-100 text-[#131E5C]">
-                                    {d}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <select
-                            value={filters.estado}
-                            onChange={(e) => setFilters((p) => ({ ...p, estado: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-[#131E5C] px-3 py-2 text-sm text-white outline-none"
-                        >
-                            {estados.map((s) => (
-                                <option key={s} value={s} className="bg-neutral-100 text-[#131E5C]">
-                                    {s}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="md:col-span-2">
-                        <button
-                            onClick={resetFilters}
-                            className="inline-flex items-center gap-2 rounded-lg border w-full border-white/10 bg-[#131E5C] px-3 py-2 text-sm font-semibold text-white/85 hover:bg-[#131E5C]/85"
-                        >
-                            <X className="h-4 w-4" />
-                            Limpiar filtros
-                        </button>
-                    </div>
                 </div>
             </div>
 
-            <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
-                <div className="overflow-auto">
-                    <table className="min-w-full text-left text-sm">
-                        <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
-                            <tr>
-                                <th className="px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("agencia")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Dealer
-                                        <span className="opacity-60">
-                                            {sort.key === "agencia" ? (sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />) : <ArrowUpDown className="h-4" />}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="px-4 py-3">Cliente</th>
-                                <th className="px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("fecha_reclamacion")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Fecha de Reclamacion
-                                        <span className="opacity-60">
-                                            {sort.key === "fecha_reclamacion" ? (sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />) : <ArrowUpDown className="h-4" />}
-                                        </span>
-                                    </button>
-                                </th>
-                                <th className="px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("estado")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Estado
-                                        <span className="opacity-60">
-                                            {sort.key === "estado" ? (sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />) : <ArrowUpDown className="h-4" />}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="px-4 py-3">Descripción del Problema</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-black/30">
-                            {sorted.map((row) => (
-                                <tr
-                                    key={row.id_exp}
-                                    onDoubleClick={() => openEdit(row)}
-                                    onContextMenu={(e) => onRowContextMenu(e, row)}
-                                    className="cursor-pointer hover:bg-white/[0.04]"
-                                    title="Doble clic para editar"
-                                >
-                                    <td className="px-4 py-3 font-semibold text-[#131E5C]">
-                                        {row.agencia}
-                                    </td>
-                                    <td className="px-4 py-3 text-[#131E5C]">{row.cliente_nombre + " " + row.cliente_apellidos}</td>
-                                    <td className="px-4 py-3 text-[#131E5C]">
-                                        {row.fecha_reclamacion}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <BadgeEstado value={row.estado} />
-                                    </td>
-                                    <td className="px-4 py-3 text-[#131E5C]">
-                                        <span className="line-clamp-2">{row.problema}</span>
-                                    </td>
-                                </tr>
-                            ))}
-                            {ctxMenu.open && ctxMenu.row ? (
-                                <div
-                                    className="fixed z-[9999]"
-                                    style={{ left: ctxMenu.x, top: ctxMenu.y }}
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <div className="w-48 overflow-hidden rounded-xl border border-black/10 bg-white shadow-2xl">
-                                        <button
-                                            className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
-                                            onClick={() => eliminarCaso(ctxMenu.row)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                            Eliminar
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : null}
-
-                            {sorted.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-4 py-10 text-center text-[#131E5C]">
-                                        No hay resultados con esos filtros.
-                                    </td>
-                                </tr>
-                            ) : null}
-                        </tbody>
-                    </table>
+            <div className="flex grid-cols-2 mb-4 rounded-lg border border-white/10 bg-white/[0.03]  p-3">
+                <div className="relative bg-[#131E5C] w-full max-w-96 px-4 py-1 rounded-l-lg">
+                    <p className="text-white">Chats</p>
+                </div>
+                <div className="relative bg-[#131E5C] text-white px-4 py-1 rounded-r-lg w-full">
+                    Conversacion
                 </div>
             </div>
-            {/*Mobile */}
-            <div className="grid gap-3 lg:hidden">
-                {sorted.map((row) => (
-                    <button
-                        key={row.id_exp}
-                        onClick={() => openEdit(row)}
-                        className="text-left rounded-3xl border border-black/10 bg-white p-4 shadow-sm hover:bg-slate-50"
-                    >
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <div className="truncate text-sm font-extrabold text-[#131E5C]">
-                                    {row.cliente_nombre + " " + row.cliente_apellidos}
-                                </div>
-                                <div className="mt-1 text-xs text-slate-600">
-                                    {row.agencia} • {row.fecha_reclamacion}
-                                </div>
-                            </div>
-                            <BadgeEstado value={row.estado} />
-                        </div>
-
-                        <div className="mt-3 text-sm text-slate-700 line-clamp-3">
-                            {row.problema}
-                        </div>
-
-                        <div className="mt-3 text-xs text-slate-500">
-                            Toca para editar
-                        </div>
-                    </button>
-                ))}
-
-                {sorted.length === 0 ? (
-                    <div className="rounded-3xl border border-black/10 bg-white p-10 text-center text-slate-600">
-                        No hay resultados con esos filtros.
-                    </div>
-                ) : null}
-            </div>
-
-
-            {/* ---------------- MODAL EDITAR ---------------- */}
-            <Modal
-                open={openModal}
-                title={mode === "create" ? "Nuevo caso" : `Editar caso • ${draft?.id_exp}`}
-                onClose={closeModal}
-                footer={
-                    <>
-                        <button
-                            onClick={closeModal}
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-red-400 px-4 py-2 text-sm font-semibold text-white/90 hover:text-white hover:bg-red-600"
-                        >
-                            <X className="h-4 w-4" />
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={save}
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 bg-[#131E5C]/85 py-2 text-sm font-bold text-white/90 hover:bg-[#131E5C] hover:text-white"
-                        >
-                            <Save className="h-4 w-4" />
-                            Guardar cambios
-                        </button>
-                    </>
-                }
-            >
-                {!draft ? null : (
-                    <div className="grid gap-3 md:grid-cols-2">
-
-                        <Field label="Chasis" icon={Building}>
-                            <input
-                                value={draft.chasis || ""}
-                                onChange={(e) => setDraft(p => ({ ...p, chasis: e.target.value }))}
-                                className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                            />
-                        </Field>
-                        <Field label="Dealer" icon={Building2}>
-                            <select
-                                value={draft.agencia || ""}
-                                onChange={(e) => setDraft(p => ({ ...p, agencia: e.target.value }))}
-                                className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                            >
-                                <option value="" disabled>Selecciona un dealer...</option>
-                                {DEALERS.map((d) => (
-                                    <option key={d} value={d}>{d}</option>
-                                ))}
-                            </select>
-                        </Field>
-                        <div className="md:col-span-2">
-                            <Field label="Cliente" icon={User}>
-                                <div className="grid gap-3 md:grid-cols-2">
-                                    <div>
-                                        <div className="mb-1 text-xs font-bold text-[#131E5C]">Nombre(s)</div>
-                                        <input
-                                            value={draft.cliente_nombre || ""}
-                                            onChange={(e) => setDraft(p => ({ ...p, cliente_nombre: e.target.value }))}
-                                            className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <div className="mb-1 text-xs font-bold text-[#131E5C]">Apellidos</div>
-                                        <input
-                                            value={draft.cliente_apellidos || ""}
-                                            onChange={(e) => setDraft(p => ({ ...p, cliente_apellidos: e.target.value }))}
-                                            className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                        />
-                                    </div>
-                                </div>
-                            </Field>
-                        </div>
-
-                        <Field label="Fecha de Reclamación" icon={CalendarDays}>
-                            <input
-                                type="date"
-                                value={draft.fecha_reclamacion || ""}
-                                onChange={(e) =>
-                                    setDraft((p) => ({ ...p, fecha_reclamacion: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                            />
-                        </Field>
-                        <Field label="Fecha de Atencion" icon={CalendarDays}>
-                            <input
-                                type="date"
-                                value={draft.fecha_atencion || ""}
-                                onChange={(e) => setDraft(p => ({ ...p, fecha_atencion: e.target.value }))}
-                                className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                            />
-                        </Field>
-                        <Field label="Estado" icon={Flag}>
-                            <select
-                                value={draft.estado || ""}
-                                onChange={(e) => setDraft((p) => ({ ...p, estado: e.target.value }))}
-                                className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                            >
-                                {["1er contacto", "2do contacto", "3er contacto", "Reclamación cerrada"].map((s) => (
-                                    <option key={s} value={s} className="bg-neutral-200">
-                                        {s}
-                                    </option>
-                                ))}
-                            </select>
-                            <div className="mt-2">
-                                <BadgeEstado value={draft.estado} />
-                            </div>
-                        </Field>
-                        <Field label="OS-Expediente" icon={FileText}>
-                            <input
-                                value={draft.os_exp || ""}
-                                onChange={(e) => { setDraft((p) => ({ ...p, os_exp: e.target.value.replace(/\D/g, "") })) }}
-                                className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                            />
-                        </Field>
-                        <div className="md:col-span-2">
-                            <Field label="Descripción del Problema" icon={FileText}>
-                                <textarea
-                                    value={draft.problema || ""}
-                                    onChange={(e) => setDraft(p => ({ ...p, problema: e.target.value }))}
-                                    rows={4}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                            </Field>
-                        </div>
-
-                        <Field label="Origen">
-                            <OrigenPicker
-                                value={draft.origen}
-                                onChange={(v) => setDraft((p) => ({ ...p, origen: v }))}
-                            />
-                        </Field>
-
-                        <Field label="Línea">
-                            <LineaPicker
-                                value={draft.linea}
-                                onChange={(v) => setDraft((p) => ({ ...p, linea: v }))}
-                            />
-                        </Field>
-
-                        <div className="md:col-span-2">
-                            <Field label="Causa / Raíz" icon={FileText}>
-                                <CausaRaiz
-                                    causa={draft.causa}
-                                    raiz={draft.raiz}
-                                    opcionesRaiz={opcionesRaiz}
-                                    onChangeCausa={(v) => setDraft((p) => ({ ...p, causa: v }))}
-                                    onChangeRaiz={(v) => setDraft((p) => ({ ...p, raiz: v }))}
-                                />
-                            </Field>
-
-                        </div>
-                        <div className="md:col-span-2">
-                            <Field label="Documentacion">
-                                <DocumentacionUploader
-                                    files={draft.documentacion || []}
-                                    onChange={(next) => setDraft((p) => ({ ...p, documentacion: next }))}
-                                    onDeleteServerFile={async (idDoc) => {
-                                        await api.deleteDoc(idDoc);
-                                    }}
-                                />
-
-                            </Field>
-                        </div>
-                        <div className="md:col-span-2">
-                            <Field label="Recopilacion del cliente / Calificacion" icon={Star}>
-                                <div className="mb-3">
-                                    <StarRating
-                                        value={draft.calificacion || 0}
-                                        onChange={(val) => setDraft((p) => ({ ...p, calificacion: val }))}
-                                    />
-                                </div>
-
-                                <textarea
-                                    value={draft.recopilacion || ""}
-                                    onChange={(e) => setDraft((p) => ({ ...p, recopilacion: e.target.value }))}
-                                    rows={3}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                    placeholder="Escribe la opinión del cliente..."
-                                />
-                            </Field>
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <Field label="Observaciones Contacto 1" icon={CalendarDays}>
-                                <input
-                                    type="datetime-local"
-                                    value={draft.fecha_contacto_1 || ""}
-                                    onChange={(e) => setDraft(p => ({ ...p, fecha_contacto_1: e.target.value }))}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 my-3 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                                <textarea
-                                    value={draft.obs_contacto_1 || ""}
-                                    onChange={(e) =>
-                                        setDraft((p) => ({ ...p, obs_contacto_1: e.target.value }))
-                                    }
-                                    rows={3}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                            </Field>
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <Field label="Observaciones Contacto 2" icon={CalendarDays}>
-                                <input
-                                    type="datetime-local"
-                                    value={draft.fecha_contacto_2 || ""}
-                                    onChange={(e) => setDraft(p => ({ ...p, fecha_contacto_2: e.target.value }))}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 my-3 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                                <textarea
-                                    value={draft.obs_contacto_2 || ""}
-                                    onChange={(e) =>
-                                        setDraft((p) => ({ ...p, obs_contacto_2: e.target.value }))
-                                    }
-                                    rows={3}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                            </Field>
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <Field label="Observaciones Contacto 3" icon={CalendarDays}>
-                                <input
-                                    type="datetime-local"
-                                    value={draft.fecha_contacto_3 || ""}
-                                    onChange={(e) => setDraft(p => ({ ...p, fecha_contacto_3: e.target.value }))}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 my-3 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                                <textarea
-                                    value={draft.obs_contacto_3 || ""}
-                                    onChange={(e) =>
-                                        setDraft((p) => ({ ...p, obs_contacto_3: e.target.value }))
-                                    }
-                                    rows={3}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                            </Field>
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <Field label="Observaciones Contacto Cierre" icon={CalendarDays}>
-                                <input
-                                    type="datetime-local"
-                                    value={draft.fecha_contacto_cierre || ""}
-                                    onChange={(e) => setDraft(p => ({ ...p, fecha_contacto_cierre: e.target.value }))}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 my-3 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                                <textarea
-                                    value={draft.obs_contacto_cierre || ""}
-                                    onChange={(e) =>
-                                        setDraft((p) => ({ ...p, obs_contacto_cierre: e.target.value }))
-                                    }
-                                    rows={3}
-                                    className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                                />
-                            </Field>
-                        </div>
-
-                    </div>
-                )}
-            </Modal>
         </div >
     );
 }
