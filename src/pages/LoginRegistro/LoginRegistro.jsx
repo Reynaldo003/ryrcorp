@@ -1,6 +1,8 @@
+
 import { useMemo, useState } from "react";
 import { Eye, EyeOff, User, Lock, Mail, Building2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext"; // ajusta el path según tu estructura
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Bouncy } from "ldrs/react";
 import "ldrs/react/Bouncy.css";
@@ -36,6 +38,11 @@ export default function LoginRegistro() {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
+    const { login } = useAuth();
+    const location = useLocation();
+    const from = location.state?.from?.pathname || "/";
+
+
     const [formLogin, setFormLogin] = useState({ usuario: "", contrasena: "" });
     const [formRegistro, setFormRegistro] = useState({
         nombre: "",
@@ -62,6 +69,7 @@ export default function LoginRegistro() {
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
+
         try {
             const res = await fetch(`${API}/conformidad/api/auth/login/`, {
                 method: "POST",
@@ -76,9 +84,10 @@ export default function LoginRegistro() {
                 return;
             }
 
-            localStorage.setItem("token", data.token);
-            localStorage.setItem("usuario", JSON.stringify(data.user));
-            navigate("/");
+            // ✅ aquí está la clave
+            login({ token: data.token, user: data.user });
+
+            navigate(from, { replace: true });
         } catch (err) {
             console.error(err);
             alert("No se pudo iniciar sesión.");
@@ -86,6 +95,7 @@ export default function LoginRegistro() {
             setIsLoading(false);
         }
     };
+
 
     const handleRegistro = async (e) => {
         e.preventDefault();
