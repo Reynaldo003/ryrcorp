@@ -6,7 +6,7 @@ import { Bouncy } from "ldrs/react";
 import "ldrs/react/Bouncy.css";
 
 const BRAND_BLUE = "#131E5C";
-const API = import.meta.env.VITE_API_URL || "https://rhi4i2-ip-187-148-222-77.tunnelmole.net";
+const API = import.meta.env.VITE_API_URL || "https://ryrback-1.onrender.com";
 
 const DEALERS = [
     "VW Cordoba",

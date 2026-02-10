@@ -1,7 +1,5 @@
 // src/lib/api.js
-const API =
-  import.meta.env.VITE_API_URL ||
-  "https://rhi4i2-ip-187-148-222-77.tunnelmole.net";
+const API = import.meta.env.VITE_API_URL || "https://ryrback-1.onrender.com";
 
 async function http(path, { method = "GET", body, headers } = {}) {
   const res = await fetch(`${API}${path}`, { method, body, headers });

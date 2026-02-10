@@ -10,7 +10,7 @@ import PHONE from "/phone.svg";
 import { api } from "../../lib/api";
 
 const BRAND_BLUE = "#131E5C";
-const API = import.meta.env.VITE_API_URL || "https://rhi4i2-ip-187-148-222-77.tunnelmole.net";
+const API = import.meta.env.VITE_API_URL || "https://ryrback-1.onrender.com";
 
 const ImgIcon = (src, alt) => (props) =>
     <img src={src} alt={alt} {...props} />;
