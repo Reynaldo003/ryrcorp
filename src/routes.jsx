@@ -21,10 +21,8 @@ import DigitalesProspectos from "./pages/Digitales/DigitalesProspectos";
 import DigitalesContacto from "./pages/Digitales/DigitalesContacto";
 
 export const router = createBrowserRouter([
-    // Públicas
     { path: "/login", element: <Login /> },
 
-    // Protegidas
     {
         element: <ProtectedLayout />,
         children: [
@@ -55,12 +53,9 @@ export const router = createBrowserRouter([
                     { path: "*", element: <NotFound /> },
                 ],
             },
-
-            // Si /configuracion también debe ser privada, déjala aquí:
             { path: "/configuracion", element: <Settings /> },
         ],
     },
 
-    // Fallback global
     { path: "*", element: <NotFound /> },
 ]);

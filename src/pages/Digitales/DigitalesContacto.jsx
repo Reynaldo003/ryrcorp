@@ -1,884 +1,457 @@
-// src/pages/CrmCases.jsx
-import { useMemo, useState, useRef, useEffect } from "react";
-import { Plus, Search, X, Save, Star, User, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, Flag, FileText, Tag, Wrench, Car, Package, Building2, Building, FileImage, FileVideo, FileSpreadsheet, File, Eye, Trash2, UploadCloud, CheckCheckIcon } from "lucide-react";
-import JDPOWER from "/jdpower.svg";
-import WAP from "/whatsapp.svg";
-import FB from "/facebook.svg";
-import ENCUESTA from "/encuesta.svg";
-import SPEAK from "/speak.svg";
-import PHONE from "/phone.svg";
-import { api } from "../../lib/api";
+// src/pages/ProspectosWhatsapp.jsx
+import { useMemo, useState } from "react";
+import {
+    Search,
+    Filter,
+    Star,
+    StarOff,
+    CheckCheck,
+    Check,
+    Phone,
+    Video,
+    MoreVertical,
+    Paperclip,
+    Smile,
+    Send,
+    ArrowLeft,
+    User,
+    Building2,
+    Tag,
+    Clock,
+} from "lucide-react";
 
 const BRAND_BLUE = "#131E5C";
-const API = import.meta.env.VITE_API_URL || "https://ryrback-1.onrender.com";
 
-const ImgIcon = (src, alt) => (props) =>
-    <img src={src} alt={alt} {...props} />;
+// --------- Utils UI
+function cls(...a) {
+    return a.filter(Boolean).join(" ");
+}
 
-function StarRating({ value = 0, onChange, step = 0.5 }) {
-    const v = Number(value || 0);
-
-    const setByClick = (e, i) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const half = x < rect.width / 2 ? 0.5 : 1;
-        const next = Math.max(0, Math.min(5, i + half));
-        onChange?.(next);
-    };
-
-    const stars = [0, 1, 2, 3, 4];
+function Avatar({ name = "?" }) {
+    const initials = name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((x) => x[0]?.toUpperCase())
+        .join("");
 
     return (
-        <div className="flex items-center gap-1">
-            {stars.map((i) => {
-                const fill = Math.max(0, Math.min(1, v - i));
-                return (
-                    <button
-                        type="button"
-                        key={i}
-                        onClick={(e) => setByClick(e, i)}
-                        className="relative h-8 w-8"
-                        title={`${(i + 1).toFixed(1)} estrellas`}
-                    >
-                        <Star className="h-8 w-8 text-slate-300" />
-
-                        <span
-                            className="absolute inset-0 overflow-hidden"
-                            style={{ width: `${fill * 100}%` }}
-                        >
-                            <Star className="h-8 w-8 text-yellow-500 fill-yellow-400" />
-                        </span>
-                    </button>
-                );
-            })}
-
-            <span className="ml-2 text-sm font-bold text-[#131E5C]">
-                {v.toFixed(1)}
-            </span>
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm">
+            <span className="text-sm font-extrabold text-[#131E5C]">{initials || "?"}</span>
         </div>
     );
-}
-
-const opcionesRaiz = {
-    "Gestion de Clientes": [
-        "Respuestas lentas a las quejas",
-        "Falta de seguimiento postventa",
-        "Encuestas de satisfacción poco frecuentes o inexistentes",
-        "Mala gestión de la experiencia del cliente en el showroom",
-        "Falta de personal dedicado a la atención al cliente",
-        "Tiempos de espera prolongados para servicios de mantenimiento",
-        "Falta de comunicación proactiva con los clientes",
-        "Carencia de programas de fidelización",
-        "Problemas en la gestión de citas y servicios programados",
-        "Deficiencias en la personalización del servicio",
-        "Falta de transparencia en la información proporcionada a los clientes",
-        "Deficiencias en la gestión de la imagen y reputación",
-        "Falta de atención a los comentarios y reseñas",
-        "Problemas en la gestión de garantías",
-        "Falta de ofertas y promociones atractivas",
-        "Dificultad para contactar con el servicio al cliente",
-        "Horarios de atención limitados",
-        "Mal uso de CRM",
-        "Problemas en la gestión de reclamaciones y devoluciones"
-    ],
-    Metodo: [
-        "Procesos complejos",
-        "Procesos poco explícitos",
-        "Incumplimiento en la ejecución",
-        "Procesos limitados",
-        "Falta de documentación y registro",
-        "Falta de integración entre departamentos",
-        "Inconsistencias en la aplicación",
-        "Procesos no optimizados",
-        "Falta de estandarización en la atención al cliente",
-        "Ausencia de procedimientos claros para la gestión de garantías",
-        "Falta de protocolos para la entrega de vehículos nuevos",
-        "Falta de automatización en procesos administrativos",
-        "Retrasos en la tramitación de documentos",
-        "Ineficiencia en la programación de citas",
-        "Problemas en la gestión de la información del cliente",
-        "Falta de procedimientos de emergencia",
-        "Deficiencias en el control de calidad",
-        "Falta de auditorías internas periódicas",
-        "Problemas en la implementación de sistemas ERP",
-        "Deficiencias en la gestión de proyectos",
-        "Falta de revisiones periódicas",
-        "Procedimientos redundantes",
-        "Falta de actualización de manuales operativos",
-        "Uso ineficiente de recursos",
-        "Falta de un sistema de gestión de calidad total"
-    ],
-    Materiales: [
-        "Insuficiencia de materiales",
-        "Materiales en mal estado",
-        "Materiales descalibrados",
-        "Difícil disponibilidad",
-        "Costos elevados",
-        "Variabilidad en la calidad",
-        "Obsolescencia",
-        "Falta de stock de piezas de alta demanda",
-        "Problemas con proveedores no confiables",
-        "Almacenamiento inadecuado de piezas",
-        "Pérdidas por deterioro",
-        "Falta de control de inventarios",
-        "Gestión ineficaz de devoluciones",
-        "Uso de materiales no homologados",
-        "Falta de piezas específicas para ciertos modelos",
-        "Problemas en la logística de entrega",
-        "Retrasos en la recepción de materiales importados",
-        "Problemas en la aduana",
-        "Roturas durante el transporte",
-        "Embalajes inadecuados",
-        "Falta de previsión en pedidos",
-        "Fallos en la trazabilidad de piezas"
-    ],
-    Infraestructura: [],
-    "Talento Humano": [
-        "Falta de capacitación",
-        "Falta de adiestramiento",
-        "Problemas de comunicación",
-        "Desmotivación",
-        "Conflictos laborales",
-        "Alta rotación de personal",
-        "Falta de reconocimiento",
-        "Cargas de trabajo excesivas",
-        "Ausentismo",
-        "Falta de liderazgo efectivo",
-        "Insuficiente personal de ventas durante picos de demanda",
-        "Falta de técnicos especializados en postventa",
-        "Ausencia de programas de desarrollo profesional y mentoría",
-        "Evaluación de desempeño inadecuada",
-        "Falta de incentivos y bonificaciones",
-        "Falta de claridad en las expectativas laborales",
-        "Escasa participación de los empleados en la toma de decisiones",
-        "Deficiencias en la gestión del talento",
-        "Falta de programas de bienestar laboral",
-        "Problemas con la gestión del tiempo",
-        "Personal de nuevo ingreso",
-        "Problemas de retención de talento clave",
-        "Baja moral del equipo",
-        "Falta de diversidad e inclusión",
-        "Problemas con la conciliación laboral y familiar",
-        "Ausencia de un plan de carrera claro",
-        "Falta de apoyo psicológico",
-        "Falta de programas de salud y seguridad laboral"]
-};
-const lineaMeta = {
-    Ventas: { Icon: Tag, label: "Ventas" },
-    Servicio: { Icon: Wrench, label: "Servicio" },
-    Usados: { Icon: Car, label: "Usados" },
-    Refacciones: { Icon: Package, label: "Refacciones" },
-    General: { Icon: Building2, label: "General" },
-};
-
-const origenMeta = {
-    "JD Power": { Icon: ImgIcon(JDPOWER, "JD Power"), label: "JD Power" },
-    Whatsapp: { Icon: ImgIcon(WAP, "Whatsapp"), label: "WhatsApp" },
-    Facebook: { Icon: ImgIcon(FB, "Facebook"), label: "Facebook" },
-    "Encuesta Interna": { Icon: ImgIcon(ENCUESTA, "Encuesta"), label: "Encuesta" },
-    "Reclamacion Verbal": { Icon: ImgIcon(SPEAK, "Verbal"), label: "Verbal" },
-    "Llamada de Calidad": { Icon: ImgIcon(PHONE, "Llamada"), label: "Llamada" },
-};
-
-const estadoMeta = {
-    "1er contacto": { label: "1er contacto", cls: "bg-blue-600 text-white" },
-    "2do contacto": { label: "2do contacto", cls: "bg-yellow-500 text-black" },
-    "3er contacto": { label: "3er contacto", cls: "bg-red-600 text-white" },
-    "Reclamación cerrada": { label: "Reclamación cerrada", cls: "bg-emerald-600 text-white" },
-};
-
-function getFileKind(file) {
-    const name = (file?.name || "").toLowerCase();
-    const type = (file?.type || "").toLowerCase();
-
-    const isImage = type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name);
-    const isVideo = type.startsWith("video/") || /\.(mp4|webm|ogg|mov|m4v)$/.test(name);
-    const isPdf = type === "application/pdf" || name.endsWith(".pdf");
-    const isExcel =
-        type.includes("spreadsheet") ||
-        /\.(xlsx|xls|csv)$/.test(name);
-
-    if (isImage) return "image";
-    if (isVideo) return "video";
-    if (isPdf) return "pdf";
-    if (isExcel) return "excel";
-    return "other";
-}
-
-function formatBytes(bytes = 0) {
-    if (!bytes) return "—";
-    const units = ["B", "KB", "MB", "GB"];
-    let i = 0;
-    let v = bytes;
-    while (v >= 1024 && i < units.length - 1) {
-        v /= 1024;
-        i++;
-    }
-    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 function BadgeEstado({ value }) {
     const map = {
-        "1er contacto": "bg-blue-600/15 text-blue-800 font-bold border-blue-300/25",
-        "2do contacto": "bg-yellow-500/15 text-yellow-800 border-yellow-300/25",
-        "3er contacto": "bg-red-500/15 text-red-800 border-red-300/25",
-        "reclamación cerrada": "bg-emerald-500/15 text-emerald-800 border-emerald-300/25",
+        nuevo: "bg-blue-600/15 text-blue-800 border-blue-300/25",
+        contactado: "bg-yellow-500/15 text-yellow-800 border-yellow-300/25",
+        cotizacion: "bg-purple-500/15 text-purple-800 border-purple-300/25",
+        cerrado: "bg-emerald-500/15 text-emerald-800 border-emerald-300/25",
+        perdido: "bg-red-500/15 text-red-800 border-red-300/25",
     };
 
-    const cls =
-        map[String(value || "").toLowerCase()] ||
-        "bg-white/10 text-white/85 border-white/20";
-
+    const key = String(value || "").toLowerCase();
     return (
-        <span className={["inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold", cls].join(" ")}>
-            {value || "Sin estado"}
+        <span
+            className={cls(
+                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold",
+                map[key] || "bg-slate-500/10 text-slate-700 border-slate-200"
+            )}
+        >
+            {value || "—"}
         </span>
     );
 }
 
-function DocumentacionUploader({ files, onChange, onDeleteServerFile }) {
-    const inputRef = useRef(null);
-    const [preview, setPreview] = useState(null);
-
-    const onPick = () => inputRef.current?.click();
-
-    const onFilesSelected = (e) => {
-        const picked = Array.from(e.target.files || []);
-        if (!picked.length) return;
-
-        const next = picked.map((f) => ({
-            id: crypto.randomUUID(),
-            name: f.name || f.nombre_original,
-            size: f.size || 0,
-            type: f.type || f.mime || "",
-            kind: f.kind || getFileKind({ name: f.name || f.nombre_original, type: f.type || f.mime }),
-            url: URL.createObjectURL(f),
-            _raw: f,
-        }));
-
-        onChange([...(files || []), ...next]);
-        e.target.value = "";
-    };
-
-    const removeFile = async (file) => {
-        if (file?.url?.startsWith("blob:")) URL.revokeObjectURL(file.url);
-
-        onChange((files || []).filter((x) => (x.id || x.id_doc) !== (file.id || file.id_doc)));
-
-        if (file?._fromServer && file?.id_doc && onDeleteServerFile) {
-            await onDeleteServerFile(file.id_doc);
-        }
-    };
-    const iconByKind = (kind) => {
-        if (kind === "image") return FileImage;
-        if (kind === "video") return FileVideo;
-        if (kind === "pdf") return FileText;
-        if (kind === "excel") return FileSpreadsheet;
-        return File;
-    };
+function MessageBubble({ mine, text, time, status = "sent" }) {
+    // status: sent | delivered | read
+    const StatusIcon =
+        status === "read" ? CheckCheck : status === "delivered" ? CheckCheck : Check;
 
     return (
-        <div className="space-y-3">
-            <input
-                ref={inputRef}
-                type="file"
-                multiple
-                accept="image/*,video/*,.pdf,.xlsx,.xls,.csv"
-                className="hidden"
-                onChange={onFilesSelected}
-            />
-
-            <button
-                type="button"
-                onClick={onPick}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-white shadow-lg px-4 py-3 text-sm font-semibold text-[#131E5C] hover:bg-neutral-50"
-            >
-                <UploadCloud className="h-4 w-4" />
-                Adjuntar archivos
-            </button>
-
-            {/* Lista */}
-            <div className="grid gap-2">
-                {(files || []).length === 0 ? (
-                    <div className="rounded-lg border border-black/10 bg-neutral-100 p-4 text-sm text-slate-500">
-                        Sin archivos adjuntos.
-                    </div>
-                ) : (
-                    (files || []).map((f) => {
-                        const Icon = iconByKind(f.kind);
-                        return (
-                            <div
-                                key={f.id || f.id_doc}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-neutral-100 p-3 shadow-lg"
-                            >
-                                <div className="flex min-w-0 items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white">
-                                        <Icon className="h-5 w-5 text-[#131E5C]" />
-                                    </div>
-
-                                    <div className="min-w-0">
-                                        <div className="truncate text-sm font-extrabold text-[#131E5C]">
-                                            {f.name || f.nombre_original}
-                                        </div>
-                                        <div className="text-xs text-slate-500">
-                                            {formatBytes(f.size || 0)} • {(f.kind || getFileKind({ name: f.name || f.nombre_original, type: f.type || f.mime }) || "other").toUpperCase()}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => window.open(f.url, "_blank", "noopener,noreferrer")}
-                                        className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-[#131E5C] hover:bg-neutral-50"
-                                    >
-                                        <Eye className="h-4 w-4" />
-                                        Ver
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => removeFile(f)}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-extrabold text-white hover:bg-red-600"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                        Quitar
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })
-                )}
-            </div>
-
-            {preview ? (
-                <div className="fixed inset-0 z-[80]">
-                    <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
-                        onClick={() => setPreview(null)}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                        <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-black/10 bg-white shadow-2xl">
-                            <div className="flex items-center justify-between gap-3 px-5 py-4 bg-[#131E5C]">
-                                <div className="min-w-0">
-                                    <div className="truncate text-sm font-extrabold text-white">
-                                        {preview.name}
-                                    </div>
-                                    <div className="text-xs text-white/80">
-                                        {formatBytes(preview.size)} • {(preview.kind || "other").toUpperCase()}
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => setPreview(null)}
-                                    className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-extrabold text-white hover:bg-white/15"
-                                >
-                                    Cerrar
-                                </button>
-                            </div>
-
-                            <div className="max-h-[75vh] overflow-auto bg-neutral-50 p-4">
-                                {preview.kind === "image" ? (
-                                    <img src={preview.url} alt={preview.name} className="mx-auto max-h-[70vh] rounded-2xl" />
-                                ) : preview.kind === "video" ? (
-                                    <video src={preview.url} controls className="mx-auto w-full max-h-[70vh] rounded-2xl" />
-                                ) : preview.kind === "pdf" ? (
-                                    <iframe title="pdf" src={preview.url} className="h-[70vh] w-full rounded-2xl bg-white" />
-                                ) : preview.kind === "excel" ? (
-                                    <div className="rounded-2xl border border-black/10 bg-white p-6">
-                                        <div className="text-sm font-extrabold text-[#131E5C]">Vista previa limitada</div>
-                                        <div className="mt-1 text-sm text-slate-600">
-                                            Por seguridad del navegador, XLSX/CSV no siempre se previsualiza bien sin parsearlo.
-                                            Puedes abrirlo/descargarlo:
-                                        </div>
-                                        <a
-                                            href={preview.url}
-                                            download={preview.name}
-                                            className="mt-4 inline-flex rounded-2xl bg-[#131E5C] px-4 py-2 text-sm font-extrabold text-white"
-                                        >
-                                            Descargar {preview.name}
-                                        </a>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-2xl border border-black/10 bg-white p-6">
-                                        <div className="text-sm font-extrabold text-[#131E5C]">No hay preview</div>
-                                        <div className="mt-1 text-sm text-slate-600">
-                                            Tipo de archivo no soportado para vista previa.
-                                        </div>
-                                        <a
-                                            href={preview.url}
-                                            download={preview.name}
-                                            className="mt-4 inline-flex rounded-2xl bg-[#131E5C] px-4 py-2 text-sm font-extrabold text-white"
-                                        >
-                                            Descargar {preview.name}
-                                        </a>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function CausaRaiz({ causa, raiz, onChangeCausa, onChangeRaiz, opcionesRaiz }) {
-    const raices = useMemo(() => opcionesRaiz[causa] || [], [causa, opcionesRaiz]);
-
-    return (
-        <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-                <div className="mb-2 text-xs font-bold text-[#131E5C]">Causa</div>
-                <select
-                    value={causa || ""}
-                    onChange={(e) => {
-                        const next = e.target.value;
-                        onChangeCausa(next);
-                        onChangeRaiz("");
-                    }}
-                    className="w-full rounded-2xl border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
-                >
-                    <option value="">Selecciona</option>
-                    {Object.keys(opcionesRaiz).map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                    ))}
-                </select>
-            </div>
-
-            <div>
-                <div className="mb-2 text-xs font-bold text-[#131E5C]">Raíz</div>
-                <select
-                    value={raiz || ""}
-                    onChange={(e) => onChangeRaiz(e.target.value)}
-                    disabled={!causa || raices.length === 0}
-                    className="w-full rounded-2xl border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none disabled:opacity-50"
-                >
-                    <option value="">
-                        {!causa ? "Selecciona causa primero" : raices.length ? "Selecciona" : "Sin opciones"}
-                    </option>
-                    {raices.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                    ))}
-                </select>
-            </div>
-        </div>
-    );
-}
-
-function LineaPicker({ value, onChange }) {
-    const items = Object.entries(lineaMeta);
-
-    return (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2">
-            {items.map(([key, meta]) => {
-                const Active = value === key;
-                const Icon = meta.Icon;
-
-                return (
-                    <button
-                        key={key}
-                        type="button"
-                        onClick={() => onChange(key)}
-                        className={[
-                            "rounded-lg border px-3 py-1 shadow-lg transition",
-                            "flex items-center justify-center gap-2",
-                            Active
-                                ? "border-[#131E5C]/50 bg-white ring-2 ring-[#131E5C]/30"
-                                : "border-black/10 bg-neutral-100 hover:bg-white",
-                        ].join(" ")}
-                    >
-                        <span
-                            className={[
-                                "inline-flex h-8 w-8 items-center justify-center rounded-full border",
-                                Active ? "border-[#131E5C]/40 bg-[#131E5C]/10" : "border-black/10 bg-white",
-                            ].join(" ")}
-                        >
-                            <Icon className="h-4 w-4 text-[#131E5C]" />
-                        </span>
-                        <span className="text-sm text-[#131E5C]">
-                            {meta.label}
-                        </span>
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
-function OrigenPicker({ value, onChange }) {
-    const items = Object.entries(origenMeta);
-
-    return (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-            {items.map(([key, meta]) => {
-                const Active = value === key;
-                const Icon = meta.Icon;
-
-                return (
-                    <button
-                        type="button"
-                        key={key}
-                        onClick={() => onChange(key)}
-                        className={[
-                            "group rounded-lg border p-1 text-left shadow-md transition",
-                            Active
-                                ? "border-[#131E5C]/50 bg-white ring-2 ring-[#131E5C]/30"
-                                : "border-black/10 bg-neutral-100 hover:bg-white",
-                        ].join(" ")}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div
-                                className={[
-                                    "flex h-8 w-8 items-center justify-center rounded-full border",
-                                    Active ? "border-[#131E5C]/40 bg-[#131E5C]/10" : "border-black/10 bg-white",
-                                ].join(" ")}
-                            >
-                                <Icon className="h-5 w-5" />
-                            </div>
-
-                            <div className="min-w-0">
-                                <div className=" text-sm  text-[#131E5C]">
-                                    {meta.label}
-                                </div>
-                            </div>
-                        </div>
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
-
-function Modal({ open, title, onClose, children, footer }) {
-    if (!open) return null;
-
-    return (
-        <div className="fixed inset-0 z-[60]">
+        <div className={cls("flex w-full", mine ? "justify-end" : "justify-start")}>
             <div
-                className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
-                onClick={onClose}
-            />
-            <div className="absolute inset-0 flex items-end justify-center p-3 sm:items-center">
-                <div className="w-full max-w-4xl overflow-hidden rounded-lg border border-[#131E5C] bg-neutral-100 shadow-2xl">
-                    <div
-                        className="flex items-center justify-between gap-3 px-5 py-4"
-                        style={{ backgroundColor: BRAND_BLUE }}
-                    >
-                        <div className="min-w-0">
-                            <div className="truncate text-base font-extrabold text-white">
-                                {title}
-                            </div>
-                        </div>
+                className={cls(
+                    "max-w-[78%] rounded-2xl px-4 py-2 shadow-sm border",
+                    mine
+                        ? "bg-[#131E5C] text-white border-white/10"
+                        : "bg-white text-[#131E5C] border-black/10"
+                )}
+            >
+                <div className="whitespace-pre-wrap text-sm font-semibold leading-relaxed">
+                    {text}
+                </div>
 
-                        <button
-                            onClick={onClose}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white hover:bg-white/15"
-                            aria-label="Cerrar"
-                        >
-                            <X className="h-5 w-5" />
-                        </button>
-                    </div>
-
-                    <div className="max-h-[72vh] overflow-auto p-5">{children}</div>
-
-                    {footer ? (
-                        <div className="flex flex-col gap-2 border-t border-white/10 bg-white/[0.03] px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
-                            {footer}
-                        </div>
-                    ) : null}
+                <div className={cls("mt-1 flex items-center justify-end gap-2 text-[11px] font-bold",
+                    mine ? "text-white/75" : "text-slate-500"
+                )}>
+                    <span>{time}</span>
+                    {mine ? <StatusIcon className={cls("h-4 w-4", status === "read" ? "text-emerald-300" : "text-white/80")} /> : null}
                 </div>
             </div>
         </div>
     );
 }
 
-function Field({ label, icon: Icon, children }) {
-    return (
-        <div className="rounded-lg border border-white/10 bg-neutral-200/50 p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[#131E5C]">
-                {Icon ? <Icon className="h-4 w-4" /> : null}
-                <span>{label}</span>
-            </div>
-            {children}
-        </div>
-    );
-}
+// --------- Mock Data (simulado)
+const MOCK_CHATS = [
+    {
+        id: "p-001",
+        nombre: "Reynaldo Vallejo",
+        telefono: "+52 272 000 0000",
+        agencia: "VW Orizaba",
+        business: "Ventas",
+        asesor: "Andrea M.",
+        estado: "Nuevo",
+        favorito: true,
+        unread: 2,
+        last: { text: "Me interesa un Virtus, ¿hay stock?", time: "10:21" },
+        messages: [
+            { id: 1, mine: false, text: "Hola, vi un Virtus en Facebook 👋", time: "10:18", status: "sent" },
+            { id: 2, mine: false, text: "Me interesa, ¿hay stock?", time: "10:21", status: "sent" },
+            { id: 3, mine: true, text: "¡Hola! Sí, ¿qué versión te interesa? 😊", time: "10:22", status: "read" },
+        ],
+    },
+    {
+        id: "p-002",
+        nombre: "Mariana López",
+        telefono: "+52 228 111 2233",
+        agencia: "VW Córdoba",
+        business: "Usados",
+        asesor: "Luis R.",
+        estado: "Contactado",
+        favorito: false,
+        unread: 0,
+        last: { text: "¿Me compartes enganche mínimo?", time: "Ayer" },
+        messages: [
+            { id: 1, mine: true, text: "¡Hola Mariana! ¿Qué modelo buscas?", time: "Ayer", status: "read" },
+            { id: 2, mine: false, text: "Un Polo 2020 aprox", time: "Ayer", status: "sent" },
+            { id: 3, mine: false, text: "¿Me compartes enganche mínimo?", time: "Ayer", status: "sent" },
+        ],
+    },
+    {
+        id: "p-003",
+        nombre: "Carlos Hernández",
+        telefono: "+52 999 555 6666",
+        agencia: "JAECOO R&R",
+        business: "Ventas",
+        asesor: "Andrea M.",
+        estado: "Cotización",
+        favorito: true,
+        unread: 1,
+        last: { text: "¿La cotización incluye seguro?", time: "09:05" },
+        messages: [
+            { id: 1, mine: false, text: "Buen día, quiero info de JAECOO", time: "08:50", status: "sent" },
+            { id: 2, mine: true, text: "Claro, ¿qué versión te interesa? Te armo cotización.", time: "08:55", status: "delivered" },
+            { id: 3, mine: false, text: "¿La cotización incluye seguro?", time: "09:05", status: "sent" },
+        ],
+    },
+];
+
+const QUICK_FILTERS = ["Todos", "No leídos", "Favoritos", "Nuevo", "Contactado", "Cotización", "Cerrado", "Perdido"];
 
 export default function DigitalesProspectos() {
-    const [cases, setCases] = useState([]);
-    const DEALERS = [
-        "VW Cordoba",
-        "VW Orizaba",
-        "VW Poza Rica",
-        "VW Tuxtepec",
-        "VW Tuxpan",
-        "Chirey",
-        "JAECOO R&R",
-    ];
-    const [ctxMenu, setCtxMenu] = useState({
-        open: false,
-        x: 0,
-        y: 0,
-        row: null,
-    });
+    const [q, setQ] = useState("");
+    const [filter, setFilter] = useState("Todos");
+    const [chats, setChats] = useState(MOCK_CHATS);
+    const [activeId, setActiveId] = useState(MOCK_CHATS[0]?.id || null);
 
-    useEffect(() => {
-        const onGlobal = () => setCtxMenu((p) => ({ ...p, open: false, row: null }));
-        window.addEventListener("click", onGlobal);
-        window.addEventListener("scroll", onGlobal, true);
-        window.addEventListener("resize", onGlobal);
-        return () => {
-            window.removeEventListener("click", onGlobal);
-            window.removeEventListener("scroll", onGlobal, true);
-            window.removeEventListener("resize", onGlobal);
-        };
-    }, []);
-    const onRowContextMenu = (e, row) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setCtxMenu({
-            open: true,
-            x: e.clientX,
-            y: e.clientY,
-            row,
-        });
-    };
-    const eliminarCaso = async (row) => {
-        if (!row?.id_exp) return;
-        const ok = confirm(`¿Eliminar el caso ${row.id_exp}? Esta acción no se puede deshacer.`);
-        if (!ok) return;
+    // Mobile: lista vs chat
+    const [mobileView, setMobileView] = useState("list"); // list | chat
 
-        try {
-            await api.deleteCaso(row.id_exp);
-            setCases((prev) => prev.filter((c) => c.id_exp !== row.id_exp));
-            setCtxMenu({ open: false, x: 0, y: 0, row: null });
-        } catch (e) {
-            console.error(e);
-            alert("No se pudo eliminar (revisa consola / backend).");
-        }
-    };
-
-    const [sort, setSort] = useState({ key: null, dir: "asc" });
-
-    function toggleSort(key) {
-        setSort((prev) => {
-            if (prev.key !== key) return { key, dir: "asc" };
-            return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
-        });
-    }
-
-    // filtros (corrige claves)
-    const [filters, setFilters] = useState({
-        q: "",
-        estado: "Todos",
-        agencia: "Todos",
-    });
-
-    // modal unificado
-    const [openModal, setOpenModal] = useState(false);
-    const [mode, setMode] = useState("create"); // "create" | "edit"
-    const [draft, setDraft] = useState(null);
-
-    useEffect(() => {
-        api.listCasos().then(setCases).catch(console.error);
-    }, []);
-
-    const dealers = useMemo(() => {
-        // antes: c.dealer (ya no existe)
-        const d = new Set(cases.map((c) => c.agencia).filter(Boolean));
-        return ["Todos", ...Array.from(d)];
-    }, [cases]);
-
-    const estados = useMemo(() => {
-        const s = new Set(cases.map((c) => c.estado).filter(Boolean));
-        return ["Todos", ...Array.from(s)];
-    }, [cases]);
+    const active = useMemo(() => chats.find((c) => c.id === activeId) || null, [chats, activeId]);
 
     const filtered = useMemo(() => {
-        const q = filters.q.trim().toLowerCase();
+        const qq = q.trim().toLowerCase();
 
-        return cases.filter((c) => {
-            const nombre = `${c.cliente_nombre || ""} ${c.cliente_apellidos || ""}`.trim();
+        return chats
+            .filter((c) => {
+                const matchQ =
+                    !qq ||
+                    c.nombre.toLowerCase().includes(qq) ||
+                    c.telefono.toLowerCase().includes(qq) ||
+                    c.agencia.toLowerCase().includes(qq) ||
+                    c.business.toLowerCase().includes(qq) ||
+                    c.asesor.toLowerCase().includes(qq) ||
+                    (c.last?.text || "").toLowerCase().includes(qq);
 
-            const matchQ =
-                !q ||
-                String(c.agencia || "").toLowerCase().includes(q) ||
-                String(nombre).toLowerCase().includes(q) ||
-                String(c.problema || "").toLowerCase().includes(q) ||
-                String(c.estado || "").toLowerCase().includes(q);
+                let matchF = true;
+                if (filter === "No leídos") matchF = (c.unread || 0) > 0;
+                else if (filter === "Favoritos") matchF = !!c.favorito;
+                else if (filter !== "Todos") matchF = String(c.estado || "").toLowerCase() === filter.toLowerCase();
 
-            const matchEstado = filters.estado === "Todos" || c.estado === filters.estado;
-            const matchAgencia = filters.agencia === "Todos" || c.agencia === filters.agencia;
+                return matchQ && matchF;
+            })
+            .sort((a, b) => {
+                // Favoritos arriba, luego no leídos, luego orden “reciente” (aquí simulamos por unread/flag)
+                if (a.favorito !== b.favorito) return a.favorito ? -1 : 1;
+                if ((a.unread || 0) !== (b.unread || 0)) return (b.unread || 0) - (a.unread || 0);
+                return 0;
+            });
+    }, [chats, q, filter]);
 
-            return matchQ && matchEstado && matchAgencia;
-        });
-    }, [cases, filters]);
-    const sorted = useMemo(() => {
-        const data = [...filtered];
-        if (!sort.key) return data;
+    const openChat = (id) => {
+        setActiveId(id);
+        setMobileView("chat");
 
-        const dir = sort.dir === "asc" ? 1 : -1;
-
-        return data.sort((a, b) => {
-            // ordenar por agencia o estado (string)
-            const va = (a?.[sort.key] ?? "").toString().toLowerCase();
-            const vb = (b?.[sort.key] ?? "").toString().toLowerCase();
-
-            // si quieres que "Sin estado" vaya al final, podrías manejarlo aquí
-            if (va < vb) return -1 * dir;
-            if (va > vb) return 1 * dir;
-            return 0;
-        });
-    }, [filtered, sort]);
-    const openCreate = () => {
-        setMode("create");
-        setDraft({
-            // cliente
-            id_cliente: null,
-            chasis: "",
-            os_exp: "",
-            agencia: "",
-            cliente_nombre: "",
-            cliente_apellidos: "",
-            telefono: "",
-            correo: "",
-
-            // expediente
-            linea: "Ventas",
-            fecha_atencion: new Date().toISOString().slice(0, 10),
-            fecha_reclamacion: new Date().toISOString().slice(0, 10),
-            origen: "Facebook",
-            estado: "1er contacto",
-            problema: "",
-            calificacion: 0,
-            recopilacion: "",
-            causa: "",
-            raiz: "",
-
-            // docs (mezcla: existentes + nuevos)
-            documentacion: [],
-        });
-        setOpenModal(true);
+        // Simular que al abrir el chat se “lee”
+        setChats((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c))
+        );
     };
 
-    const openEdit = async (row) => {
-        try {
-            setMode("edit");
-            const detail = await api.getCaso(row.id_exp);
-
-            const docs = Array.isArray(detail.documentacion) ? detail.documentacion : [];
-            const normalizedDocs = docs.map((d) => ({
-                id: d.id_doc || crypto.randomUUID(),
-                id_doc: d.id_doc,
-                name: d.nombre_original || "archivo",
-                size: d.size || 0,
-                type: d.mime || "",
-                mime: d.mime,
-                kind: getFileKind({ name: d.nombre_original || "archivo", type: d.mime || "" }),
-                url: d.url,          // tu serializer ya manda url absoluta, úsala directo
-                _raw: null,
-                _fromServer: true,
-            }));
-
-            setDraft({ ...detail, documentacion: normalizedDocs });
-            setOpenModal(true);
-        } catch (e) {
-            console.error(e);
-            alert("No se pudo abrir el caso para editar (revisa consola).");
-        }
+    const toggleFav = (id) => {
+        setChats((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, favorito: !c.favorito } : c))
+        );
     };
 
-    const closeModal = () => {
-        setOpenModal(false);
-        setDraft(null);
+    const setEstado = (id, estado) => {
+        setChats((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, estado } : c))
+        );
     };
 
-    const save = async () => {
-        try {
-            const localFiles = (draft.documentacion || [])
-                .map((x) => x?._raw)
-                .filter(Boolean);
+    const [draftMsg, setDraftMsg] = useState("");
 
-            let payload = {
-                chasis: draft.chasis,
-                os_exp: Number(draft.os_exp || 0),
-                agencia: draft.agencia,
-                cliente_nombre: draft.cliente_nombre,
-                cliente_apellidos: draft.cliente_apellidos,
-                telefono: draft.telefono,
-                correo: draft.correo,
+    const sendMessage = () => {
+        const text = draftMsg.trim();
+        if (!text || !active) return;
 
-                linea: draft.linea,
-                fecha_atencion: draft.fecha_atencion,
-                fecha_reclamacion: draft.fecha_reclamacion,
-                origen: draft.origen,
-                estado: draft.estado,
-                problema: draft.problema,
-                calificacion: draft.calificacion || null,
-                recopilacion: draft.recopilacion || "",
-                causa: draft.causa,
-                raiz: draft.raiz,
-                obs_contacto_1: draft.obs_contacto_1,
-                fecha_contacto_1: draft.fecha_contacto_1 || null,
+        setChats((prev) =>
+            prev.map((c) => {
+                if (c.id !== active.id) return c;
+                const nextMessages = [
+                    ...c.messages,
+                    {
+                        id: crypto.randomUUID(),
+                        mine: true,
+                        text,
+                        time: "Ahora",
+                        status: "delivered",
+                    },
+                ];
 
-                obs_contacto_2: draft.obs_contacto_2,
-                fecha_contacto_2: draft.fecha_contacto_2 || null,
+                return {
+                    ...c,
+                    messages: nextMessages,
+                    last: { text, time: "Ahora" },
+                };
+            })
+        );
 
-                obs_contacto_3: draft.obs_contacto_3,
-                fecha_contacto_3: draft.fecha_contacto_3 || null,
-                obs_contacto_cierre: draft.obs_contacto_cierre,
-                fecha_contacto_cierre: draft.fecha_contacto_cierre || null,
-
-            };
-
-            let saved;
-            if (mode === "edit") {
-                payload = { ...payload, id_cliente: draft.id_cliente };
-            }
-            if (mode === "create") {
-                saved = await api.createCaso(payload);
-            } else {
-                saved = await api.updateCaso(draft.id_exp, payload);
-            }
-
-            // subir docs si hay
-            if (localFiles.length) {
-                await api.uploadDocs(saved.id_exp, localFiles);
-            }
-
-            // refrescar lista
-            const updated = await api.listCasos();
-            setCases(updated);
-
-            closeModal();
-        } catch (e) {
-            console.error(e);
-            alert("Error guardando el caso (revisa consola).");
-        }
+        setDraftMsg("");
     };
-
-    const resetFilters = () => setFilters({ q: "", estado: "Todos", agencia: "Todos" });
 
     return (
         <div className="w-full">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
-                        Lista de Prospectos
-                    </h2>
-                </div>
-            </div>
+            <div className="rounded-lg border border-black/10 bg-white shadow-sm overflow-hidden pb-6">
+                <div
+                    className="px-5 py-4 text-white"
+                    style={{ backgroundColor: BRAND_BLUE }}
+                >
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-lg font-extrabold">Prospectos Digitales</div>
+                        </div>
 
-            <div className="flex grid-cols-2 mb-4 rounded-lg border border-white/10 bg-white/[0.03]  p-3">
-                <div className="relative bg-[#131E5C] w-full max-w-96 px-4 py-1 rounded-l-lg">
-                    <p className="text-white">Chats</p>
+                    </div>
                 </div>
-                <div className="relative bg-[#131E5C] text-white px-4 py-1 rounded-r-lg w-full">
-                    Conversacion
+
+                {/* Layout tipo WhatsApp Web */}
+                <div className="grid h-[75vh] grid-cols-1 lg:grid-cols-[360px_1fr]">
+                    {/* LEFT: Lista de chats */}
+                    <aside
+                        className={cls(
+                            "border-r border-black/10 bg-neutral-50",
+                            // En mobile ocultamos si estás en chat
+                            "lg:block",
+                            mobileView === "chat" ? "hidden" : "block"
+                        )}
+                    >
+                        {/* Buscador */}
+                        <div className="p-4 border-b border-black/10 bg-white">
+                            <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-neutral-100 px-3 py-2">
+                                <Search className="h-4 w-4 text-[#131E5C]" />
+                                <input
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                    placeholder="Buscar prospecto, número, agencia…"
+                                    className="w-full bg-transparent text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400"
+                                />
+                            </div>
+
+                        </div>
+
+                        {/* Lista */}
+                        <div className="h-[calc(75vh-120px)] overflow-auto">
+                            {filtered.map((c) => {
+                                const isActive = c.id === activeId;
+
+                                return (
+                                    <button
+                                        key={c.id}
+                                        onClick={() => openChat(c.id)}
+                                        className={cls(
+                                            "w-full text-left px-4 py-3 border-b border-black/5 transition",
+                                            isActive ? "bg-white" : "bg-neutral-50 hover:bg-white"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Avatar name={c.nombre} />
+
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="truncate text-sm font-extrabold text-[#131E5C]">
+                                                        {c.nombre}
+                                                    </div>
+                                                    <div className="text-[11px] font-bold text-slate-400">
+                                                        {c.last?.time}
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-0.5 flex items-center justify-between gap-2">
+                                                    <div className="truncate text-xs font-semibold text-slate-500">
+                                                        {c.last?.text}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        {c.unread > 0 ? (
+                                                            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[11px] font-extrabold text-white">
+                                                                {c.unread}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <BadgeEstado value={c.estado} />
+                                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                                                        <Building2 className="h-3.5 w-3.5" />
+                                                        {c.agencia}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+
+                            {filtered.length === 0 ? (
+                                <div className="p-8 text-center text-sm font-semibold text-slate-500">
+                                    Sin resultados.
+                                </div>
+                            ) : null}
+                        </div>
+                    </aside>
+
+                    {/* RIGHT: Chat */}
+                    <section
+                        className={cls(
+                            "relative flex flex-col bg-white",
+                            // En mobile ocultamos si estás en list
+                            "lg:flex",
+                            mobileView === "list" ? "hidden" : "flex"
+                        )}
+                    >
+                        {!active ? (
+                            <div className="flex h-full items-center justify-center text-slate-500">
+                                Selecciona un chat
+                            </div>
+                        ) : (
+                            <>
+                                {/* Header chat */}
+                                <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3 bg-white">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        {/* Back en mobile */}
+                                        <button
+                                            onClick={() => setMobileView("list")}
+                                            className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white hover:bg-neutral-50"
+                                            aria-label="Volver"
+                                        >
+                                            <ArrowLeft className="h-5 w-5 text-[#131E5C]" />
+                                        </button>
+
+                                        <Avatar name={active.nombre} />
+
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-extrabold text-[#131E5C]">
+                                                {active.nombre}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <User className="h-3.5 w-3.5" />
+                                                    {active.telefono}
+                                                </span>
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Building2 className="h-3.5 w-3.5" />
+                                                    {active.agencia}
+                                                </span>
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Tag className="h-3.5 w-3.5" />
+                                                    {active.business}
+                                                </span>
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Clock className="h-3.5 w-3.5" />
+                                                    Asesor: {active.asesor}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Mensajes */}
+                                <div className="flex-1 overflow-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-50 via-white to-neutral-50 px-4 py-4">
+                                    <div className="mx-auto max-w-3xl space-y-3">
+                                        {active.messages.map((m) => (
+                                            <MessageBubble
+                                                key={m.id}
+                                                mine={m.mine}
+                                                text={m.text}
+                                                time={m.time}
+                                                status={m.status}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Composer */}
+                                <div className="border-t border-black/10 bg-white px-3 py-3">
+                                    <div className="mx-auto flex max-w-3xl items-center gap-2">
+                                        <button
+                                            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-black/10 bg-white hover:bg-neutral-50"
+                                            title="Emoji"
+                                        >
+                                            <Smile className="h-5 w-5 text-[#131E5C]" />
+                                        </button>
+
+                                        <input
+                                            value={draftMsg}
+                                            onChange={(e) => setDraftMsg(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") sendMessage();
+                                            }}
+                                            placeholder="Escribe un mensaje…"
+                                            className="h-11 flex-1 rounded-xl border border-black/10 bg-neutral-100 px-4 text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400"
+                                        />
+
+                                        <button
+                                            onClick={sendMessage}
+                                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold text-white shadow-sm hover:opacity-95"
+                                            style={{ backgroundColor: BRAND_BLUE }}
+                                            title="Enviar"
+                                        >
+                                            <Send className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Enviar</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </section>
                 </div>
             </div>
-        </div >
+        </div>
     );
 }

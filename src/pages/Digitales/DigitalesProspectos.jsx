@@ -1013,6 +1013,12 @@ export default function DigitalesProspectos() {
                                     <td className="px-4 py-3 text-[#131E5C]">
                                         {row.fecha_reclamacion}
                                     </td>
+                                    <td className="px-4 py-3 text-[#131E5C]">
+                                        Usados
+                                    </td>
+                                    <td className="px-4 py-3 text-[#131E5C]">
+                                        Lizbeth Cano
+                                    </td>
                                     <td className="px-4 py-3">
                                         <BadgeEstado value={row.estado} />
                                     </td>

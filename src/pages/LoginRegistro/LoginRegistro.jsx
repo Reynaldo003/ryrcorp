@@ -83,8 +83,6 @@ export default function LoginRegistro() {
                 alert(data?.detail || "Credenciales inválidas.");
                 return;
             }
-
-            // ✅ aquí está la clave
             login({ token: data.token, user: data.user });
 
             navigate(from, { replace: true });
