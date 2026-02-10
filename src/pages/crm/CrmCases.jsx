@@ -1189,11 +1189,18 @@ export default function CrmCases() {
                         </Field>
                         <Field label="OS-Expediente" icon={FileText}>
                             <input
-                                value={draft.os_exp || ""}
-                                onChange={(e) => setDraft(p => ({ ...p, os_exp: e.target.value }))}
+                                value={draft.os_exp ?? ""}
+                                onChange={(e) => {
+                                    const soloNumeros = e.target.value.replace(/\D/g, "");
+                                    setDraft((p) => ({ ...p, os_exp: soloNumeros }));
+                                }}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="Solo números"
                                 className="w-full rounded-lg border border-black/10 bg-neutral-100 shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none"
                             />
                         </Field>
+
 
                         <div className="md:col-span-2">
                             <Field label="Descripción del Problema" icon={FileText}>
