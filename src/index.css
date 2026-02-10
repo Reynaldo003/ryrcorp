@@ -23,7 +23,14 @@ body,
   height: 100%;
   font-family: "fuenteVW";
 }
-
+@layer utilities {
+  .font-vw {
+    font-family: "fuenteVW", system-ui, sans-serif;
+  }
+  .font-vw-header {
+    font-family: "fuenteVW_Header", system-ui, sans-serif;
+  }
+}
 body {
   @apply bg-slate-50 text-slate-900;
 }

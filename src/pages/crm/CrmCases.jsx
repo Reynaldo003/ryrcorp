@@ -797,12 +797,10 @@ export default function CrmCases() {
 
     const save = async () => {
         try {
-            // archivos locales nuevos (los que trae _raw)
             const localFiles = (draft.documentacion || [])
                 .map((x) => x?._raw)
                 .filter(Boolean);
 
-            // payload JSON (sin blobs)
             let payload = {
                 chasis: draft.chasis,
                 os_exp: Number(draft.os_exp || 0),
@@ -867,7 +865,7 @@ export default function CrmCases() {
         <div className="w-full">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                    <h2 className="truncate text-lg font-extrabold text-[#131E5C]">
+                    <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
                         Casos
                     </h2>
                     <p className="text-sm text-slate-400">
@@ -951,7 +949,7 @@ export default function CrmCases() {
             <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
                 <div className="overflow-auto">
                     <table className="min-w-full text-left text-sm">
-                        <thead className="text-xs bg-[#131E5C] text-white border border-black">
+                        <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
                             <tr>
                                 <th className="px-4 py-3">
                                     <button
@@ -1048,40 +1046,43 @@ export default function CrmCases() {
                     </table>
                 </div>
             </div>
-
+            {/*Mobile */}
             <div className="grid gap-3 lg:hidden">
                 {sorted.map((row) => (
                     <button
                         key={row.id_exp}
                         onClick={() => openEdit(row)}
-                        className="text-left rounded-3xl border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.05]"
+                        className="text-left rounded-3xl border border-black/10 bg-white p-4 shadow-sm hover:bg-slate-50"
                     >
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                                <div className="truncate text-sm font-extrabold text-white">
+                                <div className="truncate text-sm font-extrabold text-[#131E5C]">
                                     {row.cliente_nombre + " " + row.cliente_apellidos}
                                 </div>
-                                <div className="mt-1 text-xs text-white/70">
+                                <div className="mt-1 text-xs text-slate-600">
                                     {row.agencia} • {row.fecha_reclamacion}
                                 </div>
                             </div>
                             <BadgeEstado value={row.estado} />
                         </div>
-                        <div className="mt-3 text-sm text-white/75 line-clamp-3">
+
+                        <div className="mt-3 text-sm text-slate-700 line-clamp-3">
                             {row.problema}
                         </div>
-                        <div className="mt-3 text-xs text-white/50">
+
+                        <div className="mt-3 text-xs text-slate-500">
                             Toca para editar
                         </div>
                     </button>
                 ))}
 
                 {sorted.length === 0 ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center text-white/60">
+                    <div className="rounded-3xl border border-black/10 bg-white p-10 text-center text-slate-600">
                         No hay resultados con esos filtros.
                     </div>
                 ) : null}
             </div>
+
 
             {/* ---------------- MODAL EDITAR ---------------- */}
             <Modal
@@ -1341,6 +1342,6 @@ export default function CrmCases() {
                     </div>
                 )}
             </Modal>
-        </div>
+        </div >
     );
 }

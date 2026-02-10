@@ -34,7 +34,7 @@ export default function CrmTopNav() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                                <h1 className="truncate text-lg font-extrabold text-white sm:text-xl">
+                                <h1 className="font-vw-header truncate text-lg font-extrabold text-white sm:text-xl">
                                     Gestión de las Reclamaciones
                                 </h1>
                             </div>
@@ -53,7 +53,7 @@ export default function CrmTopNav() {
                                             key={t.href}
                                             to={t.href}
                                             className={[
-                                                "group inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                                                "font-vw-header group inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
                                                 "border",
                                                 active
                                                     ? "border-white/35 bg-white/20 text-white shadow-sm"

@@ -19,7 +19,7 @@ export default function Sidebar() {
                         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[#0f2866] text-white">
                             <img src="/ryr.png" alt="" />
                         </div>
-                        <div className="leading-tight">
+                        <div className="font-vw-header leading-tight">
                             <div className="text-sm font-semibold">Grupo Automotriz</div>
                             <div className="text-xs text-slate-500">Volkswagen</div>
                         </div>
@@ -32,7 +32,7 @@ export default function Sidebar() {
                         Módulos
                     </div>
 
-                    <div className="flex flex-col gap-1">
+                    <div className="font-vw-header flex flex-col gap-1">
                         <NavLink to="/" end className={linkClass}>
                             <LayoutDashboard size={18} />
                             Inicio
