@@ -1,28 +1,9 @@
-// src/pages/ProspectosWhatsapp.jsx
+// src/pages/Digitales/DigitalesContacto.jsx
 import { useMemo, useState } from "react";
-import {
-    Search,
-    Filter,
-    Star,
-    StarOff,
-    CheckCheck,
-    Check,
-    Phone,
-    Video,
-    MoreVertical,
-    Paperclip,
-    Smile,
-    Send,
-    ArrowLeft,
-    User,
-    Building2,
-    Tag,
-    Clock,
-} from "lucide-react";
+import { Search, CheckCheck, Check, Smile, Send, ArrowLeft, User, Building2, Tag, Clock } from "lucide-react";
 
 const BRAND_BLUE = "#131E5C";
 
-// --------- Utils UI
 function cls(...a) {
     return a.filter(Boolean).join(" ");
 }
@@ -65,7 +46,6 @@ function BadgeEstado({ value }) {
 }
 
 function MessageBubble({ mine, text, time, status = "sent" }) {
-    // status: sent | delivered | read
     const StatusIcon =
         status === "read" ? CheckCheck : status === "delivered" ? CheckCheck : Check;
 
@@ -94,7 +74,6 @@ function MessageBubble({ mine, text, time, status = "sent" }) {
     );
 }
 
-// --------- Mock Data (simulado)
 const MOCK_CHATS = [
     {
         id: "p-001",
@@ -157,8 +136,23 @@ export default function DigitalesProspectos() {
     const [chats, setChats] = useState(MOCK_CHATS);
     const [activeId, setActiveId] = useState(MOCK_CHATS[0]?.id || null);
 
-    // Mobile: lista vs chat
-    const [mobileView, setMobileView] = useState("list"); // list | chat
+
+    async function onEnviarWhatsApp() {
+        try {
+            const res = await fetch("http://127.0.0.1:8000/digitales/enviar-template/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to: 522711872907 }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || "Error enviando WhatsApp");
+            alert("Template enviado ✅");
+        } catch (e) {
+            alert(`Falló: ${e.message}`);
+        }
+    }
+
+    const [mobileView, setMobileView] = useState("list");
 
     const active = useMemo(() => chats.find((c) => c.id === activeId) || null, [chats, activeId]);
 
@@ -184,7 +178,6 @@ export default function DigitalesProspectos() {
                 return matchQ && matchF;
             })
             .sort((a, b) => {
-                // Favoritos arriba, luego no leídos, luego orden “reciente” (aquí simulamos por unread/flag)
                 if (a.favorito !== b.favorito) return a.favorito ? -1 : 1;
                 if ((a.unread || 0) !== (b.unread || 0)) return (b.unread || 0) - (a.unread || 0);
                 return 0;
@@ -195,7 +188,6 @@ export default function DigitalesProspectos() {
         setActiveId(id);
         setMobileView("chat");
 
-        // Simular que al abrir el chat se “lee”
         setChats((prev) =>
             prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c))
         );
@@ -259,18 +251,14 @@ export default function DigitalesProspectos() {
                     </div>
                 </div>
 
-                {/* Layout tipo WhatsApp Web */}
                 <div className="grid h-[75vh] grid-cols-1 lg:grid-cols-[360px_1fr]">
-                    {/* LEFT: Lista de chats */}
                     <aside
                         className={cls(
                             "border-r border-black/10 bg-neutral-50",
-                            // En mobile ocultamos si estás en chat
                             "lg:block",
                             mobileView === "chat" ? "hidden" : "block"
                         )}
                     >
-                        {/* Buscador */}
                         <div className="p-4 border-b border-black/10 bg-white">
                             <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-neutral-100 px-3 py-2">
                                 <Search className="h-4 w-4 text-[#131E5C]" />
@@ -284,7 +272,6 @@ export default function DigitalesProspectos() {
 
                         </div>
 
-                        {/* Lista */}
                         <div className="h-[calc(75vh-120px)] overflow-auto">
                             {filtered.map((c) => {
                                 const isActive = c.id === activeId;
@@ -346,11 +333,9 @@ export default function DigitalesProspectos() {
                         </div>
                     </aside>
 
-                    {/* RIGHT: Chat */}
                     <section
                         className={cls(
                             "relative flex flex-col bg-white",
-                            // En mobile ocultamos si estás en list
                             "lg:flex",
                             mobileView === "list" ? "hidden" : "flex"
                         )}
@@ -361,10 +346,8 @@ export default function DigitalesProspectos() {
                             </div>
                         ) : (
                             <>
-                                {/* Header chat */}
                                 <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3 bg-white">
                                     <div className="flex items-center gap-3 min-w-0">
-                                        {/* Back en mobile */}
                                         <button
                                             onClick={() => setMobileView("list")}
                                             className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white hover:bg-neutral-50"
@@ -416,7 +399,6 @@ export default function DigitalesProspectos() {
                                     </div>
                                 </div>
 
-                                {/* Composer */}
                                 <div className="border-t border-black/10 bg-white px-3 py-3">
                                     <div className="mx-auto flex max-w-3xl items-center gap-2">
                                         <button
@@ -437,7 +419,8 @@ export default function DigitalesProspectos() {
                                         />
 
                                         <button
-                                            onClick={sendMessage}
+                                            //onClick={sendMessage}
+                                            onClick={onEnviarWhatsApp}
                                             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold text-white shadow-sm hover:opacity-95"
                                             style={{ backgroundColor: BRAND_BLUE }}
                                             title="Enviar"
