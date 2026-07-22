@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+@font-face {
+  font-family: "fuenteVW";
+ src: url('/fonts/VWText-Light.otf');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: "fuenteVW_Header";
+  src: url("/public/fonts/VWHead-Bold.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  font-family: "fuenteVW";
+}
+@layer utilities {
+  .font-vw {
+    font-family: "fuenteVW", system-ui, sans-serif;
+  }
+  .font-vw-header {
+    font-family: "fuenteVW_Header", system-ui, sans-serif;
+  }
+}
+body {
+  @apply bg-slate-50 text-slate-900;
+}

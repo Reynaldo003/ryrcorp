@@ -1,0 +1,45 @@
+@font-face {
+  font-family: 'VW Head';
+  src: url('../../assets/fonts/VWHead-Light.otf') format('opentype');
+  font-weight: 300;
+}
+@font-face {
+  font-family: 'VW Head';
+  src: url('../../assets/fonts/VWHead-Regular.otf') format('opentype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'VW Head';
+  src: url('../../assets/fonts/VWHead-Bold.otf') format('opentype');
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'VW Head';
+  src: url('../../assets/fonts/VWHead-ExtraBold.otf') format('opentype');
+  font-weight: 800;
+}
+@font-face {
+  font-family: 'VW Text';
+  src: url('../../assets/fonts/VWText-Light.otf') format('opentype');
+  font-weight: 300;
+}
+@font-face {
+  font-family: 'VW Text';
+  src: url('../../assets/fonts/VWText-Regular.otf') format('opentype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'VW Text';
+  src: url('../../assets/fonts/VWText-Bold.otf') format('opentype');
+  font-weight: 700;
+}
+
+.kpi-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: default;
+}
+
+.kpi-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 30, 80, 0.12);
+}
