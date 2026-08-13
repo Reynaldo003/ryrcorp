@@ -10,7 +10,6 @@ import { api } from "../../lib/apiPruebas";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { apiCitas } from "../../lib/apiCitas";
-import { apiEntregas } from "../../lib/apiEntregas";
 import { useAuth } from "../../auth/AuthContext";
 import * as XLSX from "xlsx";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
@@ -485,6 +484,7 @@ function normalizeProspecto(p) {
         folio_solicitud_credito: p.folio_solicitud_credito || "",
         solicitud_credito_estado: p.solicitud_credito_estado || "",
         vin_facturado: p.vin_facturado || "",
+        facturado_at: p.facturado_at || null,
         vin_estatus_entrega: p.vin_estatus_entrega || "",
     };
 }
@@ -1449,33 +1449,19 @@ function esAsesorDigitalValidoBDC(value) {
 function getTelefonoApiBDC(item) {
     return normalizaTelefonoMx(item?.cliente?.telefono || item?.telefono || item?.cliente_telefono || "");
 }
-function getVinBDC(item) {
-    return String(item?.vin || item?.vin_facturado || "").trim().toUpperCase();
-}
 function getTimestampSeguroBDC(value) {
-    if (!value)
-        return 0;
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime()) && date.getTime() >= BDC_FECHA_INICIO_MS)
-        return date.getTime();
+    if (!value) return 0;
+    const fecha = new Date(value);
+    if (!Number.isNaN(fecha.getTime()) && fecha.getTime() >= BDC_FECHA_INICIO_MS) return fecha.getTime();
     const ymd = onlyDate(value);
-    if (!ymd)
-        return 0;
+    if (!ymd) return 0;
     const fallback = new Date(`${ymd}T00:00:00`).getTime();
     return Number.isNaN(fallback) || fallback < BDC_FECHA_INICIO_MS ? 0 : fallback;
 }
 function getProspectoTimestampBDC(row) {
-    const values = [
-        row?.creado,
-        row?.fecha_reclamacion,
-        row?.primer_contacto_at,
-        row?.fecha_contacto,
-        row?.ultimo_contacto_at,
-    ];
-    for (const value of values) {
+    for (const value of [row?.creado, row?.fecha_reclamacion, row?.primer_contacto_at, row?.fecha_contacto, row?.ultimo_contacto_at]) {
         const timestamp = getTimestampSeguroBDC(value);
-        if (timestamp)
-            return timestamp;
+        if (timestamp) return timestamp;
     }
     return 0;
 }
@@ -1483,215 +1469,76 @@ function buildProspectosPorTelefonoBDC(rows) {
     const map = new Map();
     for (const row of rows || []) {
         const telefono = normalizaTelefonoMx(row?.telefono || "");
-        if (!/^52\d{10}$/.test(telefono))
-            continue;
-        if (!map.has(telefono))
-            map.set(telefono, []);
+        if (!/^52\d{10}$/.test(telefono)) continue;
+        if (!map.has(telefono)) map.set(telefono, []);
         map.get(telefono).push(row);
     }
-    for (const list of map.values())
-        list.sort((a, b) => getProspectoTimestampBDC(a) - getProspectoTimestampBDC(b));
+    for (const lista of map.values()) lista.sort((a, b) => getProspectoTimestampBDC(a) - getProspectoTimestampBDC(b));
     return map;
 }
 function getProspectoRelacionadoBDC(index, telefono, fechaReferencia = "") {
     const tel = normalizaTelefonoMx(telefono || "");
-    if (!/^52\d{10}$/.test(tel))
-        return null;
-    const list = index.get(tel) || [];
-    if (!list.length)
-        return null;
-    const ref = getTimestampSeguroBDC(fechaReferencia);
-    if (ref) {
-        for (let i = list.length - 1; i >= 0; i -= 1) {
-            const ts = getProspectoTimestampBDC(list[i]);
-            if (ts && ts <= ref)
-                return list[i];
-        }
-        return null;
+    if (!/^52\d{10}$/.test(tel)) return null;
+    const lista = index.get(tel) || [];
+    if (!lista.length) return null;
+    const referencia = getTimestampSeguroBDC(fechaReferencia);
+    if (!referencia) return lista[lista.length - 1];
+    for (let i = lista.length - 1; i >= 0; i -= 1) {
+        const ts = getProspectoTimestampBDC(lista[i]);
+        if (ts && ts <= referencia) return lista[i];
     }
-    return list[list.length - 1];
-}
-function buildProspectosPorVinBDC(rows) {
-    const map = new Map();
-    for (const row of rows || []) {
-        const vin = getVinBDC({ vin_facturado: row?.vin_facturado });
-        if (!vin || !esAsesorDigitalValidoBDC(row?.asesor_digital))
-            continue;
-        const actual = map.get(vin);
-        if (!actual || getProspectoTimestampBDC(row) >= getProspectoTimestampBDC(actual))
-            map.set(vin, row);
-    }
-    return map;
+    return null;
 }
 function getProspectoCitaBDC(cita, prospectosPorTelefono) {
-    return getProspectoRelacionadoBDC(
-        prospectosPorTelefono,
-        getTelefonoApiBDC(cita),
-        cita?.fecha_hora_cita,
-    );
+    return getProspectoRelacionadoBDC(prospectosPorTelefono, getTelefonoApiBDC(cita), cita?.fecha_hora_cita);
 }
 function getAsesorCitaBDC(cita) {
-    return canonicalAsesorDigitalBDC(
-        cita?.asesor_digital || ""
-    );
-}
-function esCitaDigitalBDC(cita, prospectosPorTelefono) {
-    const prospecto = getProspectoCitaBDC(cita, prospectosPorTelefono);
-    if (!prospecto)
-        return false;
-    const tipo = normalizeText(cita?.tipo_cita || "");
-    if (tipo === "tradicional")
-        return false;
-    const asesorDirecto = canonicalAsesorDigitalBDC(cita?.asesor_digital || "");
-    const asesorProspecto = canonicalAsesorDigitalBDC(prospecto?.asesor_digital || "");
-    if (tipo === "digital")
-        return esAsesorDigitalValidoBDC(asesorDirecto) || esAsesorDigitalValidoBDC(asesorProspecto);
-    // Evento/Remarketing/sin tipo sólo cuentan si la cita trae explícitamente asesor digital.
-    return esAsesorDigitalValidoBDC(asesorDirecto);
+    // Importante: usa el mismo criterio del módulo RegistroCitas.jsx: trim, sin canonicalizar.
+    return String(cita?.asesor_digital || "").trim();
 }
 function getTipoUnidadCitaBDC(cita, prospecto) {
     const desdeProspecto = getTipoUnidadBDC(prospecto || {});
-    if (desdeProspecto)
-        return desdeProspecto;
+    if (desdeProspecto) return desdeProspecto;
     const agencia = normalizeText(cita?.agencia || "");
     const auto = normalizeText(cita?.auto_interes || "");
-    if (agencia.includes("usados") || auto === "seminuevos" || auto === "seminuevo")
-        return "Seminuevos";
-    return "";
-}
-function getProspectoEntregaBDC(entrega, prospectosPorVin) {
-    const vinEntrega = normalizarVinBDC(entrega?.vin);
-
-    if (!vinEntrega) {
-        return null;
-    }
-
-    /*
-     * Primera relación fuerte:
-     * Entregas.vin === ExpedienteDigital.vin_facturado
-     */
-    const prospecto = prospectosPorVin.get(vinEntrega) || null;
-
-    if (!prospecto) {
-        return null;
-    }
-
-    /*
-     * Segunda relación:
-     * debe ser el mismo cliente.
-     */
-    const telefonoEntrega = getTelefonoApiBDC(entrega);
-
-    const telefonoProspecto = normalizaTelefonoMx(
-        prospecto?.telefono || ""
-    );
-
-    if (
-        !/^52\d{10}$/.test(telefonoEntrega) ||
-        !/^52\d{10}$/.test(telefonoProspecto) ||
-        telefonoEntrega !== telefonoProspecto
-    ) {
-        return null;
-    }
-
-    /*
-     * El VIN facturado + el mismo cliente son la relación fuerte con Digitales.
-     * No exigimos que asesor_ventas coincida: el asesor de piso puede cambiar entre
-     * cotización, facturación y entrega y esa condición producía falsos negativos.
-     */
-
-    /* La entrega tampoco puede ser anterior al prospecto digital. */
-    const fechaEntrega = getTimestampSeguroBDC(
-        entrega?.fecha_hora_entrega
-    );
-
-    const fechaProspecto = getProspectoTimestampBDC(
-        prospecto
-    );
-
-    if (
-        fechaEntrega &&
-        fechaProspecto &&
-        fechaProspecto > fechaEntrega
-    ) {
-        return null;
-    }
-
-    return prospecto;
-}
-function getAsesorEntregaBDC(entrega, prospectosPorVin) {
-    const prospecto = getProspectoEntregaBDC(entrega, prospectosPorVin);
-    const asesor = canonicalAsesorDigitalBDC(prospecto?.asesor_digital || "");
-    return esAsesorDigitalValidoBDC(asesor) ? asesor : "";
-}
-function getTipoUnidadEntregaBDC(entrega, prospecto = null) {
-    const desdeProspecto = getTipoUnidadBDC(prospecto || {});
-    if (desdeProspecto)
-        return desdeProspecto;
-    const tipo = normalizeText(entrega?.tipo_venta || "");
-    if (["usado", "usados", "seminuevo", "seminuevos"].includes(tipo))
-        return "Seminuevos";
-    if (["comercial", "comerciales"].includes(tipo))
-        return "Comerciales";
-    if (["nuevo", "nuevos"].includes(tipo))
-        return "Nuevos";
+    if (agencia.includes("usados") || auto === "seminuevos" || auto === "seminuevo") return "Seminuevos";
     return "";
 }
 function tipoUnidadMatchesBDC(tipo, filtro) {
-    if (!filtro || filtro === "Todos")
-        return true;
-    if (!tipo)
-        return false;
-    if (filtro === "Nuevos + Seminuevos")
-        return tipo === "Nuevos" || tipo === "Seminuevos";
+    if (!filtro || filtro === "Todos") return true;
+    if (!tipo) return false;
+    if (filtro === "Nuevos + Seminuevos") return tipo === "Nuevos" || tipo === "Seminuevos";
     return tipo === filtro;
 }
 function asistenciaConfirmadaBDC(value) {
-    if (value === true || value === 1)
-        return true;
+    if (value === true || value === 1) return true;
     return ["si", "sí", "true", "1", "asistio", "asistió"].includes(normalizeText(value));
 }
-function entregaFisicaActivaBDC(value) {
-    if (value === true || value === 1)
-        return true;
-    const normalized = normalizeText(value);
-    return ["si", "true", "1", "yes", "entregada", "reportada"].includes(normalized);
-}
 function getCitaUniqueKeyBDC(cita) {
-    if (cita?.id !== null && cita?.id !== undefined)
-        return `id:${cita.id}`;
-    return [
-        getTelefonoApiBDC(cita),
-        String(cita?.fecha_hora_cita || ""),
-        canonicalAsesorDigitalBDC(cita?.asesor_digital || ""),
-        normalizeText(cita?.tipo_cita || ""),
-    ].join("|");
+    if (cita?.id !== null && cita?.id !== undefined) return `id:${cita.id}`;
+    return [getTelefonoApiBDC(cita), String(cita?.fecha_hora_cita || ""), getAsesorCitaBDC(cita), normalizeText(cita?.tipo_cita || "")].join("|");
 }
 function dedupeCitasBDC(citas) {
     const map = new Map();
     for (const cita of citas || []) {
         const key = getCitaUniqueKeyBDC(cita);
-        if (!map.has(key))
-            map.set(key, cita);
+        if (!map.has(key)) map.set(key, cita);
     }
     return Array.from(map.values());
 }
-function getEntregaUniqueKeyBDC(entrega) {
-    const vin = getVinBDC(entrega);
-    if (vin)
-        return `vin:${vin}`;
-    if (entrega?.id !== null && entrega?.id !== undefined)
-        return `id:${entrega.id}`;
-    return `tel:${getTelefonoApiBDC(entrega)}|fecha:${String(entrega?.fecha_hora_entrega || "")}`;
-}
-function dedupeEntregasBDC(entregas) {
-    const map = new Map();
-    for (const entrega of entregas || []) {
-        const key = getEntregaUniqueKeyBDC(entrega);
-        if (!map.has(key))
-            map.set(key, entrega);
+function setTelefonosBDC(items, getter = (item) => item?.telefono) {
+    const set = new Set();
+    for (const item of items || []) {
+        const tel = normalizaTelefonoMx(getter(item));
+        if (/^52\d{10}$/.test(tel)) set.add(tel);
     }
-    return Array.from(map.values());
+    return set;
+}
+function porcentajeInterseccionBDC(origenSet, destinoSet) {
+    if (!origenSet?.size) return 0;
+    let avanzaron = 0;
+    for (const tel of origenSet) if (destinoSet?.has(tel)) avanzaron += 1;
+    return (avanzaron / origenSet.size) * 100;
 }
 function getEstadoMetaBDC(valor, meta) {
     if (valor >= meta)
@@ -1707,428 +1554,174 @@ function getEstadoAsesorBDC(efectividad) {
         return { label: "Requiere atención", cls: "border-amber-200 bg-amber-50 text-amber-700" };
     return { label: "Crítico", cls: "border-red-200 bg-red-50 text-red-700" };
 }
-function normalizarVinBDC(value) {
-    return String(value || "")
-        .trim()
-        .toUpperCase()
-        .replace(/\s+/g, "");
-}
 function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
     const [mes, setMes] = useState(() => formatDateYMDLocal(new Date()).slice(0, 7));
     const [asesor, setAsesor] = useState("Todos");
     const [agencia, setAgencia] = useState("Todos");
     const [linea, setLinea] = useState("Todos");
     const [origen, setOrigen] = useState("Todos");
-    const [showDiscardDetails, setShowDiscardDetails,] = useState(false);
+    const [showDiscardDetails, setShowDiscardDetails] = useState(false);
     const [citasBDC, setCitasBDC] = useState([]);
-    const [entregasBDC, setEntregasBDC] = useState([]);
     const [loadingOperativoBDC, setLoadingOperativoBDC] = useState(true);
     const [errorOperativoBDC, setErrorOperativoBDC] = useState("");
 
     useEffect(() => {
-        let cancelled = false;
-
-        async function cargarDatosOperativos() {
+        let cancelado = false;
+        async function cargarCitas() {
             setLoadingOperativoBDC(true);
             setErrorOperativoBDC("");
-
             try {
-                const [
-                    citasResult,
-                    entregasResult,
-                ] = await Promise.allSettled([
-                    apiCitas.list({
-                        mes,
-                        solo_digital: 1,
-                    }),
-
-                    apiEntregas.list({
-                        mes,
-                    }),
-                ]);
-
-                if (cancelled) {
-                    return;
-                }
-
-                const errores = [];
-
-                if (
-                    citasResult.status ===
-                    "fulfilled"
-                ) {
-                    setCitasBDC(
-                        dedupeCitasBDC(
-                            getListItems(
-                                citasResult.value
-                            )
-                        )
-                    );
-                } else {
-                    console.error(
-                        "Error cargando citas BDC:",
-                        citasResult.reason
-                    );
-
+                // Sólo pedimos el mes. La identificación BDC se hace por asesor_digital,
+                // igual que RegistroCitas.jsx; ya no dependemos de Entregas.
+                const data = await apiCitas.list({ mes });
+                if (!cancelado) setCitasBDC(dedupeCitasBDC(getListItems(data)));
+            } catch (error) {
+                console.error("Error cargando citas BDC:", error);
+                if (!cancelado) {
                     setCitasBDC([]);
-                    errores.push("citas");
-                }
-
-                if (
-                    entregasResult.status ===
-                    "fulfilled"
-                ) {
-                    setEntregasBDC(
-                        dedupeEntregasBDC(
-                            getListItems(
-                                entregasResult.value
-                            )
-                        )
-                    );
-                } else {
-                    console.error(
-                        "Error cargando entregas BDC:",
-                        entregasResult.reason
-                    );
-
-                    setEntregasBDC([]);
-                    errores.push("entregas");
-                }
-
-                if (errores.length) {
-                    setErrorOperativoBDC(
-                        `No se pudieron sincronizar: ${errores.join(" y ")}.`
-                    );
+                    setErrorOperativoBDC("No se pudieron sincronizar las citas.");
                 }
             } finally {
-                if (!cancelled) {
-                    setLoadingOperativoBDC(false);
-                }
+                if (!cancelado) setLoadingOperativoBDC(false);
             }
         }
-
-        cargarDatosOperativos();
-
-        return () => {
-            cancelled = true;
-        };
+        cargarCitas();
+        return () => { cancelado = true; };
     }, [mes, versionOperativa]);
 
     const prospectosPorTelefono = useMemo(() => buildProspectosPorTelefonoBDC(rows), [rows]);
-    const prospectosPorVin = useMemo(() => buildProspectosPorVinBDC(rows), [rows]);
     const dealersPermitidos = useMemo(() => new Set(rows.map(getDealerBDC).filter(Boolean)), [rows]);
+    const asesoresExactosPermitidos = useMemo(() => new Set(rows.map((row) => String(row?.asesor_digital || "").trim()).filter(Boolean)), [rows]);
 
-    const asesoresPermitidos = useMemo(() => new Set(
-        rows.map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital)).filter(Boolean),
-    ), [rows]);
-
-    // Fuente de verdad de citas: cada fila real de Cita con asesor_digital.
-    // No exigimos que el teléfono encuentre un ExpedienteDigital: esa relación era
-    // precisamente la que eliminaba citas válidas del conteo.
+    /*
+     * Citas BDC: replica el criterio real del módulo RegistroCitas.jsx.
+     * - usa fecha_hora_cita;
+     * - requiere asesor_digital;
+     * - compara el nombre con trim, SIN canonicalizar;
+     * - no infiere el asesor desde el prospecto;
+     * - no exige tipo_cita="Digital", porque "citas registradas" significa total de
+     *   registros del asesor digital, exactamente como el filtro del módulo Citas.
+     * Esto evita que variantes históricas como "LIZBETH CANO CLARA" se fusionen
+     * artificialmente con "Lizbeth Cano Clara" y eleven el conteo del dashboard.
+     */
     const citasDigitalesBase = useMemo(() => dedupeCitasBDC((citasBDC || []).filter((cita) => {
+        if (!getMesFechaBDC(cita?.fecha_hora_cita)) return false;
         const asesorCita = getAsesorCitaBDC(cita);
+        if (!asesorCita) return false;
+        if (asesoresExactosPermitidos.size && !asesoresExactosPermitidos.has(asesorCita)) return false;
         const dealer = normalizeDealerGrupo(cita?.agencia || "");
-        if (!getMesFechaBDC(cita?.fecha_hora_cita) || !esAsesorDigitalValidoBDC(asesorCita)) return false;
-        if (asesoresPermitidos.size && !asesoresPermitidos.has(asesorCita)) return false;
         if (dealer && dealersPermitidos.size && !dealersPermitidos.has(dealer)) return false;
         return true;
-    })), [citasBDC, asesoresPermitidos, dealersPermitidos]);
+    })), [citasBDC, asesoresExactosPermitidos, dealersPermitidos]);
 
-    // Una entrega sólo se considera venta digital cuando el VIN de la entrega
-    // coincide con vin_facturado de un prospecto digital. El teléfono por sí solo
-    // no es suficiente porque un mismo cliente también puede comprar con piso.
-    const entregasDigitalesBase = useMemo(() => {
-        const filtradas = (entregasBDC || []).filter((entrega) => {
-            const mesEntrega = getMesFechaBDC(entrega?.fecha_hora_entrega);
-            if (!mesEntrega)
-                return false;
-            const prospecto = getProspectoEntregaBDC(entrega, prospectosPorVin);
-            if (!prospecto)
-                return false;
-            const asesorDigital = getAsesorEntregaBDC(entrega, prospectosPorVin);
-            if (!asesorDigital)
-                return false;
-            const dealer = normalizeDealerGrupo(entrega?.agencia || prospecto?.agencia || "");
-            if (dealer && dealersPermitidos.size && !dealersPermitidos.has(dealer))
-                return false;
-            return Boolean(getTipoUnidadEntregaBDC(entrega, prospecto));
-        });
-        return dedupeEntregasBDC(filtradas);
-    }, [entregasBDC, prospectosPorVin, dealersPermitidos]);
-
-    // ─────────────────────────────────────────────────────────────
-    // Opciones de filtros
-    // ─────────────────────────────────────────────────────────────
     const meses = useMemo(() => {
         const values = Array.from(new Set([
             ...rows.map(getMesBDC),
+            ...rows.map((row) => getMesFechaBDC(row?.facturado_at)),
             ...citasDigitalesBase.map((cita) => getMesFechaBDC(cita?.fecha_hora_cita)),
-            ...entregasDigitalesBase.map((entrega) => getMesFechaBDC(entrega?.fecha_hora_entrega)),
         ].filter(esMesValidoBDC))).sort((a, b) => b.localeCompare(a));
-        if (esMesValidoBDC(mes) && !values.includes(mes))
-            values.unshift(mes);
+        if (esMesValidoBDC(mes) && !values.includes(mes)) values.unshift(mes);
         return values;
-    }, [rows, citasDigitalesBase, entregasDigitalesBase, mes]);
+    }, [rows, citasDigitalesBase, mes]);
 
     const asesores = useMemo(() => {
-        const values = Array.from(new Set([
-            ...rows.map((row) => canonicalAsesorDigitalBDC(row.asesor_digital)),
-            ...citasDigitalesBase.map((cita) => getAsesorCitaBDC(cita, prospectosPorTelefono)),
-            ...entregasDigitalesBase.map((entrega) => getAsesorEntregaBDC(entrega, prospectosPorVin)),
-        ].filter(esAsesorDigitalValidoBDC))).sort((a, b) => a.localeCompare(b, "es"));
+        const values = Array.from(new Set(rows
+            .map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital))
+            .filter(esAsesorDigitalValidoBDC)))
+            .sort((a, b) => a.localeCompare(b, "es"));
         return ["Todos", ...values];
-    }, [rows, citasDigitalesBase, entregasDigitalesBase, prospectosPorTelefono, prospectosPorVin]);
+    }, [rows]);
 
     const agencias = useMemo(() => {
-        const ordenPreferido = [
-            "VW Cordoba",
-            "VW Orizaba",
-            "VW Poza Rica",
-            "VW Tuxtepec",
-            "VW Tuxpan",
-        ];
-        const values = Array.from(new Set(rows.map((row) => getDealerBDC(row)).filter(Boolean)));
-        const principales = ordenPreferido.filter((dealer) => values.includes(dealer));
-        const adicionales = values
-            .filter((dealer) => !ordenPreferido.includes(dealer))
-            .sort((a, b) => a.localeCompare(b, "es"));
-        return ["Todos", ...principales, ...adicionales];
+        const orden = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
+        const values = Array.from(new Set(rows.map(getDealerBDC).filter(Boolean)));
+        return ["Todos", ...orden.filter((d) => values.includes(d)), ...values.filter((d) => !orden.includes(d)).sort((a, b) => a.localeCompare(b, "es"))];
     }, [rows]);
 
-    const origenes = useMemo(() => {
-        const values = Array.from(new Set(rows
-            .map((row) => String(row.origen || "").trim())
-            .filter(Boolean))).sort((a, b) => a.localeCompare(b, "es"));
-        return ["Todos", ...values];
-    }, [rows]);
+    const origenes = useMemo(() => ["Todos", ...Array.from(new Set(rows.map((row) => String(row?.origen || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es"))], [rows]);
 
-    // ─────────────────────────────────────────────────────────────
-    // Prospectos filtrados
-    // ─────────────────────────────────────────────────────────────
-    const filteredRows = useMemo(() => {
-        return rows.filter((row) => {
-            const mesRegistro = getMesBDC(row);
-            if (!mesRegistro || (mes && mesRegistro !== mes))
-                return false;
-            if (!esAsesorDigitalValidoBDC(row?.asesor_digital))
-                return false;
-            if (asesor !== "Todos" && canonicalAsesorDigitalBDC(row.asesor_digital) !== canonicalAsesorDigitalBDC(asesor))
-                return false;
-            if (agencia !== "Todos" && getDealerBDC(row) !== agencia)
-                return false;
-            if (!lineaMatchesBDC(row, linea))
-                return false;
-            if (origen !== "Todos" && normalizeText(row.origen || "") !== normalizeText(origen))
-                return false;
-            return true;
-        });
-    }, [rows, mes, asesor, agencia, linea, origen]);
+    const filteredRows = useMemo(() => rows.filter((row) => {
+        const mesRegistro = getMesBDC(row);
+        if (!mesRegistro || mesRegistro !== mes) return false;
+        if (!esAsesorDigitalValidoBDC(row?.asesor_digital)) return false;
+        if (asesor !== "Todos" && canonicalAsesorDigitalBDC(row?.asesor_digital) !== canonicalAsesorDigitalBDC(asesor)) return false;
+        if (agencia !== "Todos" && getDealerBDC(row) !== agencia) return false;
+        if (!lineaMatchesBDC(row, linea)) return false;
+        if (origen !== "Todos" && normalizeText(row?.origen) !== normalizeText(origen)) return false;
+        return true;
+    }), [rows, mes, asesor, agencia, linea, origen]);
 
-    // Citas registradas = total de filas reales del asesor digital en el mes.
-    // Citas efectivas = exactamente esas mismas filas con asistencia=true.
-    const citasFiltradas = useMemo(() => dedupeCitasBDC((citasDigitalesBase || []).filter((cita) => {
-        const mesCita = getMesFechaBDC(cita?.fecha_hora_cita);
+    const citasFiltradas = useMemo(() => dedupeCitasBDC(citasDigitalesBase.filter((cita) => {
+        if (getMesFechaBDC(cita?.fecha_hora_cita) !== mes) return false;
+
+        // MISMA comparación que RegistroCitas.jsx: String(...).trim() === String(...).trim()
         const asesorCita = getAsesorCitaBDC(cita);
-        if (!mesCita || (mes && mesCita !== mes) || !asesorCita) return false;
-        if (asesor !== "Todos" && asesorCita !== canonicalAsesorDigitalBDC(asesor)) return false;
+        if (asesor !== "Todos" && asesorCita !== String(asesor || "").trim()) return false;
 
         const prospecto = getProspectoCitaBDC(cita, prospectosPorTelefono);
         const dealerCita = normalizeDealerGrupo(cita?.agencia || prospecto?.agencia || "");
         if (dealerCita && dealersPermitidos.size && !dealersPermitidos.has(dealerCita)) return false;
         if (agencia !== "Todos" && dealerCita !== agencia) return false;
 
+        // Cita no contiene business; sólo relacionamos con el expediente si el usuario
+        // activa ese filtro. La relación nunca decide si la cita existe o no.
         if (linea !== "Todos") {
             const tipoUnidad = getTipoUnidadCitaBDC(cita, prospecto);
             if (!tipoUnidadMatchesBDC(tipoUnidad, linea)) return false;
         }
-
-        const origenCita = String(cita?.fuente_prospeccion || prospecto?.origen || "").trim();
-        if (origen !== "Todos" && normalizeText(origenCita) !== normalizeText(origen)) return false;
+        if (origen !== "Todos") {
+            const origenCita = String(cita?.fuente_prospeccion || prospecto?.origen || "").trim();
+            if (normalizeText(origenCita) !== normalizeText(origen)) return false;
+        }
         return true;
     })), [citasDigitalesBase, mes, asesor, agencia, linea, origen, prospectosPorTelefono, dealersPermitidos]);
 
-    // Entregas/facturados digitales: relación estricta por VIN, nunca sólo por teléfono.
-    const entregasFiltradas = useMemo(() => {
-        const entregasUnicas = new Map();
-
-        for (const entrega of entregasBDC || []) {
-            /*
-             * 1. Fecha exacta del mes seleccionado.
-             */
-            const mesEntrega = getMesFechaBDC(
-                entrega?.fecha_hora_entrega
-            );
-
-            if (!mesEntrega) {
-                continue;
-            }
-
-            if (mes && mesEntrega !== mes) {
-                continue;
-            }
-
-            /*
-             * 2. VIN obligatorio.
-             */
-            const vinEntrega = normalizarVinBDC(
-                entrega?.vin
-            );
-
-            if (!vinEntrega) {
-                continue;
-            }
-
-            /*
-             * 3. Relación estricta:
-             *
-             * VIN
-             * + teléfono
-             */
-            const prospecto = getProspectoEntregaBDC(
-                entrega,
-                prospectosPorVin
-            );
-
-            if (!prospecto) {
-                continue;
-            }
-
-            /*
-             * 4. Prospecto obligatoriamente digital.
-             */
-            const asesorDigitalEntrega =
-                canonicalAsesorDigitalBDC(
-                    prospecto?.asesor_digital || ""
-                );
-
-            if (
-                !esAsesorDigitalValidoBDC(
-                    asesorDigitalEntrega
-                )
-            ) {
-                continue;
-            }
-
-            /*
-             * 5. Asesora digital seleccionada.
-             */
-            if (
-                asesor !== "Todos" &&
-                asesorDigitalEntrega !==
-                canonicalAsesorDigitalBDC(asesor)
-            ) {
-                continue;
-            }
-
-            /*
-             * 6. Dealer.
-             */
-            const dealerEntrega =
-                normalizeDealerGrupo(
-                    entrega?.agencia ||
-                    prospecto?.agencia ||
-                    ""
-                );
-
-            if (
-                dealerEntrega &&
-                dealersPermitidos.size &&
-                !dealersPermitidos.has(dealerEntrega)
-            ) {
-                continue;
-            }
-
-            if (
-                agencia !== "Todos" &&
-                dealerEntrega !== agencia
-            ) {
-                continue;
-            }
-
-            /*
-             * 7. Business.
-             */
-            const tipoEntrega =
-                getTipoUnidadEntregaBDC(
-                    entrega,
-                    prospecto
-                );
-
-            if (
-                !tipoUnidadMatchesBDC(
-                    tipoEntrega,
-                    linea
-                )
-            ) {
-                continue;
-            }
-
-            /*
-             * 8. Origen.
-             */
-            const origenEntrega = String(
-                prospecto?.origen || ""
-            ).trim();
-
-            if (
-                origen !== "Todos" &&
-                normalizeText(origenEntrega) !==
-                normalizeText(origen)
-            ) {
-                continue;
-            }
-
-            /*
-             * Un VIN sólo puede contarse una vez.
-             */
-            entregasUnicas.set(
-                vinEntrega,
-                entrega
-            );
+    // Fuente única de verdad para facturación: ExpedienteDigital.facturado_at.
+    // No se consulta ni se cruza ninguna tabla de Entregas.
+    const facturadosFiltrados = useMemo(() => {
+        const unicos = new Map();
+        for (const row of rows || []) {
+            if (getMesFechaBDC(row?.facturado_at) !== mes) continue;
+            if (!esAsesorDigitalValidoBDC(row?.asesor_digital)) continue;
+            if (asesor !== "Todos" && canonicalAsesorDigitalBDC(row?.asesor_digital) !== canonicalAsesorDigitalBDC(asesor)) continue;
+            if (agencia !== "Todos" && getDealerBDC(row) !== agencia) continue;
+            if (!lineaMatchesBDC(row, linea)) continue;
+            if (origen !== "Todos" && normalizeText(row?.origen) !== normalizeText(origen)) continue;
+            const key = row?.id_exp ?? `${normalizaTelefonoMx(row?.telefono)}|${row?.facturado_at}`;
+            unicos.set(key, row);
         }
+        return Array.from(unicos.values());
+    }, [rows, mes, asesor, agencia, linea, origen]);
 
-        return Array.from(
-            entregasUnicas.values()
-        );
-    }, [entregasBDC, mes, asesor, agencia, linea, origen, prospectosPorVin, dealersPermitidos,]);
-    // ─────────────────────────────────────────────────────────────
-    // Métricas principales
-    // ─────────────────────────────────────────────────────────────
     const metricas = useMemo(() => {
         const oportunidades = filteredRows.length;
-        const gestionables = filteredRows.filter(esGestionableBDC).length;
-        const contactados = filteredRows.filter((row) => esGestionableBDC(row) && esContactadoBDC(row)).length;
+        const gestionablesRows = filteredRows.filter(esGestionableBDC);
+        const contactadosRows = gestionablesRows.filter(esContactadoBDC);
+        const solicitudesRows = filteredRows.filter(tieneSolicitudBDC);
         const citados = citasFiltradas.length;
         const efectivas = citasFiltradas.filter((cita) => asistenciaConfirmadaBDC(cita?.asistencia)).length;
-        const solicitudes = filteredRows.filter(tieneSolicitudBDC).length;
+        const facturados = facturadosFiltrados.length;
+        const gestionables = gestionablesRows.length;
+        const contactados = contactadosRows.length;
+        const solicitudes = solicitudesRows.length;
         const anf = filteredRows.filter(esAnfBDC).length;
-        // Facturada: existe registro en Entregas ligado de forma estricta al VIN facturado del prospecto digital.
-        // Entregada: además, Entregas.entrega_reportada=true.
-        const facturados = entregasFiltradas.length;
-        const reportados = entregasFiltradas.filter((entrega) => entregaFisicaActivaBDC(entrega?.entrega_reportada)).length;
-        const descartados = filteredRows.filter((row) => normalizeText(row.estado) === "descalificado").length;
-        const tasaContacto = gestionables ? (contactados / gestionables) * 100 : 0;
-        const efectividadCitas = citados ? (efectivas / citados) * 100 : 0;
-        const tasaFacturacion = solicitudes ? (facturados / solicitudes) * 100 : 0;
+        const descartados = filteredRows.filter((row) => normalizeText(row?.estado) === "descalificado").length;
         return {
-            oportunidades,
-            gestionables,
-            contactados,
-            citados,
-            efectivas,
-            solicitudes,
-            anf,
-            facturados,
-            reportados,
-            descartados,
-            tasaContacto,
-            efectividadCitas,
-            tasaFacturacion,
+            oportunidades, gestionables, contactados, citados, efectivas, solicitudes, anf, facturados, descartados,
+            tasaContacto: gestionables ? (contactados / gestionables) * 100 : 0,
+            efectividadCitas: citados ? (efectivas / citados) * 100 : 0,
+            tasaFacturacion: solicitudes ? (facturados / solicitudes) * 100 : 0,
+            sets: {
+                gestionables: setTelefonosBDC(gestionablesRows),
+                contactados: setTelefonosBDC(contactadosRows),
+                citados: setTelefonosBDC(citasFiltradas, getTelefonoApiBDC),
+                efectivas: setTelefonosBDC(citasFiltradas.filter((cita) => asistenciaConfirmadaBDC(cita?.asistencia)), getTelefonoApiBDC),
+                solicitudes: setTelefonosBDC(solicitudesRows),
+                facturados: setTelefonosBDC(facturadosFiltrados),
+            },
         };
-    }, [filteredRows, citasFiltradas, entregasFiltradas]);
-    // ─────────────────────────────────────────────────────────────
-    // Funnel
-    // ─────────────────────────────────────────────────────────────
+    }, [filteredRows, citasFiltradas, facturadosFiltrados]);
+
     const funnel = useMemo(() => {
         const stages = [
             { key: "gestionables", label: "Gestionables", value: metricas.gestionables, wrapCls: "flex-[1.2]", boxCls: "h-[118px] bg-[#0B46D8] text-white [clip-path:polygon(0_0,100%_7%,100%_93%,0_100%)]" },
@@ -2140,671 +1733,148 @@ function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
         ];
         return stages.map((stage, index) => {
             const next = stages[index + 1];
-            const conversion = next && stage.value
-                ? (next.value /
-                    stage.value) * 100
-                : next
-                    ? 0
-                    : null;
-            const perdidos = next
-                ? Math.max(stage.value -
-                    next.value, 0)
-                : 0;
-            return {
-                ...stage,
-                conversion,
-                perdidos,
-            };
+            const origenSet = metricas.sets?.[stage.key] || new Set();
+            const destinoSet = next ? metricas.sets?.[next.key] || new Set() : new Set();
+            let avanzaron = 0;
+            for (const tel of origenSet) if (destinoSet.has(tel)) avanzaron += 1;
+            return { ...stage, nextLabel: next?.label || "", conversion: next ? porcentajeInterseccionBDC(origenSet, destinoSet) : null, baseClientes: origenSet.size, avanzaron, perdidos: Math.max(origenSet.size - avanzaron, 0) };
         });
     }, [metricas]);
-    // ─────────────────────────────────────────────────────────────
-    // Resultados por asesora
-    // ─────────────────────────────────────────────────────────────
+
     const resultadosAsesor = useMemo(() => {
-        const nombres = new Set();
-        for (const row of filteredRows) {
-            const nombre = canonicalAsesorDigitalBDC(row?.asesor_digital || "");
-            if (esAsesorDigitalValidoBDC(nombre))
-                nombres.add(nombre);
-        }
+        const nombres = Array.from(new Set(filteredRows.map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital)).filter(Boolean)));
         for (const cita of citasFiltradas) {
-            const nombre = getAsesorCitaBDC(cita, prospectosPorTelefono);
-            if (nombre)
-                nombres.add(nombre);
+            const nombre = getAsesorCitaBDC(cita);
+            if (nombre && !nombres.includes(nombre)) nombres.push(nombre);
         }
-        for (const entrega of entregasFiltradas) {
-            const nombre = getAsesorEntregaBDC(entrega, prospectosPorVin);
-            if (nombre)
-                nombres.add(nombre);
-        }
-        return Array.from(nombres)
-            .map((nombre) => {
-                const registros = filteredRows.filter((row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === nombre);
-                const citasAsesor = citasFiltradas.filter((cita) => getAsesorCitaBDC(cita, prospectosPorTelefono) === nombre);
-                const entregasAsesor = entregasFiltradas.filter((entrega) => getAsesorEntregaBDC(entrega, prospectosPorVin) === nombre);
-                const gestionables = registros.filter(esGestionableBDC).length;
-                const contactados = registros.filter((row) => esGestionableBDC(row) && esContactadoBDC(row)).length;
-                const citados = citasAsesor.length;
-                const efectivas = citasAsesor.filter((cita) => asistenciaConfirmadaBDC(cita?.asistencia)).length;
-                const noShow = Math.max(citados - efectivas, 0);
-                const solicitudes = registros.filter(tieneSolicitudBDC).length;
-                const facturados = entregasAsesor.length;
-                const entregados = entregasAsesor.filter((entrega) => entregaFisicaActivaBDC(entrega?.entrega_reportada)).length;
-                const efectividad = citados ? (efectivas / citados) * 100 : 0;
-                return { nombre, gestionables, contactados, citados, efectivas, noShow, solicitudes, facturados, entregados, efectividad };
-            })
-            .sort((a, b) => b.facturados - a.facturados || b.efectivas - a.efectivas || b.citados - a.citados || b.contactados - a.contactados);
-    }, [filteredRows, citasFiltradas, entregasFiltradas, prospectosPorTelefono, prospectosPorVin]);
-    // ─────────────────────────────────────────────────────────────
-    // Orígenes
-    // ─────────────────────────────────────────────────────────────
+        return nombres.map((nombre) => {
+            const registros = filteredRows.filter((row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === canonicalAsesorDigitalBDC(nombre));
+            // De nuevo, cita por asesor con igualdad exacta para no fusionar variantes históricas.
+            const citasAsesor = citasFiltradas.filter((cita) => getAsesorCitaBDC(cita) === String(nombre).trim());
+            const facturadosAsesor = facturadosFiltrados.filter((row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === canonicalAsesorDigitalBDC(nombre));
+            const gestionables = registros.filter(esGestionableBDC).length;
+            const contactados = registros.filter((row) => esGestionableBDC(row) && esContactadoBDC(row)).length;
+            const citados = citasAsesor.length;
+            const efectivas = citasAsesor.filter((cita) => asistenciaConfirmadaBDC(cita?.asistencia)).length;
+            const solicitudes = registros.filter(tieneSolicitudBDC).length;
+            return { nombre, gestionables, contactados, citados, efectivas, noShow: Math.max(citados - efectivas, 0), solicitudes, facturados: facturadosAsesor.length, efectividad: citados ? (efectivas / citados) * 100 : 0 };
+        }).sort((a, b) => b.facturados - a.facturados || b.efectivas - a.efectivas || b.citados - a.citados || b.contactados - a.contactados);
+    }, [filteredRows, citasFiltradas, facturadosFiltrados]);
+
     const origenStats = useMemo(() => {
         const map = new Map();
         for (const row of filteredRows) {
-            const key = String(row.origen || "").trim() ||
-                "Otros / sin origen";
+            const key = String(row?.origen || "").trim() || "Otros / sin origen";
             map.set(key, (map.get(key) || 0) + 1);
         }
         return Array.from(map.entries()).sort(([, a], [, b]) => b - a);
     }, [filteredRows]);
-    // ─────────────────────────────────────────────────────────────
-    // Descartados
-    // ─────────────────────────────────────────────────────────────
+
     const motivosDescarte = useMemo(() => {
         const map = new Map();
         for (const row of filteredRows) {
-            if (normalizeText(row.estado) !== "descalificado") {
-                continue;
-            }
-            const key = String(row.motivo_descalificacion ||
-                "").trim() ||
-                "Sin motivo capturado";
+            if (normalizeText(row?.estado) !== "descalificado") continue;
+            const key = String(row?.motivo_descalificacion || "").trim() || "Sin motivo capturado";
             map.set(key, (map.get(key) || 0) + 1);
         }
         return Array.from(map.entries()).sort(([, a], [, b]) => b - a);
     }, [filteredRows]);
-    const principalDescarte = motivosDescarte[0] || [
-        "Sin descartes",
-        0,
-    ];
+
+    const principalDescarte = motivosDescarte[0] || ["Sin descartes", 0];
     const maxOrigen = Math.max(...origenStats.map(([, total]) => total), 1);
     const maxMotivo = Math.max(...motivosDescarte.map(([, total]) => total), 1);
-    // ─────────────────────────────────────────────────────────────
-    // Helpers UI
-    // ─────────────────────────────────────────────────────────────
     const getOriginBarClass = (label) => {
         const value = normalizeText(label);
-        if (value.includes("facebook") || value.includes("meta"))
-            return "bg-[#1670F5]";
-        if (value.includes("whatsapp"))
-            return "bg-[#22C55E]";
-        if (value.includes("llamada"))
-            return "bg-[#F59E0B]";
-        if (value.includes("concesionario") || value.includes("web"))
-            return "bg-[#131E5C]";
+        if (value.includes("facebook") || value.includes("meta")) return "bg-[#1670F5]";
+        if (value.includes("whatsapp")) return "bg-[#22C55E]";
+        if (value.includes("llamada")) return "bg-[#F59E0B]";
+        if (value.includes("concesionario") || value.includes("web")) return "bg-[#131E5C]";
         return "bg-slate-400";
     };
-    const Control = ({ value, onChange, children, ariaLabel, }) => (<select value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10">
-        {children}
-    </select>);
-    const SummaryCard = ({ label, value, }) => (<div className="border-r border-slate-100 px-4 py-3 last:border-r-0">
-        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            {label}
-        </div>
 
-        <div className="mt-1 text-[28px] font-black leading-none text-slate-950">
-            {value.toLocaleString("es-MX")}
-        </div>
-    </div>);
-    const ProcessRow = ({ label, value, detail, }) => (<div className="flex min-h-[58px] items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0">
-        <div className="min-w-0">
-            <div className="text-xs font-bold text-sky-700">
-                {label}
-            </div>
-
-            <div className="mt-0.5 text-[9px] leading-tight text-slate-400">
-                {detail}
-            </div>
-        </div>
-
-        <div className="shrink-0 text-xl font-black text-slate-950">
-            {value.toLocaleString("es-MX")}
-        </div>
-    </div>);
+    const Control = ({ value, onChange, children, ariaLabel }) => <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel} className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10">{children}</select>;
+    const SummaryCard = ({ label, value }) => <div className="border-r border-slate-100 px-4 py-3 last:border-r-0"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 text-[28px] font-black leading-none text-slate-950">{value.toLocaleString("es-MX")}</div></div>;
+    const ProcessRow = ({ label, value, detail }) => <div className="flex min-h-[64px] items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0"><div className="min-w-0"><div className="text-xs font-bold text-sky-700">{label}</div><div className="mt-0.5 text-[9px] leading-tight text-slate-400">{detail}</div></div><div className="shrink-0 text-xl font-black text-slate-950">{value.toLocaleString("es-MX")}</div></div>;
     const MetaRow = ({ label, value, meta }) => {
         const estado = getEstadoMetaBDC(value, meta);
         const barColor = value >= meta ? "bg-emerald-500" : value >= meta * 0.6 ? "bg-amber-500" : "bg-red-500";
         const metaLeft = meta >= 100 ? "left-[calc(100%-2px)]" : meta >= 90 ? "left-[90%]" : meta >= 80 ? "left-[80%]" : "left-[70%]";
-        return (<div className="grid grid-cols-[96px_52px_minmax(100px,1fr)_70px] items-center gap-3 rounded-xl border border-slate-100 px-3 py-3">
-            <div className="text-xs font-black text-[#131E5C]">{label}</div>
-            <div className={cls("text-right text-lg font-black", estado.text)}>{value.toFixed(0)}%</div>
-            <div className="relative h-2">
-                <div className="absolute inset-0 rounded-full bg-slate-100" />
-                <div className={cls("absolute left-0 top-0 h-2 rounded-full transition-all", barColor, widthClass(value))} />
-                <div className={cls("absolute -top-1 h-4 border-l-2 border-dotted border-[#131E5C]", metaLeft)} />
-            </div>
-            <div className="text-[10px] font-bold text-slate-500">Meta {meta}%</div>
-        </div>);
+        return <div className="grid grid-cols-[96px_52px_minmax(100px,1fr)_70px] items-center gap-3 rounded-xl border border-slate-100 px-3 py-3"><div className="text-xs font-black text-[#131E5C]">{label}</div><div className={cls("text-right text-lg font-black", estado.text)}>{value.toFixed(0)}%</div><div className="relative h-2"><div className="absolute inset-0 rounded-full bg-slate-100" /><div className={cls("absolute left-0 top-0 h-2 rounded-full transition-all", barColor, widthClass(value))} /><div className={cls("absolute -top-1 h-4 border-l-2 border-dotted border-[#131E5C]", metaLeft)} /></div><div className="text-[10px] font-bold text-slate-500">Meta {meta}%</div></div>;
     };
+
     const estadoRendimiento = getEstadoMetaBDC(metricas.efectividadCitas, 80);
-    return (<div className="overflow-hidden">
 
-        {/* ───────────────── HEADER ───────────────── */}
-
+    return <div className="overflow-hidden">
         <div className="px-5 pt-5">
             <div className="mt-3 grid gap-3 xl:grid-cols-[150px_minmax(0,1fr)] xl:items-end">
-                <div>
-                    <div className="text-[22px] font-black leading-[0.9] text-slate-950">
-                        Ventas Digitales
-                    </div>
-
-                    <div className="mt-1 text-[12px] font-bold text-blue-500">
-                        Resumen de resultados BDC
-                    </div>
-                </div>
-
+                <div><div className="text-[22px] font-black leading-[0.9] text-slate-950">Ventas Digitales</div><div className="mt-1 text-[12px] font-bold text-blue-500">Resumen de resultados BDC</div></div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                    <Control value={mes} onChange={setMes} ariaLabel="Mes">
-                        {meses.length === 0 ? (<option value={mes}>
-                            {formatMesBDC(mes)}
-                        </option>) : (meses.map((item) => (<option key={item} value={item}>
-                            {formatMesBDC(item)}
-                        </option>)))}
-                    </Control>
-
-                    <Control value={asesor} onChange={setAsesor} ariaLabel="Asesora digital">
-                        {asesores.map((item) => (<option key={item} value={item}>
-                            {item === "Todos"
-                                ? "Todas las asesoras"
-                                : item}
-                        </option>))}
-                    </Control>
-
-                    <Control value={agencia} onChange={setAgencia} ariaLabel="Agencia">
-                        {agencias.map((item) => (<option key={item} value={item}>
-                            {item === "Todos"
-                                ? "Todas las agencias"
-                                : item}
-                        </option>))}
-                    </Control>
-
-                    <Control value={linea} onChange={setLinea} ariaLabel="Business">
-                        {[
-                            "Nuevos + Seminuevos",
-                            "Todos",
-                            "Nuevos",
-                            "Seminuevos",
-                            "Comerciales",
-                        ].map((item) => (<option key={item} value={item}>
-                            {item}
-                        </option>))}
-                    </Control>
-
-                    <Control value={origen} onChange={setOrigen} ariaLabel="Origen">
-                        {origenes.map((item) => (<option key={item} value={item}>
-                            {item === "Todos"
-                                ? "Todos los orígenes"
-                                : item}
-                        </option>))}
-                    </Control>
+                    <Control value={mes} onChange={setMes} ariaLabel="Mes">{meses.length ? meses.map((item) => <option key={item} value={item}>{formatMesBDC(item)}</option>) : <option value={mes}>{formatMesBDC(mes)}</option>}</Control>
+                    <Control value={asesor} onChange={setAsesor} ariaLabel="Asesora digital">{asesores.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todas las asesoras" : item}</option>)}</Control>
+                    <Control value={agencia} onChange={setAgencia} ariaLabel="Agencia">{agencias.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todas las agencias" : item}</option>)}</Control>
+                    <Control value={linea} onChange={setLinea} ariaLabel="Business">{["Todos", "Nuevos + Seminuevos", "Nuevos", "Seminuevos", "Comerciales"].map((item) => <option key={item} value={item}>{item}</option>)}</Control>
+                    <Control value={origen} onChange={setOrigen} ariaLabel="Origen">{origenes.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todos los orígenes" : item}</option>)}</Control>
                 </div>
             </div>
-
             <div className="mt-2 flex min-h-5 flex-wrap items-center justify-between gap-2 text-[10px] font-semibold">
-                <span className="text-slate-400">Citas: fecha_hora_cita · Efectivas: asistencia=true · Facturados: Entregas con VIN + teléfono ligados al prospecto digital · Entregados: entrega_reportada=true.</span>
-                <span className="inline-flex items-center gap-2">{loadingOperativoBDC ? (<><Loader2 className="h-3.5 w-3.5 animate-spin text-[#131E5C]" /><span className="text-slate-500">Sincronizando Citas y Entregas…</span></>) : errorOperativoBDC ? (<span className="text-amber-600">{errorOperativoBDC}</span>) : (<span className="text-emerald-600">Citas y Entregas sincronizadas</span>)}</span>
+                <span className="text-slate-400">Citas registradas: filas reales de Citas por fecha_hora_cita y asesor_digital exacto · Efectivas: asistencia=true · Facturados: facturado_at del Expediente Digital.</span>
+                <span className="inline-flex items-center gap-2">{loadingOperativoBDC ? <><Loader2 className="h-3.5 w-3.5 animate-spin text-[#131E5C]" /><span className="text-slate-500">Sincronizando citas…</span></> : errorOperativoBDC ? <span className="text-amber-600">{errorOperativoBDC}</span> : <span className="text-emerald-600">Citas sincronizadas</span>}</span>
             </div>
         </div>
 
-        {/* ───────────────── KPI SUPERIORES ───────────────── */}
-
-        <div className="mx-5 mt-4 grid overflow-hidden border-y border-slate-100 bg-white sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-            <SummaryCard label="Oportunidades" value={metricas.oportunidades} />
-            <SummaryCard label="Gestionables" value={metricas.gestionables} />
-            <SummaryCard label="Contactados únicos" value={metricas.contactados} />
-            <SummaryCard label="Citas registradas" value={metricas.citados} />
-            <SummaryCard label="Citas efectivas" value={metricas.efectivas} />
-            <SummaryCard label="Facturados" value={metricas.facturados} />
-            <SummaryCard label="Entregados" value={metricas.reportados} />
+        <div className="mx-5 mt-4 grid overflow-hidden border-y border-slate-100 bg-white sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <SummaryCard label="Oportunidades" value={metricas.oportunidades} /><SummaryCard label="Gestionables" value={metricas.gestionables} /><SummaryCard label="Contactados únicos" value={metricas.contactados} /><SummaryCard label="Citas registradas" value={metricas.citados} /><SummaryCard label="Citas efectivas" value={metricas.efectivas} /><SummaryCard label="Facturados" value={metricas.facturados} />
         </div>
 
-        {/* ───────────────── ZONA PRINCIPAL ───────────────── */}
-
-        <div className="grid gap-5 px-5 py-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(490px,1fr)]">
-
-            {/* FUNNEL + RENDIMIENTO */}
-
+        <div className="grid gap-5 px-5 py-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(470px,1fr)]">
             <div className="min-w-0">
-                <h4 className="mb-2 text-sm font-black text-[#131E5C]">
-                    Embudo comercial
-                </h4>
-
-                <div className="overflow-x-auto pb-2">
+                <h4 className="mb-2 text-sm font-black text-[#131E5C]">Embudo comercial</h4>
+                <div className="overflow-x-auto pb-28">
                     <div className="min-w-[760px]">
-
-                        {/* Funnel */}
-
                         <div className="flex h-[130px] items-center">
-                            {funnel.map((stage, index) => (<div key={stage.key} className={cls("group relative flex h-full min-w-0 items-center", stage.wrapCls)}>
-                                <div className={cls("relative -ml-px flex w-full items-center justify-center shadow-sm transition-transform duration-200 first:ml-0 group-hover:z-20 group-hover:scale-[1.02]", stage.boxCls)}>
-                                    <div className="text-center">
-                                        <div className="text-[11px] font-bold">
-                                            {stage.label}
-                                        </div>
-
-                                        <div className="mt-1 text-2xl font-black">
-                                            {stage.value.toLocaleString("es-MX")}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Tooltip */}
-
-                                {stage.conversion !==
-                                    null ? (<div className="pointer-events-none absolute left-1/2 top-0 z-50 hidden w-52 -translate-x-1/2 -translate-y-[88%] rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xl group-hover:block">
-                                        <div className="text-[10px] font-bold uppercase text-slate-400">
-                                            {stage.label}{" "}
-                                            →{" "}
-                                            {funnel[index +
-                                                1]
-                                                ?.label}
-                                        </div>
-
-                                        <div className="mt-2 flex justify-between text-xs">
-                                            <span className="text-slate-500">
-                                                Conversión
-                                            </span>
-
-                                            <span className="font-black text-[#131E5C]">
-                                                {stage.conversion.toFixed(1)}
-                                                %
-                                            </span>
-                                        </div>
-
-                                        <div className="mt-1 flex justify-between text-xs">
-                                            <span className="text-slate-500">
-                                                No
-                                                avanzaron
-                                            </span>
-
-                                            <span className="font-black text-red-500">
-                                                {stage.perdidos}
-                                            </span>
-                                        </div>
-                                    </div>) : null}
-                            </div>))}
+                            {funnel.map((stage) => <div key={stage.key} className={cls("group relative flex h-full min-w-0 items-center", stage.wrapCls)}>
+                                <div className={cls("relative -ml-px flex w-full items-center justify-center shadow-sm transition-transform duration-200 first:ml-0 group-hover:z-20 group-hover:scale-[1.02]", stage.boxCls)}><div className="text-center"><div className="text-[11px] font-bold">{stage.label}</div><div className="mt-1 text-2xl font-black">{stage.value.toLocaleString("es-MX")}</div></div></div>
+                                {stage.conversion !== null ? <div className="pointer-events-none absolute left-1/2 top-full z-[60] mt-2 hidden w-64 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 text-left text-slate-900 shadow-xl ring-1 ring-black/5 group-hover:block"><div className="text-[10px] font-black uppercase text-slate-500">{stage.label} → {stage.nextLabel}</div><div className="mt-2 flex justify-between text-xs"><span className="text-slate-600">Conversión clientes únicos</span><span className="font-black text-[#131E5C]">{stage.conversion.toFixed(1)}%</span></div><div className="mt-1 text-[10px] leading-relaxed text-slate-500">{stage.avanzaron} de {stage.baseClientes} clientes únicos avanzaron al siguiente paso.</div><div className="mt-2 flex justify-between text-xs"><span className="text-slate-600">No avanzaron</span><span className="font-black text-red-500">{stage.perdidos}</span></div></div> : null}
+                            </div>)}
                         </div>
-
-                        {/* Conversiones */}
-
-                        <div className="flex">
-                            {funnel.map((stage) => (<div key={`conversion-${stage.key}`} className={cls("min-w-0 text-center", stage.wrapCls)}>
-                                {stage.conversion !==
-                                    null ? (<span className={cls("text-[11px] font-black", stage.conversion >=
-                                        50
-                                        ? "text-emerald-500"
-                                        : stage.conversion >=
-                                            20
-                                            ? "text-amber-500"
-                                            : "text-red-500")}>
-                                        {stage.conversion.toFixed(1)}
-                                        %
-                                    </span>) : null}
-                            </div>))}
-                        </div>
+                        <div className="flex">{funnel.map((stage) => <div key={`conversion-${stage.key}`} className={cls("min-w-0 text-center", stage.wrapCls)}>{stage.conversion !== null ? <div><div className={cls("text-[11px] font-black", stage.conversion >= 50 ? "text-emerald-500" : stage.conversion >= 20 ? "text-amber-500" : "text-red-500")}>{stage.conversion.toFixed(1)}%</div><div className="mt-0.5 text-[9px] font-semibold text-slate-400">→ {stage.nextLabel}</div></div> : null}</div>)}</div>
                     </div>
                 </div>
 
-                {/* Rendimiento citas */}
-
-                <div className="mt-3 rounded-xl border border-[#131E5C]/20 bg-white px-4 py-3">
-                    <h4 className="text-xs font-black text-[#131E5C]">
-                        Rendimiento de citas
-                    </h4>
-
+                <div className="-mt-20 rounded-xl border border-[#131E5C]/20 bg-white px-4 py-3">
+                    <h4 className="text-xs font-black text-[#131E5C]">Rendimiento de citas</h4>
                     <div className="mt-2 grid items-center gap-4 sm:grid-cols-[1fr_80px_1fr]">
-                        <div className="text-center">
-                            <div className="text-xs font-bold text-slate-500">
-                                Citas registradas
-                            </div>
-
-                            <div className="text-3xl font-black text-[#131E5C]">
-                                {metricas.citados}
-                            </div>
-
-                            <div className="text-[10px] text-slate-400">
-                                Registros reales del módulo de Citas
-                            </div>
-                        </div>
-
-                        <div className="flex items-center">
-                            <div className="h-px flex-1 bg-blue-500" />
-
-                            <div className="h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-[#1670F5]" />
-                        </div>
-
-                        <div className="text-center">
-                            <div className="text-xs font-bold text-slate-500">
-                                Citas efectivas
-                            </div>
-
-                            <div className="text-3xl font-black text-[#131E5C]">
-                                {metricas.efectivas}
-                            </div>
-
-                            <div className="text-[10px] text-slate-400">
-                                Asistencia confirmada
-                            </div>
-                        </div>
+                        <div className="text-center"><div className="text-xs font-bold text-slate-500">Citas registradas</div><div className="text-3xl font-black text-[#131E5C]">{metricas.citados}</div><div className="text-[10px] text-slate-400">Mismo criterio del módulo de Citas</div></div>
+                        <div className="flex items-center"><div className="h-px flex-1 bg-blue-500" /><div className="h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-[#1670F5]" /></div>
+                        <div className="text-center"><div className="text-xs font-bold text-slate-500">Citas efectivas</div><div className="text-3xl font-black text-[#131E5C]">{metricas.efectivas}</div><div className="text-[10px] text-slate-400">Asistencia=true</div></div>
                     </div>
-
-                    <div className="mt-3 grid grid-cols-[110px_minmax(0,1fr)_60px_auto] items-center gap-3">
-                        <div className="text-[10px] font-black text-slate-500">
-                            Efectividad de citas
-                        </div>
-
-                        <div className="h-2 overflow-hidden rounded-full bg-blue-100">
-                            <div className={cls("h-full rounded-full bg-blue-600 transition-all", widthClass(metricas.efectividadCitas))} />
-                        </div>
-
-                        <div className="text-right text-xs font-black text-[#131E5C]">
-                            {metricas.efectividadCitas.toFixed(1)}
-                            %
-                        </div>
-
-                        <div className={cls("rounded-full border px-2 py-1 text-[9px] font-black", estadoRendimiento.bg, estadoRendimiento.border, estadoRendimiento.text)}>
-                            •{" "}
-                            {estadoRendimiento.label}
-                        </div>
-                    </div>
+                    <div className="mt-3 grid grid-cols-[110px_minmax(0,1fr)_60px_auto] items-center gap-3"><div className="text-[10px] font-black text-slate-500">Efectividad de citas</div><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className={cls("h-full rounded-full bg-blue-600 transition-all", widthClass(metricas.efectividadCitas))} /></div><div className="text-right text-xs font-black text-[#131E5C]">{metricas.efectividadCitas.toFixed(1)}%</div><div className={cls("rounded-full border px-2 py-1 text-[9px] font-black", estadoRendimiento.bg, estadoRendimiento.border, estadoRendimiento.text)}>• {estadoRendimiento.label}</div></div>
                 </div>
             </div>
-
-            {/* METAS + PROCESO */}
 
             <div className="grid min-w-0 gap-4 lg:grid-cols-2 xl:grid-cols-2">
-                <section>
-                    <h4 className="mb-2 text-xs font-black text-[#131E5C]">
-                        Cumplimiento de metas
-                    </h4>
-
-                    <div className="space-y-2">
-                        <MetaRow label="Contacto" value={metricas.tasaContacto} meta={90} />
-
-                        <MetaRow label="Citas efectivas" value={metricas.efectividadCitas} meta={80} />
-
-                        <MetaRow label="Facturación" value={metricas.tasaFacturacion} meta={100} />
-                    </div>
-                </section>
-
-                <section>
-                    <h4 className="mb-2 text-xs font-black text-[#131E5C]">
-                        Proceso comercial
-                    </h4>
-
-                    <div className="overflow-hidden rounded-xl border border-slate-100 bg-white">
-                        <ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" />
-
-                        <ProcessRow label="ANF" value={metricas.anf} detail="Solicitudes autorizadas aún sin VIN facturado" />
-
-                        <ProcessRow label="Facturados" value={metricas.facturados} detail="Registros de Entregas ligados por VIN + teléfono al prospecto digital" />
-
-                        <ProcessRow label="Entregados" value={metricas.reportados} detail="VIN facturado con entrega física reportada" />
-                    </div>
-                </section>
+                <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Cumplimiento de metas</h4><div className="space-y-2"><MetaRow label="Contacto" value={metricas.tasaContacto} meta={90} /><MetaRow label="Citas efectivas" value={metricas.efectividadCitas} meta={80} /><MetaRow label="Facturación" value={metricas.tasaFacturacion} meta={100} /></div></section>
+                <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Proceso comercial</h4><div className="overflow-hidden rounded-xl border border-slate-100 bg-white"><ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" /><ProcessRow label="ANF" value={metricas.anf} detail="Solicitud autorizada/condicionada aún sin VIN facturado" /><ProcessRow label="Facturados" value={metricas.facturados} detail="Expedientes con facturado_at dentro del mes seleccionado" /></div></section>
             </div>
         </div>
 
-        {/* ───────────────── LEYENDA ───────────────── */}
-
-        <div className="flex flex-wrap items-center justify-center gap-5 px-5 pb-3 text-[10px] font-bold text-slate-500">
-            <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                En meta
-            </span>
-
-            <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Atención
-            </span>
-
-            <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-red-500" />
-                Crítico
-            </span>
-        </div>
-
-        {/* ───────────────── TABLA ASESORAS ───────────────── */}
+        <div className="flex flex-wrap items-center justify-center gap-5 px-5 pb-3 text-[10px] font-bold text-slate-500"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />En meta</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Atención</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" />Crítico</span></div>
 
         <section className="px-5">
-            <div className="mb-1 flex items-center justify-end">
-                <span className="text-[10px] text-slate-400">
-                    Comparativo del mes seleccionado
-                </span>
-            </div>
-
-            <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-[11px]">
-                    <thead>
-                        <tr className="border-b border-slate-200 text-slate-500">
-                            <th className="px-2 py-2 font-bold">
-                                Asesora
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Gestionables
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Contactados
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Citados
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Efectivas
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                No show
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Solicitudes
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Facturados
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Entregados
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Efectividad
-                            </th>
-
-                            <th className="px-2 py-2 text-center font-bold">
-                                Estado
-                            </th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        {resultadosAsesor.map((item) => {
-                            const estado = getEstadoAsesorBDC(item.efectividad);
-                            return (<tr key={item.nombre} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
-                                <td className="px-2 py-2.5 font-bold text-slate-900">
-                                    {item.nombre}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-semibold text-slate-600">
-                                    {item.gestionables}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-semibold text-slate-600">
-                                    {item.contactados}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-semibold text-slate-600">
-                                    {item.citados}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-semibold text-slate-600">
-                                    {item.efectivas}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-semibold text-slate-600">
-                                    {item.noShow}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-semibold text-slate-600">
-                                    {item.solicitudes}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-black text-slate-900">
-                                    {item.facturados}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center font-black text-slate-900">
-                                    {item.entregados}
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center">
-                                    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-black text-[#131E5C]">
-                                        {item.efectividad.toFixed(1)}
-                                        %
-                                    </span>
-                                </td>
-
-                                <td className="px-2 py-2.5 text-center">
-                                    <span className={cls("inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black", estado.cls)}>
-                                        •{" "}
-                                        {estado.label}
-                                    </span>
-                                </td>
-                            </tr>);
-                        })}
-
-                        {resultadosAsesor.length ===
-                            0 ? (<tr>
-                                <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
-                                    Sin resultados para los filtros seleccionados.
-                                </td>
-                            </tr>) : null}
-                    </tbody>
-                </table>
-            </div>
+            <div className="mb-1 flex items-center justify-end"><span className="text-[10px] text-slate-400">Comparativo del mes seleccionado</span></div>
+            <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead><tr className="border-b border-slate-200 text-slate-500">{["Asesora", "Gestionables", "Contactados", "Citados", "Efectivas", "No show", "Solicitudes", "Facturados", "Efectividad", "Estado"].map((label, i) => <th key={label} className={cls("px-2 py-2 font-bold", i ? "text-center" : "")}>{label}</th>)}</tr></thead><tbody>
+                {resultadosAsesor.map((item) => { const estado = getEstadoAsesorBDC(item.efectividad); return <tr key={item.nombre} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"><td className="px-2 py-2.5 font-bold text-slate-900">{item.nombre}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.gestionables}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.contactados}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.citados}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.efectivas}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.noShow}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.solicitudes}</td><td className="px-2 py-2.5 text-center font-black text-slate-900">{item.facturados}</td><td className="px-2 py-2.5 text-center"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-black text-[#131E5C]">{item.efectividad.toFixed(1)}%</span></td><td className="px-2 py-2.5 text-center"><span className={cls("inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black", estado.cls)}>• {estado.label}</span></td></tr>; })}
+                {!resultadosAsesor.length ? <tr><td colSpan={10} className="px-3 py-8 text-center text-slate-400">Sin resultados para los filtros seleccionados.</td></tr> : null}
+            </tbody></table></div>
         </section>
 
-        {/* ───────────────── ORIGEN + DESCARTADOS ───────────────── */}
-
         <div className="grid gap-8 px-5 py-5 xl:grid-cols-2">
-
-            {/* Origen */}
-
-            <section>
-                <h4 className="mb-4 text-sm font-black text-slate-950">
-                    ¿De dónde vienen los resultados?
-                </h4>
-
-                <div className="space-y-3">
-                    {origenStats
-                        .slice(0, 6)
-                        .map(([label, total,]) => {
-                            const pct = metricas.oportunidades
-                                ? (total /
-                                    metricas.oportunidades) * 100
-                                : 0;
-                            return (<div key={label} className="grid grid-cols-[110px_minmax(0,1fr)_44px] items-center gap-3">
-                                <span className="truncate text-[11px] font-medium text-slate-600" title={label}>
-                                    {label}
-                                </span>
-
-                                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                                    <div className={cls("h-full rounded-full transition-all", widthClass((total / maxOrigen) * 100), getOriginBarClass(label))} />
-                                </div>
-
-                                <span className="text-right text-[11px] font-black text-slate-900">
-                                    {pct.toFixed(0)}
-                                    %
-                                </span>
-                            </div>);
-                        })}
-
-                    {origenStats.length ===
-                        0 ? (<div className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-400">
-                            Sin datos de origen.
-                        </div>) : null}
-                </div>
-            </section>
-
-            {/* Descartados */}
-
-            <section>
-                <h4 className="mb-3 text-sm font-black text-slate-950">
-                    Leads descartados
-                </h4>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <button type="button" onClick={() => setShowDiscardDetails((value) => !value)} className="rounded-xl bg-slate-50 p-4 text-left transition hover:bg-slate-100">
-                        <div className="text-xs text-slate-500">
-                            Total descartados
-                        </div>
-
-                        <div className="mt-1 text-3xl font-black text-slate-950">
-                            {metricas.descartados}
-                        </div>
-
-                        <div className="mt-2 text-[10px] font-bold text-[#131E5C]">
-                            {showDiscardDetails
-                                ? "Ocultar motivos"
-                                : "Ver todos los motivos"}
-                        </div>
-                    </button>
-
-                    <div className="rounded-xl bg-slate-50 p-4">
-                        <div className="text-xs text-slate-500">
-                            Principal motivo
-                        </div>
-
-                        <div className="mt-1 line-clamp-2 text-xl font-black text-slate-950">
-                            {principalDescarte[0]}
-                        </div>
-
-                        <div className="mt-1 text-xs text-slate-500">
-                            {principalDescarte[1]}{" "}
-                            leads
-                        </div>
-                    </div>
-                </div>
-
-                {showDiscardDetails &&
-                    motivosDescarte.length >
-                    0 ? (<div className="mt-3 space-y-3 rounded-xl border border-slate-200 p-4">
-                        {motivosDescarte.map(([label, total,]) => (<div key={label}>
-                            <div className="mb-1 flex items-center justify-between gap-3 text-[10px]">
-                                <span className="truncate font-semibold text-slate-600" title={label}>
-                                    {label}
-                                </span>
-
-                                <span className="font-black text-slate-900">
-                                    {total}
-                                </span>
-                            </div>
-
-                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                <div className={cls("h-full rounded-full bg-slate-500", widthClass((total / maxMotivo) * 100))} />
-                            </div>
-                        </div>))}
-                    </div>) : null}
-            </section>
+            <section><h4 className="mb-4 text-sm font-black text-slate-950">¿De dónde vienen los resultados?</h4><div className="space-y-3">{origenStats.slice(0, 6).map(([label, total]) => { const pct = metricas.oportunidades ? (total / metricas.oportunidades) * 100 : 0; return <div key={label} className="grid grid-cols-[110px_minmax(0,1fr)_44px] items-center gap-3"><span className="truncate text-[11px] font-medium text-slate-600" title={label}>{label}</span><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full transition-all", widthClass((total / maxOrigen) * 100), getOriginBarClass(label))} /></div><span className="text-right text-[11px] font-black text-slate-900">{pct.toFixed(0)}%</span></div>; })}{!origenStats.length ? <div className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-400">Sin datos de origen.</div> : null}</div></section>
+            <section><h4 className="mb-3 text-sm font-black text-slate-950">Leads descartados</h4><div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setShowDiscardDetails((value) => !value)} className="rounded-xl bg-slate-50 p-4 text-left transition hover:bg-slate-100"><div className="text-xs text-slate-500">Total descartados</div><div className="mt-1 text-3xl font-black text-slate-950">{metricas.descartados}</div><div className="mt-2 text-[10px] font-bold text-[#131E5C]">{showDiscardDetails ? "Ocultar motivos" : "Ver todos los motivos"}</div></button><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Principal motivo</div><div className="mt-1 line-clamp-2 text-xl font-black text-slate-950">{principalDescarte[0]}</div><div className="mt-1 text-xs text-slate-500">{principalDescarte[1]} leads</div></div></div>{showDiscardDetails && motivosDescarte.length ? <div className="mt-3 space-y-3 rounded-xl border border-slate-200 p-4">{motivosDescarte.map(([label, total]) => <div key={label}><div className="mb-1 flex items-center justify-between gap-3 text-[10px]"><span className="truncate font-semibold text-slate-600" title={label}>{label}</span><span className="font-black text-slate-900">{total}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full bg-slate-500", widthClass((total / maxMotivo) * 100))} /></div></div>)}</div> : null}</section>
         </div>
-    </div>);
+    </div>;
 }
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 function Modal({ open, title, onClose, children, footer }) {
     if (!open)
@@ -3705,6 +2775,7 @@ export default function DigitalesProspectos() {
                 solicitud_credito_estado: p.solicitud_credito_estado ||
                     "",
                 vin_facturado: p.vin_facturado || "",
+                facturado_at: p.facturado_at || null,
                 vin_estatus_entrega: p.vin_estatus_entrega ||
                     "",
                 evidencias_existentes: Array.isArray(evidenciasData)
