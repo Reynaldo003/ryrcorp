@@ -9,6 +9,7 @@ import {
     Activity,
     BarChart3,
     Car,
+    Cake,
     CheckCircle2,
     ChevronDown,
     ClipboardList,
@@ -177,6 +178,12 @@ function mapearOrden(item) {
         modelo_nombre: item.modelo_nombre || "Sin modelo",
         condicion_vehiculo: item.condicion_vehiculo || "",
         nombre_cliente: item.nombre_cliente || "Sin cliente",
+        cumpleanos:
+        item.cumpleaños ??
+        item.cumpleanos ??
+        item.Cumpleaños ??
+        item.Cumpleanos ??
+        "",
         telefono_cliente: item.telefono_cliente || "",
         telefono_cliente2: item.telefono_cliente2 || "",
         telefono_cliente3: item.telefono_cliente3 || "",
@@ -206,6 +213,71 @@ function estadoBadgeClass(estado) {
     if (valor === "inactivo") return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
     return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
 }
+//cumpleaños 
+function diasParaCumpleanos(fechaCumpleanos) {
+    const fecha = parseFechaLocal(fechaCumpleanos);
+
+    if (!fecha) return null;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    let proximoCumpleanos = new Date(
+        hoy.getFullYear(),
+        fecha.getMonth(),
+        fecha.getDate()
+    );
+
+    proximoCumpleanos.setHours(0, 0, 0, 0);
+
+    if (proximoCumpleanos < hoy) {
+        proximoCumpleanos = new Date(
+            hoy.getFullYear() + 1,
+            fecha.getMonth(),
+            fecha.getDate()
+        );
+
+        proximoCumpleanos.setHours(0, 0, 0, 0);
+    }
+
+    return Math.round(
+        (proximoCumpleanos.getTime() - hoy.getTime()) / 86400000
+    );
+}
+
+function obtenerEstadoCumpleanos(fechaCumpleanos) {
+    const dias = diasParaCumpleanos(fechaCumpleanos);
+
+    if (dias === null || dias > 5) {
+        return null;
+    }
+
+    if (dias === 0) {
+        return {
+            dias,
+            texto: "Cumpleaños hoy",
+            clase: "border-green-600 bg-green-100 text-green-700",
+        };
+    }
+
+    if (dias <= 3) {
+        return {
+            dias,
+            texto:
+                dias === 1
+                    ? "Cumpleaños mañana"
+                    : `Cumpleaños en ${dias} días`,
+            clase: "border-amber-200 bg-amber-50 text-amber-600",
+        };
+    }
+
+    return {
+        dias,
+        texto: `Cumpleaños en ${dias} días`,
+        clase: "border-blue-200 bg-blue-50 text-blue-600",
+    };
+}
+
 
 // ---- KPI ----
 function KpiCard({ icon: Icon, label, value, sub, color }) {
@@ -308,10 +380,30 @@ function KpiCard({ icon: Icon, label, value, sub, color }) {
             );
         }
 
-// ---- Tabla ----
-function TablaClientes({ datos, onAbrirDetalle, onAbrirChat  }) {
-    const datosTabla = datos.slice(0, 1000);
+        // ---- Tabla ----
+        function TablaClientes({ datos, onAbrirDetalle, onAbrirChat }) {
+            const datosTabla = [...datos]
+                .sort((a, b) => {
+                    const diasA = diasParaCumpleanos(a.cumpleanos);
+                    const diasB = diasParaCumpleanos(b.cumpleanos);
 
+                    const cumpleProximoA =
+                        diasA !== null && diasA >= 0 && diasA <= 5;
+
+                    const cumpleProximoB =
+                        diasB !== null && diasB >= 0 && diasB <= 5;
+
+                    if (cumpleProximoA && !cumpleProximoB) return -1;
+                    if (!cumpleProximoA && cumpleProximoB) return 1;
+
+                    if (cumpleProximoA && cumpleProximoB) {
+                        return diasA - diasB;
+                    }
+
+                    return 0;
+                })
+                .slice(0, 1000);
+                
     return (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
@@ -365,10 +457,40 @@ function TablaClientes({ datos, onAbrirDetalle, onAbrirChat  }) {
                                         >
                                             {iniciales(item.nombre_cliente)}
                                         </div>
+
                                         <div className="min-w-0">
-                                            <div className="truncate font-bold text-slate-800">
-                                                {item.nombre_cliente}
+                                            <div className="flex items-start gap-2">
+                                                <div
+                                                    className="max-w-[260px] font-bold leading-4 text-slate-800"
+                                                    style={{
+                                                        display: "-webkit-box",
+                                                        WebkitLineClamp: 2,
+                                                        WebkitBoxOrient: "vertical",
+                                                        overflow: "hidden",
+                                                    }}
+                                                    title={item.nombre_cliente}
+                                                >
+                                                    {item.nombre_cliente}
+                                                </div>
+
+                                                {(() => {
+                                                    const cumple = obtenerEstadoCumpleanos(item.cumpleanos);
+
+                                                    if (!cumple) return null;
+
+                                                    return (
+                                                        <div
+                                                            title={cumple.texto}
+                                                            className={`flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-bold ${cumple.clase}`}
+                                                        >
+                                                            <Cake className="h-3.5 w-3.5" />
+                                                            <span>{cumple.texto}</span>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
+ 
+
                                             <div className="truncate text-xs text-slate-400">
                                                 {item.telefono_cliente ? formatTelefono(item.telefono_cliente) : "Sin teléfono"}
                                             </div>
