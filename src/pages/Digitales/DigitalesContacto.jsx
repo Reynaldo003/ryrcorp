@@ -47,6 +47,8 @@ import {
     CarFront,
     HelpCircle,
     CalendarCheck,
+    ShieldAlert,
+    Loader2,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
@@ -85,7 +87,7 @@ const BURO_OPTIONS = [
     { value: "", label: "— Selecciona —" },
     { value: "bueno", label: "Bueno" },
     { value: "regular", label: "Regular" },
-    { value: "iniciando", label: "Iniciando" },
+    { value: "malo", label: "Malo" },
     { value: "desconocido", label: "Desconocido" },
 ];
 
@@ -2175,6 +2177,8 @@ export default function DigitalesContacto() {
 
     const [quickEditDraft, setQuickEditDraft] = useState({});
     const [savingQuickEdit, setSavingQuickEdit] = useState(false);
+    const [savingBuroMalo, setSavingBuroMalo] = useState(false);
+    const [buroMaloMarcado, setBuroMaloMarcado] = useState(false);
 
     const [copiedTel, setCopiedTel] = useState(false);
     const [markingUnreadTel, setMarkingUnreadTel] = useState("");
@@ -4163,6 +4167,30 @@ export default function DigitalesContacto() {
         }
     }
 
+    async function toggleBuroMalo() {
+        if (!prospecto?.id || !activeTel) return;
+        if (savingBuroMalo) return;
+
+        const yaMalo =
+            String(quickEditDraft.buro_estado || prospecto?.buro_estado || "").trim().toLowerCase() === "malo";
+        const nuevo = yaMalo ? "" : "malo";
+
+        setSavingBuroMalo(true);
+        try {
+            await api.digitalesPatchProspecto(prospecto.id, { buro_estado: nuevo });
+            setQuickEditDraft((current) => ({ ...current, buro_estado: nuevo }));
+            if (nuevo) {
+                setBuroMaloMarcado(true);
+                setTimeout(() => setBuroMaloMarcado(false), 2000);
+            }
+            await refreshActiveChat(activeTel).catch(() => { });
+        } catch (error) {
+            alert(`No se pudo actualizar el buró: ${error.message}`);
+        } finally {
+            setSavingBuroMalo(false);
+        }
+    }
+
     async function saveHeaderEstado(nuevoEstado) {
         if (!prospecto?.id || !activeTel) return;
 
@@ -4386,12 +4414,12 @@ export default function DigitalesContacto() {
 
                 const telefonoMensaje =
                     normalizaTelefonoMx(
-                        data.telefono || ""
+                        data.telefono ||
+                        data.wa_id ||
+                        data.from ||
+                        data.numero_cliente ||
+                        ""
                     );
-
-                if (!telefonoMensaje) {
-                    return;
-                }
 
                 /*
                  * Ignora eventos que indiquen
@@ -4412,6 +4440,7 @@ export default function DigitalesContacto() {
                 }
 
                 if (
+                    telefonoMensaje &&
                     telefonoMensaje ===
                     activeTelRef.current
                 ) {
@@ -4574,39 +4603,57 @@ export default function DigitalesContacto() {
         return () => { ignore = true; };
     }, [isDirectChatMode, numeroAsesorActivo,]);
     useEffect(() => {
-        let alive = true, timer = null, tickCount = 0;
+        let alive = true, timer = null;
         const tick = async () => {
+            const target = activeTelRef.current;
+            const numeroLinea = numeroAsesorActivoRef.current;
+
             try {
-                const target = activeTelRef.current;
-                if (!target) { timer = setTimeout(tick, 3500); return; }
-                const prev = mensajesRef.current || [], last = prev[prev.length - 1];
-                const lastId = last?.id || last?.wa_message_id || "", lastCreatedAt = last?.created_at || "";
-                if (!lastId && !lastCreatedAt) { timer = setTimeout(tick, 3500); return; }
-                const data = await api.digitalesContactoUpdates(
-                    target,
-                    lastCreatedAt,
-                    {
-                        limit: CHAT_UPDATES_LIMIT,
-                        after_id: lastId,
-                        numero_asesor: numeroAsesorActivo,
+                if (target) {
+                    const prev = mensajesRef.current || [], last = prev[prev.length - 1];
+                    const lastId = last?.id || last?.wa_message_id || "", lastCreatedAt = last?.created_at || "";
+                    if (lastId || lastCreatedAt) {
+                        const data = await api.digitalesContactoUpdates(
+                            target,
+                            lastCreatedAt,
+                            {
+                                limit: CHAT_UPDATES_LIMIT,
+                                after_id: lastId,
+                                numero_asesor: numeroLinea,
+                            }
+                        );
+                        if (!alive) return;
+                        if (activeTelRef.current === target) {
+                            const incoming = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
+                            if (incoming.length) {
+                                shouldStickToBottomRef.current = isNearBottom(messagesScrollRef.current);
+                                setMensajes(old => mergeMessages(old, incoming));
+                                const ultimo = incoming[incoming.length - 1];
+                                setChats(prev => prev.map(c =>
+                                    c.telefono === target
+                                        ? {
+                                            ...c,
+                                            last: {
+                                                text: ultimo?.text || c.last?.text || "",
+                                                time: ultimo?.created_at || "",
+                                                timestamp: ultimo?.created_at || c.last?.timestamp || "",
+                                            },
+                                        }
+                                        : c
+                                ));
+                            }
+                        }
                     }
-                );
-                if (!alive) return;
-                if (activeTelRef.current !== target) {
-                    timer = setTimeout(tick, 3500);
-                    return;
                 }
-                const incoming = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
-                if (incoming.length) {
-                    shouldStickToBottomRef.current = isNearBottom(messagesScrollRef.current);
-                    setMensajes(old => mergeMessages(old, incoming));
-                    if (!isDirectChatMode) await refreshChats().catch(() => { });
-                } else {
-                    tickCount += 1;
-                    if (!isDirectChatMode && tickCount % 5 === 0) await refreshChats().catch(() => { });
-                }
-            } catch { }
-            timer = setTimeout(tick, 3500);
+            } catch { /* La conversación activa pudo haber cambiado; se reintenta en el siguiente tick. */ }
+
+            if (alive && !isDirectChatMode) {
+                try {
+                    await refreshChats();
+                } catch { /* El refresco de la lista se reintenta en el siguiente tick. */ }
+            }
+            if (!alive) return;
+            timer = setTimeout(tick, 2000);
         };
         tick();
         return () => { alive = false; if (timer) clearTimeout(timer); };
@@ -4650,6 +4697,9 @@ export default function DigitalesContacto() {
         quickEditDraft.comprobacion_ingresos,
         quickEditDraft.comentarios,
     ].filter((value) => String(value ?? "").trim() === "").length;
+
+    const esBuroMalo =
+        String(quickEditDraft.buro_estado || prospecto?.buro_estado || "").trim().toLowerCase() === "malo";
 
     // ── RENDER ────────────────────────────────────────────────────────────────
     return (

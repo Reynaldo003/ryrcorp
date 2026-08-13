@@ -10,13 +10,14 @@ import {
 import {
     ArrowLeft, Search, X, Building2, Loader2, Send, Phone,
     Play, Pause, FileText, Check, CheckCheck, Clock, AlertCircle,
-    LayoutTemplate, Zap, ChevronLeft, Smile, Paperclip, Mic, Square, Pencil,
-} from "lucide-react";
-import EmojiPicker from "emoji-picker-react";
+    LayoutTemplate, Zap, ChevronLeft, ChevronDown, Smile, Paperclip, Mic, Square, Pencil, MessageCircle,
+    UserRound, Activity, CalendarClock, CheckCircle2, XCircle, Tag,
+} from "lucide-react";import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
+import { apiCitas } from "../../lib/apiCitas";
 
 const BRAND_BLUE = "#131E5C";
-const DRAWER_POLL_MS = 4000;
+const DRAWER_POLL_MS = 2000;
 const QUICK_BUBBLES_KEY = "digitales_quick_bubbles_global";
 const MAX_RECORDING_SECONDS = 300;
 
@@ -32,13 +33,10 @@ const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"]
 
 const ESTADOS_BANDEJA = [
 
-    { key: "generacion_leads", label: "Generación de Leads", match: ["generación de leads", "generacion de leads", "generacion_leads", ""], color: "#0EA5E9" },
-    { key: "seminuevos", label: "Seminuevos", match: ["seminuevos"], color: "#F97316" },
-    { key: "contactado", label: "Contactado", match: ["contactado", "sin respuesta", "sin_respuesta"], color: "#F59E0B" },
-    { key: "perfilado", label: "Perfilado", match: ["perfilado"], color: "#6366F1" },
+    { key: "contactado", label: "Contactado", match: ["contactado", "sin respuesta", "sin_respuesta", ""], color: "#F59E0B" },
     { key: "cotizacion", label: "Cotización", match: ["cotización", "cotizacion"], color: "#8B5CF6" },
     { key: "cita_programada", label: "Cita Programada", match: ["cita programada", "cita_programada"], color: "#0891B2" },
-    { key: "no_show", label: "No Show", match: ["no show", "no_show", "noshow"], color: "#DC2626" },
+    { key: "no_show", label: "No asistió", match: ["no show", "no_show", "noshow", "no asistio", "no asistió"], color: "#DC2626" },
     { key: "asistencia_cita", label: "Asistencia a la Cita", match: ["asistencia a la cita", "asistencia_cita"], color: "#059669" },
     { key: "documentos_enviados", label: "Documentos Enviados", match: ["documentos enviados", "documentos_enviados"], color: "#0D9488" },
     { key: "solicitud_credito", label: "Solicitud de Crédito", match: ["solicitud de crédito", "solicitud de credito", "solicitud_credito"], color: "#7C3AED" },
@@ -46,6 +44,7 @@ const ESTADOS_BANDEJA = [
     { key: "cierre_venta", label: "Cierre de la Venta", match: ["cierre de la venta", "cierre_venta", "cierre de venta"], color: "#16A34A" },
     { key: "descalificado", label: "Descalificado", match: ["descalificado"], color: "#94A3B8" },
 ];
+
 
 function cls(...items) { return items.filter(Boolean).join(" "); }
 function safeLower(v) { return String(v || "").toLowerCase(); }
@@ -198,81 +197,286 @@ function PulseRing({ value = 0, label, color = BRAND_BLUE, size = 60, stroke = 6
 }
 
 
-function FlowStreamBar({ conteoPorEstado, total }) {
+function PipelineSidebar({
+    conteoPorEstado,
+    total,
+    nuevosHoy,
+    tasaAtencion,
+    tasaConversion,
+    tasaLectura,
+    filtroActivo,
+    onFiltroChange,
+}) {
+    const maxEstado = Math.max(
+        1,
+        ...ESTADOS_BANDEJA.map((estado) => conteoPorEstado.get(estado.key) || 0)
+    );
+
     return (
-        <div className="min-w-[220px] flex-1">
-            <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[10px] font-extrabold uppercase tracking-wide text-[#131E5C]/50">Pulso de la bandeja</span>
-                <span className="text-[10px] font-bold text-slate-400">{total} chat{total === 1 ? "" : "s"}</span>
-            </div>
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-neutral-100 ring-1 ring-black/5">
-                {ESTADOS_BANDEJA.map((b) => {
-                    const count = conteoPorEstado.get(b.key) || 0;
-                    const pct = total ? (count / total) * 100 : 0;
-                    return (
-                        <div
-                            key={b.key}
-                            title={`${b.label}: ${count}`}
-                            className="h-full transition-all duration-700 ease-out"
-                            style={{ width: `${pct}%`, backgroundColor: mutedColor(b.color, 0.3) }}
-                        />
-                    );
-                })}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                {ESTADOS_BANDEJA.map((b) => (
-                    <div key={b.key} className="flex items-center gap-1 text-[10px] font-semibold text-slate-400">
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: mutedColor(b.color, 0.3) }} />
-                        {b.label} · {conteoPorEstado.get(b.key) || 0}
+        <aside className="flex h-full min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+            {/* MÉTRICAS */}
+            <section className="shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-white p-3 shadow-sm">
+                <div className="mb-3 flex min-w-0 items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <h2 className="truncate text-sm font-extrabold text-[#131E5C]">
+                            Resumen comercial
+                        </h2>
+                        <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
+                            Rendimiento de la línea
+                        </p>
                     </div>
-                ))}
-            </div>
-        </div>
+
+                    <span className="shrink-0 rounded-full bg-[#131E5C]/5 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]">
+                        {total}
+                    </span>
+                </div>
+
+                <div className="grid min-w-0 grid-cols-3 gap-1">
+                    <PulseRing value={tasaAtencion} label="Atención" color="#3B82F6" size={54} stroke={5} />
+                    <PulseRing value={tasaConversion} label="Conversión" color="#F97316" size={54} stroke={5} />
+                    <PulseRing value={tasaLectura} label="Lectura" color="#8B5CF6" size={54} stroke={5} />
+                </div>
+            </section>
+
+            {/* PIPELINE */}
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm">
+                <div className="shrink-0 border-b border-black/5 px-3 py-2.5">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                        <div className="min-w-0">
+                            <h2 className="truncate text-sm font-extrabold text-[#131E5C]">
+                                Estado de prospectos
+                            </h2>
+                            <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
+                                Etapas del proceso comercial
+                            </p>
+                        </div>
+
+                        {filtroActivo !== "todos" ? (
+                            <button
+                                type="button"
+                                onClick={() => onFiltroChange?.("todos")}
+                                className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-extrabold text-[#131E5C] transition hover:bg-[#131E5C]/5"
+                            >
+                                Limpiar
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-2.5">
+                    <button
+                        type="button"
+                        onClick={() => onFiltroChange?.("nuevos")}
+                        className={cls(
+                            "mb-2.5 w-full min-w-0 max-w-full overflow-hidden rounded-xl border px-2.5 py-2 text-left transition",
+                            filtroActivo === "nuevos"
+                                ? "border-sky-300 bg-sky-50 shadow-sm ring-1 ring-sky-100"
+                                : "border-sky-100 bg-sky-50/60 hover:border-sky-200 hover:bg-sky-50"
+                        )}
+                    >
+                        <div className="flex min-w-0 items-center gap-2">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
+                            <span className="min-w-0 flex-1 truncate text-[11px] font-extrabold text-[#131E5C]">
+                                Nuevos prospectos
+                            </span>
+                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold text-sky-600 shadow-sm ring-1 ring-sky-100">
+                                {nuevosHoy}
+                            </span>
+                        </div>
+
+                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-sky-100">
+                            <div
+                                className="h-full max-w-full rounded-full bg-sky-500 transition-all duration-500"
+                                style={{ width: `${total ? Math.min(100, (nuevosHoy / total) * 100) : 0}%` }}
+                            />
+                        </div>
+                    </button>
+
+                    <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2 px-1">
+                        <span className="truncate text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                            Pipeline comercial
+                        </span>
+                        <span className="shrink-0 text-[9px] font-bold text-slate-300">
+                            Filtrar
+                        </span>
+                    </div>
+
+                    <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-1">
+                        {ESTADOS_BANDEJA.map((estado) => {
+                            const cantidad = conteoPorEstado.get(estado.key) || 0;
+                            const porcentaje = Math.min(100, (cantidad / maxEstado) * 100);
+                            const activo = filtroActivo === estado.key;
+
+                            return (
+                                <button
+                                    key={estado.key}
+                                    type="button"
+                                    onClick={() => onFiltroChange?.(estado.key)}
+                                    className={cls(
+                                        "w-full min-w-0 max-w-full overflow-hidden rounded-xl border px-2.5 py-2 text-left transition",
+                                        activo
+                                            ? "border-[#131E5C]/20 bg-[#131E5C]/[0.04] shadow-sm ring-1 ring-[#131E5C]/10"
+                                            : "border-transparent hover:border-black/5 hover:bg-neutral-50"
+                                    )}
+                                >
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span
+                                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                            style={{ backgroundColor: estado.color }}
+                                        />
+
+                                        <span className={cls(
+                                            "min-w-0 flex-1 truncate text-[10px] font-bold",
+                                            activo ? "text-[#131E5C]" : "text-slate-600"
+                                        )} title={estado.label}>
+                                            {estado.label}
+                                        </span>
+
+                                        <span className={cls(
+                                            "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold",
+                                            activo
+                                                ? "bg-white text-[#131E5C] shadow-sm"
+                                                : "bg-slate-50 text-slate-500"
+                                        )}>
+                                            {cantidad}
+                                        </span>
+                                    </div>
+
+                                    <div className="ml-[18px] mt-1.5 h-1 max-w-[calc(100%-18px)] overflow-hidden rounded-full bg-slate-100">
+                                        <div
+                                            className="h-full max-w-full rounded-full transition-all duration-500"
+                                            style={{
+                                                width: `${porcentaje}%`,
+                                                backgroundColor: mutedColor(estado.color, 0.15),
+                                            }}
+                                        />
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </section>
+        </aside>
     );
 }
 
-function ChatCard({ chat, onOpen, draggable = true, onDragStart, onDragEnd, dragging, dateLabel }) {
+function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
+    const estado = getEstadoBandeja(chat.estado);
+    const ultimoMensaje = String(chat?.last?.text || "").trim() || "Sin mensajes recientes";
+    const hora = formatHoraCorta(chat?.last?.timestamp) || chat?.last?.time || "—";
+    const quiereSeminuevos = normalizeText(chat?.autoInteres).includes("seminuevos");
+    const [savingEtapa, setSavingEtapa] = useState(false);
+
+    async function handleEtapaChange(label) {
+        if (savingEtapa) return;
+        setSavingEtapa(true);
+        try {
+            await onChangeEtapa?.(chat, label);
+        } finally {
+            setSavingEtapa(false);
+        }
+    }
+
     return (
         <div
-            draggable={draggable}
-            onDragStart={(e) => onDragStart?.(e, chat)}
-            onDragEnd={onDragEnd}
+            role="button"
+            tabIndex={0}
             onClick={() => onOpen?.(chat)}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpen?.(chat);
+                }
+            }}
             className={cls(
-                "cursor-grab select-none rounded-xl border border-black/10 bg-white px-3 py-2.5 shadow-sm transition active:cursor-grabbing hover:border-[#131E5C]/30 hover:shadow-md",
-                dragging ? "opacity-40" : "opacity-100"
+                "group w-full min-w-0 cursor-pointer select-none rounded-xl border border-black/10 bg-white px-3 py-2.5 shadow-sm transition hover:border-[#131E5C]/30 hover:shadow-md",
+                selected ? "border-[#7AA7FF] bg-[#F5F8FF] ring-1 ring-[#7AA7FF]" : ""
             )}
-            title="Arrastra a una bandeja o haz clic para abrir el chat"
+            title="Haz clic para abrir la conversación"
         >
             <div className="flex items-center gap-2.5">
                 <Avatar name={chat.nombre} />
+
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-[13px] font-extrabold text-[#131E5C]">{chat.nombre}</div>
-                        {chat.unread > 0 ? (
-                            <span className="inline-flex h-4 min-w-[16px] shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-extrabold text-white">
-                                {chat.unread}
+                        <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[13px] font-extrabold text-[#131E5C]">
+                                {chat.nombre}
                             </span>
-                        ) : null}
+                            {quiereSeminuevos ? (
+                                <span
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#F97316]/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#F97316] ring-1 ring-[#F97316]/30"
+                                    title="Interés en Seminuevos (configurado desde Contacto)"
+                                >
+                                    Seminuevo
+                                </span>
+                            ) : null}
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-2">
+                            {chat.unread > 0 ? (
+                                <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-extrabold text-white">
+                                    {chat.unread}
+                                </span>
+                            ) : null}
+                            <span className="whitespace-nowrap text-[9px] font-bold text-slate-400">
+                                {hora}
+                            </span>
+                        </div>
                     </div>
-                    <div className="truncate text-[11px] font-semibold text-slate-400">{formateaTelUi(chat.telefono)}</div>
+
+                    <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">
+                        {formateaTelUi(chat.telefono)}
+                    </div>
+
                     {chat.agencia ? (
                         <div className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-slate-400">
-                            <Building2 className="h-2.5 w-2.5" />
+                            <Building2 className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">{chat.agencia}</span>
                         </div>
                     ) : null}
-                    {dateLabel ? (
-                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] font-extrabold text-sky-600 ring-1 ring-sky-200">
-                            Nuevo · {dateLabel}
+
+                    <div className="mt-2 flex min-w-0 items-center gap-2">
+                        
+                        <div className="shrink-0 max-w-[60%]" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                            <EtapaSelect
+                                estado={estado}
+                                saving={savingEtapa}
+                                onChange={handleEtapaChange}
+                            />
                         </div>
-                    ) : null}
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
 
+function EtapaSelect({ estado, onChange, saving = false }) {
+    return (
+        <div className="relative inline-flex max-w-full items-center">
+            <select
+                value={estado.key}
+                disabled={saving}
+                onChange={(event) => {
+                    const opcion = ESTADOS_BANDEJA.find((b) => b.key === event.target.value);
+                    if (opcion) onChange?.(opcion.label);
+                }}
+                title={`Etapa: ${estado.label}`}
+                className="max-w-full cursor-pointer appearance-none rounded-full border border-transparent py-1 pl-2 pr-6 text-xs font-extrabold outline-none transition hover:border-black/10 focus:border-black/25 disabled:cursor-wait disabled:opacity-60"
+                style={{ color: estado.color, backgroundColor: mutedColor(estado.color, 0.90) }}
+            >
+                {ESTADOS_BANDEJA.map((b) => (
+                    <option key={b.key} value={b.key} className="bg-white text-slate-700">
+                        {b.label}
+                    </option>
+                ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-current opacity-70" />
+        </div>
+    );
+}
 
 
 function asObject(value) {
@@ -1055,8 +1259,25 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
             setLoading(false);
         })();
 
+        const onNuevoMensaje = (event) => {
+            const data = event.detail || {};
+            const telEvento = normalizaTelefonoMx(
+                data.telefono ||
+                data.wa_id ||
+                data.from ||
+                data.numero_cliente ||
+                ""
+            );
+            if (telEvento && telEvento !== tel) return;
+            cargar({ markRead: false });
+        };
+
+        window.addEventListener("whatsapp:nuevo-mensaje", onNuevoMensaje);
         pollRef.current = window.setInterval(() => { cargar({ markRead: false }); }, DRAWER_POLL_MS);
-        return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
+        return () => {
+            if (pollRef.current) window.clearInterval(pollRef.current);
+            window.removeEventListener("whatsapp:nuevo-mensaje", onNuevoMensaje);
+        };
 
     }, [open, tel]);
 
@@ -1972,6 +2193,267 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
 
 
 
+const EVENTOS_ACTIVIDAD = {
+    whatsapp: { icon: MessageCircle, color: "#16A34A", bg: "bg-emerald-50" },
+    asignacion: { icon: UserRound, color: "#8B5CF6", bg: "bg-violet-50" },
+    etapa: { icon: Tag, color: "#F97316", bg: "bg-orange-50" },
+    cita: { icon: CalendarClock, color: "#0891B2", bg: "bg-cyan-50" },
+    venta: { icon: CheckCircle2, color: "#16A34A", bg: "bg-emerald-50" },
+    descalificado: { icon: XCircle, color: "#DC2626", bg: "bg-red-50" },
+    creado: { icon: Clock, color: BRAND_BLUE, bg: "bg-[#131E5C]/5" },
+};
+
+function buildActividad(prospecto = {}) {
+    const items = [];
+    const estado = getEstadoBandeja(prospecto?.estado);
+
+    if (prospecto?.creado || prospecto?.primer_contacto_at) {
+        items.push({
+            id: "creado",
+            tipo: "creado",
+            titulo: "Prospecto registrado",
+            descripcion: "Expediente creado en el CRM",
+            fecha: prospecto?.creado || prospecto?.primer_contacto_at,
+        });
+    }
+    if (prospecto?.last?.text) {
+        items.push({
+            id: "ultimo-mensaje",
+            tipo: "whatsapp",
+            titulo: "Mensaje de WhatsApp",
+            descripcion: prospecto.last.text,
+            fecha: prospecto?.last?.timestamp || "",
+        });
+    }
+    if (estado?.label) {
+        items.push({
+            id: "etapa",
+            tipo: "etapa",
+            titulo: "Etapa actualizada",
+            descripcion: `Etapa actual: ${estado.label}`,
+            fecha: "",
+        });
+    }
+    if (prospecto?.asignadoA) {
+        items.push({
+            id: "asignacion",
+            tipo: "asignacion",
+            titulo: "Asignación de asesor",
+            descripcion: `Asignado a ${prospecto.asignadoA}`,
+            fecha: "",
+        });
+    }
+    return items;
+}
+
+function formatFechaCita(iso) {
+    if (!iso) return "—";
+    const fecha = new Date(iso);
+    if (Number.isNaN(fecha.getTime())) return "—";
+    return fecha.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "America/Mexico_City" });
+}
+
+function formatHoraCita(iso) {
+    if (!iso) return "—";
+    const fecha = new Date(iso);
+    if (Number.isNaN(fecha.getTime())) return "—";
+    return fecha.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Mexico_City" });
+}
+
+function estadoCitaDe(cita) {
+    if (!cita?.fecha_hora_cita) return null;
+    const fecha = new Date(cita.fecha_hora_cita);
+    const yaPaso = !Number.isNaN(fecha.getTime()) && fecha.getTime() < Date.now();
+    if (cita.asistencia) return { key: "asistio", label: "Asistió", color: "#16A34A", border: "#16A34A40" };
+    if (yaPaso) return { key: "no_asistio", label: "No asistió", color: "#DC2626", border: "#DC262640" };
+    return { key: "pendiente", label: "Pendiente", color: "#0891B2", border: "#0891B240" };
+}
+
+function tiempoCitaMs(cita) {
+    const fecha = new Date(cita?.fecha_hora_cita || "");
+    return Number.isNaN(fecha.getTime()) ? null : fecha.getTime();
+}
+
+function seleccionarCitaRelevante(existente, candidata) {
+    if (!existente) return candidata;
+    const tExistente = tiempoCitaMs(existente);
+    const tCandidata = tiempoCitaMs(candidata);
+    if (tExistente === null) return candidata;
+    if (tCandidata === null) return existente;
+    const ahora = Date.now();
+    const existenteFutura = tExistente >= ahora;
+    const candidataFutura = tCandidata >= ahora;
+    if (candidataFutura && !existenteFutura) return candidata;
+    if (existenteFutura && !candidataFutura) return existente;
+    if (candidataFutura) return tCandidata < tExistente ? candidata : existente;
+    return tCandidata > tExistente ? candidata : existente;
+}
+
+function InfoRow({ label, value, className }) {
+    return (
+        <div className={cls("min-w-0", className)}>
+            <div className="text-[10px] font-bold text-slate-400">{label}</div>
+            <div className="mt-0.5 truncate text-xs font-extrabold text-[#131E5C]" title={value}>{value || "—"}</div>
+        </div>
+    );
+}
+
+function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
+    const telefono = String(prospecto?.telefono || "");
+    const cita = prospecto?.cita || null;
+    const estadoCita = estadoCitaDe(cita);
+
+    const nombre = String(prospecto?.nombre || "").trim() || "Prospecto";
+    const agencia = String(prospecto?.agencia || "").trim();
+    const origen = firstNonEmpty(prospecto?.canal_contacto, prospecto?.origen, prospecto?.fuente) || "No registrado";
+    const interes = firstNonEmpty(prospecto?.auto_interes, prospecto?.interes, prospecto?.vehiculo, prospecto?.modelo) || "Por confirmar";
+    const asignadoA = String(prospecto?.asignadoA || "").trim() || "Sin asignar";
+    const estado = getEstadoBandeja(prospecto?.estado);
+    const actividad = useMemo(() => buildActividad(prospecto || {}), [prospecto]);
+
+    if (!open || !prospecto) return null;
+
+    const telLink = `tel:+${telefono.replace(/\D/g, "")}`;
+
+    return (
+        <div className="fixed inset-0 z-[95] flex justify-end">
+            <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+
+            <aside className="relative flex h-full w-full max-w-[410px] flex-col bg-[#F6F8FC] shadow-2xl sm:max-w-[430px] md:max-w-[45vw] lg:max-w-[410px]">
+
+                <div className="shrink-0 border-b border-black/10 bg-white px-4 py-3">
+                    <div className="flex items-center gap-3">
+                        <Avatar name={nombre} />
+                        <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-extrabold text-[#131E5C]">{nombre}</div>
+                            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-400">
+                                <span className="truncate">{formateaTelUi(telefono)}</span>
+                                {agencia ? (
+                                    <>
+                                        <span className="h-0.5 w-0.5 shrink-0 rounded-full bg-slate-300" />
+                                        <span className="truncate">{agencia}</span>
+                                    </>
+                                ) : null}
+                            </div>
+                        </div>
+                        <button type="button" onClick={onClose}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-neutral-100 hover:text-slate-600"
+                            title="Cerrar">
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-black/10 bg-white px-4 py-3">
+                    <button type="button" onClick={() => onOpenChat?.(telefono)}
+                        className="flex flex-col items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 transition hover:bg-emerald-100"
+                        title="Abrir conversación de WhatsApp">
+                        <MessageCircle className="h-4 w-4 text-emerald-600" />
+                        <span className="text-[10px] font-extrabold text-emerald-700">WhatsApp</span>
+                    </button>
+                    <a href={telLink}
+                        className="flex flex-col items-center gap-1.5 rounded-xl border border-black/10 bg-white py-2.5 transition hover:bg-neutral-50"
+                        title="Llamar al cliente">
+                        <Phone className="h-4 w-4 text-[#131E5C]" />
+                        <span className="text-[10px] font-extrabold text-[#131E5C]">Llamar</span>
+                    </a>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
+
+                    <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                        <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
+                            <Building2 className="h-4 w-4" />
+                            Información del prospecto
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                            <InfoRow label="Origen" value={origen} />
+                            <InfoRow label="Interés" value={interes} />
+                            <div className="col-span-2 min-w-0">
+                                <div className="text-[10px] font-bold text-slate-400">Etapa actual</div>
+                                <div className="mt-1">
+                                    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold"
+                                        style={{ color: estado.color, backgroundColor: `${estado.color}14`, borderColor: `${estado.color}40` }}>
+                                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: estado.color }} />
+                                        <span className="truncate">{estado.label}</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="col-span-2 min-w-0">
+                                <div className="text-[10px] font-bold text-slate-400">Asignado a</div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-xs font-extrabold text-[#131E5C]">
+                                    <UserRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                    <span className="truncate">{asignadoA}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {cita ? (
+                        <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
+                                    <CalendarClock className="h-4 w-4" />
+                                    Cita
+                                </div>
+                                {estadoCita ? (
+                                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold"
+                                        style={{ color: estadoCita.color, backgroundColor: `${estadoCita.color}14`, borderColor: estadoCita.border }}>
+                                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: estadoCita.color }} />
+                                        {estadoCita.label}
+                                    </span>
+                                ) : null}
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                <InfoRow label="Fecha" value={formatFechaCita(cita?.fecha_hora_cita)} />
+                                <InfoRow label="Hora" value={formatHoraCita(cita?.fecha_hora_cita)} />
+                                <InfoRow label="Asesor asignado" value={firstNonEmpty(cita?.asesor_asignado, cita?.asesor_piso, cita?.asesor_digital) || "Sin asignar"} className="col-span-2" />
+                            </div>
+                        </div>
+                    ) : null}
+
+                    <div className="mt-4 rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                        <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
+                            <Activity className="h-4 w-4" />
+                            Actividad reciente
+                        </div>
+                        {actividad.length ? (
+                            <div>
+                                {actividad.map((item, index) => {
+                                    const cfg = EVENTOS_ACTIVIDAD[item.tipo] || EVENTOS_ACTIVIDAD.creado;
+                                    const Icon = cfg.icon;
+                                    const esUltimo = index === actividad.length - 1;
+                                    return (
+                                        <div key={item.id} className="relative flex gap-3 pb-4 last:pb-0">
+                                            {!esUltimo ? <span className="absolute left-[15px] top-8 bottom-0 w-px bg-black/10" /> : null}
+                                            <div className={cls("z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", cfg.bg)}>
+                                                <Icon className="h-4 w-4" style={{ color: cfg.color }} />
+                                            </div>
+                                            <div className="min-w-0 pt-0.5">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="truncate text-xs font-extrabold text-[#131E5C]">{item.titulo}</div>
+                                                    {item.fecha ? <div className="shrink-0 text-[10px] font-semibold text-slate-400">{formatWhatsAppDate(item.fecha)}</div> : null}
+                                                </div>
+                                                <div className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-relaxed text-slate-400">{item.descripcion}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="rounded-xl border border-dashed border-black/10 bg-neutral-50 px-4 py-6 text-center text-[11px] font-semibold text-slate-400">
+                                Sin actividad registrada por ahora.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </aside>
+        </div>
+    );
+}
+
+
+
 export default function DigitalesBandeja() {
     const navigate = useNavigate();
     const { user, ready } = useAuth();
@@ -1992,56 +2474,103 @@ export default function DigitalesBandeja() {
     const [numeroAsesorActivo, setNumeroAsesorActivo] = useState("");
     const [chats, setChats] = useState([]);
     const [prospectosIndex, setProspectosIndex] = useState([]);
+    const [citasIndex, setCitasIndex] = useState([]);
     const [loading, setLoading] = useState(false);
     const [q, setQ] = useState("");
-    const [draggingTel, setDraggingTel] = useState("");
-    const [dragOverEstado, setDragOverEstado] = useState("");
-    const [savingTel, setSavingTel] = useState("");
     const [drawerTel, setDrawerTel] = useState("");
+    const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
+    const [filtroActivo, setFiltroActivo] = useState("todos");
+    const [orden, setOrden] = useState("reciente");
 
     const requestRef = useRef(0);
+    const kanbanScrollRef = useRef(null);
+    const kanbanColumnRefs = useRef(new Map());
+
+    useEffect(() => {
+        if (["todos", "no_leidos", "nuevos", "mios"].includes(filtroActivo)) {
+            return;
+        }
+        const column = kanbanColumnRefs.current.get(filtroActivo);
+        const container = kanbanScrollRef.current;
+        if (column && container) {
+            const containerRect = container.getBoundingClientRect();
+            const colRect = column.getBoundingClientRect();
+            const relativeLeft = colRect.left - containerRect.left + container.scrollLeft;
+            const target = relativeLeft - container.clientWidth / 2 + column.clientWidth / 2;
+            container.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+        }
+    }, [filtroActivo]);
 
     useEffect(() => {
         if (!ready) return;
-        if (!numerosDisponibles.length) { setNumeroAsesorActivo(""); return; }
-        const guardado = normalizaTelefonoMx(localStorage.getItem("digitales_numero_asesor_activo") || "");
+        if (!numerosDisponibles.length) {
+            setNumeroAsesorActivo("");
+            return;
+        }
+
+        const guardado = normalizaTelefonoMx(
+            localStorage.getItem("digitales_numero_asesor_activo") || ""
+        );
+
         setNumeroAsesorActivo((actual) => {
             if (actual && numerosDisponibles.includes(actual)) return actual;
-            return guardado && numerosDisponibles.includes(guardado) ? guardado : numerosDisponibles[0];
+            return guardado && numerosDisponibles.includes(guardado)
+                ? guardado
+                : numerosDisponibles[0];
         });
     }, [ready, numerosDisponibles]);
 
     async function cargarTodo() {
         const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
         if (!numeroLinea) return;
+
         const requestId = requestRef.current + 1;
         requestRef.current = requestId;
         setLoading(true);
+
         try {
-            const [chatsResp, prospectosResp] = await Promise.all([
+            const [chatsResp, prospectosResp, citasResp] = await Promise.all([
                 api.digitalesChats({ numero_asesor: numeroLinea }),
                 api.digitalesListProspectos({ numero_asesor: numeroLinea }).catch(() => []),
+                apiCitas.list().catch(() => []),
             ]);
+
             if (requestId !== requestRef.current) return;
 
-            const items = Array.isArray(chatsResp) ? chatsResp : Array.isArray(chatsResp?.results) ? chatsResp.results : [];
-            const normalized = items.map((chat) => ({
-                id: chat?.id || `${numeroLinea}-${chat?.telefono}`,
-                telefono: normalizaTelefonoMx(chat?.telefono || ""),
-                nombre: chat?.nombre || "Prospecto",
-                agencia: chat?.agencia || "",
-                estado: chat?.estado || "",
-                unread: Number(chat?.unread || 0),
-                last: {
-                    text: chat?.last_text || "",
-                    time: chat?.last_time || "",
-                    timestamp: chat?.last_message_at || "",
+            const items = Array.isArray(chatsResp)
+                ? chatsResp
+                : Array.isArray(chatsResp?.results)
+                    ? chatsResp.results
+                    : [];
 
-                },
-            })).filter((c) => c.telefono);
+            const normalized = items
+                .map((chat) => ({
+                    id: chat?.id || `${numeroLinea}-${chat?.telefono}`,
+                    telefono: normalizaTelefonoMx(chat?.telefono || ""),
+                    nombre: chat?.nombre || "Prospecto",
+                    agencia: chat?.agencia || "",
+                    estado: chat?.estado || "",
+                    unread: Number(chat?.unread || 0),
+                    asignadoA: firstNonEmpty(
+                        chat?.asesor_digital,
+                        chat?.asesor_ventas,
+                        chat?.responsable,
+                        chat?.asignado_a,
+                        chat?.asesor,
+                        chat?.assigned_to
+                    ),
+                    esMio: Boolean(chat?.es_mio || chat?.is_mine || chat?.mine),
+                    last: {
+                        text: chat?.last_text || "",
+                        time: chat?.last_time || "",
+                        timestamp: chat?.last_message_at || "",
+                    },
+                }))
+                .filter((chat) => chat.telefono);
 
             setChats(normalized);
             setProspectosIndex(Array.isArray(prospectosResp) ? prospectosResp : []);
+            setCitasIndex(Array.isArray(citasResp) ? citasResp : []);
         } catch (error) {
             console.error("Error cargando bandeja de chats:", error);
         } finally {
@@ -2049,295 +2578,545 @@ export default function DigitalesBandeja() {
         }
     }
 
-    useEffect(() => { cargarTodo(); }, [numeroAsesorActivo]);
-
-    const prospectoIdPorTel = useMemo(() => {
-        const map = new Map();
-        for (const p of prospectosIndex) {
-            const tel = normalizaTelefonoMx(p?.telefono || "");
-            if (tel && p?.id) map.set(tel, p.id);
-        }
-        return map;
-    }, [prospectosIndex]);
-
+    useEffect(() => {
+        cargarTodo();
+    }, [numeroAsesorActivo]);
 
     const prospectoPorTel = useMemo(() => {
         const map = new Map();
-        for (const p of prospectosIndex) {
-            const tel = normalizaTelefonoMx(p?.telefono || "");
-            if (tel) map.set(tel, p);
+
+        for (const prospecto of prospectosIndex) {
+            const tel = normalizaTelefonoMx(prospecto?.telefono || "");
+            if (tel) map.set(tel, prospecto);
         }
+
         return map;
     }, [prospectosIndex]);
 
+    const citaPorTel = useMemo(() => {
+        const map = new Map();
+
+        for (const cita of citasIndex) {
+            const tel = normalizaTelefonoMx(cita?.cliente?.telefono || cita?.telefono || "");
+            if (tel && cita?.fecha_hora_cita) {
+                map.set(tel, seleccionarCitaRelevante(map.get(tel), cita));
+            }
+        }
+
+        return map;
+    }, [citasIndex]);
+
+    const userAliases = useMemo(() => {
+        return [
+            user?.nombre,
+            user?.name,
+            user?.nombre_completo,
+            user?.username,
+            user?.email,
+        ]
+            .map((value) => normalizeText(value))
+            .filter(Boolean);
+    }, [user]);
+
+    const chatsEnriquecidos = useMemo(() => {
+        return chats.map((chat) => {
+            const prospecto = prospectoPorTel.get(chat.telefono) || {};
+            const asignadoA = firstNonEmpty(
+                chat?.asignadoA,
+                prospecto?.asesor_digital,
+                prospecto?.asesor_ventas,
+                prospecto?.responsable,
+                prospecto?.asignado_a,
+                prospecto?.asesor,
+                prospecto?.assigned_to
+            );
+
+            const asignadoNormalizado = normalizeText(asignadoA);
+            const coincideUsuario = Boolean(
+                asignadoNormalizado &&
+                userAliases.some(
+                    (alias) =>
+                        asignadoNormalizado === alias ||
+                        asignadoNormalizado.includes(alias) ||
+                        alias.includes(asignadoNormalizado)
+                )
+            );
+
+            return {
+                ...chat,
+                asignadoA,
+                esMio: Boolean(chat.esMio || coincideUsuario),
+                prospectoId: prospecto?.id || "",
+                autoInteres: firstNonEmpty(
+                    prospecto?.auto_interes,
+                    prospecto?.interes,
+                    prospecto?.vehiculo,
+                    prospecto?.modelo,
+                    chat?.auto_interes,
+                    chat?.interes
+                ) || "",
+            };
+        });
+    }, [chats, prospectoPorTel, userAliases]);
+
     const filteredChats = useMemo(() => {
         const query = normalizeText(q);
-        if (!query) return chats;
-        return chats.filter((c) =>
-            normalizeText(c.nombre).includes(query) ||
-            normalizaTelefonoMx(c.telefono).includes(normalizaTelefonoMx(q) || query) ||
-            normalizeText(c.agencia).includes(query)
-        );
-    }, [chats, q]);
 
-    const chatsPorBandeja = useMemo(() => {
-        const map = new Map(ESTADOS_BANDEJA.map((b) => [b.key, []]));
-        for (const chat of filteredChats) {
-            const bandeja = getEstadoBandeja(chat.estado);
-            map.get(bandeja.key)?.push(chat);
-        }
-        return map;
-    }, [filteredChats]);
+        if (!query) return chatsEnriquecidos;
+
+        return chatsEnriquecidos.filter((chat) =>
+            normalizeText(chat.nombre).includes(query) ||
+            normalizaTelefonoMx(chat.telefono).includes(normalizaTelefonoMx(q) || query) ||
+            normalizeText(chat.agencia).includes(query) ||
+            normalizeText(chat.estado).includes(query) ||
+            normalizeText(chat.last?.text).includes(query) ||
+            normalizeText(chat.asignadoA).includes(query)
+        );
+    }, [chatsEnriquecidos, q]);
 
 
     const chatsNuevosHoy = useMemo(() => {
-        return filteredChats
+        return chatsEnriquecidos
             .filter((chat) => {
-
                 const prospecto = prospectoPorTel.get(chat.telefono);
-                const fechaMensaje = chat.last?.timestamp;
-                const fechaCreacion = prospecto?.creado || prospecto?.primer_contacto_at;
-                return esFechaDeHoy(fechaMensaje) || esFechaDeHoy(fechaCreacion);
+
+                // Preferimos la fecha real de alta/primer contacto.
+                // Solo usamos el último mensaje como fallback si el expediente no trae fecha.
+                const fechaReferencia =
+                    prospecto?.creado ||
+                    prospecto?.primer_contacto_at ||
+                    chat.last?.timestamp;
+
+                return esFechaDeHoy(fechaReferencia);
             })
             .sort((a, b) => {
                 const ta = new Date(a.last?.timestamp || 0).getTime();
                 const tb = new Date(b.last?.timestamp || 0).getTime();
                 return tb - ta;
             });
-    }, [filteredChats, prospectoPorTel]);
-
+    }, [chatsEnriquecidos, prospectoPorTel]);
 
     const statsGenerales = useMemo(() => {
-        const total = chats.length;
-        const conteoPorEstado = new Map(ESTADOS_BANDEJA.map((b) => [b.key, 0]));
+        const total = chatsEnriquecidos.length;
+        const conteoPorEstado = new Map(
+            ESTADOS_BANDEJA.map((estado) => [estado.key, 0])
+        );
+
         let totalUnread = 0;
-        for (const chat of chats) {
-            const bandeja = getEstadoBandeja(chat.estado);
-            conteoPorEstado.set(bandeja.key, (conteoPorEstado.get(bandeja.key) || 0) + 1);
+
+        for (const chat of chatsEnriquecidos) {
+            const estado = getEstadoBandeja(chat.estado);
+            conteoPorEstado.set(
+                estado.key,
+                (conteoPorEstado.get(estado.key) || 0) + 1
+            );
             totalUnread += Number(chat.unread || 0);
         }
-        const calificados = conteoPorEstado.get("lead_calificado") || 0;
-        const sinRespuesta = conteoPorEstado.get("generacion_leads") || 0;
-        const chatsConUnread = chats.filter((c) => Number(c.unread || 0) > 0).length;
+
+        const cierres = conteoPorEstado.get("cierre_venta") || 0;
+        const sinAtender = conteoPorEstado.get(ESTADOS_BANDEJA[0].key) || 0;
+        const chatsConUnread = chatsEnriquecidos.filter(
+            (chat) => Number(chat.unread || 0) > 0
+        ).length;
+
         return {
             total,
             conteoPorEstado,
             totalUnread,
-            tasaConversion: total ? Math.round((calificados / total) * 100) : 0,
-            tasaAtencion: total ? Math.round(((total - sinRespuesta) / total) * 100) : 0,
-            tasaLectura: total ? Math.round(((total - chatsConUnread) / total) * 100) : 100,
+            tasaConversion: total
+                ? Math.round((cierres / total) * 100)
+                : 0,
+            tasaAtencion: total
+                ? Math.round(((total - sinAtender) / total) * 100)
+                : 0,
+            tasaLectura: total
+                ? Math.round(((total - chatsConUnread) / total) * 100)
+                : 100,
         };
-    }, [chats]);
+    }, [chatsEnriquecidos]);
 
-    function onDragStart(e, chat) {
-        setDraggingTel(chat.telefono);
-        e.dataTransfer.setData("text/plain", chat.telefono);
-        e.dataTransfer.effectAllowed = "move";
-    }
+    const nuevosHoySet = useMemo(
+        () => new Set(chatsNuevosHoy.map((chat) => chat.telefono)),
+        [chatsNuevosHoy]
+    );
 
-    function onDragEnd() {
-        setDraggingTel("");
-        setDragOverEstado("");
-    }
+    const chatsVisibles = useMemo(() => {
+        let items = [...filteredChats];
 
-    async function onDropEnBandeja(e, bandeja) {
-        e.preventDefault();
-        const tel = normalizaTelefonoMx(e.dataTransfer.getData("text/plain") || draggingTel);
-        setDragOverEstado("");
-        setDraggingTel("");
-        if (!tel) return;
-
-        const chat = chats.find((c) => c.telefono === tel);
-        if (!chat) return;
-
-        if (getEstadoBandeja(chat.estado).key === bandeja.key) return;
-
-        const prospectoId = prospectoIdPorTel.get(tel);
-        if (!prospectoId) {
-            alert("Este chat todavía no tiene un expediente de prospecto asociado, ábrelo desde Chats para crear/editar sus datos primero.");
-            return;
+        if (filtroActivo === "nuevos") {
+            items = items.filter((chat) => nuevosHoySet.has(chat.telefono));
+        } else if (filtroActivo === "no_leidos") {
+            items = items.filter((chat) => Number(chat.unread || 0) > 0);
+        } else if (filtroActivo === "mios") {
+            items = items.filter((chat) => Boolean(chat.esMio));
         }
 
-        const estadoAnterior = chat.estado;
-        setSavingTel(tel);
+        return items.sort((a, b) => {
+            if (orden === "nombre") {
+                return String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", {
+                    sensitivity: "base",
+                });
+            }
 
-        setChats((prev) => prev.map((c) => (c.telefono === tel ? { ...c, estado: bandeja.label } : c)));
+            const ta = new Date(a.last?.timestamp || 0).getTime();
+            const tb = new Date(b.last?.timestamp || 0).getTime();
+
+            if (orden === "antiguo") return ta - tb;
+            return tb - ta;
+        });
+    }, [filteredChats, filtroActivo, nuevosHoySet, orden]);
+
+    const chatsPorColumna = useMemo(() => {
+        const map = new Map(ESTADOS_BANDEJA.map((estado) => [estado.key, []]));
+        for (const chat of chatsVisibles) {
+            const estado = getEstadoBandeja(chat.estado);
+            map.get(estado.key)?.push(chat);
+        }
+        return map;
+    }, [chatsVisibles]);
+
+    const noLeidosCount = useMemo(
+        () => chatsEnriquecidos.filter((chat) => Number(chat.unread || 0) > 0).length,
+        [chatsEnriquecidos]
+    );
+
+    const misChatsCount = useMemo(
+        () => chatsEnriquecidos.filter((chat) => Boolean(chat.esMio)).length,
+        [chatsEnriquecidos]
+    );
+
+
+    const filtroSeleccionado = useMemo(() => {
+        if (filtroActivo === "todos") {
+            return {
+                label: "Todos los chats",
+                color: BRAND_BLUE,
+                description: "Todas las conversaciones de la línea",
+            };
+        }
+
+        if (filtroActivo === "nuevos") {
+            return {
+                label: "Nuevos prospectos",
+                color: "#0EA5E9",
+                description: "Prospectos que ingresaron hoy",
+            };
+        }
+
+        if (filtroActivo === "no_leidos") {
+            return {
+                label: "No leídos",
+                color: "#10B981",
+                description: "Conversaciones que requieren revisión",
+            };
+        }
+
+        const estado = ESTADOS_BANDEJA.find(
+            (item) => item.key === filtroActivo
+        );
+
+        return {
+            label: estado?.label || "Prospectos",
+            color: estado?.color || BRAND_BLUE,
+            description: "Prospectos en esta etapa comercial",
+        };
+    }, [filtroActivo]);
+
+    function cambiarLinea(numero) {
+        const normalized = normalizaTelefonoMx(numero);
+        setNumeroAsesorActivo(normalized);
+        setFiltroActivo("todos");
 
         try {
-            await api.digitalesPatchProspecto(prospectoId, { estado: bandeja.label });
-        } catch (error) {
-            setChats((prev) => prev.map((c) => (c.telefono === tel ? { ...c, estado: estadoAnterior } : c)));
-            alert(`No se pudo mover el chat: ${error.message}`);
-        } finally {
-            setSavingTel("");
+            localStorage.setItem(
+                "digitales_numero_asesor_activo",
+                normalized
+            );
+        } catch {
         }
     }
 
-    function abrirChat(chat) {
-        setDrawerTel(chat.telefono);
+    function abrirProspecto(chat) {
+        const prospecto = prospectoPorTel.get(chat.telefono);
+        const cita = citaPorTel.get(chat.telefono);
+        setProspectoSeleccionado({ ...chat, ...prospecto, cita, estado: chat.estado });
+    }
+
+    async function guardarEtapa(chat, label) {
+        const id = chat?.prospectoId;
+        if (!id) return;
+
+        const anterior = chat.estado;
+
+        setChats((prev) =>
+            prev.map((c) =>
+                c.telefono === chat.telefono ? { ...c, estado: label } : c
+            )
+        );
+        setProspectoSeleccionado((prev) =>
+            prev && prev.telefono === chat.telefono ? { ...prev, estado: label } : prev
+        );
+
+        try {
+            await api.digitalesPatchProspecto(id, { estado: label });
+        } catch (error) {
+            console.error("No se pudo actualizar la etapa:", error);
+            setChats((prev) =>
+                prev.map((c) =>
+                    c.telefono === chat.telefono ? { ...c, estado: anterior } : c
+                )
+            );
+            setProspectoSeleccionado((prev) =>
+                prev && prev.telefono === chat.telefono ? { ...prev, estado: anterior } : prev
+            );
+            alert(`No se pudo actualizar la etapa: ${error.message}`);
+        }
     }
 
     return (
-        <div className="w-full min-w-0">
-            <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-                {/* Header */}
-                <div className="flex flex-wrap items-center gap-3 border-b border-black/10 bg-white px-4 py-3">
-                    <button onClick={() => navigate("/comercial/prospectos")}
-                        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-extrabold text-[#131E5C] hover:bg-neutral-100 transition"
-                        type="button">
-                        <ArrowLeft className="h-4 w-4" />Volver
-                    </button>
+        <div className="w-full min-w-0 overflow-x-hidden">
+            <div className="mb-4 flex min-w-0 flex-wrap items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm">
+                <button
+                    onClick={() => navigate("/comercial/prospectos")}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-extrabold text-[#131E5C] transition hover:bg-neutral-100"
+                    type="button"
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    Volver
+                </button>
 
-                    <div className="text-sm font-extrabold text-[#131E5C]">Bandeja de chats</div>
+                <div className="hidden h-6 w-px bg-black/10 sm:block" />
 
-                    {numerosDisponibles.length > 0 ? (
-                        <select
-                            value={numeroAsesorActivo}
-                            onChange={(e) => setNumeroAsesorActivo(normalizaTelefonoMx(e.target.value))}
-                            className="h-9 rounded-lg border border-[#131E5C]/20 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none focus:ring-2 focus:ring-[#131E5C]/15"
+                <div className="min-w-0">
+                    <div className="truncate text-sm font-extrabold text-[#131E5C]">
+                        Bandeja de chats
+                    </div>
+                    <div className="truncate text-[10px] font-semibold text-slate-400">
+                        Conversaciones y seguimiento de prospectos
+                    </div>
+                </div>
+
+                {numerosDisponibles.length > 0 ? (
+                    <select
+                        value={numeroAsesorActivo}
+                        onChange={(event) => cambiarLinea(event.target.value)}
+                        className="h-9 max-w-full rounded-xl border border-[#131E5C]/15 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#131E5C]/30 focus:ring-2 focus:ring-[#131E5C]/10"
+                    >
+                        {numerosDisponibles.map((numero) => (
+                            <option key={numero} value={numero}>
+                                {obtenerEtiquetaLinea(numero)} · {formateaTelUi(numero)}
+                            </option>
+                        ))}
+                    </select>
+                ) : null}
+
+                <div className="flex min-w-[220px] flex-1 items-center gap-2 overflow-hidden rounded-2xl bg-neutral-100 px-3 py-2">
+                    <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                    <input
+                        value={q}
+                        onChange={(event) => setQ(event.target.value)}
+                        placeholder="Buscar prospecto, teléfono, agencia o mensaje…"
+                        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400"
+                    />
+                    {q ? (
+                        <button
+                            type="button"
+                            onClick={() => setQ("")}
+                            className="shrink-0 text-slate-400 hover:text-slate-600"
+                            title="Limpiar búsqueda"
                         >
-                            {numerosDisponibles.map((numero) => (
-                                <option key={numero} value={numero}>
-                                    {obtenerEtiquetaLinea(numero)} · {formateaTelUi(numero)}
-                                </option>
-                            ))}
-                        </select>
+                            <X className="h-3.5 w-3.5" />
+                        </button>
                     ) : null}
-
-                    <div className="flex flex-1 items-center gap-2 rounded-2xl bg-neutral-100 px-3 py-2 min-w-[180px]">
-                        <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                        <input value={q} onChange={(e) => setQ(e.target.value)}
-                            placeholder="Buscar prospecto…"
-                            className="w-full bg-transparent text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400" />
-                        {q ? (<button type="button" onClick={() => setQ("")} className="shrink-0 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>) : null}
-                    </div>
-
-                    {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#131E5C]/50" /> : null}
                 </div>
 
+                {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#131E5C]/50" /> : null}
+            </div>
 
-                <div className="flex flex-wrap items-center gap-5 border-b border-black/10 bg-white px-4 py-3">
-                    <FlowStreamBar conteoPorEstado={statsGenerales.conteoPorEstado} total={statsGenerales.total} />
-                    <div className="flex items-center gap-4 border-l border-black/5 pl-5">
-                        <PulseRing value={statsGenerales.tasaAtencion} label="Atención" color={mutedColor("#3B82F6", 0.1)} />
-                        <PulseRing value={statsGenerales.tasaConversion} label="Conversión" color={mutedColor("#22C55E", 0.1)} />
-                        <PulseRing value={statsGenerales.tasaLectura} label="Lectura" color={mutedColor(BRAND_BLUE, 0.15)} />
-                    </div>
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+                <div className="min-w-0 max-w-full overflow-hidden xl:h-[calc(100dvh-150px)] xl:min-h-[620px]">
+                    <PipelineSidebar
+                        conteoPorEstado={statsGenerales.conteoPorEstado}
+                        total={statsGenerales.total}
+                        nuevosHoy={chatsNuevosHoy.length}
+                        tasaAtencion={statsGenerales.tasaAtencion}
+                        tasaConversion={statsGenerales.tasaConversion}
+                        tasaLectura={statsGenerales.tasaLectura}
+                        filtroActivo={filtroActivo}
+                        onFiltroChange={setFiltroActivo}
+                    />
                 </div>
 
-
-                <div className="grid h-[calc(90dvh-120px)] grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)]">
-                    <aside className="min-h-0 overflow-y-auto border-r border-black/10 bg-neutral-50 p-3">
-                        <div className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/50">
-                            Todos los chats ({filteredChats.length})
-                        </div>
-                        <div className="space-y-2">
-                            {filteredChats.map((chat) => (
-                                <ChatCard
-                                    key={chat.id}
-                                    chat={chat}
-                                    onOpen={abrirChat}
-                                    onDragStart={onDragStart}
-                                    onDragEnd={onDragEnd}
-                                    dragging={draggingTel === chat.telefono}
-                                />
-                            ))}
-                            {!loading && filteredChats.length === 0 ? (
-                                <div className="p-6 text-center text-xs font-bold text-slate-400">Sin chats aún</div>
-                            ) : null}
-                        </div>
-                    </aside>
-
-                    <div className="min-h-0 overflow-x-auto overflow-y-hidden p-3">
-                        <div className="grid h-full grid-flow-col auto-cols-[240px] gap-3">
-
-                            <div className="flex h-full min-h-0 flex-col rounded-2xl border border-sky-200 bg-sky-50/40">
-                                <div className="flex shrink-0 flex-col gap-1.5 border-b border-sky-100 px-3 py-2.5">
-                                    <div className="flex items-center gap-2">
-                                        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
-                                        <span className="truncate text-xs font-extrabold text-[#131E5C]">Nuevos prospectos</span>
-                                        <span className="ml-auto shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-extrabold text-sky-600 ring-1 ring-sky-200">
-                                            {chatsNuevosHoy.length}
-                                        </span>
-                                    </div>
-                                    <div className="text-[10px] font-semibold text-sky-600/70">Mensajes o prospectos de hoy</div>
-                                </div>
-                                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
-                                    {chatsNuevosHoy.map((chat) => (
-                                        <ChatCard
-                                            key={chat.id}
-                                            chat={chat}
-                                            onOpen={abrirChat}
-                                            onDragStart={onDragStart}
-                                            onDragEnd={onDragEnd}
-                                            dragging={draggingTel === chat.telefono || savingTel === chat.telefono}
-                                            dateLabel={formatHoraCorta(chat.last?.timestamp) || "Hoy"}
-                                        />
-                                    ))}
-                                    {chatsNuevosHoy.length === 0 ? (
-                                        <div className="rounded-xl border border-dashed border-sky-200 px-3 py-6 text-center text-[11px] font-bold text-slate-400">
-                                            Sin prospectos nuevos hoy
-                                        </div>
+                {/* BANDEJA*/}
+                <section className="flex min-h-[620px] min-w-0 max-w-full flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm xl:h-[calc(100dvh-150px)]">
+                    <div className="shrink-0 border-b border-black/10 bg-white px-3 py-2.5 sm:px-4">
+                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroActivo("todos")}
+                                    className={cls(
+                                        "relative rounded-lg px-3 py-2 text-[11px] font-extrabold transition",
+                                        filtroActivo === "todos"
+                                            ? "bg-[#EEF4FF] text-[#2563EB]"
+                                            : "text-slate-500 hover:bg-neutral-50 hover:text-[#131E5C]"
+                                    )}
+                                >
+                                    Todos
+                                    <span className="ml-1.5 rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] text-[#6B8FD9]">
+                                        {statsGenerales.total}
+                                    </span>
+                                    {filtroActivo === "todos" ? (
+                                        <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[#3B82F6]" />
                                     ) : null}
-                                </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroActivo("no_leidos")}
+                                    className={cls(
+                                        "relative rounded-lg px-3 py-2 text-[11px] font-extrabold transition",
+                                        filtroActivo === "no_leidos"
+                                            ? "bg-[#EEF4FF] text-[#2563EB]"
+                                            : "text-slate-500 hover:bg-neutral-50 hover:text-[#131E5C]"
+                                    )}
+                                >
+                                    No leídos
+                                    <span className="ml-1.5 rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] text-[#6B8FD9]">
+                                        {noLeidosCount}
+                                    </span>
+                                    {filtroActivo === "no_leidos" ? (
+                                        <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[#3B82F6]" />
+                                    ) : null}
+                                </button>
+
                             </div>
 
-                            {ESTADOS_BANDEJA.map((bandeja) => {
-                                const items = chatsPorBandeja.get(bandeja.key) || [];
-                                const isOver = dragOverEstado === bandeja.key;
-                                return (
-                                    <div
-                                        key={bandeja.key}
-                                        onDragOver={(e) => { e.preventDefault(); setDragOverEstado(bandeja.key); }}
-                                        onDragLeave={() => setDragOverEstado((prev) => (prev === bandeja.key ? "" : prev))}
-                                        onDrop={(e) => onDropEnBandeja(e, bandeja)}
-                                        className={cls(
-                                            "flex h-full min-h-0 flex-col rounded-2xl border bg-neutral-50 transition",
-                                            isOver ? "border-[#131E5C]/40 bg-[#131E5C]/[0.04] ring-2 ring-[#131E5C]/15" : "border-black/10"
-                                        )}
-                                    >
-                                        <div className="flex shrink-0 flex-col gap-1.5 border-b border-black/5 px-3 py-2.5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: bandeja.color }} />
-                                                <span className="truncate text-xs font-extrabold text-[#131E5C]">{bandeja.label}</span>
-                                                <span className="ml-auto shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-extrabold text-slate-500 ring-1 ring-black/5">
-                                                    {items.length}
-                                                </span>
-                                            </div>
-                                            <div className="h-1 w-full overflow-hidden rounded-full bg-black/5">
-                                                <div
-                                                    className="h-full rounded-full transition-all duration-700 ease-out"
-                                                    style={{
-                                                        width: `${statsGenerales.total ? ((statsGenerales.conteoPorEstado.get(bandeja.key) || 0) / statsGenerales.total) * 100 : 0}%`,
-                                                        backgroundColor: mutedColor(bandeja.color, 0.3),
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
-                                            {items.map((chat) => (
-                                                <ChatCard
-                                                    key={chat.id}
-                                                    chat={chat}
-                                                    onOpen={abrirChat}
-                                                    onDragStart={onDragStart}
-                                                    onDragEnd={onDragEnd}
-                                                    dragging={draggingTel === chat.telefono || savingTel === chat.telefono}
-                                                />
-                                            ))}
-                                            {items.length === 0 ? (
-                                                <div className="rounded-xl border border-dashed border-black/10 px-3 py-6 text-center text-[11px] font-bold text-slate-400">
-                                                    Suelta aquí
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            <select
+                                value={orden}
+                                onChange={(event) => setOrden(event.target.value)}
+                                className="h-8 max-w-full rounded-xl border border-black/10 bg-white px-3 text-[10px] font-bold text-slate-500 outline-none transition hover:border-[#131E5C]/20 focus:border-[#131E5C]/30"
+                            >
+                                <option value="reciente">Ordenar: Más reciente</option>
+                                <option value="antiguo">Ordenar: Más antiguo</option>
+                                <option value="nombre">Ordenar: Nombre A-Z</option>
+                            </select>
                         </div>
+                        
+                        {!["todos", "no_leidos", "mios"].includes(filtroActivo) ? (
+                            <div className="mt-2 flex min-w-0 items-center gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5">
+                                <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{ backgroundColor: filtroSeleccionado.color }}
+                                />
+                                <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-slate-500">
+                                    Filtrando por: <span className="text-[#131E5C]">{filtroSeleccionado.label}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroActivo("todos")}
+                                    className="shrink-0 rounded-md px-2 py-1 text-[9px] font-extrabold text-[#131E5C] hover:bg-white"
+                                >
+                                    Quitar
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
-                </div>
+
+                    <div className="min-h-0 min-w-0 flex-1 bg-[#F9FAFB]">
+                        {loading && chatsEnriquecidos.length === 0 ? (
+                            <div className="flex h-full min-h-[220px] items-center justify-center">
+                                <div className="flex flex-col items-center gap-2 text-slate-400">
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                    <span className="text-xs font-semibold">Cargando conversaciones…</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div ref={kanbanScrollRef} className="flex h-full min-w-0 items-stretch gap-3 overflow-x-auto overflow-y-hidden px-3 py-3">
+                                {ESTADOS_BANDEJA.map((estado) => {
+                                    const items = chatsPorColumna.get(estado.key) || [];
+                                    const activo = filtroActivo === estado.key;
+                                    return (
+                                        <div
+                                            key={estado.key}
+                                            ref={(node) => {
+                                                if (node) kanbanColumnRefs.current.set(estado.key, node);
+                                                else kanbanColumnRefs.current.delete(estado.key);
+                                            }}
+                                            className={cls(
+                                                "flex h-full w-[260px] min-w-0 shrink-0 flex-col overflow-hidden rounded-[12px] border bg-white shadow-sm transition",
+                                                activo ? "border-[#131E5C]/25 ring-1 ring-[#131E5C]/10" : "border-[#E5E7EB]"
+                                            )}
+                                        >
+                                            {/* Encabezado de columna */}
+                                            <div className="shrink-0 border-b border-[#E5E7EB]/60 px-3 pt-3 pb-2.5">
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <span
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                        style={{ backgroundColor: estado.color }}
+                                                    />
+                                                    <span className="min-w-0 flex-1 truncate text-[11px] font-extrabold text-[#131E5C]">
+                                                        {estado.label}
+                                                    </span>
+                                                    <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-extrabold text-slate-500 ring-1 ring-black/5">
+                                                        {items.length}
+                                                    </span>
+                                                </div>
+                                                <div
+                                                    className="mt-2 h-[3px] w-full rounded-full"
+                                                    style={{ backgroundColor: estado.color }}
+                                                />
+                                            </div>
+
+                                            {/* Prospectos de la columna */}
+                                            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-2.5">
+                                                {items.length === 0 ? (
+                                                    <div className="rounded-lg border border-dashed border-[#E5E7EB] py-5 text-center text-[10px] font-semibold text-slate-300">
+                                                        Sin prospectos
+                                                    </div>
+                                                ) : (
+                                                    items.map((chat) => (
+                                                        <ChatCard
+                                                            key={chat.id}
+                                                            chat={chat}
+                                                            onOpen={abrirProspecto}
+                                                            onChangeEtapa={guardarEtapa}
+                                                            selected={prospectoSeleccionado?.telefono === chat.telefono}
+                                                        />
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-black/10 bg-white px-4 py-2.5">
+                        <div className="text-[10px] font-semibold text-slate-400">
+                            Mostrando <span className="font-extrabold text-[#131E5C]">{chatsVisibles.length}</span> de {statsGenerales.total} conversaciones
+                        </div>
+                        {filtroActivo !== "todos" ? (
+                            <button
+                                type="button"
+                                onClick={() => setFiltroActivo("todos")}
+                                className="rounded-lg px-2.5 py-1.5 text-[10px] font-extrabold text-[#131E5C] transition hover:bg-[#131E5C]/5"
+                            >
+                                Quitar filtro
+                            </button>
+                        ) : null}
+                    </div>
+                </section>
             </div>
+
+            <ProspectoDrawer
+                key={prospectoSeleccionado?.telefono || "ninguno"}
+                open={Boolean(prospectoSeleccionado)}
+                prospecto={prospectoSeleccionado}
+                onClose={() => setProspectoSeleccionado(null)}
+                onOpenChat={(telefono) => setDrawerTel(telefono)}
+            />
 
             <ChatDrawer
                 open={Boolean(drawerTel)}
