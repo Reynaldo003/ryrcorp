@@ -35,6 +35,7 @@ import {
     MoreVertical,
 } from "lucide-react";
 import { apiCitas } from "../../lib/apiCitas";
+import { api } from "../../lib/apiPruebas";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import * as XLSX from "xlsx";
@@ -44,6 +45,40 @@ const BRAND_BLUE = "#131E5C";
 
 
 function normalizeStr(v) { return String(v ?? "").trim(); }
+
+function normalizaTelefonoMx(tel) {
+    const digits = String(tel || "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("521") && digits.length === 13) return `52${digits.slice(3)}`;
+    if (digits.length === 10) return `52${digits}`;
+    if (digits.length === 12 && digits.startsWith("52")) return digits;
+    return digits;
+}
+
+// Cuando una cita ya ocurrió, sincroniza la etapa del prospecto en la bandeja
+// de digitales: "Asistencia a la Cita" si asistió, o "No asistió" si no.
+async function sincronizarEtapaConAsistencia(cita = {}) {
+    const telefono = normalizaTelefonoMx(cita?.cliente?.telefono || cita?.telefono || "");
+    if (!telefono) return;
+
+    const fecha = cita?.fecha_hora_cita;
+    if (!fecha) return;
+    const dt = new Date(fecha);
+    if (Number.isNaN(dt.getTime())) return;
+    if (dt.getTime() > Date.now()) return; // la cita aún no ocurre
+
+    const estado = cita?.asistencia ? "Asistencia a la Cita" : "No asistió";
+
+    try {
+        const lista = await api.digitalesListProspectos({});
+        const prospectos = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
+        const prospecto = prospectos.find((p) => normalizaTelefonoMx(p?.telefono) === telefono);
+        if (!prospecto?.id) return;
+        await api.digitalesPatchProspecto(prospecto.id, { estado });
+    } catch (error) {
+        console.error("No se pudo sincronizar la etapa en la bandeja:", error);
+    }
+}
 
 function toDTLocal(isoOrNull) {
     if (!isoOrNull) return "";
@@ -1438,6 +1473,12 @@ export default function RegistroCitas() {
             } else {
                 await apiCitas.patch(draft.id, payload);
             }
+            await sincronizarEtapaConAsistencia({
+                cliente: { telefono: payload.telefono },
+                telefono: payload.telefono,
+                fecha_hora_cita: payload.fecha_hora_cita,
+                asistencia: payload.asistencia,
+            });
             await refreshList(); closeModal();
         } catch (e) { console.error(e); alert("Error guardando la cita (revisa consola)."); }
         finally { setSaving(false); }
@@ -1449,9 +1490,13 @@ export default function RegistroCitas() {
             alert("No tienes permisos para modificar registros de otra agencia."); return;
         }
         const prev = !!row.asistencia;
-        setCitas((p) => p.map((c) => (c.id === id ? { ...c, asistencia: !prev } : c)));
+        const siguiente = !prev;
+        setCitas((p) => p.map((c) => (c.id === id ? { ...c, asistencia: siguiente } : c)));
         setUpdatingInline((p) => ({ ...p, [id]: true }));
-        try { await apiCitas.patch(id, { asistencia: !prev }); }
+        try {
+            await apiCitas.patch(id, { asistencia: siguiente });
+            await sincronizarEtapaConAsistencia({ ...row, asistencia: siguiente });
+        }
         catch (e) { console.error(e); setCitas((p) => p.map((c) => (c.id === id ? { ...c, asistencia: prev } : c))); alert("No se pudo actualizar asistencia."); }
         finally { setUpdatingInline((p) => { const n = { ...p }; delete n[id]; return n; }); }
     };
