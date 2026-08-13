@@ -1,69 +1,41 @@
 // src/lib/apiCitas.js
-import { http } from "./apiClient";
+import { buildQuery, http } from "./apiClient";
 
-function buildQuery(params = {}) {
-  const query = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") {
-      return;
-    }
-
-    query.set(key, String(value));
-  });
-
-  const text = query.toString();
-
-  return text ? `?${text}` : "";
+function jsonRequest(method, payload, auth = true) {
+  return {
+    method,
+    auth,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  };
 }
 
-async function listAll(params = {}) {
-  let results = [];
-
+async function listarTodo(params = {}) {
   let next = `/citas/api/citas/${buildQuery(params)}`;
+  const resultados = [];
+  const visitadas = new Set();
 
-  while (next) {
-    const data = await http(next);
-
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    results = results.concat(data?.results || []);
-
+  while (next && !visitadas.has(next)) {
+    visitadas.add(next);
+    const data = await http(next, { auth: false });
+    if (Array.isArray(data)) return resultados.concat(data);
+    resultados.push(...(Array.isArray(data?.results) ? data.results : []));
     next = data?.next
       ? String(data.next).replace(/^https?:\/\/[^/]+/, "")
       : null;
   }
 
-  return results;
-}
-
-function jsonRequest(method, payload) {
-  return {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload ?? {}),
-  };
+  return resultados;
 }
 
 export const apiCitas = {
-  list: (params = {}) => listAll(params),
-
-  get: (id) => http(`/citas/api/citas/${id}/`),
-
-  create: (payload) => http("/citas/api/citas/", jsonRequest("POST", payload)),
-
+  list: (params = {}) => listarTodo(params),
+  get: (id) => http(`/citas/api/citas/${id}/`, { auth: false }),
+  create: (payload) =>
+    http("/citas/api/citas/", jsonRequest("POST", payload, false)),
   update: (id, payload) =>
     http(`/citas/api/citas/${id}/`, jsonRequest("PUT", payload)),
-
   patch: (id, payload) =>
     http(`/citas/api/citas/${id}/`, jsonRequest("PATCH", payload)),
-
-  remove: (id) =>
-    http(`/citas/api/citas/${id}/`, {
-      method: "DELETE",
-    }),
+  remove: (id) => http(`/citas/api/citas/${id}/`, { method: "DELETE" }),
 };
