@@ -456,7 +456,7 @@ export default function Sidebar() {
 
             <aside
                 className={cls(
-                    "sticky top-0 z-[200] hidden h-screen shrink-0 overflow-visible border-r border-slate-200 bg-white md:block",
+                    "sticky top-0 z-20 hidden h-screen shrink-0 overflow-visible border-r border-slate-200 bg-white md:block",
                     "transition-[width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
                     collapsed ? "w-18" : "w-72"
                 )}

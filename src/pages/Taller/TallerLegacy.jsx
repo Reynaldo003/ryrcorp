@@ -25,31 +25,15 @@ import {
     ChevronUp,
     GripVertical,
     CalendarClock,
-    CalendarCheck,
-    CalendarX,
-    Car,
-    ClipboardCheck,
     Coffee,
-    FileSignature,
-    Filter,
     GraduationCap,
     History,
-    KeyRound,
-    Layers,
-    MapPin,
-    Megaphone,
-    PackageOpen,
-    ReceiptText,
-    ScanSearch,
-    Sparkles,
-    Workflow,
 } from "lucide-react";
 
 import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
 import { useAuth } from "../../auth/AuthContext";
-import TallerLegacy from "./TallerLegacy";
 
-const BRAND_BLUE = "#001E50";
+const BRAND_BLUE = "#131E5C";
 
 const DEALERS = [
     "VW Cordoba",
@@ -118,120 +102,6 @@ const ETAPAS_WIP = [
 const ETAPAS_TERMINADO = ["Terminado", "Autos terminados no entregados"];
 const TODAS_ETAPAS = [...ETAPAS_PROCESO, ...ETAPAS_WIP, ...ETAPAS_TERMINADO];
 
-const ETAPAS_FLUJO_TRABAJO = [
-    {
-        id: "clientes-con-cita",
-        numero: 1,
-        nombre: "Clientes con Cita",
-        icon: CalendarCheck,
-        color: "#14B8A6",
-        etapas: ["Ingreso con Cita"],
-    },
-    {
-        id: "clientes-sin-cita",
-        numero: 2,
-        nombre: "Clientes sin Cita",
-        icon: CalendarX,
-        color: "#06B6D4",
-        etapas: ["Ingreso Sin Cita"],
-    },
-    {
-        id: "recepcion",
-        numero: 3,
-        nombre: "Recepción",
-        icon: ClipboardList,
-        color: "#3B82F6",
-        etapas: ["En espera de trabajo"],
-    },
-    {
-        id: "espera-servicio",
-        numero: 4,
-        nombre: "En espera de Servicio",
-        icon: Car,
-        color: "#6366F1",
-        etapas: ["En espera de Servicio"],
-    },
-    {
-        id: "espera-diagnostico",
-        numero: 5,
-        nombre: "En espera de Diagnóstico",
-        icon: ScanSearch,
-        color: "#6366F1",
-        etapas: ["En espera de Diagnóstico"],
-    },
-    {
-        id: "espera-diss",
-        numero: 6,
-        nombre: "En espera de DISS",
-        icon: MapPin,
-        color: "#6366F1",
-        etapas: ["En espera de DISS"],
-    },
-    {
-        id: "espera-autorizacion",
-        numero: 7,
-        nombre: "En espera de Autorización",
-        icon: FileSignature,
-        color: "#6366F1",
-        etapas: [
-            "En espera de autorización de presupuesto",
-            "En espera de Autorización",
-        ],
-    },
-    {
-        id: "espera-piezas",
-        numero: 8,
-        nombre: "En espera de Piezas",
-        icon: PackageOpen,
-        color: "#6366F1",
-        etapas: ["En espera de refacciones", "En espera de Piezas"],
-    },
-    {
-        id: "reparacion",
-        numero: 9,
-        nombre: "En Reparación",
-        icon: Wrench,
-        color: "#EC4899",
-        etapas: ["Trabajo en Proceso"],
-    },
-    {
-        id: "control-calidad",
-        numero: 10,
-        nombre: "Control de Calidad",
-        icon: ClipboardCheck,
-        color: "#EC4899",
-        etapas: ["En Control de Calidad", "En espera de Control de Calidad"],
-    },
-    {
-        id: "lavado-preparacion",
-        numero: 11,
-        nombre: "Lavado / Preparación",
-        icon: Sparkles,
-        color: "#EC4899",
-        etapas: ["En Lavado", "Espera de Lavado"],
-    },
-    {
-        id: "terminados-no-entregados",
-        numero: 12,
-        nombre: "Autos Terminados No Entregados",
-        icon: KeyRound,
-        color: "#D5232A",
-        etapas: [
-            "Autos terminados no entregados",
-            "En Espera de Entrega",
-            "Terminado",
-        ],
-    },
-    {
-        id: "ordenes-facturar",
-        numero: 13,
-        nombre: "Órdenes por Facturar",
-        icon: ReceiptText,
-        color: "#D5232A",
-        etapas: ["Órdenes por Facturar"],
-    },
-];
-
 const ESTATUS_AGENDA = ["Programado", "Terminado"];
 
 const TIPOS_BLOQUE = [
@@ -253,9 +123,11 @@ const TOTAL_INTERVALOS =
     MINUTOS_TOTALES_AGENDA / INTERVALO_MINUTOS;
 const HORA_INICIO_TEXTO = "08:30";
 
-const ANCHO_TECNICO = 250;
-const ANCHO_MINIMO_LINEA = 1850;
-const ALTURA_CARRIL = 82;
+const ANCHO_TECNICO = 230;
+const ANCHO_MINIMO_LINEA = 2600;
+const ALTURA_CARRIL = 100;
+
+const PANEL_STORAGE_KEY = "taller.paneles.contenedores.v3";
 
 const CONTENEDORES_TALLER = {
     izquierda: [
@@ -374,6 +246,15 @@ const CONTENEDORES_TALLER = {
 };
 
 const TODOS_CONTENEDORES = Object.values(CONTENEDORES_TALLER).flat();
+
+const DEFAULT_PANEL_STATE = {
+    izquierda: true,
+    derecha: true,
+    inferior: true,
+    contenedores: Object.fromEntries(
+        TODOS_CONTENEDORES.map((contenedor) => [contenedor.id, true]),
+    ),
+};
 
 function normalizeStr(value) {
     return String(value ?? "").trim();
@@ -591,6 +472,19 @@ function getOrdenKey(row) {
     return `cliente:${normalizeKey(cliente)}|tel:${normalizeKey(telefono)}|vin:${normalizeKey(vin)}`;
 }
 
+function loadJSONStorage(key, fallback) {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(key) || "null");
+        return parsed ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function saveJSONStorage(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+}
+
 function canonicalTechnician(value) {
     const key = normalizeKey(value);
 
@@ -695,28 +589,24 @@ function getActivityLabel(order) {
 const WORK_TYPE_META = {
     reparacion: {
         label: "Reparación",
-        icon: Wrench,
         backgroundColor: "#FEE2E2",
         borderColor: "#DC2626",
         color: "#991B1B",
     },
     diagnostico: {
         label: "Diagnóstico",
-        icon: ScanSearch,
-        backgroundColor: "rgba(194, 221, 252, 0.9)",
-        borderColor: "#3471eb",
-        color: "#0e1e41",
+        backgroundColor: "#E5E7EB",
+        borderColor: "#6B7280",
+        color: "#111827",
     },
     campana: {
         label: "Campaña",
-        icon: Megaphone,
-        backgroundColor: "#d3a0e9",
-        borderColor: "#3d0865",
-        color: "#3b1a69",
+        backgroundColor: "#171717",
+        borderColor: "#000000",
+        color: "#FFFFFF",
     },
     mantenimiento: {
         label: "Mantenimiento",
-        icon: ClipboardCheck,
         backgroundColor: "#DCFCE7",
         borderColor: "#16A34A",
         color: "#14532D",
@@ -749,21 +639,6 @@ function getWorkTypeKey(order) {
 
 function getWorkTypeMeta(order) {
     return WORK_TYPE_META[getWorkTypeKey(order)];
-}
-
-const LEGEND_CHIPS = {
-    reparacion: { label: "Reparación", icon: Wrench, backgroundColor: "#FECACA", borderColor: "#EF4444", color: "#991B1B" },
-    diagnostico: { label: "Diagnóstico", icon: ScanSearch, backgroundColor: "#DBEAFE", borderColor: "#3B82F6", color: "#1E3A8A" },
-    campana: { label: "Campaña", icon: Megaphone, backgroundColor: "#EDE9FE", borderColor: "#8B5CF6", color: "#5B21B6" },
-    mantenimiento: { label: "Mantenimiento", icon: ClipboardCheck, backgroundColor: "#D1FAE5", borderColor: "#10B981", color: "#065F46" },
-    comida: { label: "Comida", icon: Coffee, backgroundColor: "#CFFAFE", borderColor: "#06B6D4", color: "#155E75" },
-    capacitacion: { label: "Capacitación", icon: GraduationCap, backgroundColor: "#FFEDD5", borderColor: "#F97316", color: "#9A3412" },
-};
-
-function getCategoryKey(order) {
-    if (order?.tipo_bloque === "comida") return "comida";
-    if (order?.tipo_bloque === "capacitacion") return "capacitacion";
-    return getWorkTypeKey(order);
 }
 
 function getActivityStyles(order) {
@@ -849,13 +724,11 @@ function orderBelongsToContainer(order, container) {
     );
 }
 
-function orderMatchesEtapas(order, etapas) {
-    const currentStage = normalizeKey(order?.etapa);
-    return etapas.some((stage) => normalizeKey(stage) === currentStage);
-}
-
 function DraggableOrderCard({ order, onEdit }) {
-    const workType = order.tipo_bloque === "trabajo" ? getWorkTypeMeta(order) : null;
+    const workType =
+        order.tipo_bloque === "trabajo"
+            ? getWorkTypeMeta(order)
+            : null;
 
     function handleDragStart(event) {
         event.dataTransfer.effectAllowed = "move";
@@ -863,129 +736,90 @@ function DraggableOrderCard({ order, onEdit }) {
         event.dataTransfer.setData("text/plain", order.id);
     }
 
-    const cliente =
-        order.cliente && order.cliente !== "Sin nombre" ? order.cliente : "";
-    const vehiculo = [order.modelo, order.vin].filter(Boolean).join(" · ");
-
     return (
         <article
             draggable
             onDragStart={handleDragStart}
             onClick={() => onEdit(order)}
             onDoubleClick={() => onEdit(order)}
-            className="cursor-grab rounded-lg border px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,.05)] transition hover:shadow-md active:cursor-grabbing"
-            style={
-                workType
-                    ? {
-                        backgroundColor: workType.backgroundColor,
-                        borderColor: workType.borderColor,
-                    }
-                    : undefined
-            }
-            title="Arrastra esta orden a otra etapa"
+            className="group cursor-grab rounded-lg border border-black/10 bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#131E5C]/40 hover:shadow-md active:cursor-grabbing"
+            title="Arrastra esta tarjeta a otro contenedor para cambiar su etapa"
         >
-            <div className="flex items-center justify-between gap-2">
-                <span
-                    className="truncate text-[11px] font-black tracking-wide"
-                    style={{ color: workType ? workType.color : "#334155" }}
-                >
-                    {order.no_orden ? `OR ${order.no_orden}` : "SIN ORDEN"}
-                </span>
-                {workType ? (
-                    <span
-                        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black text-white"
-                        style={{ backgroundColor: workType.borderColor }}
-                    >
-                        <workType.icon className="h-3 w-3" />
-                        {workType.label}
-                    </span>
-                ) : null}
-            </div>
+            <div className="flex items-start gap-2">
+                <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-[#131E5C]" />
 
-            <div className="mt-1.5 truncate text-[13px] font-black leading-tight text-slate-900">
-                {cliente || vehiculo || "Sin datos"}
-            </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-[11px] font-black text-[#131E5C]">
+                            {order.no_orden ? `ORDEN ${order.no_orden}` : "SIN NÚMERO DE ORDEN"}
+                        </div>
+                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-500">
+                            {order.hora_inicio || "--:--"}
+                        </span>
+                    </div>
 
-            {vehiculo && cliente ? (
-                <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
-                    {vehiculo}
+                    <div className="mt-1 truncate text-xs font-extrabold text-slate-800">
+                        {order.cliente || "Sin cliente"}
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap gap-1 text-[10px] font-semibold text-slate-500">
+                        {workType ? (
+                            <span
+                                className="rounded border px-1.5 py-0.5 font-black"
+                                style={{
+                                    backgroundColor: workType.backgroundColor,
+                                    borderColor: workType.borderColor,
+                                    color: workType.color,
+                                }}
+                            >
+                                {workType.label}
+                            </span>
+                        ) : null}
+
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-black text-slate-600">
+                            {order.estatus_agenda || "Programado"}
+                        </span>
+
+                        {order.modelo ? (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5">
+                                {order.modelo}
+                            </span>
+                        ) : null}
+
+                        {order.tecnico ? (
+                            <span className="max-w-full truncate rounded bg-blue-50 px-1.5 py-0.5 text-blue-700">
+                                {order.tecnico}
+                            </span>
+                        ) : (
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                                Sin técnico
+                            </span>
+                        )}
+                    </div>
                 </div>
-            ) : null}
-
-            <div className="mt-1.5 flex items-center justify-between gap-2">
-                {order.tecnico ? (
-                    <span className="inline-flex min-w-0 items-center gap-1 text-[10px] font-bold text-slate-600">
-                        <UserCog className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{order.tecnico}</span>
-                    </span>
-                ) : (
-                    <span />
-                )}
-                {order.hora_inicio ? (
-                    <span
-                        className="inline-flex shrink-0 items-center gap-1 rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-black tabular-nums"
-                        style={{ color: workType ? workType.color : "#64748B" }}
-                    >
-                        <Clock3 className="h-3 w-3" />
-                        {order.hora_inicio}
-                    </span>
-                ) : null}
             </div>
         </article>
     );
 }
+
 function StageContainer({
     container,
     orders,
-    onClose,
+    open,
+    onToggle,
     onMoveOrder,
     onEdit,
     bottom = false,
 }) {
     const [dragOver, setDragOver] = useState(false);
-    const [showFilter, setShowFilter] = useState(false);
-    const [filterQuery, setFilterQuery] = useState("");
-
-    const filteredOrders = useMemo(() => {
-        const query = normalizeKey(filterQuery);
-
-        if (!query) return orders;
-
-        return orders.filter((order) => {
-            const cliente = normalizeKey(order.cliente);
-            const tecnico = normalizeKey(order.tecnico);
-
-            return (
-                (cliente && cliente.includes(query)) ||
-                (tecnico && tecnico.includes(query))
-            );
-        });
-    }, [orders, filterQuery]);
-
-    const sortedOrders = useMemo(() => {
-        const withTime = [];
-        const withoutTime = [];
-
-        filteredOrders.forEach((order) => {
-            const minutes = timeToMinutes(order.hora_inicio);
-
-            if (minutes === null) withoutTime.push(order);
-            else withTime.push({ order, minutes });
-        });
-
-        withTime.sort((a, b) => a.minutes - b.minutes);
-        withoutTime.sort((a, b) =>
-            normalizeStr(a.cliente).localeCompare(normalizeStr(b.cliente)),
-        );
-
-        return withTime.map((entry) => entry.order).concat(withoutTime);
-    }, [filteredOrders]);
+    const Icon = container.icon;
 
     function handleDrop(event) {
         event.preventDefault();
         const orderId =
             event.dataTransfer.getData("application/x-taller-order-id") ||
             event.dataTransfer.getData("text/plain");
+
         setDragOver(false);
         if (orderId) onMoveOrder(orderId, container.etapaDestino);
     }
@@ -998,102 +832,78 @@ function StageContainer({
                 setDragOver(true);
             }}
             onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setDragOver(false);
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setDragOver(false);
+                }
             }}
             onDrop={handleDrop}
             className={[
-                "flex h-[300px] w-[270px] flex-col overflow-hidden rounded-lg border transition",
+                "overflow-hidden rounded-xl border-2 shadow-sm transition",
                 dragOver
-                    ? "border-[#0A64FF] bg-blue-50/80 ring-2 ring-[#0A64FF]/10"
-                    : "border-slate-100 bg-[#F8FAFC]",
+                    ? "scale-[1.01] border-[#131E5C] ring-4 ring-[#131E5C]/10"
+                    : "border-transparent",
+                bottom ? "min-w-[270px]" : "w-full",
             ].join(" ")}
         >
-            {container.color ? (
-                <span
-                    className="block h-1 w-full shrink-0"
-                    style={{ backgroundColor: container.color }}
-                />
-            ) : null}
-            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-2.5 py-2">
-                <div className="flex min-w-0 items-center gap-1.5">
-                    {container.icon ? (
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,.06)]">
-                            <container.icon className="h-3.5 w-3.5" />
-                        </span>
-                    ) : null}
-                    <span className="truncate text-[9px] font-black text-slate-700">
+            <button
+                type="button"
+                onClick={onToggle}
+                className="flex w-full items-center gap-2 px-3 py-3 text-left text-white"
+                style={{ backgroundColor: container.color }}
+            >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
+                    <Icon className="h-5 w-5" />
+                </span>
+
+                <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-black leading-tight">
                         {container.titulo}
                     </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                    <button
-                        type="button"
-                        onClick={() => setShowFilter((value) => !value)}
-                        className={[
-                            "flex h-5 w-5 items-center justify-center rounded transition",
-                            showFilter || filterQuery
-                                ? "bg-[#0A64FF] text-white"
-                                : "text-slate-400 hover:bg-slate-200 hover:text-slate-700",
-                        ].join(" ")}
-                        title={showFilter ? "Ocultar filtro" : "Filtrar por cliente o técnico"}
-                    >
-                        <Filter className="h-3 w-3" />
-                    </button>
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0A64FF] px-1 text-[7px] font-black text-white">
-                        {sortedOrders.length}
+                    <span className="mt-0.5 block text-[10px] font-semibold text-white/75">
+                        {orders.length} {orders.length === 1 ? "tarjeta" : "tarjetas"}
                     </span>
-                    {onClose ? (
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex h-4 w-4 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                            title="Cerrar bandeja"
-                        >
-                            <X className="h-3 w-3" />
-                        </button>
-                    ) : null}
-                </div>
-            </div>
+                </span>
 
-            {showFilter ? (
-                <div className="flex items-center gap-1.5 border-b border-slate-100 bg-white px-2 py-1.5">
-                    <Search className="h-3 w-3 shrink-0 text-slate-400" />
-                    <input
-                        autoFocus
-                        value={filterQuery}
-                        onChange={(event) => setFilterQuery(event.target.value)}
-                        placeholder="Buscar cliente o técnico..."
-                        className="w-full min-w-0 bg-transparent text-[10px] font-semibold text-slate-700 outline-none placeholder:text-slate-400"
-                    />
-                    {filterQuery ? (
-                        <button
-                            type="button"
-                            onClick={() => setFilterQuery("")}
-                            className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+                {open ? (
+                    <ChevronUp className="h-4 w-4 shrink-0" />
+                ) : (
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                )}
+            </button>
+
+            {open ? (
+                <div
+                    className={[
+                        "space-y-2 overflow-y-auto bg-slate-100 p-2",
+                        bottom ? "max-h-[260px] min-h-[100px]" : "max-h-[230px] min-h-[82px]",
+                    ].join(" ")}
+                >
+                    {orders.length === 0 ? (
+                        <div
+                            className={[
+                                "flex min-h-[66px] items-center justify-center rounded-lg border-2 border-dashed px-3 text-center text-[11px] font-bold",
+                                dragOver
+                                    ? "border-[#131E5C] bg-blue-50 text-[#131E5C]"
+                                    : "border-slate-300 bg-white/70 text-slate-400",
+                            ].join(" ")}
                         >
-                            <X className="h-3 w-3" />
-                        </button>
-                    ) : null}
+                            Arrastra aquí una orden
+                        </div>
+                    ) : (
+                        orders.map((order) => (
+                            <DraggableOrderCard
+                                key={order.id}
+                                order={order}
+                                onEdit={onEdit}
+                            />
+                        ))
+                    )}
                 </div>
             ) : null}
-
-            <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
-                {sortedOrders.map((order) => (
-                    <DraggableOrderCard key={order.id} order={order} onEdit={onEdit} />
-                ))}
-                {orders.length === 0 ? (
-                    <div className="flex h-[56px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-white/70 px-2 text-center text-[9px] font-bold text-slate-300">
-                        Suelta aquí
-                    </div>
-                ) : sortedOrders.length === 0 ? (
-                    <div className="flex h-[56px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-white/70 px-2 text-center text-[9px] font-bold text-slate-400">
-                        Sin coincidencias
-                    </div>
-                ) : null}
-            </div>
         </section>
     );
 }
+
 function SideContainerPanel({
     side,
     title,
@@ -1111,13 +921,13 @@ function SideContainerPanel({
             <button
                 type="button"
                 onClick={() => onTogglePanel(side)}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black text-[#001E50] shadow-sm hover:bg-slate-50 xl:h-[72vh] xl:w-11 xl:flex-col"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-800 px-3 text-xs font-black text-white shadow-sm xl:h-[72vh] xl:w-12 xl:flex-col"
                 title={`Abrir ${title}`}
             >
                 {side === "izquierda" ? (
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-5 w-5" />
                 ) : (
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-5 w-5" />
                 )}
                 <span className="xl:[writing-mode:vertical-rl] xl:rotate-180">
                     {title}
@@ -1126,36 +936,14 @@ function SideContainerPanel({
         );
     }
 
-    const totalOrders = containers.reduce(
-        (sum, container) =>
-            sum +
-            orders.filter((order) =>
-                orderBelongsToContainer(order, container),
-            ).length,
-        0,
-    );
-
     return (
-        <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:w-[300px]">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3.5 py-3">
-                <div className="min-w-0">
-                    <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
-                        Flujo de trabajo
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2">
-                        <span className="truncate text-sm font-black text-[#001E50]">
-                            {title}
-                        </span>
-                        <span className="rounded-full bg-[#EAF2FF] px-2 py-0.5 text-[9px] font-black text-[#001E50]">
-                            {totalOrders}
-                        </span>
-                    </div>
-                </div>
-
+        <aside className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-lg xl:w-[290px]">
+            <div className="flex items-center justify-between gap-2 bg-slate-800 px-3 py-3 text-white">
+                <div className="text-sm font-black tracking-wide">{title}</div>
                 <button
                     type="button"
                     onClick={() => onTogglePanel(side)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-[#001E50]/20 hover:bg-[#EAF2FF] hover:text-[#001E50]"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20"
                     title="Contraer panel"
                 >
                     {side === "izquierda" ? (
@@ -1166,7 +954,7 @@ function SideContainerPanel({
                 </button>
             </div>
 
-            <div className="max-h-[calc(72vh-58px)] space-y-2 overflow-y-auto bg-[#F7F9FC] p-2.5">
+            <div className="max-h-[calc(72vh-52px)] space-y-3 overflow-y-auto bg-slate-200 p-3">
                 {containers.map((container) => (
                     <StageContainer
                         key={container.id}
@@ -1195,56 +983,25 @@ function BottomContainerPanel({
     onMoveOrder,
     onEdit,
 }) {
-    const totalOrders = containers.reduce(
-        (sum, container) =>
-            sum +
-            orders.filter((order) =>
-                orderBelongsToContainer(order, container),
-            ).length,
-        0,
-    );
-
     return (
-        <section className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="mt-3 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-lg">
             <button
                 type="button"
                 onClick={() => onTogglePanel("inferior")}
-                className="flex w-full items-center justify-between gap-3 bg-white px-4 py-3 text-left"
+                className="flex w-full items-center justify-between gap-3 bg-slate-800 px-4 py-3 text-left text-white"
             >
-                <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-[#D5232A]">
-                        <ListChecks className="h-4.5 w-4.5" />
-                    </span>
-                    <div className="min-w-0">
-                        <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
-                            Flujo fuera de proceso
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-2">
-                            <span className="truncate text-sm font-black text-[#001E50]">
-                                Esperas y bloqueos
-                            </span>
-                            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[9px] font-black text-[#D5232A]">
-                                {totalOrders}
-                            </span>
-                        </div>
-                    </div>
+                <div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                    <span className="hidden text-[10px] font-bold text-slate-400 sm:block">
-                        Diagnóstico · DISS · Autorización · Piezas · Entrega
-                    </span>
-                    {open ? (
-                        <ChevronUp className="h-5 w-5 text-slate-400" />
-                    ) : (
-                        <ChevronDown className="h-5 w-5 text-slate-400" />
-                    )}
-                </div>
+                {open ? (
+                    <ChevronUp className="h-5 w-5" />
+                ) : (
+                    <ChevronDown className="h-5 w-5" />
+                )}
             </button>
 
             {open ? (
-                <div className="overflow-x-auto border-t border-slate-200 bg-[#F7F9FC] p-3">
-                    <div className="grid min-w-max grid-flow-col auto-cols-[300px] gap-3">
+                <div className="overflow-x-auto bg-slate-200 p-3">
+                    <div className="grid min-w-max grid-flow-col auto-cols-[290px] gap-3">
                         {containers.map((container) => (
                             <StageContainer
                                 key={container.id}
@@ -1266,179 +1023,75 @@ function BottomContainerPanel({
     );
 }
 
-function FlujoTrabajoSection({
-    orders = [],
-    onStageSelect,
-    onMoveOrder,
-    onEdit,
-}) {
-    const [selectedStage, setSelectedStage] = useState(null);
-    const [traysOpen, setTraysOpen] = useState(false);
-
-    return (
-        <section className="rounded-[10px] border border-[#E5E7EB] bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF2FF] text-[#001E50]">
-                        <Workflow className="h-6 w-6" />
-                    </span>
-                    <h3 className="truncate text-sm font-bold text-[#001E50]">
-                        Flujo de Trabajo
-                    </h3>
-                </div>
-
-                <button
-                    type="button"
-                    onClick={() => {
-                        const next = !traysOpen;
-                        setTraysOpen(next);
-                        if (next) setSelectedStage(null);
-                    }}
-                    className={[
-                        "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition",
-                        traysOpen
-                            ? "border-[#001E50] bg-[#001E50] text-white"
-                            : "border-slate-200 bg-white text-[#001E50] hover:border-[#001E50]/25 hover:bg-[#EAF2FF]",
-                    ].join(" ")}
-                >
-                    <Layers className="h-3.5 w-3.5" />
-                    Bandejas
-                    {traysOpen ? (
-                        <ChevronUp className="h-3.5 w-3.5" />
-                    ) : (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                    )}
-                </button>
-            </div>
-
-            <div className="mt-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <div className="flex w-max items-start gap-2">
-                    {ETAPAS_FLUJO_TRABAJO.map((stage, index) => {
-                        const isTray = traysOpen || selectedStage === stage.id;
-                        const anyTray = traysOpen || selectedStage !== null;
-
-                        if (isTray) {
-                            return (
-                                <div key={stage.id} className="flex shrink-0 items-center gap-2">
-                                    {index > 0 && anyTray ? (
-                                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-                                    ) : null}
-                                    <StageContainer
-                                        container={{
-                                            id: stage.id,
-                                            titulo: stage.nombre,
-                                            icon: stage.icon,
-                                            color: stage.color,
-                                            etapaDestino: stage.etapas[0],
-                                        }}
-                                        orders={orders.filter((order) =>
-                                            orderMatchesEtapas(order, stage.etapas),
-                                        )}
-                                        onClose={
-                                            traysOpen
-                                                ? undefined
-                                                : () => {
-                                                    setSelectedStage(null);
-                                                }
-                                        }
-                                        onMoveOrder={onMoveOrder}
-                                        onEdit={onEdit}
-                                    />
-                                </div>
-                            );
-                        }
-
-                        const count = orders.filter((order) =>
-                            orderMatchesEtapas(order, stage.etapas),
-                        ).length;
-                        const selected = selectedStage === stage.id;
-                        const Icon = stage.icon;
-
-                        return (
-                            <div key={stage.id} className="flex shrink-0 items-center gap-2">
-                                {index > 0 && anyTray ? (
-                                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-                                ) : null}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const next = selected ? null : stage.id;
-                                        setSelectedStage(next);
-                                        if (next) setTraysOpen(false);
-                                        if (typeof onStageSelect === "function") {
-                                            onStageSelect(next);
-                                        }
-                                    }}
-                                    className={[
-                                        "group relative flex w-[112px] shrink-0 flex-col items-center overflow-hidden rounded-[6px] border bg-white px-2 pb-2 pt-0 text-center transition-all duration-200 hover:-translate-y-0.5",
-                                        selected
-                                            ? "border-[#001E50] shadow-[0_6px_16px_rgba(0,30,80,.14)] ring-1 ring-[#001E50]/10"
-                                            : "border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,.04)] hover:border-slate-300 hover:shadow-[0_8px_18px_rgba(15,23,42,.10)]",
-                                    ].join(" ")}
-                                >
-                                    <span
-                                        className="block h-1 w-full shrink-0"
-                                        style={{ backgroundColor: stage.color }}
-                                    />
-
-                                    <span className="mt-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                        {String(stage.numero).padStart(2, "0")}
-                                    </span>
-
-                                    <span className="mt-1 line-clamp-2 min-h-[34px] text-xs font-bold leading-tight text-slate-700">
-                                        {stage.nombre}
-                                    </span>
-
-                                    <span className="mt-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition-colors duration-200 group-hover:bg-[#EAF2FF] group-hover:text-[#001E50]">
-                                        <Icon className="h-5 w-5" />
-                                    </span>
-
-                                    <span className="mt-2 text-[24px] font-bold leading-none tabular-nums text-[#001E50]">
-                                        {count}
-                                    </span>
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </section>
-    );
-}
-
 function WorkshopBoardLayout({
     agendaOrders,
     containerOrders,
     technicians,
     selectedDate,
-    highlightType,
     onEdit,
+    onMoveOrder,
     onScheduleOrder,
     onUnassignOrder,
     onResizeOrder,
-    onMoveOrder,
+    panelState,
+    onTogglePanel,
+    onToggleContainer,
 }) {
     return (
-        <div className="space-y-4">
-            <AgendaBoard
-                orders={agendaOrders}
-                technicians={technicians}
-                selectedDate={selectedDate}
-                highlightType={highlightType}
-                onEdit={onEdit}
-                onScheduleOrder={onScheduleOrder}
-                onUnassignOrder={onUnassignOrder}
-                onResizeOrder={onResizeOrder}
-            />
+        <div>
 
-            <FlujoTrabajoSection
-                orders={containerOrders || []}
+            <div className="grid gap-3 xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-start">
+                <SideContainerPanel
+                    side="izquierda"
+                    open={panelState.izquierda}
+                    containers={CONTENEDORES_TALLER.izquierda}
+                    orders={containerOrders}
+                    panelState={panelState}
+                    onTogglePanel={onTogglePanel}
+                    onToggleContainer={onToggleContainer}
+                    onMoveOrder={onMoveOrder}
+                    onEdit={onEdit}
+                />
+
+                <div className="min-w-0">
+                    <AgendaBoard
+                        orders={agendaOrders}
+                        technicians={technicians}
+                        selectedDate={selectedDate}
+                        onEdit={onEdit}
+                        onScheduleOrder={onScheduleOrder}
+                        onUnassignOrder={onUnassignOrder}
+                        onResizeOrder={onResizeOrder}
+                    />
+                </div>
+
+                <SideContainerPanel
+                    side="derecha"
+                    open={panelState.derecha}
+                    containers={CONTENEDORES_TALLER.derecha}
+                    orders={containerOrders}
+                    panelState={panelState}
+                    onTogglePanel={onTogglePanel}
+                    onToggleContainer={onToggleContainer}
+                    onMoveOrder={onMoveOrder}
+                    onEdit={onEdit}
+                />
+            </div>
+
+            <BottomContainerPanel
+                open={panelState.inferior}
+                containers={CONTENEDORES_TALLER.inferior}
+                orders={containerOrders}
+                panelState={panelState}
+                onTogglePanel={onTogglePanel}
+                onToggleContainer={onToggleContainer}
                 onMoveOrder={onMoveOrder}
                 onEdit={onEdit}
             />
         </div>
     );
 }
+
 function Modal({ open, title, onClose, children, footer }) {
     if (!open) return null;
 
@@ -1449,8 +1102,8 @@ function Modal({ open, title, onClose, children, footer }) {
                 onClick={onClose}
             />
 
-            <div className="absolute inset-0 flex justify-end">
-                <div className="flex h-full w-full max-w-xl flex-col border-l border-[#001E50] bg-neutral-100 shadow-2xl">
+            <div className="absolute inset-0 flex items-end justify-center p-3 sm:items-center">
+                <div className="w-full max-w-6xl overflow-hidden rounded-xl border border-[#131E5C] bg-neutral-100 shadow-2xl">
                     <div
                         className="flex items-center justify-between gap-3 px-5 py-4"
                         style={{ backgroundColor: BRAND_BLUE }}
@@ -1467,7 +1120,7 @@ function Modal({ open, title, onClose, children, footer }) {
                         </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-auto p-5">{children}</div>
+                    <div className="max-h-[75vh] overflow-auto p-5">{children}</div>
 
                     {footer ? (
                         <div className="flex flex-col gap-2 border-t border-black/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
@@ -1483,7 +1136,7 @@ function Modal({ open, title, onClose, children, footer }) {
 function Field({ label, icon: Icon, children, className = "" }) {
     return (
         <div className={`rounded-xl border border-black/10 bg-white p-4 ${className}`}>
-            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[#001E50]">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[#131E5C]">
                 {Icon ? <Icon className="h-4 w-4" /> : null}
                 <span>{label}</span>
             </div>
@@ -1495,7 +1148,7 @@ function Field({ label, icon: Icon, children, className = "" }) {
 function FilterBlock({ label, children }) {
     return (
         <div>
-            <div className="mb-2 text-xs font-extrabold tracking-wide text-[#001E50]">
+            <div className="mb-2 text-xs font-extrabold tracking-wide text-[#131E5C]">
                 {label}
             </div>
             {children}
@@ -1520,22 +1173,8 @@ function StatusBadge({ status }) {
     );
 }
 
-function useNow(intervalMs = 30000) {
-    const [now, setNow] = useState(() => new Date());
-
-    useEffect(() => {
-        const timer = window.setInterval(
-            () => setNow(new Date()),
-            intervalMs,
-        );
-        return () => window.clearInterval(timer);
-    }, [intervalMs]);
-
-    return now;
-}
-
-function TimelineLines({ showCurrentTime = false, now = new Date() }) {
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+function TimelineLines({ showCurrentTime = false }) {
+    const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
     const currentTimeVisible =
         showCurrentTime &&
         currentMinutes >= MINUTOS_INICIO_AGENDA &&
@@ -1545,9 +1184,9 @@ function TimelineLines({ showCurrentTime = false, now = new Date() }) {
         <div className="pointer-events-none absolute inset-0 z-0">
             {Array.from({ length: TOTAL_INTERVALOS + 1 }, (_, index) => {
                 const markMinutes =
-                    MINUTOS_INICIO_AGENDA + index * INTERVALO_MINUTOS;
+                    MINUTOS_INICIO_AGENDA +
+                    index * INTERVALO_MINUTOS;
                 const isHour = markMinutes % 60 === 0;
-
                 return (
                     <div
                         key={index}
@@ -1555,30 +1194,21 @@ function TimelineLines({ showCurrentTime = false, now = new Date() }) {
                         style={{
                             left: `${(index / TOTAL_INTERVALOS) * 100}%`,
                             borderLeft: isHour
-                                ? "1px solid rgba(148,163,184,.28)"
-                                : "1px solid rgba(226,232,240,.42)",
+                                ? "1px solid rgba(71, 85, 105, 0.42)"
+                                : "1px dotted rgba(100, 116, 139, 0.35)",
                         }}
                     />
                 );
             })}
 
             {currentTimeVisible ? (
-                <>
-                    <div
-                        className="absolute inset-y-0 z-20 w-px bg-[#D5232A]"
-                        style={{
-                            left: `${((currentMinutes - MINUTOS_INICIO_AGENDA) / MINUTOS_TOTALES_AGENDA) * 100}%`,
-                        }}
-                    />
-                    <div
-                        className="absolute top-1 z-30 -translate-x-1/2 rounded-md bg-[#D5232A] px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm"
-                        style={{
-                            left: `${((currentMinutes - MINUTOS_INICIO_AGENDA) / MINUTOS_TOTALES_AGENDA) * 100}%`,
-                        }}
-                    >
-                        {pad2(now.getHours())}:{pad2(now.getMinutes())}
-                    </div>
-                </>
+                <div
+                    className="absolute inset-y-0 z-20 w-[2px] bg-red-500"
+                    style={{
+                        left: `${((currentMinutes - MINUTOS_INICIO_AGENDA) / MINUTOS_TOTALES_AGENDA) * 100}%`,
+                    }}
+                    title="Hora actual"
+                />
             ) : null}
         </div>
     );
@@ -1589,7 +1219,8 @@ function TimeHeader() {
         { length: TOTAL_INTERVALOS + 1 },
         (_, index) => {
             const minutes =
-                MINUTOS_INICIO_AGENDA + index * INTERVALO_MINUTOS;
+                MINUTOS_INICIO_AGENDA +
+                index * INTERVALO_MINUTOS;
 
             return {
                 index,
@@ -1602,33 +1233,43 @@ function TimeHeader() {
     );
 
     return (
-        <div className="relative h-[52px] bg-[#1E3A8A]">
+        <div className="relative h-[62px] border-l border-slate-400 bg-slate-200">
+            <TimelineLines />
+
             {marks.map((mark) => {
                 const isFirst = mark.index === 0;
                 const isLast = mark.index === TOTAL_INTERVALOS;
                 const showMainLabel =
-                    isFirst || isLast || mark.minute === 0;
-
-                if (!showMainLabel) return null;
+                    isFirst ||
+                    isLast ||
+                    mark.minute === 0;
 
                 return (
                     <div
                         key={mark.minutes}
-                        className="absolute top-1/2 z-10 -translate-y-1/2"
+                        className="absolute inset-y-0 z-10"
                         style={{ left: `${mark.left}%` }}
                     >
-                        <div
-                            className={[
-                                "whitespace-nowrap text-[11px] font-extrabold text-white",
-                                isFirst
-                                    ? "translate-x-2"
-                                    : isLast
-                                        ? "-translate-x-full -ml-2"
-                                        : "-translate-x-1/2",
-                            ].join(" ")}
-                        >
-                            {pad2(mark.hour)}:{pad2(mark.minute)}
-                        </div>
+                        {showMainLabel ? (
+                            <div
+                                className={[
+                                    "absolute top-1 whitespace-nowrap text-[12px] font-black text-slate-700",
+                                    isFirst
+                                        ? "left-1"
+                                        : isLast
+                                            ? "right-1"
+                                            : "-translate-x-1/2",
+                                ].join(" ")}
+                            >
+                                {pad2(mark.hour)}:{pad2(mark.minute)}
+                            </div>
+                        ) : null}
+
+                        {!isLast ? (
+                            <div className="absolute bottom-1 -translate-x-1/2 text-[10px] font-bold text-slate-500">
+                                {pad2(mark.minute)}
+                            </div>
+                        ) : null}
                     </div>
                 );
             })}
@@ -1636,9 +1277,9 @@ function TimeHeader() {
     );
 }
 
+
 function ActivityBar({
     order,
-    highlightType,
     onEdit,
     onUnassignOrder,
     onResizeOrder,
@@ -1656,11 +1297,12 @@ function ActivityBar({
         : order;
 
     const position = getActivityPosition(visibleOrder);
+    const styles = getActivityStyles(order);
+    const label = getActivityLabel(order);
     const workType =
-        order.tipo_bloque === "trabajo" ? getWorkTypeMeta(order) : null;
-    const categoryKey = getCategoryKey(order);
-    const isDimmed = Boolean(highlightType) && categoryKey !== highlightType;
-    const isHighlighted = Boolean(highlightType) && categoryKey === highlightType;
+        order.tipo_bloque === "trabajo"
+            ? getWorkTypeMeta(order)
+            : null;
 
     function handleDragStart(event) {
         if (resizingRef.current) {
@@ -1669,20 +1311,27 @@ function ActivityBar({
         }
 
         event.dataTransfer.effectAllowed = "move";
+
         event.dataTransfer.setData(
             "application/x-taller-order-id",
             String(order.id),
         );
-        event.dataTransfer.setData("text/plain", String(order.id));
+
+        event.dataTransfer.setData(
+            "text/plain",
+            String(order.id),
+        );
     }
 
     function handleOpen() {
-        if (!suppressClickRef.current) onEdit(order);
+        if (suppressClickRef.current) return;
+        onEdit(order);
     }
 
     function handleRemove(event) {
         event.preventDefault();
         event.stopPropagation();
+
         onUnassignOrder(order.id);
     }
 
@@ -1698,7 +1347,8 @@ function ActivityBar({
         if (!rowRectangle?.width) return;
 
         const originalStart =
-            timeToMinutes(order.hora_inicio) ?? MINUTOS_INICIO_AGENDA;
+            timeToMinutes(order.hora_inicio) ??
+            MINUTOS_INICIO_AGENDA;
         const originalEnd =
             timeToMinutes(order.hora_fin) ??
             originalStart + INTERVALO_MINUTOS;
@@ -1711,7 +1361,8 @@ function ActivityBar({
         suppressClickRef.current = true;
 
         function handlePointerMove(pointerEvent) {
-            const deltaPixels = pointerEvent.clientX - pointerStartX;
+            const deltaPixels =
+                pointerEvent.clientX - pointerStartX;
             const deltaMinutes = roundToQuarter(
                 (deltaPixels / rowRectangle.width) *
                 MINUTOS_TOTALES_AGENDA,
@@ -1744,17 +1395,27 @@ function ActivityBar({
         }
 
         function finishResize() {
-            window.removeEventListener("pointermove", handlePointerMove);
-            window.removeEventListener("pointerup", finishResize);
-            window.removeEventListener("pointercancel", finishResize);
+            window.removeEventListener(
+                "pointermove",
+                handlePointerMove,
+            );
+            window.removeEventListener(
+                "pointerup",
+                finishResize,
+            );
+            window.removeEventListener(
+                "pointercancel",
+                finishResize,
+            );
 
             resizingRef.current = false;
             setResizePreview(null);
 
-            if (
+            const changed =
                 latestStart !== originalStart ||
-                latestEnd !== originalEnd
-            ) {
+                latestEnd !== originalEnd;
+
+            if (changed) {
                 onResizeOrder(
                     order.id,
                     minutesToTime(latestStart),
@@ -1767,38 +1428,21 @@ function ActivityBar({
             }, 120);
         }
 
-        window.addEventListener("pointermove", handlePointerMove);
-        window.addEventListener("pointerup", finishResize, { once: true });
-        window.addEventListener("pointercancel", finishResize, { once: true });
+        window.addEventListener(
+            "pointermove",
+            handlePointerMove,
+        );
+        window.addEventListener(
+            "pointerup",
+            finishResize,
+            { once: true },
+        );
+        window.addEventListener(
+            "pointercancel",
+            finishResize,
+            { once: true },
+        );
     }
-
-    const isLunch = order.tipo_bloque === "comida";
-    const isTraining = order.tipo_bloque === "capacitacion";
-
-    const visualStyle = getActivityStyles(order);
-
-    const primary =
-        isLunch
-            ? "COMIDA"
-            : isTraining
-                ? "CAPACITACIÓN"
-                : order.no_orden
-                    ? `OR ${order.no_orden}`
-                    : order.cliente || "Actividad";
-
-    const secondary = isLunch || isTraining
-        ? `${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`
-        : [order.modelo, order.vin].filter(Boolean).join(" · ") ||
-          order.cliente ||
-          "Trabajo de taller";
-
-    const detail =
-        order.tipo_bloque === "trabajo"
-            ? (order.subtrabajos || [])
-                .map((work) => work.nombre)
-                .filter(Boolean)
-                .join(" + ")
-            : "";
 
     return (
         <div
@@ -1809,60 +1453,81 @@ function ActivityBar({
             onDoubleClick={handleOpen}
             onClick={handleOpen}
             onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+                if (
+                    event.key === "Enter" ||
+                    event.key === " "
+                ) {
                     event.preventDefault();
                     handleOpen();
                 }
             }}
-            className={[
-                "group absolute z-10 flex h-[58px] cursor-grab flex-col justify-center overflow-hidden rounded-lg border px-3 pr-8 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
-                highlightType
-                    ? ""
-                    : "hover:z-30 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
-                isDimmed ? "opacity-25 saturate-50" : "",
-                isHighlighted
-                    ? "z-20 ring-2 ring-[#001E50]/50 ring-offset-1"
-                    : "",
-            ].join(" ")}
+            className="
+                absolute
+                z-10
+                flex
+                h-[60px]
+                cursor-grab
+                flex-col
+                justify-center
+                overflow-hidden
+                rounded
+                border
+                py-1
+                pl-3
+                pr-8
+                text-left
+                text-[10px]
+                font-extrabold
+                shadow-sm
+                transition
+                hover:z-30
+                hover:brightness-95
+                active:cursor-grabbing
+                focus:outline-none
+                focus:ring-2
+                focus:ring-[#131E5C]/40
+            "
             style={{
                 ...position,
-                ...visualStyle,
-                top: `${order.lane * ALTURA_CARRIL + 11}px`,
+                ...styles,
+                top: `${order.lane * ALTURA_CARRIL + 8}px`,
             }}
-            title={`${primary}\n${secondary}\n${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`}
+            title={`${label}\n${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}\nArrastra los extremos para modificar el horario`}
         >
             <button
                 type="button"
                 draggable={false}
-                onPointerDown={(event) => beginResize(event, "start")}
+                onPointerDown={(event) =>
+                    beginResize(event, "start")
+                }
                 onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 left-0 z-40 w-1.5 cursor-ew-resize bg-black/5 opacity-0 transition hover:bg-black/15 group-hover:opacity-100"
+                className="absolute inset-y-0 left-0 z-40 w-2 cursor-ew-resize border-r border-black/10 bg-black/5 transition hover:bg-black/20"
                 title="Modificar hora de inicio"
+                aria-label="Modificar hora de inicio"
             />
 
-            <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="truncate text-[11px] font-black">
-                    {primary}
-                </span>
-                {!isLunch && !isTraining && workType ? (
-                    <span className="shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-black">
+            <span className="w-full truncate pr-1">
+                {label}
+            </span>
+
+            <span className="mt-1 flex w-full min-w-0 items-center gap-1 overflow-hidden text-[9px]">
+                {workType ? (
+                    <span className="shrink-0 rounded bg-black/10 px-1.5 py-0.5 font-black">
                         {workType.label}
                     </span>
                 ) : null}
-            </div>
 
-            <div className="mt-0.5 truncate text-[9px] font-bold opacity-80">
-                {secondary}
-            </div>
+                <span className="shrink-0 rounded bg-black/10 px-1.5 py-0.5 font-black">
+                    {order.estatus_agenda || "Programado"}
+                </span>
 
-            {detail ? (
-                <div className="mt-0.5 truncate text-[9px] font-semibold opacity-65">
-                    {detail}
-                </div>
-            ) : null}
+                <span className="truncate font-black">
+                    {visibleOrder.hora_inicio} - {visibleOrder.hora_fin}
+                </span>
+            </span>
 
             <button
                 type="button"
@@ -1871,22 +1536,42 @@ function ActivityBar({
                     event.stopPropagation();
                 }}
                 onClick={handleRemove}
-                className="absolute right-2 top-1/2 z-50 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-white/60 opacity-0 shadow-sm transition hover:bg-red-600 hover:text-white group-hover:opacity-100"
+                className="
+                    absolute
+                    right-2.5
+                    top-1/2
+                    z-50
+                    flex
+                    h-5
+                    w-5
+                    -translate-y-1/2
+                    items-center
+                    justify-center
+                    rounded
+                    bg-black/15
+                    text-current
+                    transition
+                    hover:bg-red-600
+                    hover:text-white
+                "
                 title="Quitar de la agenda"
             >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
             </button>
 
             <button
                 type="button"
                 draggable={false}
-                onPointerDown={(event) => beginResize(event, "end")}
+                onPointerDown={(event) =>
+                    beginResize(event, "end")
+                }
                 onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 right-0 z-40 w-1.5 cursor-ew-resize bg-black/5 opacity-0 transition hover:bg-black/15"
+                className="absolute inset-y-0 right-0 z-40 w-2 cursor-ew-resize border-l border-black/10 bg-black/5 transition hover:bg-black/20"
                 title="Modificar hora de fin"
+                aria-label="Modificar hora de fin"
             />
         </div>
     );
@@ -1896,9 +1581,6 @@ function TimelineRow({
     orders,
     technician,
     selectedDate,
-    now,
-    zebra,
-    highlightType,
     onEdit,
     onScheduleOrder,
     onUnassignOrder,
@@ -1907,25 +1589,41 @@ function TimelineRow({
     const [dragOver, setDragOver] = useState(false);
     const [dropMinutes, setDropMinutes] = useState(null);
 
-    const laneData = useMemo(() => assignLanes(orders), [orders]);
-    const isToday = selectedDate === toYMD(now);
+    const laneData = useMemo(
+        () => assignLanes(orders),
+        [orders],
+    );
+
+    const rowHeight = laneData.laneCount * ALTURA_CARRIL;
+    const isToday = selectedDate === toYMD(new Date());
 
     function calculateDropMinutes(event) {
         const rectangle = event.currentTarget.getBoundingClientRect();
+
         const relativeX = Math.max(
             0,
-            Math.min(rectangle.width, event.clientX - rectangle.left),
+            Math.min(
+                rectangle.width,
+                event.clientX - rectangle.left,
+            ),
         );
+
         const percentage =
-            rectangle.width > 0 ? relativeX / rectangle.width : 0;
+            rectangle.width > 0
+                ? relativeX / rectangle.width
+                : 0;
+
+        const rawMinutes =
+            MINUTOS_INICIO_AGENDA +
+            percentage * MINUTOS_TOTALES_AGENDA;
+
+        const roundedMinutes = roundToQuarter(rawMinutes);
+
         return Math.max(
             MINUTOS_INICIO_AGENDA,
             Math.min(
                 MINUTOS_FIN_AGENDA - INTERVALO_MINUTOS,
-                roundToQuarter(
-                    MINUTOS_INICIO_AGENDA +
-                    percentage * MINUTOS_TOTALES_AGENDA,
-                ),
+                roundedMinutes,
             ),
         );
     }
@@ -1933,8 +1631,11 @@ function TimelineRow({
     function handleDragOver(event) {
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
+
+        const minutes = calculateDropMinutes(event);
+
         setDragOver(true);
-        setDropMinutes(calculateDropMinutes(event));
+        setDropMinutes(minutes);
     }
 
     function handleDragLeave(event) {
@@ -1948,29 +1649,33 @@ function TimelineRow({
         event.preventDefault();
 
         const orderId =
-            event.dataTransfer.getData("application/x-taller-order-id") ||
+            event.dataTransfer.getData(
+                "application/x-taller-order-id",
+            ) ||
             event.dataTransfer.getData("text/plain");
+
         const minutes = calculateDropMinutes(event);
 
         setDragOver(false);
         setDropMinutes(null);
 
-        if (orderId) {
-            onScheduleOrder(
-                orderId,
-                technician,
-                selectedDate,
-                minutesToTime(minutes),
-            );
-        }
+        if (!orderId) return;
+
+        onScheduleOrder(
+            orderId,
+            technician,
+            selectedDate,
+            minutesToTime(minutes),
+        );
     }
 
     const previewPosition =
         dropMinutes === null
             ? 0
-            : ((dropMinutes - MINUTOS_INICIO_AGENDA) /
-                MINUTOS_TOTALES_AGENDA) *
-              100;
+            : (
+                (dropMinutes - MINUTOS_INICIO_AGENDA) /
+                MINUTOS_TOTALES_AGENDA
+            ) * 100;
 
     return (
         <div
@@ -1979,26 +1684,52 @@ function TimelineRow({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={[
-                "relative h-full border-b border-slate-200 transition",
+                "relative h-full border-b border-slate-400 bg-white transition",
                 dragOver
-                    ? "bg-blue-50/70 ring-2 ring-inset ring-[#001E50]/20"
-                    : zebra
-                        ? "bg-[#F3F9FF]"
-                        : "bg-white",
+                    ? "bg-blue-50 ring-2 ring-inset ring-[#131E5C]/30"
+                    : "",
             ].join(" ")}
-            style={{ minHeight: `${ALTURA_CARRIL}px` }}
+            style={{
+                minHeight: `${ALTURA_CARRIL}px`,
+            }}
         >
-            <TimelineLines showCurrentTime={isToday} now={now} />
+            <TimelineLines showCurrentTime={isToday} />
 
             {dragOver && dropMinutes !== null ? (
                 <>
                     <div
-                        className="pointer-events-none absolute inset-y-0 z-40 w-[2px] bg-[#001E50]"
-                        style={{ left: `${previewPosition}%` }}
+                        className="
+                            pointer-events-none
+                            absolute
+                            inset-y-0
+                            z-40
+                            w-[3px]
+                            bg-[#131E5C]
+                        "
+                        style={{
+                            left: `${previewPosition}%`,
+                        }}
                     />
+
                     <div
-                        className="pointer-events-none absolute top-1 z-50 -translate-x-1/2 rounded-md bg-[#001E50] px-2 py-1 text-[9px] font-black text-white shadow"
-                        style={{ left: `${previewPosition}%` }}
+                        className="
+                            pointer-events-none
+                            absolute
+                            top-1
+                            z-50
+                            -translate-x-1/2
+                            rounded
+                            bg-[#131E5C]
+                            px-2
+                            py-1
+                            text-[10px]
+                            font-black
+                            text-white
+                            shadow
+                        "
+                        style={{
+                            left: `${previewPosition}%`,
+                        }}
                     >
                         {minutesToTime(dropMinutes)}
                     </div>
@@ -2009,7 +1740,6 @@ function TimelineRow({
                 <ActivityBar
                     key={order.id}
                     order={order}
-                    highlightType={highlightType}
                     onEdit={onEdit}
                     onUnassignOrder={onUnassignOrder}
                     onResizeOrder={onResizeOrder}
@@ -2023,7 +1753,6 @@ function AgendaBoard({
     orders,
     technicians,
     selectedDate,
-    highlightType,
     onEdit,
     onScheduleOrder,
     onUnassignOrder,
@@ -2032,90 +1761,64 @@ function AgendaBoard({
     const rowsByTechnician = useMemo(() => {
         const grouped = new Map();
 
-        technicians.forEach((technician) => grouped.set(technician, []));
+        technicians.forEach((technician) => {
+            grouped.set(technician, []);
+        });
 
         orders.forEach((order) => {
             const technician =
                 canonicalTechnician(order.tecnico) || "SIN TÉCNICO";
 
-            if (!grouped.has(technician)) grouped.set(technician, []);
+            if (!grouped.has(technician)) {
+                grouped.set(technician, []);
+            }
+
             grouped.get(technician).push(order);
         });
 
         return grouped;
     }, [orders, technicians]);
 
-    const now = useNow();
-
-    const headerScrollerRef = useRef(null);
-
-    function handleScroll(event) {
-        if (headerScrollerRef.current) {
-            headerScrollerRef.current.scrollLeft = event.currentTarget.scrollLeft;
-        }
-    }
-
     return (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                <div>
-                    <div className="text-sm font-black tracking-tight text-[#001E50]">
-                        CRONOGRAMA DE TÉCNICOS
-                    </div>
-                    <div className="mt-0.5 text-[10px] font-semibold capitalize text-slate-400">
-                        {formatLongDate(selectedDate)}
-                    </div>
-                </div>
-
-                <div className="hidden items-center gap-2 text-[10px] font-bold text-slate-400 md:flex">
-                    <span className="h-2 w-2 rounded-full bg-[#D5232A]" />
-                    Hora actual
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-black tabular-nums text-[#001E50]">
-                        {pad2(now.getHours())}:{pad2(now.getMinutes())}
-                    </span>
-                    <span className="ml-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                        Arrastra para reasignar
-                    </span>
-                </div>
-            </div>
-
-            <div className="flex border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,.04)]">
-                <div
-                    className="z-40 flex h-[52px] items-center border-r border-slate-200 bg-slate-50 px-4"
-                    style={{
-                        flex: `0 0 ${ANCHO_TECNICO}px`,
-                        width: `${ANCHO_TECNICO}px`,
-                    }}
-                >
-                    <div>
-                        <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
-                            Técnico
-                        </div>
-                        <div className="mt-0.5 text-xs font-extrabold text-[#001E50]">
-                            Equipo de taller
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    ref={headerScrollerRef}
-                    className="h-[52px] flex-1 overflow-hidden"
-                    style={{ minWidth: `${ANCHO_MINIMO_LINEA}px` }}
-                >
-                    <TimeHeader />
-                </div>
-            </div>
-
-            <div className="max-h-[72vh] overflow-auto" onScroll={handleScroll}>
+        <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-lg">
+            <div className="max-h-[72vh] overflow-auto">
                 <div
                     style={{
                         minWidth: `${ANCHO_TECNICO + ANCHO_MINIMO_LINEA}px`,
                     }}
                 >
+                    {/* Encabezado */}
+                    <div
+                        className="sticky top-0 z-30 grid border-b border-slate-400 bg-white"
+                        style={{
+                            gridTemplateColumns: `${ANCHO_TECNICO}px minmax(${ANCHO_MINIMO_LINEA}px, 1fr)`,
+                        }}
+                    >
+                        {/* Columna técnico */}
+                        <div
+                            className="sticky left-0 z-30 flex h-[62px] items-center border-r border-slate-400 bg-[#0F6475] px-4 text-white"
+                            style={{ width: `${ANCHO_TECNICO}px` }}
+                        >
+                            <div>
+                                <div className="text-xs font-black tracking-widest">
+                                    {getMonthName(selectedDate)}
+                                </div>
 
+                                <div className="mt-1 text-[11px] font-semibold text-white/80">
+                                    TÉCNICO
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Horario */}
+                        <TimeHeader />
+                    </div>
+
+                    {/* Filas de técnicos */}
                     {technicians.map((technician, technicianIndex) => {
                         const technicianOrders =
                             rowsByTechnician.get(technician) || [];
+
                         const laneData = assignLanes(technicianOrders);
                         const rowHeight =
                             laneData.laneCount * ALTURA_CARRIL;
@@ -2123,53 +1826,36 @@ function AgendaBoard({
                         return (
                             <div
                                 key={technician}
-                                className="flex"
+                                className="grid"
                                 style={{
+                                    gridTemplateColumns: `${ANCHO_TECNICO}px minmax(${ANCHO_MINIMO_LINEA}px, 1fr)`,
                                     height: `${rowHeight}px`,
                                     minHeight: `${ALTURA_CARRIL}px`,
                                 }}
                             >
-                                <div
-                                    className={[
-                                        "sticky left-0 z-30 flex h-full items-center gap-3 border-b border-r border-slate-200 px-3",
-                                        technicianIndex % 2 === 1 ? "bg-[#F3F9FF]" : "bg-white",
-                                    ].join(" ")}
-                                    style={{
-                                        flex: `0 0 ${ANCHO_TECNICO}px`,
-                                        width: `${ANCHO_TECNICO}px`,
-                                    }}
-                                >
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EAF2FF] text-[10px] font-black text-[#001E50]">
-                                        {getInitials(technician)}
-                                    </div>
+                                {/* Información del técnico */}
+                                <div className="sticky left-0 z-30 flex h-full items-center gap-3 border-b border-r border-slate-400 bg-white px-3" style={{ width: `${ANCHO_TECNICO}px`, }}>
+                                    <div className="min-w-0">
+                                        <div className="text-[10px] font-black text-slate-400">
+                                            {pad2(technicianIndex + 1)}
+                                        </div>
 
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-[11px] font-black text-[#001E50]">
+                                        <div className="text-xs font-extrabold leading-tight text-[#131E5C]">
                                             {technician}
                                         </div>
-                                        <div className="mt-0.5 text-[9px] font-semibold text-slate-400">
-                                            Técnico {pad2(technicianIndex + 1)}
-                                        </div>
                                     </div>
                                 </div>
 
-                                <div
-                                    className="min-w-0 flex-1"
-                                    style={{ minWidth: `${ANCHO_MINIMO_LINEA}px` }}
-                                >
-                                    <TimelineRow
-                                        orders={technicianOrders}
-                                        technician={technician}
-                                        selectedDate={selectedDate}
-                                        now={now}
-                                        zebra={technicianIndex % 2 === 1}
-                                        highlightType={highlightType}
-                                        onEdit={onEdit}
-                                        onScheduleOrder={onScheduleOrder}
-                                        onUnassignOrder={onUnassignOrder}
-                                        onResizeOrder={onResizeOrder}
-                                    />
-                                </div>
+                                {/* Todas las actividades juntas */}
+                                <TimelineRow
+                                    orders={technicianOrders}
+                                    technician={technician}
+                                    selectedDate={selectedDate}
+                                    onEdit={onEdit}
+                                    onScheduleOrder={onScheduleOrder}
+                                    onUnassignOrder={onUnassignOrder}
+                                    onResizeOrder={onResizeOrder}
+                                />
                             </div>
                         );
                     })}
@@ -2178,7 +1864,7 @@ function AgendaBoard({
         </div>
     );
 }
-export default function Taller() {
+export default function TallerLegacy({ onSwitchToNuevo }) {
     const { user } = useAuth();
 
     const permisos = user?.permisos || [];
@@ -2206,7 +1892,6 @@ export default function Taller() {
     const [remoteRows, setRemoteRows] = useState([]);
     const [loadingList, setLoadingList] = useState(false);
     const [vista, setVista] = useState("agenda");
-    const [highlightType, setHighlightType] = useState(null);
     const [openModal, setOpenModal] = useState(false);
     const [editingOrden, setEditingOrden] = useState(null);
     const [draft, setDraft] = useState(null);
@@ -2217,11 +1902,22 @@ export default function Taller() {
         tecnico: "Todos",
         fecha: toYMD(new Date()),
     });
+    const [panelState, setPanelState] = useState(() => {
+        const stored = loadJSONStorage(PANEL_STORAGE_KEY, DEFAULT_PANEL_STATE);
+        return {
+            ...DEFAULT_PANEL_STATE,
+            ...stored,
+            contenedores: {
+                ...DEFAULT_PANEL_STATE.contenedores,
+                ...(stored?.contenedores || {}),
+            },
+        };
+    });
 
     const inputBase =
-        "w-full rounded-lg border px-3 py-2 text-sm font-semibold text-[#001E50] outline-none transition";
+        "w-full rounded-lg border px-3 py-2 text-sm font-semibold text-[#131E5C] outline-none transition";
     const inputOk =
-        "border-black/10 bg-neutral-100 focus:border-[#001E50] focus:ring-2 focus:ring-[#001E50]/10";
+        "border-black/10 bg-neutral-100 focus:border-[#131E5C] focus:ring-2 focus:ring-[#131E5C]/10";
 
     const refreshList = useCallback(async () => {
         setLoadingList(true);
@@ -2252,6 +1948,10 @@ export default function Taller() {
     useEffect(() => {
         refreshList();
     }, [refreshList]);
+
+    useEffect(() => {
+        saveJSONStorage(PANEL_STORAGE_KEY, panelState);
+    }, [panelState]);
 
     const userTieneAgencia = useCallback(
         (agenciaRegistro) => {
@@ -2820,6 +2520,71 @@ export default function Taller() {
         }
     }
 
+    async function moveOrderToStage(
+        orderId,
+        targetStage,
+    ) {
+        const previousRows = remoteRows;
+
+        setRemoteRows((previous) =>
+            previous.map((row) =>
+                String(row.id) === String(orderId)
+                    ? {
+                        ...row,
+                        etapa: targetStage,
+                    }
+                    : row,
+            ),
+        );
+
+        try {
+            const updated =
+                await apiHojaIngresos.patch(
+                    orderId,
+                    {
+                        etapa: targetStage,
+                    },
+                );
+
+            setRemoteRows((previous) =>
+                previous.map((row) =>
+                    String(row.id) === String(orderId)
+                        ? {
+                            ...row,
+                            ...(updated || {}),
+                            etapa: targetStage,
+                        }
+                        : row,
+                ),
+            );
+        } catch (error) {
+            console.error(error);
+            setRemoteRows(previousRows);
+
+            alert(
+                error?.message ||
+                "No se pudo cambiar la etapa de la orden.",
+            );
+        }
+    }
+
+    function togglePanel(panelName) {
+        setPanelState((previous) => ({
+            ...previous,
+            [panelName]: !previous[panelName],
+        }));
+    }
+
+    function toggleContainer(containerId) {
+        setPanelState((previous) => ({
+            ...previous,
+            contenedores: {
+                ...(previous.contenedores || {}),
+                [containerId]: previous.contenedores?.[containerId] === false,
+            },
+        }));
+    }
+
     function openEdit(order) {
         setEditingOrden(order);
         setDraft({
@@ -2845,60 +2610,6 @@ export default function Taller() {
             })),
         });
         setOpenModal(true);
-    }
-
-    async function moveOrderToStage(orderId, etapaDestino) {
-        const order = ordenes.find(
-            (item) => String(item.id) === String(orderId),
-        );
-
-        if (!order) {
-            alert("No se encontró la actividad seleccionada.");
-            return;
-        }
-
-        if (order.etapa === etapaDestino) return;
-
-        const previousRows = remoteRows;
-        const payload = { etapa: etapaDestino };
-
-        setRemoteRows((previous) =>
-            previous.map((row) =>
-                String(row.id) === String(orderId)
-                    ? {
-                        ...row,
-                        ...payload,
-                    }
-                    : row,
-            ),
-        );
-
-        try {
-            const updated = await apiHojaIngresos.patch(
-                orderId,
-                payload,
-            );
-
-            setRemoteRows((previous) =>
-                previous.map((row) =>
-                    String(row.id) === String(orderId)
-                        ? {
-                            ...row,
-                            ...(updated || {}),
-                            ...payload,
-                        }
-                        : row,
-                ),
-            );
-        } catch (error) {
-            console.error(error);
-            setRemoteRows(previousRows);
-
-            alert(
-                error?.message ||
-                "No se pudo mover la actividad entre etapas.",
-            );
-        }
     }
 
     function openCreateManual() {
@@ -3190,23 +2901,19 @@ export default function Taller() {
         }));
     }
 
-    if (vista === "legacy") {
-        return <TallerLegacy onSwitchToNuevo={() => setVista("agenda")} />;
-    }
-
     return (
         <div className="w-full">
             <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate text-lg font-extrabold text-[#001E50]">
+                        <h2 className="truncate text-lg font-extrabold text-[#131E5C]">
                             Progreso y Control de Trabajos a Taller
                         </h2>
                     </div>
                     {!isAdmin && userAgencias.length > 0 ? (
                         <p className="mt-1 text-xs font-semibold text-slate-500">
                             Agencia asignada:{" "}
-                            <span className="text-[#001E50]">
+                            <span className="text-[#131E5C]">
                                 {userAgencias.join(", ")}
                             </span>
                         </p>
@@ -3214,15 +2921,15 @@ export default function Taller() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex overflow-hidden rounded-lg border border-[#001E50]/30">
+                    <div className="flex overflow-hidden rounded-lg border border-[#131E5C]/30">
                         <button
                             type="button"
                             onClick={() => setVista("agenda")}
                             className={[
                                 "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition",
                                 vista === "agenda"
-                                    ? "bg-[#001E50] text-white"
-                                    : "bg-white text-[#001E50] hover:bg-[#001E50]/10",
+                                    ? "bg-[#131E5C] text-white"
+                                    : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
                             ].join(" ")}
                         >
                             <CalendarClock className="h-3.5 w-3.5" /> Agenda
@@ -3233,195 +2940,67 @@ export default function Taller() {
                             className={[
                                 "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition",
                                 vista === "lista"
-                                    ? "bg-[#001E50] text-white"
-                                    : "bg-white text-[#001E50] hover:bg-[#001E50]/10",
+                                    ? "bg-[#131E5C] text-white"
+                                    : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
                             ].join(" ")}
                         >
                             <Table2 className="h-3.5 w-3.5" /> Lista
                         </button>
                         <button
                             type="button"
-                            onClick={() => setVista("legacy")}
+                            onClick={onSwitchToNuevo}
                             className={[
                                 "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition",
-                                vista === "legacy"
-                                    ? "bg-[#001E50] text-white"
-                                    : "bg-white text-[#001E50] hover:bg-[#001E50]/10",
+                                "bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
                             ].join(" ")}
                         >
-                            <History className="h-3.5 w-3.5" /> Diseño 2
+                            <History className="h-3.5 w-3.5" /> Diseño 1
                         </button>
                     </div>
 
                     <button
                         type="button"
                         onClick={openCreateManual}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#001E50] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[#001E50]/90"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[#131E5C]/90"
                     >
                         <Plus className="h-4 w-4" /> Nueva actividad
                     </button>
                 </div>
             </div>
 
-            <div className="mb-4">
-                <div className="mb-3 flex items-center gap-2.5">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#001E50]/5 text-[#001E50]">
-                        <ListChecks className="h-4.5 w-4.5" />
-                    </span>
-                    <div>
-                        <div className="text-sm font-black text-[#001E50]">
-                            Control y progreso
-                        </div>
-                        <div className="text-[10px] font-bold text-slate-400">
-                            Resumen del día en agenda
-                        </div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm">
+                    <div className="text-xs font-bold text-slate-400">Actividades</div>
+                    <div className="mt-1 text-2xl font-extrabold text-[#131E5C]">
+                        {stats.total}
                     </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <span className="absolute inset-x-0 top-0 h-1 bg-[#001E50]" />
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
-                                    Actividades
-                                </div>
-                                <div className="mt-1.5 text-3xl font-black tabular-nums text-[#001E50]">
-                                    {stats.total}
-                                </div>
-                            </div>
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#001E50]/5 text-[#001E50]">
-                                <ClipboardList className="h-4.5 w-4.5" />
-                            </span>
-                        </div>
-                        <div className="mt-3">
-                            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                    className="h-full bg-blue-500"
-                                    style={{ width: `${stats.total ? (stats.programmed / stats.total) * 100 : 0}%` }}
-                                />
-                                <div
-                                    className="h-full bg-emerald-500"
-                                    style={{ width: `${stats.total ? (stats.finished / stats.total) * 100 : 0}%` }}
-                                />
-                            </div>
-                            <div className="mt-1.5 flex items-center justify-between text-[9px] font-bold text-slate-400">
-                                <span className="inline-flex items-center gap-1">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Programadas
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Terminadas
-                                </span>
-                            </div>
-                        </div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
+                    <div className="text-xs font-bold text-blue-500">Programadas</div>
+                    <div className="mt-1 text-2xl font-extrabold text-blue-700">
+                        {stats.programmed}
                     </div>
+                </div>
 
-                    <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
-                        <span className="absolute inset-x-0 top-0 h-1 bg-blue-500" />
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-[.12em] text-blue-500">
-                                    Programadas
-                                </div>
-                                <div className="mt-1.5 text-3xl font-black tabular-nums text-blue-700">
-                                    {stats.programmed}
-                                </div>
-                            </div>
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                <CalendarClock className="h-4.5 w-4.5" />
-                            </span>
-                        </div>
-                        <div className="mt-3 flex items-center gap-2">
-                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-blue-100">
-                                <div
-                                    className="h-full rounded-full bg-blue-500"
-                                    style={{ width: `${stats.total ? (stats.programmed / stats.total) * 100 : 0}%` }}
-                                />
-                            </div>
-                            <span className="text-[10px] font-black tabular-nums text-blue-600">
-                                {stats.total ? Math.round((stats.programmed / stats.total) * 100) : 0}%
-                            </span>
-                        </div>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+                    <div className="text-xs font-bold text-emerald-600">Terminadas</div>
+                    <div className="mt-1 text-2xl font-extrabold text-emerald-700">
+                        {stats.finished}
                     </div>
+                </div>
 
-                    <div className="relative overflow-hidden rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-                        <span className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-[.12em] text-emerald-600">
-                                    Terminadas
-                                </div>
-                                <div className="mt-1.5 text-3xl font-black tabular-nums text-emerald-700">
-                                    {stats.finished}
-                                </div>
-                            </div>
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                                <CheckCircle2 className="h-4.5 w-4.5" />
-                            </span>
-                        </div>
-                        <div className="mt-3 flex items-center gap-2">
-                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-emerald-100">
-                                <div
-                                    className="h-full rounded-full bg-emerald-500"
-                                    style={{ width: `${stats.total ? (stats.finished / stats.total) * 100 : 0}%` }}
-                                />
-                            </div>
-                            <span className="text-[10px] font-black tabular-nums text-emerald-600">
-                                {stats.total ? Math.round((stats.finished / stats.total) * 100) : 0}%
-                            </span>
-                        </div>
+                <div className="rounded-xl border border-cyan-100 bg-cyan-50 p-4 shadow-sm">
+                    <div className="text-xs font-bold text-cyan-700">Comida / Capacitación</div>
+                    <div className="mt-1 text-2xl font-extrabold text-cyan-800">
+                        {stats.lunch} / {stats.training}
                     </div>
+                </div>
 
-                    <div className="relative overflow-hidden rounded-xl border border-cyan-100 bg-white p-4 shadow-sm">
-                        <span className="absolute inset-x-0 top-0 h-1 bg-cyan-500" />
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <div className="text-[9px] font-black uppercase leading-snug text-cyan-700">
-                                    Comida / Capacitación
-                                </div>
-                                <div className="mt-1.5 flex items-baseline gap-1.5">
-                                    <span className="text-3xl font-black tabular-nums text-cyan-700">
-                                        {stats.lunch}
-                                    </span>
-                                    <span className="text-sm font-black text-slate-300">/</span>
-                                    <span className="text-3xl font-black tabular-nums text-cyan-700">
-                                        {stats.training}
-                                    </span>
-                                </div>
-                            </div>
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
-                                <Coffee className="h-4.5 w-4.5" />
-                            </span>
-                        </div>
-                        <div className="mt-3 flex items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-1.5 py-0.5 text-[9px] font-black text-cyan-700">
-                                <Coffee className="h-3 w-3" /> Comida
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-1.5 py-0.5 text-[9px] font-black text-cyan-700">
-                                <GraduationCap className="h-3 w-3" /> Capacitación
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="relative overflow-hidden rounded-xl border border-violet-100 bg-white p-4 shadow-sm">
-                        <span className="absolute inset-x-0 top-0 h-1 bg-violet-500" />
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-[.12em] text-violet-600">
-                                    Horas programadas
-                                </div>
-                                <div className="mt-1.5 flex items-baseline gap-1 text-3xl font-black tabular-nums text-violet-800">
-                                    {stats.hours.toFixed(2)}
-                                    <span className="text-sm font-black text-violet-400">h</span>
-                                </div>
-                            </div>
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
-                                <Clock3 className="h-4.5 w-4.5" />
-                            </span>
-                        </div>
-                        <div className="mt-3 text-[10px] font-bold text-slate-400">
-                            Suma de duración de actividades
-                        </div>
+                <div className="rounded-xl border border-violet-100 bg-violet-50 p-4 shadow-sm">
+                    <div className="text-xs font-bold text-violet-600">Horas programadas</div>
+                    <div className="mt-1 text-2xl font-extrabold text-violet-800">
+                        {stats.hours.toFixed(2)} h
                     </div>
                 </div>
             </div>
@@ -3430,8 +3009,8 @@ export default function Taller() {
                 <div className="grid gap-3 xl:grid-cols-12">
                     <div className="xl:col-span-5">
                         <FilterBlock label="Búsqueda">
-                            <div className="flex items-center gap-2 rounded-lg border border-[#001E50] bg-white px-3 py-2">
-                                <Search className="h-4 w-4 text-[#001E50]" />
+                            <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
+                                <Search className="h-4 w-4 text-[#131E5C]" />
                                 <input
                                     value={filters.q}
                                     onChange={(event) =>
@@ -3441,7 +3020,7 @@ export default function Taller() {
                                         }))
                                     }
                                     placeholder="Cliente, teléfono, VIN, orden o trabajo..."
-                                    className="w-full text-sm font-semibold text-[#001E50] outline-none placeholder:text-slate-400"
+                                    className="w-full text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400"
                                 />
                                 {filters.q ? (
                                     <button
@@ -3471,7 +3050,7 @@ export default function Taller() {
                                         tecnico: event.target.value,
                                     }))
                                 }
-                                className="w-full rounded-lg border border-[#001E50] bg-white px-3 py-2 text-sm font-semibold text-[#001E50] outline-none"
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] outline-none"
                             >
                                 {techniciansFilter.map((technician) => (
                                     <option key={technician} value={technician}>
@@ -3484,11 +3063,11 @@ export default function Taller() {
 
                     <div className="xl:col-span-4">
                         <FilterBlock label="Fecha de la agenda">
-                            <div className="flex items-center overflow-hidden rounded-lg border border-[#001E50] bg-white">
+                            <div className="flex items-center overflow-hidden rounded-lg border border-[#131E5C] bg-white">
                                 <button
                                     type="button"
                                     onClick={() => moveDate(-1)}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#001E50] hover:bg-[#001E50]/10"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#131E5C] hover:bg-[#131E5C]/10"
                                     title="Día anterior"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
@@ -3503,13 +3082,13 @@ export default function Taller() {
                                             fecha: event.target.value,
                                         }))
                                     }
-                                    className="h-10 min-w-0 flex-1 border-x border-[#001E50]/30 px-3 text-center text-sm font-bold text-[#001E50] outline-none"
+                                    className="h-10 min-w-0 flex-1 border-x border-[#131E5C]/30 px-3 text-center text-sm font-bold text-[#131E5C] outline-none"
                                 />
 
                                 <button
                                     type="button"
                                     onClick={() => moveDate(1)}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#001E50] hover:bg-[#001E50]/10"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#131E5C] hover:bg-[#131E5C]/10"
                                     title="Día siguiente"
                                 >
                                     <ChevronRight className="h-4 w-4" />
@@ -3539,8 +3118,8 @@ export default function Taller() {
                                             className={[
                                                 "rounded-lg border px-4 py-2 text-xs font-extrabold transition sm:text-sm",
                                                 active
-                                                    ? "border-[#001E50] bg-[#001E50] text-white shadow-sm"
-                                                    : "border-[#001E50] bg-white text-[#001E50] hover:bg-[#001E50]/10",
+                                                    ? "border-[#131E5C] bg-[#131E5C] text-white shadow-sm"
+                                                    : "border-[#131E5C] bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
                                             ].join(" ")}
                                         >
                                             {dealer}
@@ -3564,45 +3143,43 @@ export default function Taller() {
                             <button
                                 type="button"
                                 onClick={resetFilters}
-                                className="inline-flex items-center gap-2 rounded-lg border border-[#001E50] bg-white px-3 py-2 text-sm font-bold text-[#001E50] hover:bg-[#001E50] hover:text-white"
+                                className="inline-flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-bold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
                             >
                                 <X className="h-4 w-4" /> Limpiar
                             </button>
 
-                            <div className="flex flex-wrap items-center gap-2">
-                                {Object.entries(LEGEND_CHIPS).map(([key, meta]) => {
-                                    const Icon = meta.icon;
-                                    const active = highlightType === key;
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-6 rounded border border-red-600 bg-red-100" />
+                                Reparación
+                            </div>
 
-                                    return (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            onClick={() =>
-                                                setHighlightType(active ? null : key)
-                                            }
-                                            title={active ? "Quitar resaltado" : `Resaltar ${meta.label}`}
-                                            className={[
-                                                "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-black transition",
-                                                active
-                                                    ? "ring-2 ring-[#001E50] ring-offset-1"
-                                                    : "hover:-translate-y-0.5 hover:shadow-sm",
-                                            ].join(" ")}
-                                            style={{
-                                                backgroundColor: meta.backgroundColor,
-                                                borderColor: active ? "#001E50" : meta.borderColor,
-                                                color: meta.color,
-                                            }}
-                                        >
-                                            <Icon className="h-3 w-3" />
-                                            {meta.label}
-                                        </button>
-                                    );
-                                })}
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-6 rounded border border-gray-500 bg-gray-200" />
+                                Diagnóstico
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-6 rounded border border-black bg-black" />
+                                Campaña
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-6 rounded border border-green-600 bg-green-100" />
+                                Mantenimiento
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-6 rounded border border-cyan-800 bg-cyan-700" />
+                                Comida
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-6 rounded border border-orange-700 bg-orange-600" />
+                                Capacitación
                             </div>
 
                             <div className="ml-auto hidden text-right lg:block">
-                                <div className="text-sm font-extrabold capitalize text-[#001E50]">
+                                <div className="text-sm font-extrabold capitalize text-[#131E5C]">
                                     {formatLongDate(filters.fecha)}
                                 </div>
                                 <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
@@ -3615,7 +3192,7 @@ export default function Taller() {
             </div>
 
             {loadingList ? (
-                <div className="rounded-xl border border-black/10 bg-white p-10 text-center text-[#001E50]">
+                <div className="rounded-xl border border-black/10 bg-white p-10 text-center text-[#131E5C]">
                     <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" />
                     Cargando taller...
                 </div>
@@ -3625,19 +3202,20 @@ export default function Taller() {
                     containerOrders={containerOrders}
                     technicians={techniciansInAgenda}
                     selectedDate={filters.fecha}
-                    highlightType={highlightType}
-                    onToggleHighlight={setHighlightType}
                     onEdit={openEdit}
+                    onMoveOrder={moveOrderToStage}
                     onScheduleOrder={scheduleOrder}
                     onUnassignOrder={unassignOrder}
                     onResizeOrder={resizeOrder}
-                    onMoveOrder={moveOrderToStage}
+                    panelState={panelState}
+                    onTogglePanel={togglePanel}
+                    onToggleContainer={toggleContainer}
                 />
             ) : (
                 <div className="overflow-hidden rounded-xl bg-white shadow-lg">
                     <div className="overflow-x-auto">
                         <table className="min-w-[1450px] text-left text-sm">
-                            <thead className="bg-[#001E50] text-xs text-white">
+                            <thead className="bg-[#131E5C] text-xs text-white">
                                 <tr>
                                     {[
                                         "Fecha",
@@ -3662,7 +3240,7 @@ export default function Taller() {
                                     <tr>
                                         <td
                                             colSpan={10}
-                                            className="px-4 py-10 text-center text-[#001E50]"
+                                            className="px-4 py-10 text-center text-[#131E5C]"
                                         >
                                             No hay actividades para esta fecha y filtros.
                                         </td>
@@ -3680,14 +3258,14 @@ export default function Taller() {
                                                 onDoubleClick={() => openEdit(order)}
                                                 className="cursor-pointer hover:bg-blue-50/50"
                                             >
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
                                                     {order.fecha_programada}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-bold text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 font-bold text-[#131E5C]">
                                                     {order.hora_inicio} - {order.hora_fin}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <div className="font-extrabold text-[#001E50]">
+                                                    <div className="font-extrabold text-[#131E5C]">
                                                         {getActivityLabel(order)}
                                                     </div>
                                                     {order.tipo_bloque === "trabajo" ? (
@@ -3696,31 +3274,31 @@ export default function Taller() {
                                                         </div>
                                                     ) : null}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
                                                     {order.no_orden || "—"}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
                                                     {order.agencia || "—"}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
                                                     {order.tecnico || "Sin técnico"}
                                                 </td>
                                                 <td className="whitespace-nowrap px-4 py-3">
                                                     <StatusBadge status={order.estatus_agenda} />
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-bold capitalize text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 font-bold capitalize text-[#131E5C]">
                                                     {order.tipo_bloque === "trabajo"
                                                         ? getWorkTypeMeta(order).label
                                                         : order.tipo_bloque === "capacitacion"
                                                             ? "Capacitación"
                                                             : order.tipo_bloque}
                                                 </td>
-                                                <td className="px-4 py-3 text-[#001E50]">
+                                                <td className="px-4 py-3 text-[#131E5C]">
                                                     {order.subtrabajos
                                                         .map((work) => work.nombre)
                                                         .join(" + ")}
                                                 </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-extrabold text-[#001E50]">
+                                                <td className="whitespace-nowrap px-4 py-3 font-extrabold text-[#131E5C]">
                                                     {order.horasAgenda.toFixed(2)} h
                                                 </td>
                                             </tr>
@@ -3754,7 +3332,7 @@ export default function Taller() {
                             type="button"
                             onClick={saveOrder}
                             disabled={saving}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#001E50] px-4 py-2 text-sm font-bold text-white hover:bg-[#001E50]/90 disabled:opacity-60"
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm font-bold text-white hover:bg-[#131E5C]/90 disabled:opacity-60"
                         >
                             {saving ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -3767,7 +3345,7 @@ export default function Taller() {
                 }
             >
                 {!draft ? null : (
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <Field label="Tipo de actividad" icon={ListChecks}>
                             <select
                                 value={draft.tipo_bloque}
@@ -3957,22 +3535,22 @@ export default function Taller() {
                         {draft.tipo_bloque === "trabajo" ? (
                             <>
                                 {editingOrden && !editingOrden.isManual ? (
-                                    <div className="rounded-xl border border-black/10 bg-white p-4 md:col-span-2">
-                                        <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                                    <div className="rounded-xl border border-black/10 bg-white p-4 md:col-span-2 xl:col-span-4">
+                                        <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
                                             <div>
-                                                <b className="text-[#001E50]">Cliente:</b>{" "}
+                                                <b className="text-[#131E5C]">Cliente:</b>{" "}
                                                 {editingOrden.cliente}
                                             </div>
                                             <div>
-                                                <b className="text-[#001E50]">Teléfono:</b>{" "}
+                                                <b className="text-[#131E5C]">Teléfono:</b>{" "}
                                                 {editingOrden.telefono}
                                             </div>
                                             <div>
-                                                <b className="text-[#001E50]">Orden:</b>{" "}
+                                                <b className="text-[#131E5C]">Orden:</b>{" "}
                                                 {editingOrden.no_orden || "—"}
                                             </div>
                                             <div>
-                                                <b className="text-[#001E50]">VIN:</b>{" "}
+                                                <b className="text-[#131E5C]">VIN:</b>{" "}
                                                 {editingOrden.vin || "—"}
                                             </div>
                                         </div>
@@ -4085,7 +3663,7 @@ export default function Taller() {
                                 </Field>
                             </>
                         ) : (
-                            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 md:col-span-2">
+                            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 md:col-span-2 xl:col-span-4">
                                 {draft.tipo_bloque === "comida" ? (
                                     <div className="flex items-center gap-2">
                                         <Coffee className="h-5 w-5 text-cyan-700" />
@@ -4103,7 +3681,7 @@ export default function Taller() {
                         <Field
                             label="Comentarios de taller"
                             icon={ClipboardList}
-                            className="md:col-span-2"
+                            className="md:col-span-2 xl:col-span-4"
                         >
                             <textarea
                                 value={draft.comentarios_taller || ""}
@@ -4123,15 +3701,15 @@ export default function Taller() {
                         </Field>
 
                         {draft.tipo_bloque === "trabajo" ? (
-                            <div className="rounded-xl border border-black/10 bg-white p-4 md:col-span-2">
+                            <div className="rounded-xl border border-black/10 bg-white p-4 md:col-span-2 xl:col-span-4">
                                 <div className="mb-3 flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2 text-sm font-extrabold text-[#001E50]">
+                                    <div className="flex items-center gap-2 text-sm font-extrabold text-[#131E5C]">
                                         <Wrench className="h-4 w-4" /> Trabajos asignados
                                     </div>
                                     <button
                                         type="button"
                                         onClick={addSubtask}
-                                        className="inline-flex items-center gap-2 rounded-lg bg-[#001E50] px-3 py-2 text-xs font-bold text-white hover:bg-[#001E50]/90"
+                                        className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#131E5C]/90"
                                     >
                                         <Plus className="h-3.5 w-3.5" /> Agregar
                                     </button>

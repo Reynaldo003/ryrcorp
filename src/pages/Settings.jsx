@@ -1,15 +1,29 @@
 // src/pages/Settings.jsx
+
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
     ArrowLeft, Users, Plus, RefreshCw, Upload, Eye, EyeOff,
     Building2, ChevronDown, Pencil, Save, AtSign, Mail,
-    User, Lock, Briefcase
+    User, Lock, Briefcase, Phone, Search
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import PhoneInput from "react-phone-number-input";
+import flags from "react-phone-number-input/flags";
+import "react-phone-number-input/style.css";
+import { ensureFreshAccessToken } from "../lib/apiPruebas";
 
 const API = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
 const DEALERS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
+
+async function obtenerTokenVigente(tokenFallback) {
+    try {
+        const fresh = await ensureFreshAccessToken();
+        return fresh || tokenFallback || "";
+    } catch {
+        return tokenFallback || "";
+    }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -180,6 +194,7 @@ function UserModal({ user, roles, token, onClose, onSaved }) {
     const [form, setForm] = useState({
         nombre: user?.nombre ?? "", apellidos: user?.apellidos ?? "",
         usuario: user?.usuario ?? "", correo: user?.correo ?? "",
+        telefono: user?.telefono ?? "",
         id_rol: user?.id_rol ?? "", estado: user?.estado ?? "Activo",
         agencies: user?.agencies ?? [],
     });
@@ -195,7 +210,6 @@ function UserModal({ user, roles, token, onClose, onSaved }) {
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
-        // Animación de entrada
         requestAnimationFrame(() => setVisible(true));
     }, []);
 
@@ -239,6 +253,7 @@ function UserModal({ user, roles, token, onClose, onSaved }) {
         const fd = new FormData();
         fd.append("nombre", form.nombre); fd.append("apellidos", form.apellidos);
         fd.append("usuario", form.usuario); fd.append("correo", form.correo);
+        if (form.telefono) fd.append("telefono", form.telefono);
         fd.append("id_rol", form.id_rol); fd.append("estado", form.estado);
         fd.append("agencia", form.agencies.join("|"));
         if (password) fd.append("contrasena", password);
@@ -247,9 +262,10 @@ function UserModal({ user, roles, token, onClose, onSaved }) {
             const url = isNew
                 ? `${API}/conformidad/api/admin/usuarios/`
                 : `${API}/conformidad/api/admin/usuarios/${user.id}/`;
+            const access = await obtenerTokenVigente(token);
             const res = await fetch(url, {
                 method: isNew ? "POST" : "PATCH",
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${access}` },
                 body: fd
             });
             const data = await res.json().catch(() => ({}));
@@ -372,6 +388,7 @@ function UserModal({ user, roles, token, onClose, onSaved }) {
                         <FInput label="Apellidos" error={errors.apellidos} value={form.apellidos} onChange={e => set("apellidos", e.target.value)} placeholder="Apellidos" />
                         <FInput label="Usuario" error={errors.usuario} value={form.usuario} onChange={e => set("usuario", e.target.value)} placeholder="usuario" />
                         <FInput label="Correo" error={errors.correo} type="email" value={form.correo} onChange={e => set("correo", e.target.value)} placeholder="correo@ejemplo.com" />
+                        <PhoneField label="Teléfono" value={form.telefono} onChange={v => set("telefono", v || "")} placeholder="55 1234 5678" />
                     </div>
 
                     {/* Rol y Estado */}
@@ -597,10 +614,8 @@ function UsersTableUnificada({ users, onEdit }) {
 
 // ─── PERFIL USUARIO NORMAL ────────────────────────────────────────────────────
 function PerfilUsuario({ token, user }) {
-    // TEMPORAL - ver estructura del objeto user
     console.log("=== USER KEYS:", Object.keys(user || {}));
     console.log("=== USER JSON:", JSON.stringify(user));
-    // ... resto del componente
     const [formData, setFormData] = useState({
         nombre: user?.nombre || "",
         apellidos: user?.apellidos || "",
@@ -645,9 +660,10 @@ function PerfilUsuario({ token, user }) {
         if (foto) fd.append("foto", foto);
 
         try {
+            const access = await obtenerTokenVigente(token);
             const res = await fetch(`${API}/conformidad/api/perfil/`, {
                 method: "PATCH",
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${access}` },
                 body: fd,
             });
             const responseText = await res.text();
@@ -655,10 +671,10 @@ function PerfilUsuario({ token, user }) {
                 setMsg("✓ Datos actualizados correctamente");
                 setFoto(null);
 
-                // Vuelve a pedir los datos actualizados del usuario (incluye la foto nueva)
                 try {
+                    const accessMe = await obtenerTokenVigente(token);
                     const meRes = await fetch(`${API}/conformidad/api/auth/me/`, {
-                        headers: { Authorization: `Bearer ${token}` },
+                        headers: { Authorization: `Bearer ${accessMe}` },
                     });
                     if (meRes.ok) {
                         const updatedUser = await meRes.json();
@@ -695,9 +711,10 @@ function PerfilUsuario({ token, user }) {
         const fd = new FormData();
         fd.append("contrasena", passForm.nueva);
         try {
+            const access = await obtenerTokenVigente(token);
             const res = await fetch(`${API}/conformidad/api/admin/usuarios/${userId}/`, {
-                method: "PUT",  // ← cambia PATCH por PUT
-                headers: { Authorization: `Bearer ${token}` },
+                method: "PUT",
+                headers: { Authorization: `Bearer ${access}` },
                 body: fd,
             });
             if (res.ok) {
@@ -1042,6 +1059,50 @@ function InputWithSideIcon({ icon: Icon, label, value, onChange, type = "text", 
     );
 }
 
+// ── Teléfono internacional con bandera (externo) ──
+function PhoneInputSideField({ label, value, onChange, placeholder = "55 1234 5678" }) {
+    return (
+        <div>
+            <FLabel>{label}</FLabel>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: "#eff2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Phone size={15} color="#131E5C" />
+                </div>
+                <div style={{ flex: 1 }}>
+                    <PhoneInput
+                        international
+                        defaultCountry="MX"
+                        flags={flags}
+                        value={value || undefined}
+                        onChange={onChange}
+                        placeholder={placeholder}
+                        className="crm-phone"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Teléfono internacional con bandera (para modales/grid) ──
+function PhoneField({ label, value, onChange, placeholder = "55 1234 5678", error }) {
+    return (
+        <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <FLabel>{label}</FLabel>
+            <PhoneInput
+                international
+                defaultCountry="MX"
+                flags={flags}
+                value={value || undefined}
+                onChange={onChange}
+                placeholder={placeholder}
+                className="crm-phone"
+            />
+            {error && <span style={{ fontSize: 11, color: "#ef4444" }}>{error}</span>}
+        </label>
+    );
+}
+
 // ── Password con ícono externo + toggle ojo ──
 function PasswordSideField({ label, value, onChange, placeholder }) {
     const [show, setShow] = useState(false);
@@ -1178,12 +1239,13 @@ function NuevoRolModal({ token, onClose, onCreado }) {
         if (!nombreLimpio) return setMsg("Escribe un nombre para el rol.");
         setLoading(true); setMsg("");
         try {
+            const access = await obtenerTokenVigente(token);
             const res = await fetch(`${API}/conformidad/api/admin/roles/`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
                 body: JSON.stringify({
                     nombre: nombreLimpio,
-                    descripcion: " ",  // ← lo mandas pero invisible para el usuario
+                    descripcion: " ",
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -1264,11 +1326,9 @@ export default function Settings() {
         return permisos.includes("ALL") || permisos.includes("USUARIOS_ADMIN");
     }, [user]);
 
-    const authHeaders = useMemo(() => ({ "Content-Type": "application/json", Authorization: `Bearer ${token}` }), [token]);
-
     const [roles, setRoles] = useState([]);
     const [selectedRolId, setSelectedRolId] = useState("");
-    const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: "", apellidos: "", usuario: "", correo: "", contrasena: "", agencia: "", id_rol: "", foto: null });
+    const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: "", apellidos: "", usuario: "", correo: "", telefono: "", contrasena: "", agencia: "", id_rol: "", foto: null });
     const [agenciasSeleccionadas, setAgenciasSeleccionadas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState("");
@@ -1280,6 +1340,7 @@ export default function Settings() {
     const [filtroAgencia, setFiltroAgencia] = useState("Todas");
     const [filtroRol, setFiltroRol] = useState("Todos");
     const [filtroEstado, setFiltroEstado] = useState("Todos");
+    const [filtroBusqueda, setFiltroBusqueda] = useState("");
 
     const rolesUnicos = useMemo(() => {
         const set = new Set(usuarios.map(u => u.rol || u.nombre_rol).filter(Boolean));
@@ -1287,19 +1348,23 @@ export default function Settings() {
     }, [usuarios]);
 
     const usuariosFiltrados = useMemo(() => {
+        const q = filtroBusqueda.trim().toLowerCase();
         return usuarios.filter(u => {
             const agencias = Array.isArray(u.agencies) ? u.agencies : [];
             const matchAgencia = filtroAgencia === "Todas" || agencias.includes(filtroAgencia);
             const rolUsuario = u.rol || u.nombre_rol || "";
             const matchRol = filtroRol === "Todos" || rolUsuario === filtroRol;
             const matchEstado = filtroEstado === "Todos" || (u.estado || "Activo") === filtroEstado;
-            return matchAgencia && matchRol && matchEstado;
+            const matchBusqueda = !q
+                || (u.usuario || "").toLowerCase().includes(q)
+                || `${u.nombre || ""} ${u.apellidos || ""}`.trim().toLowerCase().includes(q)
+                || (u.correo || "").toLowerCase().includes(q);
+            return matchAgencia && matchRol && matchEstado && matchBusqueda;
         });
-    }, [usuarios, filtroAgencia, filtroRol, filtroEstado]);
+    }, [usuarios, filtroAgencia, filtroRol, filtroEstado, filtroBusqueda]);
 
     const onRolCreado = (nuevoRol) => {
         setRoles(prev => [...prev, nuevoRol]);
-        // Seleccionar automáticamente el rol recién creado
         const id = String(nuevoRol.id_rol);
         setSelectedRolId(id);
         setNuevoUsuario(p => ({ ...p, id_rol: id }));
@@ -1311,7 +1376,8 @@ export default function Settings() {
         if (!token) return;
         setLoadingTable(true);
         try {
-            const res = await fetch(`${API}/conformidad/api/admin/usuarios/`, { headers: authHeaders });
+            const access = await obtenerTokenVigente(token);
+            const res = await fetch(`${API}/conformidad/api/admin/usuarios/`, { headers: { Authorization: `Bearer ${access}` } });
             if (!res.ok) throw new Error("No se pudieron cargar los usuarios.");
             const data = await res.json();
             const lista = (Array.isArray(data) ? data : data.results ?? []).map(u => ({
@@ -1321,14 +1387,15 @@ export default function Settings() {
             setUsuarios(lista);
         } catch (err) { console.error(err); }
         finally { setLoadingTable(false); }
-    }, [token, authHeaders]);
+    }, [token]);
 
     useEffect(() => {
         if (!token || !isAdminUI) return;
         const cargarDatos = async () => {
             setLoading(true);
             try {
-                const res = await fetch(`${API}/conformidad/api/admin/roles/`, { headers: authHeaders });
+                const access = await obtenerTokenVigente(token);
+                const res = await fetch(`${API}/conformidad/api/admin/roles/`, { headers: { Authorization: `Bearer ${access}` } });
                 if (!res.ok) throw new Error("No se pudieron cargar los roles.");
                 const dataRoles = await res.json();
                 const rolesList = Array.isArray(dataRoles) ? dataRoles : [];
@@ -1343,16 +1410,16 @@ export default function Settings() {
         };
         cargarDatos();
         cargarUsuarios();
-    }, [token, isAdminUI, authHeaders, cargarUsuarios]);
+    }, [token, isAdminUI, cargarUsuarios]);
 
     const toggleAgencia = (agencia) => {
         setAgenciasSeleccionadas(prev => prev.includes(agencia) ? prev.filter(i => i !== agencia) : [...prev, agencia]);
     };
 
     const limpiarFormulario = () => {
-        setNuevoUsuario({ nombre: "", apellidos: "", usuario: "", correo: "", contrasena: "", agencia: "", id_rol: selectedRolId || "", foto: null });
+        setNuevoUsuario({ nombre: "", apellidos: "", usuario: "", correo: "", telefono: "", contrasena: "", agencia: "", id_rol: selectedRolId || "", foto: null });
         setAgenciasSeleccionadas([]);
-        setEstadoNuevo("Activo"); // ← agrega esto
+        setEstadoNuevo("Activo");
     };
     const crearUsuario = async (e) => {
         e.preventDefault();
@@ -1361,6 +1428,7 @@ export default function Settings() {
         const apellidos = String(nuevoUsuario.apellidos || "").trim();
         const usuario = String(nuevoUsuario.usuario || "").trim();
         const correo = String(nuevoUsuario.correo || "").trim();
+        const telefono = String(nuevoUsuario.telefono || "").trim();
         const contrasena = String(nuevoUsuario.contrasena || "");
         const agencia = agenciasSeleccionadas.join("|");
 
@@ -1395,17 +1463,21 @@ export default function Settings() {
         fd.append("agencia", agencia);
         fd.append("id_rol", nuevoUsuario.id_rol);
 
+        if (telefono) {
+            fd.append("telefono", telefono);
+        }
         if (nuevoUsuario.foto) {
             fd.append("foto", nuevoUsuario.foto);
         }
 
         try {
+            const access = await obtenerTokenVigente(token);
             const res = await fetch(
                 `${API}/conformidad/api/admin/usuarios/`,
                 {
                     method: "POST",
                     headers: {
-                        Authorization: `Bearer ${token}`,
+                        Authorization: `Bearer ${access}`,
                     },
                     body: fd,
                 }
@@ -1451,6 +1523,30 @@ export default function Settings() {
 
     return (
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 20px", fontFamily: "system-ui, sans-serif" }}>
+
+            <style>{`
+                .crm-phone { width: 100%; }
+                .crm-phone .PhoneInputInput {
+                    width: 100%;
+                    padding: 9px 12px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    color: #0f172a;
+                    background: #fff;
+                    outline: none;
+                    box-sizing: border-box;
+                    font-family: inherit;
+                    min-width: 0;
+                    flex: 1;
+                    transition: border-color 0.15s, box-shadow 0.15s;
+                }
+                .crm-phone .PhoneInputInput:focus {
+                    border-color: #131E5C;
+                    box-shadow: 0 0 0 3px rgba(19,30,92,0.08);
+                }
+                .crm-phone .PhoneInputCountry { margin-right: 8px; }
+            `}</style>
 
 
             {/* ── Card formulario (ancho completo) ── */}
@@ -1499,10 +1595,12 @@ export default function Settings() {
                             onChange={e => setNuevoUsuario(p => ({ ...p, usuario: e.target.value }))} placeholder="Ej. juancarlos" />
                     </div>
 
-                    {/* Fila 2: Correo + Contraseña */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px 24px", marginBottom: 20 }}>
+                    {/* Fila 2: Correo + Teléfono + Contraseña */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "18px 24px", marginBottom: 20 }}>
                         <InputWithSideIcon icon={Mail} label="Correo electrónico" type="email" value={nuevoUsuario.correo}
                             onChange={e => setNuevoUsuario(p => ({ ...p, correo: e.target.value }))} placeholder="Ej. juancarlos@correo.com" />
+                        <PhoneInputSideField label="Teléfono" value={nuevoUsuario.telefono}
+                            onChange={v => setNuevoUsuario(p => ({ ...p, telefono: v || "" }))} placeholder="55 1234 5678" />
                         <PasswordSideField label="Contraseña" value={nuevoUsuario.contrasena}
                             onChange={e => setNuevoUsuario(p => ({ ...p, contrasena: e.target.value }))} placeholder="Mín. 8 caracteres" />
                     </div>
@@ -1649,12 +1747,29 @@ export default function Settings() {
 
                 {/* Filtros */}
                 <div style={{ display: "flex", gap: 14, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
+                    <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 220 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Buscar
+                        </span>
+                        <div style={{ position: "relative" }}>
+                            <Search size={13} color="#94a3b8" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+                            <input
+                                type="text"
+                                value={filtroBusqueda}
+                                onChange={e => setFiltroBusqueda(e.target.value)}
+                                placeholder="Buscar por usuario, nombre o correo..."
+                                style={{ ...inputBase(), width: "100%", paddingLeft: 32, boxSizing: "border-box" }}
+                                onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
+                                onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+                            />
+                        </div>
+                    </label>
                     <FilterSelect label="Agencia" value={filtroAgencia} onChange={setFiltroAgencia} options={["Todas", ...DEALERS]} />
                     <FilterSelect label="Rol" value={filtroRol} onChange={setFiltroRol} options={rolesUnicos} />
                     <FilterSelect label="Estado" value={filtroEstado} onChange={setFiltroEstado} options={["Todos", "Activo", "Inactivo"]} />
-                    {(filtroAgencia !== "Todas" || filtroRol !== "Todos" || filtroEstado !== "Todos") && (
+                    {(filtroBusqueda || filtroAgencia !== "Todas" || filtroRol !== "Todos" || filtroEstado !== "Todos") && (
                         <button
-                            onClick={() => { setFiltroAgencia("Todas"); setFiltroRol("Todos"); setFiltroEstado("Todos"); }}
+                            onClick={() => { setFiltroBusqueda(""); setFiltroAgencia("Todas"); setFiltroRol("Todos"); setFiltroEstado("Todos"); }}
                             style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid #e2e8f0", background: "#f8fafc", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                         >
                             Limpiar filtros
