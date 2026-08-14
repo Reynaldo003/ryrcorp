@@ -29,7 +29,8 @@ import {
     X,
     XCircle,
 } from "lucide-react";
-//olas
+
+
 import {
     apiRetencion,
     obtenerOpcionesRetencion,
@@ -213,7 +214,8 @@ function estadoBadgeClass(estado) {
     if (valor === "inactivo") return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
     return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
 }
-//cumpleaños 
+// ---- Cumpleaños ----
+ 
 function diasParaCumpleanos(fechaCumpleanos) {
     const fecha = parseFechaLocal(fechaCumpleanos);
 
@@ -2198,7 +2200,7 @@ export default function Retencion() {
             <ChatDrawer
             open={Boolean(drawerTel)}
             telefono={drawerTel}
-            numeroAsesor=""
+            numeroAsesor="522711076834"
             clienteRetencion={clienteChat}
             onTelefonoChange={setDrawerTel}
             onClose={() => setDrawerTel("")}

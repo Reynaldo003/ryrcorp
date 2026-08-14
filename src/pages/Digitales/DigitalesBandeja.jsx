@@ -1287,6 +1287,19 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     }, [mensajes.length]);
 
     useEffect(() => {
+        if (!open || loading || !scrollRef.current) return;
+
+        const frame = requestAnimationFrame(() => {
+            if (!scrollRef.current) return;
+
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            stickBottomRef.current = true;
+        });
+
+            return () => cancelAnimationFrame(frame);
+        }, [open, loading, tel]);
+
+    useEffect(() => {
         function onKeyDown(e) { if (e.key === "Escape") onClose?.(); }
         if (open) document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
@@ -1487,42 +1500,93 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     }
 
 
-    async function enviar() {
-        if (isRecording) { setRecordingError("Detén la grabación antes de enviar el mensaje."); return; }
-        const text = draft.trim();
-        const hasAttachments = attachments.length > 0;
-        if ((!text && !hasAttachments) || !tel || sending) return;
+                    async function enviar() {
+                        if (isRecording) {
+                            setRecordingError("Detén la grabación antes de enviar el mensaje.");
+                            return;
+                        }
 
-        const optimisticId = crypto.randomUUID();
-        const currentAttachments = attachments;
-        const optimisticAttachments = currentAttachments.map((a) => ({
-            id: a.id, kind: a.kind, previewUrl: a.previewUrl, url: a.previewUrl, name: a.name, size: a.size, mime: a.mime,
-        }));
+                        const text = draft.trim();
+                        const hasAttachments = attachments.length > 0;
 
-        setSending(true);
-        setDraft("");
-        setAttachments([]);
-        stickBottomRef.current = true;
-        setMensajes((prev) => [...prev, {
-            id: optimisticId, mine: true, text: text || "Adjunto",
-            attachments: optimisticAttachments, local_created_at: new Date().toISOString(), status: "sent",
-        }]);
-        try {
-            if (hasAttachments) {
-                await api.digitalesEnviarMedia({
-                    to: tel, text, files: currentAttachments.map((a) => a.file).filter(Boolean), numero_asesor: numeroAsesor,
-                });
-            } else {
-                await api.digitalesEnviarMensaje({ to: tel, text, numero_asesor: numeroAsesor });
-            }
-            await cargar({ markRead: false });
-        } catch (error) {
-            alert(`Falló el envío: ${error.message}`);
-        } finally {
-            setSending(false);
-            cleanupPreviews(optimisticAttachments);
-        }
-    }
+                        if ((!text && !hasAttachments) || !tel || sending) return;
+
+                        const optimisticId = crypto.randomUUID();
+                        const currentAttachments = attachments;
+
+                        const optimisticAttachments = currentAttachments.map((a) => ({
+                            id: a.id,
+                            kind: a.kind,
+                            previewUrl: a.previewUrl,
+                            url: a.previewUrl,
+                            name: a.name,
+                            size: a.size,
+                            mime: a.mime,
+                        }));
+
+                        setSending(true);
+                        setDraft("");
+                        setAttachments([]);
+                        stickBottomRef.current = true;
+
+                        setMensajes((prev) => [
+                            ...prev,
+                            {
+                                id: optimisticId,
+                                mine: true,
+                                text: text || "Adjunto",
+                                attachments: optimisticAttachments,
+                                local_created_at: new Date().toISOString(),
+                                status: "sent",
+                                local_pending: true,
+                            },
+                        ]);
+
+                        try {
+                            if (hasAttachments) {
+                                await api.digitalesEnviarMedia({
+                                    to: tel,
+                                    text,
+                                    files: currentAttachments
+                                        .map((a) => a.file)
+                                        .filter(Boolean),
+                                    numero_asesor: numeroAsesor,
+                                });
+                            } else {
+                                await api.digitalesEnviarMensaje({
+                                    to: tel,
+                                    text,
+                                    numero_asesor: numeroAsesor,
+                                });
+                            }
+
+                            // Ya fue aceptado el envío: permitimos escribir otro inmediatamente
+                            setSending(false);
+
+                            // Quitamos el mensaje temporal
+                            setMensajes((prev) =>
+                                prev.filter((mensaje) => mensaje.id !== optimisticId)
+                            );
+
+                            // Traemos el mensaje real sin bloquear el compositor
+                            cargar({ markRead: false }).catch((error) => {
+                                console.error("No se pudo refrescar el chat:", error);
+                            });
+
+                        } catch (error) {
+                            setMensajes((prev) =>
+                                prev.filter((mensaje) => mensaje.id !== optimisticId)
+                            );
+
+                            setSending(false);
+
+                            alert(`Falló el envío: ${error.message}`);
+
+                            cargar({ markRead: false }).catch(() => {});
+                        } finally {
+                            cleanupPreviews(optimisticAttachments);
+                        }
+                    }
 
     function onKeyDownComposer(e) {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); }
