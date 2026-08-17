@@ -1710,57 +1710,133 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
         setTplDraft(values);
     }
 
-    async function enviarPlantilla() {
-        if (!tel || !tplSelected || sendingTemplate) return;
 
-        const fields = Array.isArray(tplSelected.fields) ? tplSelected.fields : [];
-        const incompleteField = fields.find((field) => !String(tplDraft?.[field.key] || "").trim());
-        if (incompleteField) {
-            setTemplatesError(`Completa el campo obligatorio: ${incompleteField.friendlyLabel || getFriendlyTemplateFieldLabel(incompleteField)}.`);
-            return;
-        }
+            async function enviarPlantilla() {
+                if (!tel || !tplSelected || sendingTemplate) return;
 
-        const idioma = tplSelected.idioma || tplSelected.language || "es_MX";
-        const templateName = tplSelected.key || tplSelected.name;
-        if (!templateName) { setTemplatesError("La plantilla seleccionada no tiene un nombre válido."); return; }
+                const fields = Array.isArray(tplSelected.fields) ? tplSelected.fields : [];
+                const incompleteField = fields.find(
+                    (field) => !String(tplDraft?.[field.key] || "").trim()
+                );
 
-        const textoPreview = buildTemplatePreviewText(tplSelected, tplDraft);
-        const components = buildDynamicTemplateComponents(tplSelected, tplDraft);
-        const optimisticId = crypto.randomUUID();
+                if (incompleteField) {
+                    setTemplatesError(
+                        `Completa el campo obligatorio: ${
+                            incompleteField.friendlyLabel ||
+                            getFriendlyTemplateFieldLabel(incompleteField)
+                        }.`
+                    );
+                    return;
+                }
 
-        setTemplatesError("");
-        setSendingTemplate(true);
-        stickBottomRef.current = true;
+                const idioma =
+                    tplSelected.idioma ||
+                    tplSelected.language ||
+                    "es_MX";
 
-        setMensajes((prev) => [...prev, {
-            id: optimisticId, local_pending: true, local_created_at: new Date().toISOString(),
-            mine: true, text: textoPreview || `Plantilla: ${templateName}`, status: "sent", attachments: [],
-        }]);
+                const templateName =
+                    tplSelected.key ||
+                    tplSelected.name;
 
-        try {
-            await api.digitalesEnviarPlantilla({
-                to: tel,
-                template_name: templateName,
-                idioma,
-                components: components.length > 0 ? components : undefined,
-                params: components.length > 0 ? undefined : [],
-                numero_asesor: numeroAsesor,
-            });
+                if (!templateName) {
+                    setTemplatesError(
+                        "La plantilla seleccionada no tiene un nombre válido."
+                    );
+                    return;
+                }
 
-            setShowTemplatesDropdown(false);
-            setTplSelected(null);
-            setTplDraft({});
-            setTemplatesError("");
-            await cargar({ markRead: false });
-        } catch (error) {
-            console.error("Error enviando plantilla desde drawer:", error);
-            setTemplatesError(error?.message || "No se pudo enviar la plantilla.");
-            setMensajes((prev) => prev.filter((m) => m.id !== optimisticId));
-            await cargar({ markRead: false }).catch(() => { });
-        } finally {
-            setSendingTemplate(false);
-        }
-    }
+                const textoPreview =
+                    buildTemplatePreviewText(tplSelected, tplDraft);
+
+                const components =
+                    buildDynamicTemplateComponents(tplSelected, tplDraft);
+
+                const optimisticId = crypto.randomUUID();
+
+                setTemplatesError("");
+                setSendingTemplate(true);
+                stickBottomRef.current = true;
+
+                // Mensaje temporal mientras Meta confirma el envío
+                setMensajes((prev) => [
+                    ...prev,
+                    {
+                        id: optimisticId,
+                        local_pending: true,
+                        local_created_at: new Date().toISOString(),
+                        mine: true,
+                        text: textoPreview || `Plantilla: ${templateName}`,
+                        status: "sent",
+                        attachments: [],
+                    },
+                ]);
+
+                try {
+                    await api.digitalesEnviarPlantilla({
+                        to: tel,
+                        template_name: templateName,
+                        idioma,
+                        components:
+                            components.length > 0
+                                ? components
+                                : undefined,
+                        params:
+                            components.length > 0
+                                ? undefined
+                                : [],
+                        numero_asesor: numeroAsesor,
+                    });
+
+                    // Cerramos el selector de plantillas
+                    setShowTemplatesDropdown(false);
+                    setTplSelected(null);
+                    setTplDraft({});
+                    setTemplatesError("");
+
+                    // El envío ya fue aceptado
+                    setSendingTemplate(false);
+
+                    // Quitamos el mensaje temporal ANTES de traer el real
+                    setMensajes((prev) =>
+                        prev.filter(
+                            (mensaje) => mensaje.id !== optimisticId
+                        )
+                    );
+
+                    // Traemos el mensaje real desde backend
+                    cargar({ markRead: false }).catch((error) => {
+                        console.error(
+                            "No se pudo refrescar el chat después de enviar la plantilla:",
+                            error
+                        );
+                    });
+
+                } catch (error) {
+                    console.error(
+                        "Error enviando plantilla desde drawer:",
+                        error
+                    );
+
+                    setTemplatesError(
+                        error?.message ||
+                        "No se pudo enviar la plantilla."
+                    );
+
+                    // Si falló, quitamos igualmente el mensaje temporal
+                    setMensajes((prev) =>
+                        prev.filter(
+                            (mensaje) => mensaje.id !== optimisticId
+                        )
+                    );
+
+                    setSendingTemplate(false);
+
+                    cargar({ markRead: false }).catch(() => {});
+
+                }
+            }
+
+
 
     if (!open) return null;
 
