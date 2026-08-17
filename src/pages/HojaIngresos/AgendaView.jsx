@@ -67,7 +67,7 @@ const ASESOR_PALETTE = [
 ];
 
 const CATEGORIAS_SERVICIO = [
-  { id: "mantenimientos", label: "Mantenimientos", keywords: ["manten"], icon: Wrench, },
+  { id: "mantenimientos", label: "Mantenimientos", keywords: ["manten", "mtto"], icon: Wrench, },
   { id: "reparaciones", label: "Reparaciones", keywords: ["repar"], icon: Hammer, },
   { id: "diagnosticos", label: "Diagnósticos", keywords: ["diagn"], icon: Search, },
   { id: "campanas", label: "Campañas", keywords: ["campa"], icon: Megaphone, },
