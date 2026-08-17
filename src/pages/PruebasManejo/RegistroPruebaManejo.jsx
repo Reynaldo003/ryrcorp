@@ -1,4 +1,5 @@
 // src/pages/PruebasManejo/RegistroPruebaManejo.jsx
+import { useVirtualRows } from "../../lib/useVirtualRows";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
     Plus, Search, X, Save, User, CarFront, CalendarDays, ArrowUpDown,
@@ -961,6 +962,13 @@ export default function RegistroPruebaManejo() {
         });
     }, [filtered, sort]);
 
+    const { containerRef, onScroll, resetScroll, visible, topOffset, bottomOffset } =
+        useVirtualRows({ items: sorted });
+
+    useEffect(() => {
+        resetScroll();
+    }, [filters, sort, resetScroll]);
+
     const openCreate = (fechaHoraDefault = "") => {
         setTouchedSave(false); setMode("create");
         setDraft({
@@ -1126,7 +1134,7 @@ export default function RegistroPruebaManejo() {
             row.folio_salida || "—",
             row.asistencia ? "Sí" : "No",
             row.comentarios_cliente || "—",
-            Array.isArray(row.evidencias) ? row.evidencias.length : 0,
+            row.evidencias_count || 0,
         ]));
 
         const ws = XLSX.utils.aoa_to_sheet([...titulo, ...fechaGen, ...filtroFila, ...totalFila, [[]], ...encabezados, ...filas]);
@@ -1221,9 +1229,9 @@ export default function RegistroPruebaManejo() {
             {vistaActiva === "tabla" && (
                 <>
                     <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
-                        <div className="overflow-auto">
+                        <div className="h-[calc(100vh-230px)] overflow-auto" ref={containerRef} onScroll={onScroll}>
                             <table className="min-w-full text-left text-sm">
-                                <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
+                                <thead className="sticky top-0 z-10 font-vw-header text-xs bg-[#131E5C] text-white border border-black">
                                     <tr>
                                         <th className="px-4 py-3">
                                             <button type="button" onClick={() => toggleSort("fecha_hora_cita")} className="inline-flex items-center gap-1 text-xs font-bold">
@@ -1247,10 +1255,11 @@ export default function RegistroPruebaManejo() {
                                         <>{Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}</>
                                     ) : (
                                         <>
-                                            {sorted.map((row) => {
+                                            {topOffset > 0 && <tr style={{ height: topOffset }} />}
+                                            {visible.map((row) => {
                                                 const clienteNombre = row?.cliente?.nombre || "—";
                                                 return (
-                                                    <tr key={row.id} onDoubleClick={() => openEdit(row)} onContextMenu={(e) => onRowContextMenu(e, row)} className="cursor-pointer hover:bg-white/[0.04]" title="Doble clic para editar">
+                                                    <tr key={row.id} style={{ height: 46 }} onDoubleClick={() => openEdit(row)} onContextMenu={(e) => onRowContextMenu(e, row)} className="cursor-pointer hover:bg-white/[0.04]" title="Doble clic para editar">
                                                         <td className="px-4 py-3 text-[#131E5C]">{row.fecha_hora_cita ? toDTLocal(row.fecha_hora_cita).replace("T", " ") : "—"}</td>
                                                         <td className="px-4 py-3 font-semibold text-[#131E5C]">{row.agencia || "—"}</td>
                                                         <td className="px-4 py-3 text-[#131E5C]"><div className="font-bold">{clienteNombre}</div></td>
@@ -1261,6 +1270,7 @@ export default function RegistroPruebaManejo() {
                                                     </tr>
                                                 );
                                             })}
+                                            {bottomOffset > 0 && <tr style={{ height: bottomOffset }} />}
                                             {sorted.length === 0 ? (
                                                 <tr><td colSpan={8} className="px-4 py-10 text-center text-[#131E5C]">No hay resultados con esos filtros.</td></tr>
                                             ) : null}

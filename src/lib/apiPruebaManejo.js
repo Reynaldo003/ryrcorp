@@ -1,8 +1,26 @@
 // src/lib/apiPruebaManejo.js
-import { http } from "./apiClient";
+import { buildQuery, http } from "./apiClient";
+
+async function listarTodo(params = {}) {
+  let next = `/citas/api/pruebas-manejo/${buildQuery(params)}`;
+  const resultados = [];
+  const visitadas = new Set();
+
+  while (next && !visitadas.has(next)) {
+    visitadas.add(next);
+    const data = await http(next);
+    if (Array.isArray(data)) return resultados.concat(data);
+    resultados.push(...(Array.isArray(data?.results) ? data.results : []));
+    next = data?.next
+      ? String(data.next).replace(/^https?:\/\/[^/]+/, "")
+      : null;
+  }
+
+  return resultados;
+}
 
 export const apiPruebaManejo = {
-  list: () => http("/citas/api/pruebas-manejo/"),
+  list: (params = {}) => listarTodo(params),
   get: (id) => http(`/citas/api/pruebas-manejo/${id}/`),
 
   create: (payload) =>

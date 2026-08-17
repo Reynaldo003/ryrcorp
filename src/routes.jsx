@@ -32,9 +32,11 @@ import DigitalesContacto from "./pages/Digitales/DigitalesContacto";
 import DigitalesBandeja from "./pages/Digitales/DigitalesBandeja";
 import DigitalesPlantillas from "./pages/Plantillas/Plantillas";
 
-import CitasLayout from "./pages/Citas/CitasLayout";
-import CitasOverView from "./pages/Citas/CitasOverView";
-import RegistroCitas from "./pages/Citas/RegistroCitas";
+import { Loader2 } from "lucide-react";
+
+const CitasLayout = React.lazy(() => import("./pages/Citas/CitasLayout"));
+const CitasOverView = React.lazy(() => import("./pages/Citas/CitasOverView"));
+const RegistroCitas = React.lazy(() => import("./pages/Citas/RegistroCitas"));
 
 import CitasPisoLayout from "./pages/CitasPiso/CitasPisoLayout";
 import CitasPisoOverView from "./pages/CitasPiso/CitasPisoOverView";
@@ -455,7 +457,9 @@ export const router = createBrowserRouter(
                                                 "CRM_COORDINADOR_DIGITAL",
                                             ]}
                                         >
+                                        <React.Suspense fallback={<div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-[#131E5C]" /></div>}>
                                             <CitasLayout />
+                                        </React.Suspense>
                                         </RequirePermission>
                                     ),
                                     children: [

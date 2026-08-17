@@ -38,8 +38,8 @@ import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
-import * as XLSX from "xlsx";
 import { FileDown } from "lucide-react";
+import { useVirtualRows } from "../../lib/useVirtualRows";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -1365,6 +1365,15 @@ export default function RegistroCitas() {
         });
     }, [filtered, sort]);
 
+    const {
+    containerRef,
+    onScroll,
+    visible,
+    topOffset,
+    bottomOffset,
+    } = useVirtualRows({ items: sorted, rowHeight: 52 });
+
+
     const openCreate = (dateOverride, hourOverride) => {
         setTouchedSave(false);
         setMode("create");
@@ -1518,7 +1527,8 @@ export default function RegistroCitas() {
             ))}
         </div>
     );
-    const exportarExcel = () => {
+    const exportarExcel = async () => {
+        const XLSX = await import("xlsx");
         const titulo = [["REPORTE DE CITAS — GRUPO AUTOMOTRIZ R&R"]];
         const fechaGen = [[`Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}`]];
         const filtrosActivos = [];
@@ -1722,7 +1732,7 @@ export default function RegistroCitas() {
                 <>
                     <MobileCardList rows={sorted} loading={loadingList} onEdit={openEdit} onContext={onRowContextMenu} onToggleAsistencia={toggleAsistenciaInline} updatingInline={updatingInline} />
                     <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
-                        <div className="overflow-auto">
+                        <div ref={containerRef} onScroll={onScroll} className="overflow-auto" style={{ maxHeight: "70vh" }}>
                             <table className="min-w-full text-left text-sm">
                                 <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
                                     <tr>
@@ -1740,7 +1750,7 @@ export default function RegistroCitas() {
                                 <tbody className="divide-y divide-black/30">
                                     {loadingList ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />) : (
                                         <>
-                                            {sorted.map((row) => {
+                                            {visible.map((row) => {
                                                 const isUpdating = !!updatingInline[row.id];
                                                 return (
                                                     <tr key={row.id} onDoubleClick={() => openEdit(row)} onContextMenu={(e) => onRowContextMenu(e, row)} className="cursor-pointer hover:bg-white/[0.04]" title="Doble clic para editar">
@@ -1762,6 +1772,8 @@ export default function RegistroCitas() {
                                                 );
                                             })}
                                             {sorted.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-[#131E5C]">No hay resultados con esos filtros.</td></tr>}
+                                            {topOffset > 0 && <tr style={{ height: topOffset }} />}
+                                            {bottomOffset > 0 && <tr style={{ height: bottomOffset }} />}
                                         </>
                                     )}
                                 </tbody>

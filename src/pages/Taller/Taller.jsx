@@ -1839,9 +1839,14 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 left-0 z-40 w-1.5 cursor-ew-resize bg-black/5 opacity-0 transition hover:bg-black/15 group-hover:opacity-100"
+                className="absolute inset-y-0 left-0 z-40 flex w-4 cursor-ew-resize items-center justify-start"
                 title="Modificar hora de inicio"
-            />
+            >
+                <span
+                    className="h-0 w-0 border-y-[9px] border-y-transparent border-r-[9px] transition group-hover:brightness-75"
+                    style={{ borderRightColor: visualStyle.borderColor }}
+                />
+            </button>
 
             <div className="flex min-w-0 items-center justify-between gap-2">
                 <span className="truncate text-[11px] font-black">
@@ -1885,9 +1890,14 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 right-0 z-40 w-1.5 cursor-ew-resize bg-black/5 opacity-0 transition hover:bg-black/15"
+                className="absolute inset-y-0 right-0 z-40 flex w-4 cursor-ew-resize items-center justify-end"
                 title="Modificar hora de fin"
-            />
+            >
+                <span
+                    className="h-0 w-0 border-y-[9px] border-y-transparent border-l-[9px] transition group-hover:brightness-75"
+                    style={{ borderLeftColor: visualStyle.borderColor }}
+                />
+            </button>
         </div>
     );
 }
