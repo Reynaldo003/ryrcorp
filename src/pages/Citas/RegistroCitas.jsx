@@ -1202,7 +1202,7 @@ export default function RegistroCitas() {
 
     const FUENTE = ["Facebook", "WhatsApp", "VW-Concesionarios", "Llamada Entrante", "Prospeccion", "Cartera", "Eternizacion de credito", "Remarketing", "Base de Datos", "Ubicacion"];
     const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter", "CRAFTER ELITE", "CRAFTER URBAN", "CRAFTER ELEMENTAL", "CRAFTER INSPIRE"];
-    const TIPO_CITA = ["Tradicional", "Digital", "Evento", "Remarketing"];
+    const TIPO_CITA = ["Tradicional", "Digital", "Evento", "Evento Taigun", "Remarketing"];
     const MOTIVOS_CITA = [
         "Prueba de Manejo",
         "Avalúo de auto usado",

@@ -21,6 +21,7 @@
     "echarts-for-react": "^3.0.6",
     "emoji-picker-react": "^4.18.0",
     "exceljs": "^4.4.0",
+    "flags": "^4.3.0",
     "html2canvas-pro": "^2.2.4",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

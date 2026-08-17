@@ -501,7 +501,7 @@ function VistaTabla({ datos }) {
       <table className="min-w-full text-sm">
         <thead>
           <tr style={{ backgroundColor: NAVY }} className="text-white text-left">
-            {["Campaña", "Dealer", "Canal", "Estado", "Año", "Mes", "Alcance", "Impresiones", "Gasto ($)", "Resultados"].map(h => (
+            {["Campaña", "Dealer", "Canal", "Estado", "Año", "Mes", "Alcance", "Impresiones", "Gasto ($)", "Conversaciones Iniciadas por Mensajes"].map(h => (
               <th key={h} className={`px-4 py-3 font-medium ${["Alcance", "Impresiones", "Gasto ($)", "Resultados"].includes(h) ? "text-right" : ""}`}>{h}</th>
             ))}
           </tr>

@@ -6,7 +6,7 @@ import {
     obtenerNumerosWhatsAppUsuario,
     obtenerEtiquetaLinea,
 } from "../../config/lineasWhatsApp";
-import { useEffect, useMemo, useRef, useState, useDeferredValue } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import {
     ArrowLeft,
@@ -58,10 +58,13 @@ import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 
 const BRAND_BLUE = "#131E5C";
 const QUICK_BUBBLES_KEY = "digitales_quick_bubbles_global";
-const CHAT_PAGE_SIZE = 24;
-const CHAT_UPDATES_LIMIT = 80;
+const CHAT_PAGE_SIZE = 8;
+const CHAT_LIST_PAGE_SIZE = 30;
+const CHAT_LIST_DAYS = 3;
+const CHAT_UPDATES_LIMIT = 40;
 const CHAT_CACHE_LIMIT = 80;
-const PREFETCH_CHAT_LIMIT = 12;
+const CHAT_UPDATES_INTERVAL = 2500;
+const CHAT_SEARCH_DELAY = 300;
 const MAX_RECORDING_SECONDS = 300;
 
 const DEALERS = [
@@ -81,7 +84,7 @@ const VEHICULOS = [
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
 const ESTADOS_PROSPECTO = ["Descalificado", "Contactado", "Sin Respuesta"];
-const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable",""];
+const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable", ""];
 
 const BURO_OPTIONS = [
     { value: "", label: "— Selecciona —" },
@@ -176,7 +179,7 @@ function getStatusDotColor(estado) {
     const v = String(estado || "").toLowerCase();
     if (v === "descalificado") return "#3B82F6";
     if (v === "sin respuesta" || v === "sin_respuesta" || v === "") return "#EF4444";
-    return "#22C55E"; 
+    return "#22C55E";
 }
 
 const ASESORES_VISUALES = {
@@ -256,9 +259,9 @@ function obtenerPermisosUsuario(user) {
             typeof permiso === "string"
                 ? permiso
                 : permiso?.codigo ||
-                  permiso?.nombre ||
-                  permiso?.name ||
-                  ""
+                permiso?.nombre ||
+                permiso?.name ||
+                ""
         )
     );
 }
@@ -367,32 +370,41 @@ function getPautaOrigenFromMessage(message = {}) {
     };
 }
 
-function normalizeProspectoToChat(p) {
+function normalizarResumenChat(chat, numeroLinea) {
+    const telefono = normalizaTelefonoMx(chat?.telefono || "");
     return {
-        id: `prospecto-${p.id || p.telefono}`,
-        prospectoId: p.id,
-        telefono: normalizaTelefonoMx(p.telefono || ""),
-        nombre: p.nombre || "Prospecto",
-        agencia: p.agencia || "",
-        linea: p.business || "",
-        estado: p.estado || "",
-        asesor_digital: p.asesor_digital || "",
-        usuario_crm_asignado: p.usuario_crm_asignado || "",
-        unread: 0,
-        last: { text: p.comentarios || "Sin historial reciente", time: "" },
-        isOnlyProspecto: true,
+        id: chat?.id || `${numeroLinea}-${telefono}`,
+        numero_asesor: normalizaTelefonoMx(chat?.numero_asesor || chat?.numero_destino || chat?.phone_number || numeroLinea),
+        telefono, nombre: chat?.nombre || "Prospecto", agencia: chat?.agencia || "", linea: chat?.linea || "", estado: chat?.estado || "",
+        asesor_digital: chat?.asesor_digital || "", usuario_crm_asignado: chat?.usuario_crm_asignado || "", ia_estado: chat?.ia_estado || null,
+        ia_pausada: Boolean(chat?.ia_pausada), ia_bloqueos: Array.isArray(chat?.ia_bloqueos) ? chat.ia_bloqueos : [], unread: Number(chat?.unread || 0),
+        last: { text: chat?.last_text || "", time: chat?.last_time || "", timestamp: chat?.last_message_at || "" },
+        whatsapp_bloqueado: Boolean(chat?.whatsapp_bloqueado), whatsapp_bloqueado_motivo: chat?.whatsapp_bloqueado_motivo || "",
     };
 }
 
-function mergeChatsConProspectos(chats, prospectos) {
-    const map = new Map();
-    for (const chat of chats || []) { if (chat.telefono) map.set(chat.telefono, chat); }
-    for (const p of prospectos || []) {
-        const chat = normalizeProspectoToChat(p);
-        if (!chat.telefono) continue;
-        if (!map.has(chat.telefono)) map.set(chat.telefono, chat);
+function mezclarPaginasChats(actuales, nuevos) {
+    const salida = [], indices = new Map();
+    for (const chat of [...(actuales || []), ...(nuevos || [])]) {
+        const telefono = normalizaTelefonoMx(chat?.telefono);
+        if (!telefono) continue;
+        if (!indices.has(telefono)) { indices.set(telefono, salida.length); salida.push({ ...chat, telefono }); continue; }
+        const indice = indices.get(telefono);
+        salida[indice] = { ...salida[indice], ...chat, last: { ...salida[indice]?.last, ...chat?.last } };
     }
-    return Array.from(map.values());
+    return salida;
+}
+
+async function obtenerContactoPaginado(tel, { limit = 8, before_id = "", mark_read = 1, incluir_contexto = 1, numero_asesor = "" } = {}) {
+    const query = new URLSearchParams();
+    query.set("tel", normalizaTelefonoMx(tel));
+    query.set("limit", String(limit));
+    query.set("mark_read", String(mark_read));
+    query.set("incluir_contexto", String(incluir_contexto));
+    if (incluir_contexto) query.set("ligero", "1");
+    if (before_id) query.set("before_id", String(before_id));
+    if (numero_asesor) query.set("numero_asesor", normalizaTelefonoMx(numero_asesor));
+    return api.get(`/digitales/contacto/?${query.toString()}`);
 }
 
 function normalizaTelefonoMx(tel) {
@@ -2105,10 +2117,10 @@ export default function DigitalesContacto() {
     const [q, setQ] = useState("");
     const [chatFilter, setChatFilter] = useState("todos");
     const [loadingList, setLoadingList] = useState(false);
+    const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+    const [chatsHasMore, setChatsHasMore] = useState(true);
     const [loadingChat, setLoadingChat] = useState(false);
     const [chats, setChats] = useState([]);
-    const [prospectosIndex, setProspectosIndex] = useState([]);
-    const deferredQ = useDeferredValue(q);
     const [activeTel, setActiveTel] = useState("");
     const [prospecto, setProspecto] = useState(null);
     const [iaEstado, setIaEstado] = useState(null);
@@ -2191,6 +2203,9 @@ export default function DigitalesContacto() {
     const didInitSelection = useRef(false);
     const numeroAsesorActivoRef = useRef("");
     const chatsRequestRef = useRef(0);
+    const chatListScrollRef = useRef(null);
+    const qRef = useRef("");
+    const chatsPaginationRef = useRef({ query: "", scope: "recientes", before: "", before_id: "", hasMore: true });
     const emojiRef = useRef(null);
     const fileInputRef = useRef(null);
     const inputRef = useRef(null);
@@ -2206,7 +2221,6 @@ export default function DigitalesContacto() {
     const chatRequestRef = useRef(0);
     const loadingOlderRef = useRef(false);
     const mensajesCacheRef = useRef(new Map());
-    const prefetchedChatsRef = useRef(new Set());
 
     const templateMap = useMemo(() => {
         const map = new Map();
@@ -2282,22 +2296,16 @@ export default function DigitalesContacto() {
     }, [prospecto, activeChat]);
 
     const filteredChats = useMemo(() => {
-        const query = normalizeText(deferredQ);
-        const queryPhone = normalizaTelefonoMx(deferredQ);
-        const base = query ? mergeChatsConProspectos(chats, prospectosIndex) : chats;
-        const filterDef = CHAT_FILTERS.find(f => f.key === chatFilter);
-        return base.filter(chat => {
+        const filterDef = CHAT_FILTERS.find((item) => item.key === chatFilter);
+        return chats.filter((chat) => {
             if (chatFilter === "no_leidos" && !(chat.unread > 0)) return false;
-            if (filterDef?.estados) { const en = normalizeText(chat.estado); if (!filterDef.estados.some(e => en.includes(normalizeText(e)))) return false; }
-            if (!query) return true;
-            return normalizeText(chat.nombre).includes(query) ||
-                normalizaTelefonoMx(chat.telefono).includes(queryPhone || query) ||
-                normalizeText(chat.agencia).includes(query) ||
-                normalizeText(chat.linea).includes(query) ||
-                normalizeText(chat.estado).includes(query) ||
-                normalizeText(chat.last?.text).includes(query);
+            if (filterDef?.estados) {
+                const estado = normalizeText(chat.estado);
+                if (!filterDef.estados.some((item) => estado.includes(normalizeText(item)))) return false;
+            }
+            return true;
         });
-    }, [chats, prospectosIndex, deferredQ, chatFilter]);
+    }, [chats, chatFilter]);
 
     const composerHint = useMemo(() => {
         if (!activeTel) return "Selecciona un chat para escribir…";
@@ -2342,6 +2350,9 @@ export default function DigitalesContacto() {
         setNumeroAsesorActivo(numero);
         setActiveTel("");
         setChats([]);
+        setChatsHasMore(true);
+        setLoadingMoreChats(false);
+        chatsPaginationRef.current = { query: "", scope: "recientes", before: "", before_id: "", hasMore: true };
         setProspecto(null);
         setMensajes([]);
         setIaEstado(null);
@@ -2349,7 +2360,6 @@ export default function DigitalesContacto() {
         setOldestMessageId(null);
 
         mensajesCacheRef.current.clear();
-        prefetchedChatsRef.current.clear();
 
         localStorage.setItem(
             "digitales_numero_asesor_activo",
@@ -2421,212 +2431,63 @@ export default function DigitalesContacto() {
         });
     }
 
-    function pintarChatDesdeCache(tel52) {
-        const key = normalizaTelefonoMx(tel52);
-        const cached = mensajesCacheRef.current.get(key);
-        if (!cached) return false;
-        setProspecto(cached.prospecto || null);
-        setIaEstado(cached.ia_estado || null);
-        setMensajes(cached.mensajes || []);
-        setChatHasMore(Boolean(cached.paginacion?.has_more));
-        setOldestMessageId(cached.paginacion?.oldest_id || cached.mensajes?.[0]?.id || null);
-        shouldStickToBottomRef.current = true;
-        requestAnimationFrame(() => { endRef.current?.scrollIntoView({ behavior: "auto" }); });
-        return true;
-    }
+    async function refreshChats({ numeroAsesor = numeroAsesorActivoRef.current, reset = true, query = qRef.current } = {}) {
+        const numeroLinea = normalizaTelefonoMx(numeroAsesor);
+        if (!numeroLinea) return [];
 
-    async function prefetchChat(tel52) {
-        const target = normalizaTelefonoMx(tel52);
-        if (!target || target === activeTelRef.current) return;
-        if (mensajesCacheRef.current.has(target)) return;
-        if (prefetchedChatsRef.current.has(target)) return;
-        prefetchedChatsRef.current.add(target);
-        try {
-            const data = await api.digitalesContacto(target, {
-                limit: PREFETCH_CHAT_LIMIT,
-                mark_read: 0,
-                numero_asesor: numeroAsesorActivo,
-            });
-            guardarChatEnCache(target, data);
-        } catch { prefetchedChatsRef.current.delete(target); }
-    }
+        const busqueda = String(query || "").trim();
+        const actual = chatsPaginationRef.current;
+        if (!reset && !actual.hasMore) return [];
 
-    async function refreshChats({
-        numeroAsesor =
-        numeroAsesorActivoRef.current,
-        allowEmpty = false,
-    } = {}) {
-        const numeroLinea =
-            normalizaTelefonoMx(numeroAsesor);
+        const scope = reset ? (busqueda ? "busqueda" : "recientes") : (actual.scope || (busqueda ? "busqueda" : "recientes"));
+        const before = reset ? "" : (actual.before || "");
+        const beforeId = reset ? "" : (actual.before_id || "");
+        const requestId = chatsRequestRef.current + 1;
+        chatsRequestRef.current = requestId;
 
-        /*
-         * No vaciamos la lista cuando todavía
-         * no se ha inicializado la línea.
-         */
-        if (!numeroLinea) {
-            return;
-        }
-
-        const requestId =
-            chatsRequestRef.current + 1;
-
-        chatsRequestRef.current =
-            requestId;
-
-        const response =
-            await api.digitalesChats({
-                numero_asesor:
-                    numeroLinea,
-            });
-
-        /*
-         * Ignora respuestas anteriores si otra
-         * petición más reciente ya fue enviada.
-         */
-        if (
-            requestId !==
-            chatsRequestRef.current
-        ) {
-            return;
-        }
-
-        /*
-         * Ignora respuestas correspondientes a
-         * otra línea que ya no está seleccionada.
-         */
-        if (
-            numeroAsesorActivoRef.current !==
-            numeroLinea
-        ) {
-            return;
-        }
-
-        let items;
-
-        if (Array.isArray(response)) {
-            items = response;
-        } else if (
-            Array.isArray(response?.results)
-        ) {
-            items = response.results;
-        } else {
-            /*
-             * Una respuesta inválida no debe
-             * convertirse silenciosamente en [].
-             */
-            throw new Error(
-                "La API de chats devolvió una respuesta inválida."
-            );
-        }
-
-        const normalized = items
-            .map((chat) => {
-                const telefono =
-                    normalizaTelefonoMx(
-                        chat?.telefono || ""
-                    );
-
-                return {
-                    id:
-                        chat?.id ||
-                        `${numeroLinea}-${telefono}`,
-
-                    numero_asesor:
-                        normalizaTelefonoMx(
-                            chat?.numero_asesor ||
-                            chat?.numero_destino ||
-                            chat?.phone_number ||
-                            numeroLinea
-                        ),
-
-                    telefono,
-                    nombre:
-                        chat?.nombre ||
-                        "Prospecto",
-
-                    agencia:
-                        chat?.agencia || "",
-
-                    linea:
-                        chat?.linea || "",
-
-                    estado:
-                        chat?.estado || "",
-
-                    asesor_digital:
-                        chat?.asesor_digital || "",
-
-                    usuario_crm_asignado:
-                        chat?.usuario_crm_asignado || "",
-
-                    ia_estado:
-                        chat?.ia_estado || null,
-
-                    ia_pausada:
-                        Boolean(
-                            chat?.ia_pausada
-                        ),
-
-                    ia_bloqueos:
-                        Array.isArray(
-                            chat?.ia_bloqueos
-                        )
-                            ? chat.ia_bloqueos
-                            : [],
-
-                    unread:
-                        Number(
-                            chat?.unread || 0
-                        ),
-
-                    last: {
-                        text:
-                            chat?.last_text || "",
-
-                        time:
-                            chat?.last_time || "",
-
-                        timestamp:
-                            chat?.last_message_at ||
-                            "",
-                    },
-
-                    whatsapp_bloqueado:
-                        Boolean(
-                            chat?.whatsapp_bloqueado
-                        ),
-
-                    whatsapp_bloqueado_motivo:
-                        chat
-                            ?.whatsapp_bloqueado_motivo ||
-                        "",
-                };
-            })
-            .filter(
-                (chat) =>
-                    Boolean(chat.telefono)
-            );
-
-        setChats((previous) => {
-            if (
-                !allowEmpty &&
-                normalized.length === 0 &&
-                previous.length > 0
-            ) {
-                console.warn(
-                    "La actualización de chats llegó vacía; " +
-                    "se conserva la lista anterior.",
-                    {
-                        numeroLinea,
-                        requestId,
-                    }
-                );
-
-                return previous;
-            }
-
-            return normalized;
+        const response = await api.digitalesChats({
+            numero_asesor: numeroLinea, paginado: 1, limit: CHAT_LIST_PAGE_SIZE, dias: CHAT_LIST_DAYS,
+            q: busqueda, scope, before, before_id: beforeId,
         });
+
+        if (requestId !== chatsRequestRef.current || numeroAsesorActivoRef.current !== numeroLinea) return [];
+        const items = Array.isArray(response?.results) ? response.results : Array.isArray(response) ? response : [];
+        const normalizados = items.map((chat) => normalizarResumenChat(chat, numeroLinea)).filter((chat) => Boolean(chat.telefono));
+        if (reset) setChats(normalizados);
+        else setChats((actuales) => mezclarPaginasChats(actuales, normalizados));
+
+        const paginacion = response?.paginacion || {};
+        const tieneMasEnScope = Boolean(paginacion.has_more);
+        const siguienteScope = tieneMasEnScope ? scope : (paginacion.next_scope || "");
+        const tieneMas = Boolean(tieneMasEnScope || siguienteScope);
+        chatsPaginationRef.current = {
+            query: busqueda, scope: siguienteScope || scope, before: paginacion.before || "",
+            before_id: paginacion.before_id || "", hasMore: tieneMas,
+        };
+        setChatsHasMore(tieneMas);
+
+        if (reset && !busqueda && normalizados.length === 0 && siguienteScope === "historico") {
+            return refreshChats({ numeroAsesor: numeroLinea, reset: false, query: "" });
+        }
+        return normalizados;
+    }
+
+    async function cargarMasChats() {
+        if (loadingList || loadingMoreChats || !chatsHasMore) return;
+        setLoadingMoreChats(true);
+        try {
+            await refreshChats({ numeroAsesor: numeroAsesorActivoRef.current, reset: false, query: chatsPaginationRef.current.query });
+        } catch (error) {
+            console.error("Error cargando más chats:", error);
+        } finally {
+            setLoadingMoreChats(false);
+        }
+    }
+
+    function onChatsScroll(event) {
+        const element = event.currentTarget;
+        const distanciaAlFinal = element.scrollHeight - element.scrollTop - element.clientHeight;
+        if (distanciaAlFinal <= 250) cargarMasChats();
     }
 
     async function cargarChatInicial(tel52) {
@@ -2634,115 +2495,76 @@ export default function DigitalesContacto() {
         if (!target) return;
         const requestId = chatRequestRef.current + 1;
         chatRequestRef.current = requestId;
-        const hadCache = pintarChatDesdeCache(target);
-        setLoadingChat(!hadCache);
-        if (!hadCache) { setProspecto(null); setIaEstado(null); setMensajes([]); setChatHasMore(false); setOldestMessageId(null); }
+
+        setLoadingChat(true);
+        setProspecto(null);
+        setIaEstado(null);
+        setMensajes([]);
+        setChatHasMore(false);
+        setOldestMessageId(null);
         shouldStickToBottomRef.current = true;
+
         try {
-            const data = await api.digitalesContacto(target, {
-                limit: CHAT_PAGE_SIZE,
-                mark_read: 1,
-                numero_asesor: numeroAsesorActivo,
+            const data = await obtenerContactoPaginado(target, {
+                limit: CHAT_PAGE_SIZE, mark_read: 1, incluir_contexto: 1, numero_asesor: numeroAsesorActivoRef.current,
             });
             if (chatRequestRef.current !== requestId || activeTelRef.current !== target) return;
-            const items = (Array.isArray(data.mensajes) ? data.mensajes : []).map(normalizeMessage);
-            const paginacion = data.paginacion || {};
-            guardarChatEnCache(target, data);
-            setProspecto(data.prospecto || null);
-            setIaEstado(data.ia_estado || null);
+
+            const items = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
+            const paginacion = data?.paginacion || {};
+            setProspecto(data?.prospecto || null);
+            setIaEstado(data?.ia_estado || null);
             setMensajes(items);
             setChatHasMore(Boolean(paginacion.has_more));
             setOldestMessageId(paginacion.oldest_id || items[0]?.id || null);
-            if (!isDirectChatMode) await refreshChats().catch(() => { });
-            requestAnimationFrame(() => { endRef.current?.scrollIntoView({ behavior: "auto" }); });
+            setChats((actuales) => actuales.map((chat) => chat.telefono === target ? { ...chat, unread: 0 } : chat));
+            guardarChatEnCache(target, { ...data, mensajes: items, paginacion });
+
+            requestAnimationFrame(() => {
+                if (activeTelRef.current === target) endRef.current?.scrollIntoView({ behavior: "auto" });
+            });
         } catch (error) {
-            console.error(
-                "Error cargando chat:",
-                error
-            );
-
-            if (
-                chatRequestRef.current !== requestId ||
-                activeTelRef.current !== target
-            ) {
-                return;
-            }
-
-            /*
-             * Conservamos el contenido ya cargado.
-             * Un error de renovación o conexión no debe
-             * hacer desaparecer la conversación.
-             */
-            const cached =
-                mensajesCacheRef.current.get(target);
-
-            if (
-                cached &&
-                Array.isArray(cached.mensajes)
-            ) {
-                setProspecto(
-                    cached.prospecto || null
-                );
-
-                setIaEstado(
-                    cached.ia_estado || null
-                );
-
-                setMensajes(
-                    cached.mensajes
-                );
-
-                setChatHasMore(
-                    Boolean(
-                        cached.paginacion?.has_more
-                    )
-                );
-
-                setOldestMessageId(
-                    cached.paginacion?.oldest_id ||
-                    cached.mensajes?.[0]?.id ||
-                    null
-                );
-            }
-
-            /*
-             * No ejecutamos setMensajes([]).
-             */
+            if (chatRequestRef.current !== requestId || activeTelRef.current !== target) return;
+            console.error("Error cargando conversación:", error);
+            setProspecto(null);
+            setIaEstado(null);
+            setMensajes([]);
+            setChatHasMore(false);
+            setOldestMessageId(null);
+        } finally {
+            if (chatRequestRef.current === requestId && activeTelRef.current === target) setLoadingChat(false);
         }
-        finally { if (chatRequestRef.current === requestId) setLoadingChat(false); }
     }
 
     async function refreshActiveChat(tel52, { forceBottom = false } = {}) {
         const target = normalizaTelefonoMx(tel52 || activeTelRef.current);
         if (!target) return;
-
-        const data = await api.digitalesContacto(target, {
-            limit: CHAT_PAGE_SIZE,
-            mark_read: forceBottom ? 1 : 0,
-            numero_asesor: numeroAsesorActivo,
+        const data = await obtenerContactoPaginado(target, {
+            limit: CHAT_PAGE_SIZE, mark_read: forceBottom ? 1 : 0, incluir_contexto: 1, numero_asesor: numeroAsesorActivoRef.current,
         });
-        const incoming = (Array.isArray(data.mensajes) ? data.mensajes : []).map(normalizeMessage);
-        const paginacion = data.paginacion || {};
+        const incoming = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
+        const paginacion = data?.paginacion || {};
+        guardarChatEnCache(target, { ...data, mensajes: incoming, paginacion });
+        if (activeTelRef.current !== target) return;
 
-        guardarChatEnCache(target, {
-            ...data,
-            mensajes: incoming,
-            paginacion,
-        });
-
-        // Una respuesta tardía nunca debe pintar datos sobre otro chat.
-        if (activeTelRef.current !== target) {
-            if (!isDirectChatMode) await refreshChats().catch(() => { });
-            return;
-        }
-
-        setProspecto(data.prospecto || null);
-        setIaEstado(data.ia_estado || null);
-        setMensajes(prev => mergeMessages(prev.filter(m => !m.local_pending), incoming));
-        setOldestMessageId(prev => prev || paginacion.oldest_id || incoming[0]?.id || null);
-        setChatHasMore(prev => prev || Boolean(paginacion.has_more));
+        setProspecto(data?.prospecto || null);
+        setIaEstado(data?.ia_estado || null);
+        setMensajes((prev) => mergeMessages(prev.filter((m) => !m.local_pending), incoming));
+        setOldestMessageId((prev) => prev || paginacion.oldest_id || incoming[0]?.id || null);
+        setChatHasMore((prev) => prev || Boolean(paginacion.has_more));
         if (forceBottom) shouldStickToBottomRef.current = true;
-        if (!isDirectChatMode) await refreshChats().catch(() => { });
+
+        const ultimo = incoming[incoming.length - 1];
+        if (ultimo) {
+            setChats((actuales) => actuales.map((chat) => chat.telefono === target ? {
+                ...chat, unread: 0,
+                last: {
+                    text: ultimo?.text || chat.last?.text || "",
+                    time: ultimo?.created_at || chat.last?.time || "",
+                    timestamp: ultimo?.created_at || chat.last?.timestamp || "",
+                },
+            } : chat));
+        }
     }
 
     async function pausarIaActiva() {
@@ -2777,38 +2599,32 @@ export default function DigitalesContacto() {
     async function cargarMensajesAnteriores() {
         const target = activeTelRef.current;
         const beforeId = oldestMessageId;
-        if (!target || !chatHasMore || !beforeId || loadingOlderRef.current) return;
+        if (!target || !chatHasMore || !beforeId || loadingOlderRef.current || loadingChat) return;
 
         const container = messagesScrollRef.current;
-        const prevH = container?.scrollHeight || 0;
-        const prevT = container?.scrollTop || 0;
+        const previousHeight = container?.scrollHeight || 0;
+        const previousTop = container?.scrollTop || 0;
 
         try {
             loadingOlderRef.current = true;
             setLoadingOlder(true);
-
-            const data = await api.digitalesContacto(target, {
-                limit: CHAT_PAGE_SIZE,
-                before_id: beforeId,
-                mark_read: 0,
-                numero_asesor: numeroAsesorActivo,
+            const data = await obtenerContactoPaginado(target, {
+                limit: CHAT_PAGE_SIZE, before_id: beforeId, mark_read: 0, incluir_contexto: 0, numero_asesor: numeroAsesorActivoRef.current,
             });
-
             if (activeTelRef.current !== target) return;
 
-            const older = (Array.isArray(data.mensajes) ? data.mensajes : []).map(normalizeMessage);
-            const paginacion = data.paginacion || {};
-
+            const older = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
+            const paginacion = data?.paginacion || {};
             if (older.length) {
-                setMensajes(prev => mergeMessages(older, prev));
+                setMensajes((actuales) => mergeMessages(older, actuales));
                 setOldestMessageId(paginacion.oldest_id || older[0]?.id || beforeId);
             }
-
             setChatHasMore(Boolean(paginacion.has_more));
+
             requestAnimationFrame(() => {
-                const cur = messagesScrollRef.current;
-                if (!cur || activeTelRef.current !== target) return;
-                cur.scrollTop = cur.scrollHeight - prevH + prevT;
+                const current = messagesScrollRef.current;
+                if (!current || activeTelRef.current !== target) return;
+                current.scrollTop = current.scrollHeight - previousHeight + previousTop;
             });
         } catch (error) {
             console.error("Error cargando mensajes anteriores:", error);
@@ -2818,10 +2634,10 @@ export default function DigitalesContacto() {
         }
     }
 
-    function onMessagesScroll(e) {
-        const el = e.currentTarget;
-        shouldStickToBottomRef.current = isNearBottom(el);
-        if (el.scrollTop <= 120) cargarMensajesAnteriores();
+    function onMessagesScroll(event) {
+        const element = event.currentTarget;
+        shouldStickToBottomRef.current = isNearBottom(element);
+        if (element.scrollTop <= 160 && chatHasMore && !loadingOlderRef.current) cargarMensajesAnteriores();
     }
 
     async function cargarPlantillas() {
@@ -3191,22 +3007,23 @@ export default function DigitalesContacto() {
     async function openChatByTel(tel52) {
         const normalized = normalizaTelefonoMx(tel52);
         if (!normalized) return;
+        if (normalized === activeTelRef.current) { setMobileView("chat"); return; }
 
-        if (
-            hasComposerDraft &&
-            draftOwnerTel &&
-            normalized !== draftOwnerTel
-        ) {
-            const ok = window.confirm(
-                "Tienes un mensaje sin enviar en la conversación actual. " +
-                "¿Deseas descartarlo y cambiar de cliente?"
-            );
+        if (hasComposerDraft && draftOwnerTel && normalized !== draftOwnerTel) {
+            const ok = window.confirm("Tienes un mensaje sin enviar en la conversación actual. ¿Deseas descartarlo y cambiar de cliente?");
             if (!ok) return;
             resetComposer();
         }
 
         clearTelQueryIfAny();
+        chatRequestRef.current += 1;
         activeTelRef.current = normalized;
+        setLoadingChat(true);
+        setMensajes([]);
+        setProspecto(null);
+        setIaEstado(null);
+        setChatHasMore(false);
+        setOldestMessageId(null);
         setActiveTel(normalized);
         setMobileView("chat");
         setShowProspectoPanel(false);
@@ -3215,7 +3032,7 @@ export default function DigitalesContacto() {
         setShowQuickBubblesDropdown(false);
         setShowTemplatesDropdown(false);
         localStorage.setItem("last_active_chat", normalized);
-        setChats(prev => prev.map(c => c.telefono === normalized ? { ...c, unread: 0 } : c));
+        setChats((actuales) => actuales.map((chat) => chat.telefono === normalized ? { ...chat, unread: 0 } : chat));
     }
 
     function onPickEmoji(emojiObj) {
@@ -4397,152 +4214,62 @@ export default function DigitalesContacto() {
         return () => { document.removeEventListener("mousedown", cerrar); window.removeEventListener("scroll", cerrar, true); window.removeEventListener("resize", cerrar); };
     }, [chatMenu]);
 
+    useEffect(() => { qRef.current = q; }, [q]);
+
     useEffect(() => {
-        const numeroLinea =
-            normalizaTelefonoMx(
-                numeroAsesorActivo
-            );
+        const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
+        if (!numeroLinea) return;
 
-        if (!numeroLinea) {
-            return;
-        }
+        const onNuevoMensaje = async (event) => {
+            const data = event.detail || {};
+            const telefonoMensaje = normalizaTelefonoMx(data.telefono || data.wa_id || data.from || data.numero_cliente || "");
+            const lineaEvento = normalizaTelefonoMx(data.numero_asesor || data.numero_destino || "");
+            if (lineaEvento && lineaEvento !== numeroLinea) return;
 
-        const onNuevoMensaje =
-            async (event) => {
-                const data =
-                    event.detail || {};
+            if (telefonoMensaje && telefonoMensaje === activeTelRef.current) {
+                const shouldFollow = isNearBottom(messagesScrollRef.current);
+                await refreshActiveChat(telefonoMensaje, { forceBottom: shouldFollow }).catch((error) => {
+                    console.error("No se pudo actualizar el chat activo:", error);
+                });
+                return;
+            }
 
-                const telefonoMensaje =
-                    normalizaTelefonoMx(
-                        data.telefono ||
-                        data.wa_id ||
-                        data.from ||
-                        data.numero_cliente ||
-                        ""
-                    );
-
-                /*
-                 * Ignora eventos que indiquen
-                 * explícitamente otra línea.
-                 */
-                const lineaEvento =
-                    normalizaTelefonoMx(
-                        data.numero_asesor ||
-                        data.numero_destino ||
-                        ""
-                    );
-
-                if (
-                    lineaEvento &&
-                    lineaEvento !== numeroLinea
-                ) {
-                    return;
-                }
-
-                if (
-                    telefonoMensaje &&
-                    telefonoMensaje ===
-                    activeTelRef.current
-                ) {
-                    const shouldFollow =
-                        isNearBottom(
-                            messagesScrollRef.current
-                        );
-
-                    await refreshActiveChat(
-                        telefonoMensaje,
-                        {
-                            forceBottom:
-                                shouldFollow,
-                        }
-                    ).catch((error) => {
-                        console.error(
-                            "No se pudo actualizar el chat activo:",
-                            error
-                        );
-                    });
-
-                    return;
-                }
-
-                if (!isDirectChatMode) {
-                    await refreshChats({
-                        numeroAsesor:
-                            numeroLinea,
-                    }).catch((error) => {
-                        console.error(
-                            "No se pudo actualizar la lista por nuevo mensaje:",
-                            error
-                        );
-                    });
-                }
-            };
-
-        window.addEventListener(
-            "whatsapp:nuevo-mensaje",
-            onNuevoMensaje
-        );
-
-        return () => {
-            window.removeEventListener(
-                "whatsapp:nuevo-mensaje",
-                onNuevoMensaje
-            );
+            if (!isDirectChatMode) {
+                await refreshChats({ numeroAsesor: numeroLinea, reset: true, query: qRef.current }).catch((error) => {
+                    console.error("No se pudo actualizar la lista por nuevo mensaje:", error);
+                });
+            }
         };
-    }, [
-        isDirectChatMode,
-        numeroAsesorActivo,
-    ]);
+
+        window.addEventListener("whatsapp:nuevo-mensaje", onNuevoMensaje);
+        return () => window.removeEventListener("whatsapp:nuevo-mensaje", onNuevoMensaje);
+    }, [isDirectChatMode, numeroAsesorActivo]);
 
     useEffect(() => {
-        let ignore = false;
+        let ignore = false, timer = null;
+        if (isDirectChatMode) { setLoadingList(false); return () => { ignore = true; }; }
+        if (!numeroAsesorActivo) { setChats([]); setLoadingList(false); return () => { ignore = true; }; }
 
-        if (isDirectChatMode) {
-            setLoadingList(false);
-
-            return () => {
-                ignore = true;
-            };
-        }
-
-        if (!numeroAsesorActivo) {
-            return () => {
-                ignore = true;
-            };
-        }
-
-        (async () => {
+        const delay = q.trim() ? CHAT_SEARCH_DELAY : 0;
+        timer = window.setTimeout(async () => {
             try {
                 setLoadingList(true);
-
-                await refreshChats({
-                    numeroAsesor:
-                        numeroAsesorActivo,
-                    allowEmpty: true,
-                });
+                setChats([]);
+                setChatsHasMore(true);
+                chatsPaginationRef.current = { query: q.trim(), scope: q.trim() ? "busqueda" : "recientes", before: "", before_id: "", hasMore: true };
+                await refreshChats({ numeroAsesor: numeroAsesorActivo, reset: true, query: q.trim() });
             } catch (error) {
-                console.error(
-                    "No se pudo actualizar la lista de chats:",
-                    error
-                );
+                if (!ignore) console.error("No se pudo cargar la lista de chats:", error);
             } finally {
-                if (!ignore) {
-                    setLoadingList(false);
-                }
+                if (!ignore) setLoadingList(false);
             }
-        })();
+        }, delay);
 
-        return () => {
-            ignore = true;
-        };
-    }, [
-        isDirectChatMode,
-        numeroAsesorActivo,
-    ]);
+        return () => { ignore = true; if (timer) window.clearTimeout(timer); };
+    }, [isDirectChatMode, numeroAsesorActivo, q]);
 
     useEffect(() => {
         if (didInitSelection.current) return;
-
         if (tel) {
             didInitSelection.current = true;
             activeTelRef.current = tel;
@@ -4551,13 +4278,9 @@ export default function DigitalesContacto() {
             localStorage.setItem("last_active_chat", tel);
             return;
         }
-
         if (!isDirectChatMode && chats.length) {
             const last = normalizaTelefonoMx(localStorage.getItem("last_active_chat") || "");
-            const initialTel = last && chats.some(c => c.telefono === last)
-                ? last
-                : chats[0].telefono;
-
+            const initialTel = last && chats.some((c) => c.telefono === last) ? last : chats[0].telefono;
             didInitSelection.current = true;
             activeTelRef.current = initialTel;
             setActiveTel(initialTel);
@@ -4569,94 +4292,59 @@ export default function DigitalesContacto() {
         setOpenEmoji(false);
         setShowQuickBubblesDropdown(false);
         setShowTemplatesDropdown(false);
-
         if (!activeTel) {
             setProspecto(null);
             setMensajes([]);
             setChatHasMore(false);
             setOldestMessageId(null);
+            setLoadingChat(false);
             return;
         }
-
         cargarChatInicial(activeTel);
     }, [activeTel, isDirectChatMode]);
 
-    useEffect(() => {
-        let ignore = false;
-        if (isDirectChatMode) return;
-        (async () => {
-            try {
-                const data =
-                    await api.digitalesListProspectos({
-                        numero_asesor:
-                            numeroAsesorActivo,
-                    });
-                if (ignore) return; setProspectosIndex(Array.isArray(data) ? data : []);
-            }
-            catch (error) {
-                console.error(
-                    "Error cargando índice de prospectos:",
-                    error
-                );
-            }
-        })();
-        return () => { ignore = true; };
-    }, [isDirectChatMode, numeroAsesorActivo,]);
     useEffect(() => {
         let alive = true, timer = null;
         const tick = async () => {
             const target = activeTelRef.current;
             const numeroLinea = numeroAsesorActivoRef.current;
+            if (!alive) return;
 
             try {
-                if (target) {
-                    const prev = mensajesRef.current || [], last = prev[prev.length - 1];
-                    const lastId = last?.id || last?.wa_message_id || "", lastCreatedAt = last?.created_at || "";
+                if (target && numeroLinea) {
+                    const actuales = mensajesRef.current || [];
+                    const ultimoActual = actuales[actuales.length - 1];
+                    const lastId = ultimoActual?.id || ultimoActual?.wa_message_id || "";
+                    const lastCreatedAt = ultimoActual?.created_at || "";
                     if (lastId || lastCreatedAt) {
-                        const data = await api.digitalesContactoUpdates(
-                            target,
-                            lastCreatedAt,
-                            {
-                                limit: CHAT_UPDATES_LIMIT,
-                                after_id: lastId,
-                                numero_asesor: numeroLinea,
-                            }
-                        );
+                        const data = await api.digitalesContactoUpdates(target, lastCreatedAt, {
+                            limit: CHAT_UPDATES_LIMIT, after_id: lastId, numero_asesor: numeroLinea,
+                        });
                         if (!alive) return;
                         if (activeTelRef.current === target) {
                             const incoming = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
                             if (incoming.length) {
                                 shouldStickToBottomRef.current = isNearBottom(messagesScrollRef.current);
-                                setMensajes(old => mergeMessages(old, incoming));
-                                const ultimo = incoming[incoming.length - 1];
-                                setChats(prev => prev.map(c =>
-                                    c.telefono === target
-                                        ? {
-                                            ...c,
-                                            last: {
-                                                text: ultimo?.text || c.last?.text || "",
-                                                time: ultimo?.created_at || "",
-                                                timestamp: ultimo?.created_at || c.last?.timestamp || "",
-                                            },
-                                        }
-                                        : c
-                                ));
+                                setMensajes((actualesMensajes) => mergeMessages(actualesMensajes, incoming));
+                                const nuevoUltimo = incoming[incoming.length - 1];
+                                setChats((actualesChats) => actualesChats.map((chat) => chat.telefono === target ? {
+                                    ...chat, unread: 0,
+                                    last: {
+                                        text: nuevoUltimo?.text || chat.last?.text || "",
+                                        time: nuevoUltimo?.created_at || chat.last?.time || "",
+                                        timestamp: nuevoUltimo?.created_at || chat.last?.timestamp || "",
+                                    },
+                                } : chat));
                             }
                         }
                     }
                 }
-            } catch { /* La conversación activa pudo haber cambiado; se reintenta en el siguiente tick. */ }
+            } catch { /* El chat pudo cambiar o la red estar temporalmente indisponible. */ }
 
-            if (alive && !isDirectChatMode) {
-                try {
-                    await refreshChats();
-                } catch { /* El refresco de la lista se reintenta en el siguiente tick. */ }
-            }
-            if (!alive) return;
-            timer = setTimeout(tick, 2000);
+            if (alive) timer = window.setTimeout(tick, CHAT_UPDATES_INTERVAL);
         };
         tick();
-        return () => { alive = false; if (timer) clearTimeout(timer); };
+        return () => { alive = false; if (timer) window.clearTimeout(timer); };
     }, [isDirectChatMode]);
 
     const llamarProspecto = () => {
@@ -4764,7 +4452,11 @@ export default function DigitalesContacto() {
                                         <input value={q} onChange={(e) => setQ(e.target.value)}
                                             placeholder="Buscar prospecto…"
                                             className="w-full bg-transparent text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400" />
-                                        {q ? (<button type="button" onClick={() => setQ("")} className="shrink-0 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>) : null}
+                                        {loadingList && q ? (
+                                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#1746D1]" />
+                                        ) : q ? (
+                                            <button type="button" onClick={() => setQ("")} className="shrink-0 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
+                                        ) : null}
                                     </div>
 
                                     {numerosDisponibles.length > 0 ? (
@@ -4808,7 +4500,7 @@ export default function DigitalesContacto() {
                                 </div>
 
                                 {/* Lista de chats estilo WhatsApp */}
-                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                                <div ref={chatListScrollRef} onScroll={onChatsScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                                     {loadingList ? <ChatListSkeleton rows={9} /> : filteredChats.length ? (
                                         filteredChats.map((chat) => {
                                             const isActive = chat.telefono === activeTel;
@@ -4820,8 +4512,6 @@ export default function DigitalesContacto() {
 
                                             return (
                                                 <button key={chat.id}
-                                                    onMouseEnter={() => prefetchChat(chat.telefono)}
-                                                    onFocus={() => prefetchChat(chat.telefono)}
                                                     onClick={() => openChatByTel(chat.telefono)}
                                                     onContextMenu={(e) => abrirMenuChat(e, chat)}
                                                     className={cls(
@@ -4911,8 +4601,16 @@ export default function DigitalesContacto() {
                                             );
                                         })
                                     ) : (
-                                        <div className="p-8 text-center text-sm font-extrabold text-[#131E5C]">Sin historial aún</div>
+                                        <div className="p-8 text-center text-sm font-extrabold text-[#131E5C]">{q ? "No se encontraron conversaciones" : "Sin historial aún"}</div>
                                     )}
+                                    {loadingMoreChats ? (
+                                        <div className="flex items-center justify-center gap-2 px-4 py-4 text-xs font-bold text-slate-500">
+                                            <Loader2 className="h-4 w-4 animate-spin text-[#1746D1]" /> Cargando conversaciones anteriores...
+                                        </div>
+                                    ) : null}
+                                    {!loadingList && !loadingMoreChats && !chatsHasMore && chats.length > 0 ? (
+                                        <div className="px-4 py-4 text-center text-[11px] font-semibold text-slate-400">No hay más conversaciones.</div>
+                                    ) : null}
                                 </div>
                             </>
                         )}
@@ -5075,12 +4773,10 @@ export default function DigitalesContacto() {
                                 {activeTel && !loadingChat ? (
                                     <div className="mb-3 flex justify-center">
                                         {loadingOlder ? (
-                                            <div className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-xs font-extrabold text-slate-500 shadow-sm">Cargando mensajes anteriores...</div>
-                                        ) : chatHasMore ? (
-                                            <button onClick={cargarMensajesAnteriores}
-                                                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-extrabold text-[#131E5C] shadow-sm transition hover:border-[#1746D1]/40 hover:text-[#1746D1]"
-                                                type="button">Cargar mensajes anteriores</button>
-                                        ) : mensajes.length > 0 ? (
+                                            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-xs font-extrabold text-slate-500 shadow-sm">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1746D1]" /> Cargando mensajes anteriores...
+                                            </div>
+                                        ) : !chatHasMore && mensajes.length > 0 ? (
                                             <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-400 shadow-sm">Inicio de la conversación</div>
                                         ) : null}
                                     </div>
@@ -5089,7 +4785,13 @@ export default function DigitalesContacto() {
                                 {!activeTel ? (
                                     <div className="py-10 text-center font-semibold text-slate-500">Selecciona un chat del historial para ver la conversación.</div>
                                 ) : loadingChat ? (
-                                    <MessagesSkeleton bubbles={10} />
+                                    <div className="flex min-h-[360px] flex-col items-center justify-center gap-3">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
+                                            <Loader2 className="h-5 w-5 animate-spin text-[#1746D1]" />
+                                        </div>
+                                        <div className="text-sm font-extrabold text-[#131E5C]">Cargando conversación</div>
+                                        <div className="text-xs font-medium text-slate-400">Obteniendo los mensajes más recientes...</div>
+                                    </div>
                                 ) : mensajes.length === 0 ? (
                                     <div className="py-10 text-center font-semibold text-slate-500">Aún no hay mensajes con este número.</div>
                                 ) : (
@@ -5683,69 +5385,69 @@ export default function DigitalesContacto() {
                         </div>
                     </section>
 
-                        {activeTel && showProspectoPanel ? (
-                            <button
-                                type="button"
-                                aria-label="Cerrar perfil del prospecto"
-                                onClick={() => setShowProspectoPanel(false)}
-                                className="fixed inset-0 z-[80] bg-black/25 backdrop-blur-[1px] xl:hidden"
-                            />
-                        ) : null}
+                    {activeTel && showProspectoPanel ? (
+                        <button
+                            type="button"
+                            aria-label="Cerrar perfil del prospecto"
+                            onClick={() => setShowProspectoPanel(false)}
+                            className="fixed inset-0 z-[80] bg-black/25 backdrop-blur-[1px] xl:hidden"
+                        />
+                    ) : null}
 
-                        {/* ── PERFIL DEL PROSPECTO (solo rediseño visual) ─────── */}
-                        {activeTel ? (
-                            <aside className={cls(
-                                "min-h-0 flex-col border-l border-slate-200 bg-[#F6F8FC]",
-                                showProspectoPanel
-                                    ? "fixed inset-y-0 right-0 z-[85] flex w-full max-w-[420px] shadow-[-12px_0_30px_rgba(15,23,42,0.04)] xl:static xl:z-auto xl:w-auto xl:max-w-none xl:shadow-none"
-                                    : "hidden xl:flex"
-                            )}>
-                                {showProspectoPanel ? (
-                                    <>
-                                <div className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-left">
-                                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#131E5C]/[0.08] text-[#131E5C]">
-                                            <Activity className="h-3.5 w-3.5" />
+                    {/* ── PERFIL DEL PROSPECTO (solo rediseño visual) ─────── */}
+                    {activeTel ? (
+                        <aside className={cls(
+                            "min-h-0 flex-col border-l border-slate-200 bg-[#F6F8FC]",
+                            showProspectoPanel
+                                ? "fixed inset-y-0 right-0 z-[85] flex w-full max-w-[420px] shadow-[-12px_0_30px_rgba(15,23,42,0.04)] xl:static xl:z-auto xl:w-auto xl:max-w-none xl:shadow-none"
+                                : "hidden xl:flex"
+                        )}>
+                            {showProspectoPanel ? (
+                                <>
+                                    <div className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-left">
+                                        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#131E5C]/[0.08] text-[#131E5C]">
+                                                <Activity className="h-3.5 w-3.5" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-xs font-black text-[#131E5C]">Perfil del prospecto</span>
+                                                    <span className="rounded-full bg-[#131E5C]/[0.07] px-2 py-0.5 text-[10px] font-extrabold text-[#131E5C]/70">
+                                                        {perfilProspectoPorcentaje}% completo
+                                                    </span>
+                                                </div>
+                                                <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">
+                                                    {[quickEditDraft.auto_interes || prospecto?.auto_interes, quickEditDraft.canal_contacto || prospecto?.canal_contacto, quickEditDraft.estado || prospecto?.estado]
+                                                        .filter(Boolean)
+                                                        .join(" · ") || "Completa los datos principales del cliente"}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="text-xs font-black text-[#131E5C]">Perfil del prospecto</span>
-                                                <span className="rounded-full bg-[#131E5C]/[0.07] px-2 py-0.5 text-[10px] font-extrabold text-[#131E5C]/70">
-                                                    {perfilProspectoPorcentaje}% completo
+
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            {perfilProspectoPendientes > 0 ? (
+                                                <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-extrabold text-amber-700">
+                                                    {perfilProspectoPendientes} pendiente{perfilProspectoPendientes === 1 ? "" : "s"}
                                                 </span>
-                                            </div>
-                                            <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">
-                                                {[quickEditDraft.auto_interes || prospecto?.auto_interes, quickEditDraft.canal_contacto || prospecto?.canal_contacto, quickEditDraft.estado || prospecto?.estado]
-                                                    .filter(Boolean)
-                                                    .join(" · ") || "Completa los datos principales del cliente"}
-                                            </div>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-700">
+                                                    <Check className="h-3 w-3" /> Completo
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowProspectoPanel(false)}
+                                                title="Ocultar perfil del prospecto"
+                                                aria-label="Ocultar perfil del prospecto"
+                                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#131E5C]/[0.08] text-[#131E5C] transition hover:bg-[#131E5C]/15"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div className="flex shrink-0 items-center gap-2">
-                                        {perfilProspectoPendientes > 0 ? (
-                                            <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-extrabold text-amber-700">
-                                                {perfilProspectoPendientes} pendiente{perfilProspectoPendientes === 1 ? "" : "s"}
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-700">
-                                                <Check className="h-3 w-3" /> Completo
-                                            </span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowProspectoPanel(false)}
-                                            title="Ocultar perfil del prospecto"
-                                            aria-label="Ocultar perfil del prospecto"
-                                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#131E5C]/[0.08] text-[#131E5C] transition hover:bg-[#131E5C]/15"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
-                                    <div className="space-y-4">
+                                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+                                        <div className="space-y-4">
 
                                             {/* Tarjeta del cliente: movida desde la zona de conversaciones */}
                                             <div className="rounded-2xl border border-[#131E5C]/10 bg-white p-4 shadow-sm">
@@ -6213,8 +5915,8 @@ export default function DigitalesContacto() {
                                                     {savingQuickEdit ? "Guardando..." : "Guardar cambios"}
                                                 </button>
                                             </div>
+                                        </div>
                                     </div>
-                                </div>
                                 </>
                             ) : (
                                 <button
@@ -6232,8 +5934,8 @@ export default function DigitalesContacto() {
                                     </span>
                                 </button>
                             )}
-                            </aside>
-                        ) : null}
+                        </aside>
+                    ) : null}
 
                 </div>
             </div>
