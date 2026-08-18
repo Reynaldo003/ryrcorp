@@ -10,26 +10,43 @@ function jsonRequest(method, payload, auth = true) {
   };
 }
 
-async function listarTodo(params = {}) {
-  let next = `/citas/api/citas/${buildQuery(params)}`;
-  const resultados = [];
-  const visitadas = new Set();
-
-  while (next && !visitadas.has(next)) {
-    visitadas.add(next);
-    const data = await http(next, { auth: false });
-    if (Array.isArray(data)) return resultados.concat(data);
-    resultados.push(...(Array.isArray(data?.results) ? data.results : []));
-    next = data?.next
+async function fetchPage(url) {
+  const data = await http(url, { auth: false });
+  if (Array.isArray(data)) return { results: data, next: null };
+  return {
+    results: Array.isArray(data?.results) ? data.results : [],
+    next: data?.next
       ? String(data.next).replace(/^https?:\/\/[^/]+/, "")
-      : null;
-  }
-
-  return resultados;
+      : null,
+    count: data?.count ?? 0,
+  };
 }
 
 export const apiCitas = {
-  list: (params = {}) => listarTodo(params),
+  list: async (params = {}) => {
+    const query = buildQuery(params);
+    const first = await fetchPage(`/citas/api/citas/${query}`);
+    if (!first.next) return first.results;
+
+    let next = first.next;
+    const all = [...first.results];
+    const visited = new Set();
+
+    while (next && !visited.has(next)) {
+      visited.add(next);
+      const page = await fetchPage(next);
+      all.push(...page.results);
+      next = page.next;
+    }
+
+    return all;
+  },
+
+  listPage: (params = {}) => {
+    const query = buildQuery(params);
+    return fetchPage(`/citas/api/citas/${query}`);
+  },
+
   get: (id) => http(`/citas/api/citas/${id}/`, { auth: false }),
   create: (payload) =>
     http("/citas/api/citas/", jsonRequest("POST", payload, false)),

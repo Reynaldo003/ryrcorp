@@ -39,7 +39,6 @@ import { api } from "../../lib/apiPruebas";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { FileDown } from "lucide-react";
-import { useVirtualRows } from "../../lib/useVirtualRows";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -1122,6 +1121,9 @@ export default function RegistroCitas() {
 
     const [citas, setCitas] = useState([]);
     const [vista, setVista] = useState("calendario");
+    const [page, setPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const PAGE_SIZE = 200;
 
     const DEALERS = useMemo(() => ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"], []);
     const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chávez Alarcón", "Candy Denisse Marquez Cortes", "JULIO RAMIREZ LOPEZ",];
@@ -1280,16 +1282,39 @@ export default function RegistroCitas() {
 
     const onRowContextMenu = (e, row) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ open: true, x: e.clientX, y: e.clientY, row }); };
 
-    const refreshList = useCallback(async () => {
+    const buildServerParams = useCallback((pageNum) => {
+        const params = { page: pageNum || 1, page_size: PAGE_SIZE };
+        if (filters.agencia && filters.agencia !== "Todos") params.agencia = filters.agencia;
+        if (filters.asesorDigital && filters.asesorDigital !== "Todos") params.asesor_digital = filters.asesorDigital;
+        if (filters.asesorPiso && filters.asesorPiso !== "Todos") params.asesor_piso = filters.asesorPiso;
+        if (filters.q.trim()) params.search = filters.q.trim();
+        if (filters.rangoDesde) params.fecha_desde = filters.rangoDesde;
+        if (filters.rangoHasta) params.fecha_hasta = filters.rangoHasta;
+        return params;
+    }, [filters]);
+
+    const refreshList = useCallback(async (pageNum = 1) => {
         setLoadingList(true);
         try {
-            const data = await apiCitas.list();
-            setCitas(Array.isArray(data) ? data : []);
-        } catch (e) { console.error(e); setCitas([]); }
+            const params = buildServerParams(pageNum);
+            const result = await apiCitas.listPage(params);
+            setCitas(Array.isArray(result.results) ? result.results : []);
+            setTotalCount(result.count || 0);
+            setPage(pageNum);
+        } catch (e) { console.error(e); setCitas([]); setTotalCount(0); }
         finally { setLoadingList(false); }
-    }, []);
+    }, [buildServerParams]);
 
-    useEffect(() => { refreshList(); }, [refreshList]);
+    useEffect(() => { refreshList(1); }, [refreshList]);
+
+    const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+    const goToPage = useCallback((p) => {
+        const clamped = Math.max(1, Math.min(p, totalPages));
+        refreshList(clamped);
+        const container = containerRef.current;
+        if (container) container.scrollTop = 0;
+    }, [refreshList, totalPages]);
 
     const dealers = useMemo(() => {
         const set = new Set((citas || []).map((c) => normalizeStr(c.agencia)).filter(Boolean));
@@ -1311,42 +1336,11 @@ export default function RegistroCitas() {
     }, [citas]);
 
     const filtered = useMemo(() => {
-        const q = filters.q.trim().toLowerCase();
-        const desdeInt = ymdToInt(filters.rangoDesde);
-        const hastaInt = ymdToInt(filters.rangoHasta);
         return (citas || []).filter((c) => {
             if (!isAdmin && userAgencias.length > 0 && !userTieneAgencia(c.agencia)) return false;
-            const nombreCliente = normalizeStr(c?.cliente?.nombre);
-            const telCliente = normalizeStr(c?.cliente?.telefono);
-            const matchQ =
-                !q ||
-                [
-                    c.agencia,
-                    nombreCliente,
-                    telCliente,
-                    c.auto_interes,
-                    c.tipo_cita,
-                    c.motivo_cita,
-                    c.fuente_prospeccion,
-                    c.asesor_digital,
-                    c.asesor_piso,
-                    c.comentarios,
-                ].some((value) =>
-                    normalizeStr(value).toLowerCase().includes(q)
-                );
-            const matchAgencia = filters.agencia === "Todos" || normalizeStr(c.agencia) === normalizeStr(filters.agencia);
-            const matchAsesorDigital = filters.asesorDigital === "Todos" || normalizeStr(c.asesor_digital) === normalizeStr(filters.asesorDigital);
-            const matchAsesorPiso = filters.asesorPiso === "Todos" || normalizeStr(c.asesor_piso) === normalizeStr(filters.asesorPiso);
-            let matchRango = true;
-            if (desdeInt !== null || hastaInt !== null) {
-                const ymdInt = ymdToInt(c.fecha_hora_cita ? toYMDLocal(c.fecha_hora_cita) : "");
-                if (!ymdInt) return false;
-                if (desdeInt !== null && ymdInt < desdeInt) matchRango = false;
-                if (hastaInt !== null && ymdInt > hastaInt) matchRango = false;
-            }
-            return matchQ && matchAgencia && matchAsesorDigital && matchAsesorPiso && matchRango;
+            return true;
         });
-    }, [citas, filters, isAdmin, userAgencias, userTieneAgencia]);
+    }, [citas, isAdmin, userAgencias, userTieneAgencia]);
 
     const sorted = useMemo(() => {
         const data = [...filtered];
@@ -1365,13 +1359,7 @@ export default function RegistroCitas() {
         });
     }, [filtered, sort]);
 
-    const {
-    containerRef,
-    onScroll,
-    visible,
-    topOffset,
-    bottomOffset,
-    } = useVirtualRows({ items: sorted, rowHeight: 52 });
+    const containerRef = useRef(null);
 
 
     const openCreate = (dateOverride, hourOverride) => {
@@ -1610,7 +1598,7 @@ export default function RegistroCitas() {
     return (
         <div className="w-full">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+                <div className="min-w-0">git a
                     <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">Citas</h2>
                     {!isAdmin && userAgencias.length > 0 ? (
                         <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -1732,7 +1720,7 @@ export default function RegistroCitas() {
                 <>
                     <MobileCardList rows={sorted} loading={loadingList} onEdit={openEdit} onContext={onRowContextMenu} onToggleAsistencia={toggleAsistenciaInline} updatingInline={updatingInline} />
                     <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
-                        <div ref={containerRef} onScroll={onScroll} className="overflow-auto" style={{ maxHeight: "70vh" }}>
+                        <div ref={containerRef} className="overflow-auto" style={{ maxHeight: "70vh" }}>
                             <table className="min-w-full text-left text-sm">
                                 <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
                                     <tr>
@@ -1750,7 +1738,7 @@ export default function RegistroCitas() {
                                 <tbody className="divide-y divide-black/30">
                                     {loadingList ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />) : (
                                         <>
-                                            {visible.map((row) => {
+                                            {sorted.map((row) => {
                                                 const isUpdating = !!updatingInline[row.id];
                                                 return (
                                                     <tr key={row.id} onDoubleClick={() => openEdit(row)} onContextMenu={(e) => onRowContextMenu(e, row)} className="cursor-pointer hover:bg-white/[0.04]" title="Doble clic para editar">
@@ -1771,15 +1759,58 @@ export default function RegistroCitas() {
                                                     </tr>
                                                 );
                                             })}
-                                            {sorted.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-[#131E5C]">No hay resultados con esos filtros.</td></tr>}
-                                            {topOffset > 0 && <tr style={{ height: topOffset }} />}
-                                            {bottomOffset > 0 && <tr style={{ height: bottomOffset }} />}
+                                            {sorted.length === 0 && !loadingList && (
+                                                <tr><td colSpan={9} className="px-4 py-10 text-center text-[#131E5C]">No hay resultados con esos filtros.</td></tr>
+                                            )}
                                         </>
                                     )}
                                 </tbody>
                             </table>
                             <ContextMenu ctxMenu={ctxMenu} onDelete={async (row) => { await eliminarCita(row); setCtxMenu({ open: false, x: 0, y: 0, row: null }); }} onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })} />
                         </div>
+                        {totalCount > PAGE_SIZE && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 bg-white/50 px-4 py-3">
+                                <span className="text-xs font-bold text-[#131E5C]">
+                                    {totalCount.toLocaleString("es-MX")} registros · Página {page} de {totalPages}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => goToPage(1)} disabled={page <= 1} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        ««
+                                    </button>
+                                    <button onClick={() => goToPage(page - 1)} disabled={page <= 1} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        « Anterior
+                                    </button>
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum;
+                                        if (totalPages <= 5) {
+                                            pageNum = i + 1;
+                                        } else if (page <= 3) {
+                                            pageNum = i + 1;
+                                        } else if (page >= totalPages - 2) {
+                                            pageNum = totalPages - 4 + i;
+                                        } else {
+                                            pageNum = page - 2 + i;
+                                        }
+                                        return (
+                                            <button key={pageNum} onClick={() => goToPage(pageNum)}
+                                                className={["rounded border px-2.5 py-1.5 text-xs font-bold transition",
+                                                    pageNum === page
+                                                        ? "border-[#131E5C] bg-[#131E5C] text-white"
+                                                        : "border-[#131E5C]/20 text-[#131E5C] hover:bg-[#131E5C]/10"
+                                                ].join(" ")}>
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                    <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        Siguiente »
+                                    </button>
+                                    <button onClick={() => goToPage(totalPages)} disabled={page >= totalPages} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        »»
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </>
             )}
