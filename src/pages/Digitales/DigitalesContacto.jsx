@@ -49,21 +49,25 @@ import {
     CalendarCheck,
     ShieldAlert,
     Loader2,
+    UserRoundPlus,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
+import NuevoProspectoModal from "./NuevoProspectoModal";
 
 const BRAND_BLUE = "#131E5C";
 const QUICK_BUBBLES_KEY = "digitales_quick_bubbles_global";
+const MANUAL_CHATS_KEY = "digitales_chats_manuales";
 const CHAT_PAGE_SIZE = 8;
 const CHAT_LIST_PAGE_SIZE = 30;
 const CHAT_LIST_DAYS = 3;
 const CHAT_UPDATES_LIMIT = 40;
 const CHAT_CACHE_LIMIT = 80;
 const CHAT_UPDATES_INTERVAL = 2500;
+const CHAT_LIST_REFRESH_INTERVAL = 2500;
 const CHAT_SEARCH_DELAY = 300;
 const MAX_RECORDING_SECONDS = 300;
 
@@ -267,6 +271,12 @@ function obtenerPermisosUsuario(user) {
 }
 
 function cls(...items) { return items.filter(Boolean).join(" "); }
+function cargarChatsManualesGuardados() {
+    try { const raw = localStorage.getItem(MANUAL_CHATS_KEY); const items = raw ? JSON.parse(raw) : []; return new Map((Array.isArray(items) ? items : []).map((chat) => [normalizaTelefonoMx(chat?.telefono), chat]).filter(([telefono]) => Boolean(telefono))); }
+    catch { return new Map(); }
+}
+function guardarChatsManualesGuardados(map) { try { localStorage.setItem(MANUAL_CHATS_KEY, JSON.stringify(Array.from(map?.values?.() || []))); } catch { /* almacenamiento no disponible */ } }
+
 function safeLower(v) { return String(v || "").toLowerCase(); }
 
 function normalizeText(value) {
@@ -2143,6 +2153,7 @@ export default function DigitalesContacto() {
     // Modal de agendar cita
     const [showCitaModal, setShowCitaModal] = useState(false);
     const [savingCita, setSavingCita] = useState(false);
+    const [showNuevoProspectoModal, setShowNuevoProspectoModal] = useState(false);
 
     // Asesor asignado en la tarjeta (persiste aunque el refresh borre asesor_ventas)
     const [asesorAsignado, setAsesorAsignado] = useState("");
@@ -2203,6 +2214,7 @@ export default function DigitalesContacto() {
     const didInitSelection = useRef(false);
     const numeroAsesorActivoRef = useRef("");
     const chatsRequestRef = useRef(0);
+    const silentChatsRefreshRef = useRef(false);
     const chatListScrollRef = useRef(null);
     const qRef = useRef("");
     const chatsPaginationRef = useRef({ query: "", scope: "recientes", before: "", before_id: "", hasMore: true });
@@ -2221,6 +2233,7 @@ export default function DigitalesContacto() {
     const chatRequestRef = useRef(0);
     const loadingOlderRef = useRef(false);
     const mensajesCacheRef = useRef(new Map());
+    const chatsManualesRef = useRef(cargarChatsManualesGuardados());
 
     const templateMap = useMemo(() => {
         const map = new Map();
@@ -2453,7 +2466,17 @@ export default function DigitalesContacto() {
         if (requestId !== chatsRequestRef.current || numeroAsesorActivoRef.current !== numeroLinea) return [];
         const items = Array.isArray(response?.results) ? response.results : Array.isArray(response) ? response : [];
         const normalizados = items.map((chat) => normalizarResumenChat(chat, numeroLinea)).filter((chat) => Boolean(chat.telefono));
-        if (reset) setChats(normalizados);
+        let manualesCambiaron = false;
+        for (const chat of normalizados) if (chatsManualesRef.current.delete(chat.telefono)) manualesCambiaron = true;
+        if (manualesCambiaron) guardarChatsManualesGuardados(chatsManualesRef.current);
+        const queryNormalizada = normalizeText(busqueda), queryTelefono = normalizaTelefonoMx(busqueda);
+        const manuales = Array.from(chatsManualesRef.current.values()).filter((chat) => {
+            if (normalizaTelefonoMx(chat?.numero_asesor) !== numeroLinea) return false;
+            if (!busqueda) return true;
+            const texto = normalizeText(`${chat?.nombre || ""} ${chat?.telefono || ""} ${chat?.agencia || ""}`);
+            return texto.includes(queryNormalizada) || Boolean(queryTelefono && normalizaTelefonoMx(chat?.telefono).includes(queryTelefono));
+        });
+        if (reset) setChats(mezclarPaginasChats(manuales, normalizados));
         else setChats((actuales) => mezclarPaginasChats(actuales, normalizados));
 
         const paginacion = response?.paginacion || {};
@@ -2470,6 +2493,258 @@ export default function DigitalesContacto() {
             return refreshChats({ numeroAsesor: numeroLinea, reset: false, query: "" });
         }
         return normalizados;
+    }
+
+    async function refreshChatsSilencioso({
+        numeroAsesor = numeroAsesorActivoRef.current,
+        query = qRef.current,
+    } = {}) {
+        const numeroLinea = normalizaTelefonoMx(numeroAsesor);
+        const busqueda = String(query || "").trim();
+
+        if (!numeroLinea || silentChatsRefreshRef.current) return [];
+
+        silentChatsRefreshRef.current = true;
+
+        try {
+            const params = new URLSearchParams();
+
+            params.set("numero_asesor", numeroLinea);
+            params.set("paginado", "1");
+            params.set("limit", String(CHAT_LIST_PAGE_SIZE));
+            params.set("dias", String(CHAT_LIST_DAYS));
+            params.set("scope", busqueda ? "busqueda" : "recientes");
+            params.set("before", "");
+            params.set("before_id", "");
+
+            // Evita respuestas cacheadas.
+            params.set("_ts", String(Date.now()));
+
+            if (busqueda) {
+                params.set("q", busqueda);
+            }
+
+            const usuarioCrm = String(
+                user?.usuario ||
+                user?.username ||
+                user?.user ||
+                user?.nombre_usuario ||
+                ""
+            ).trim();
+
+            if (usuarioCrm) {
+                params.set("usuario", usuarioCrm);
+            }
+
+            const response = await api.get(
+                `/digitales/chats/?${params.toString()}`
+            );
+
+            /*
+             * Si mientras cargábamos cambió la línea
+             * o la búsqueda, descartamos esta respuesta.
+             */
+            if (
+                numeroAsesorActivoRef.current !== numeroLinea ||
+                String(qRef.current || "").trim() !== busqueda
+            ) {
+                return [];
+            }
+
+            const items = Array.isArray(response?.results)
+                ? response.results
+                : Array.isArray(response)
+                    ? response
+                    : [];
+
+            const normalizados = items
+                .map((chat) =>
+                    normalizarResumenChat(
+                        chat,
+                        numeroLinea
+                    )
+                )
+                .filter((chat) =>
+                    Boolean(chat.telefono)
+                )
+                .map((chat) =>
+                    chat.telefono === activeTelRef.current
+                        ? {
+                            ...chat,
+                            unread: 0,
+                        }
+                        : chat
+                );
+
+            /*
+             * Si un chat manual ya existe realmente
+             * en backend, deja de considerarse manual.
+             */
+            let manualesCambiaron = false;
+
+            for (const chat of normalizados) {
+                if (
+                    chatsManualesRef.current.delete(
+                        chat.telefono
+                    )
+                ) {
+                    manualesCambiaron = true;
+                }
+            }
+
+            if (manualesCambiaron) {
+                guardarChatsManualesGuardados(
+                    chatsManualesRef.current
+                );
+            }
+
+            const queryNormalizada =
+                normalizeText(busqueda);
+
+            const queryTelefono =
+                normalizaTelefonoMx(busqueda);
+
+            const manuales = Array.from(
+                chatsManualesRef.current.values()
+            ).filter((chat) => {
+                if (
+                    normalizaTelefonoMx(
+                        chat?.numero_asesor
+                    ) !== numeroLinea
+                ) {
+                    return false;
+                }
+
+                if (!busqueda) return true;
+
+                const texto = normalizeText(
+                    `${chat?.nombre || ""} ` +
+                    `${chat?.telefono || ""} ` +
+                    `${chat?.agencia || ""}`
+                );
+
+                return (
+                    texto.includes(queryNormalizada) ||
+                    Boolean(
+                        queryTelefono &&
+                        normalizaTelefonoMx(
+                            chat?.telefono
+                        ).includes(queryTelefono)
+                    )
+                );
+            });
+
+            const recientes =
+                mezclarPaginasChats(
+                    manuales,
+                    normalizados
+                );
+
+            setChats((actuales) => {
+                const actualesPorTelefono = new Map(
+                    (actuales || []).map(
+                        (chat) => [
+                            normalizaTelefonoMx(
+                                chat?.telefono
+                            ),
+                            chat,
+                        ]
+                    )
+                );
+
+                const telefonosActualizados =
+                    new Set();
+
+                const actualizados =
+                    recientes.map((chat) => {
+                        const telefono =
+                            normalizaTelefonoMx(
+                                chat?.telefono
+                            );
+
+                        telefonosActualizados.add(
+                            telefono
+                        );
+
+                        const anterior =
+                            actualesPorTelefono.get(
+                                telefono
+                            );
+
+                        const esChatActivo =
+                            telefono ===
+                            activeTelRef.current;
+
+                        return {
+                            ...(anterior || {}),
+                            ...chat,
+
+                            telefono,
+
+                            /*
+                             * Si está abierto:
+                             * no debe mostrar unread.
+                             *
+                             * Si está cerrado:
+                             * conservamos el contador mayor.
+                             */
+                            unread: esChatActivo
+                                ? 0
+                                : Math.max(
+                                    Number(
+                                        chat?.unread || 0
+                                    ),
+                                    Number(
+                                        anterior?.unread || 0
+                                    )
+                                ),
+
+                            /*
+                             * El último mensaje nuevo
+                             * tiene prioridad.
+                             */
+                            last: {
+                                ...(anterior?.last || {}),
+                                ...(chat?.last || {}),
+                            },
+                        };
+                    });
+
+                /*
+                 * Conservamos chats históricos cargados
+                 * anteriormente mediante scroll.
+                 */
+                const historicos =
+                    (actuales || []).filter(
+                        (chat) =>
+                            !telefonosActualizados.has(
+                                normalizaTelefonoMx(
+                                    chat?.telefono
+                                )
+                            )
+                    );
+
+                /*
+                 * Los recientes vienen primero,
+                 * respetando el orden del backend.
+                 */
+                return [
+                    ...actualizados,
+                    ...historicos,
+                ];
+            });
+
+            return normalizados;
+        } catch (error) {
+            console.error(
+                "Error actualizando lista de chats:",
+                error
+            );
+
+            return [];
+        } finally {
+            silentChatsRefreshRef.current = false;
+        }
     }
 
     async function cargarMasChats() {
@@ -3035,6 +3310,25 @@ export default function DigitalesContacto() {
         setChats((actuales) => actuales.map((chat) => chat.telefono === normalized ? { ...chat, unread: 0 } : chat));
     }
 
+    function handleNuevoProspectoCreado(prospectoCreado, opciones = {}) {
+        const telefonoNuevo = normalizaTelefonoMx(prospectoCreado?.telefono || prospectoCreado?.telefono_out || prospectoCreado?.cliente?.telefono || "");
+        if (!telefonoNuevo) return console.error("El prospecto se creó, pero no se recibió un teléfono válido.", prospectoCreado);
+        const nombre = prospectoCreado?.nombre || prospectoCreado?.nombre_out || prospectoCreado?.cliente?.nombre || "Prospecto";
+        const chatNuevo = { ...normalizarResumenChat({ id: prospectoCreado?.id || prospectoCreado?.id_exp || prospectoCreado?.prospecto?.id || `nuevo-${telefonoNuevo}`, telefono: telefonoNuevo, numero_asesor: numeroAsesorActivo, nombre, agencia: prospectoCreado?.agencia || "", linea: prospectoCreado?.business || prospectoCreado?.linea || "", estado: prospectoCreado?.estado || "Contactado", asesor_digital: prospectoCreado?.asesor_digital || "", usuario_crm_asignado: prospectoCreado?.usuario_crm_asignado || "", unread: 0, last_text: "Prospecto nuevo · envía una plantilla para iniciar la conversación", last_time: "", last_message_at: "" }, numeroAsesorActivo), manual_created_at: new Date().toISOString() };
+        chatsManualesRef.current.set(telefonoNuevo, chatNuevo); guardarChatsManualesGuardados(chatsManualesRef.current);
+        setChats((actuales) => mezclarPaginasChats([chatNuevo], actuales.filter((chat) => normalizaTelefonoMx(chat?.telefono) !== telefonoNuevo)));
+        setChatFilter("todos"); setQ("");
+        openChatByTel(telefonoNuevo);
+        if (opciones?.cerrar !== false) setShowNuevoProspectoModal(false);
+    }
+
+    async function handlePlantillaNuevoProspectoEnviada({ telefono } = {}) {
+        const target = normalizaTelefonoMx(telefono);
+        if (!target) return;
+        try { await refreshChats({ numeroAsesor: numeroAsesorActivoRef.current, reset: true, query: qRef.current }); }
+        catch (error) { console.error("No se pudo refrescar la lista después de enviar la plantilla:", error); }
+    }
+
     function onPickEmoji(emojiObj) {
         const emoji = emojiObj?.emoji || "";
         if (!emoji) return;
@@ -3587,10 +3881,8 @@ export default function DigitalesContacto() {
             setTplDraft({});
             setTemplatesError("");
 
-            await refreshActiveChat(
-                targetTel,
-                { forceBottom: true }
-            );
+            await refreshActiveChat(targetTel, { forceBottom: true });
+            await refreshChats({ numeroAsesor: numeroAsesorActivoRef.current, reset: true, query: qRef.current }).catch(() => { });
         } catch (error) {
             console.error(
                 "Error enviando plantilla:",
@@ -4231,11 +4523,10 @@ export default function DigitalesContacto() {
                 await refreshActiveChat(telefonoMensaje, { forceBottom: shouldFollow }).catch((error) => {
                     console.error("No se pudo actualizar el chat activo:", error);
                 });
-                return;
             }
 
             if (!isDirectChatMode) {
-                await refreshChats({ numeroAsesor: numeroLinea, reset: true, query: qRef.current }).catch((error) => {
+                await refreshChatsSilencioso({ numeroAsesor: numeroLinea, query: qRef.current }).catch((error) => {
                     console.error("No se pudo actualizar la lista por nuevo mensaje:", error);
                 });
             }
@@ -4246,27 +4537,75 @@ export default function DigitalesContacto() {
     }, [isDirectChatMode, numeroAsesorActivo]);
 
     useEffect(() => {
-        let ignore = false, timer = null;
-        if (isDirectChatMode) { setLoadingList(false); return () => { ignore = true; }; }
-        if (!numeroAsesorActivo) { setChats([]); setLoadingList(false); return () => { ignore = true; }; }
+        let alive = true;
+        let timer = null;
 
-        const delay = q.trim() ? CHAT_SEARCH_DELAY : 0;
-        timer = window.setTimeout(async () => {
+        if (
+            isDirectChatMode ||
+            !numeroAsesorActivo
+        ) {
+            return () => {
+                alive = false;
+            };
+        }
+
+        const tickLista = async () => {
+            if (!alive) return;
+
             try {
-                setLoadingList(true);
-                setChats([]);
-                setChatsHasMore(true);
-                chatsPaginationRef.current = { query: q.trim(), scope: q.trim() ? "busqueda" : "recientes", before: "", before_id: "", hasMore: true };
-                await refreshChats({ numeroAsesor: numeroAsesorActivo, reset: true, query: q.trim() });
+                /*
+                 * Solo hacemos polling cuando:
+                 *
+                 * 1. La pestaña está visible.
+                 * 2. No estamos haciendo una búsqueda.
+                 *
+                 * Así evitamos consultas innecesarias.
+                 */
+                if (
+                    document.visibilityState === "visible" &&
+                    !String(
+                        qRef.current || ""
+                    ).trim()
+                ) {
+                    await refreshChatsSilencioso({
+                        numeroAsesor:
+                            numeroAsesorActivoRef.current,
+                        query: "",
+                    });
+                }
             } catch (error) {
-                if (!ignore) console.error("No se pudo cargar la lista de chats:", error);
-            } finally {
-                if (!ignore) setLoadingList(false);
+                console.error(
+                    "No se pudo refrescar " +
+                    "silenciosamente la lista:",
+                    error
+                );
             }
-        }, delay);
 
-        return () => { ignore = true; if (timer) window.clearTimeout(timer); };
-    }, [isDirectChatMode, numeroAsesorActivo, q]);
+            if (alive) {
+                timer = window.setTimeout(
+                    tickLista,
+                    CHAT_LIST_REFRESH_INTERVAL
+                );
+            }
+        };
+
+        /*
+         * Primera consulta inmediatamente.
+         */
+        tickLista();
+
+        return () => {
+            alive = false;
+
+            if (timer) {
+                window.clearTimeout(timer);
+            }
+        };
+    }, [
+        isDirectChatMode,
+        numeroAsesorActivo,
+        user,
+    ]);
 
     useEffect(() => {
         if (didInitSelection.current) return;
@@ -4305,6 +4644,29 @@ export default function DigitalesContacto() {
 
     useEffect(() => {
         let alive = true, timer = null;
+        if (isDirectChatMode || !numeroAsesorActivo) return () => { alive = false; };
+
+        const tickLista = async () => {
+            if (!alive) return;
+            try {
+                if (document.visibilityState === "visible" && !String(qRef.current || "").trim()) {
+                    await refreshChatsSilencioso({
+                        numeroAsesor: numeroAsesorActivoRef.current,
+                        query: "",
+                    });
+                }
+            } catch (error) {
+                console.error("No se pudo refrescar silenciosamente la lista de chats:", error);
+            }
+            if (alive) timer = window.setTimeout(tickLista, CHAT_LIST_REFRESH_INTERVAL);
+        };
+
+        timer = window.setTimeout(tickLista, CHAT_LIST_REFRESH_INTERVAL);
+        return () => { alive = false; if (timer) window.clearTimeout(timer); };
+    }, [isDirectChatMode, numeroAsesorActivo]);
+
+    useEffect(() => {
+        let alive = true, timer = null;
         const tick = async () => {
             const target = activeTelRef.current;
             const numeroLinea = numeroAsesorActivoRef.current;
@@ -4335,6 +4697,9 @@ export default function DigitalesContacto() {
                                         timestamp: nuevoUltimo?.created_at || chat.last?.timestamp || "",
                                     },
                                 } : chat));
+                                if (!isDirectChatMode) {
+                                    refreshChatsSilencioso({ numeroAsesor: numeroLinea, query: qRef.current }).catch(() => { });
+                                }
                             }
                         }
                     }
@@ -4731,6 +5096,16 @@ export default function DigitalesContacto() {
 
                                         {/* Botón de acción: agendar cita */}
                                         <div className="ml-auto flex shrink-0 items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); setShowNuevoProspectoModal(true); }}
+                                                disabled={!numeroAsesorActivo}
+                                                title={numeroAsesorActivo ? "Nuevo Prospecto" : "Selecciona una línea de WhatsApp"}
+                                                aria-label="Nuevo Prospecto"
+                                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#DBE7FF] text-[#1746D1] shadow-sm transition hover:bg-[#c9dcff] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                                <UserRoundPlus className="h-4.5 w-4.5" />
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={(e) => { e.stopPropagation(); setShowCitaModal(true); }}
@@ -5954,6 +6329,16 @@ export default function DigitalesContacto() {
             ) : null}
 
             {/* ── MODAL AGENDAR CITA ────────────────────────────────────────── */}
+            <NuevoProspectoModal
+                open={showNuevoProspectoModal}
+                onClose={() => setShowNuevoProspectoModal(false)}
+                onCreado={handleNuevoProspectoCreado}
+                onPlantillaEnviada={handlePlantillaNuevoProspectoEnviada}
+                numeroAsesor={numeroAsesorActivo}
+                user={user}
+                isAdmin={isAdmin}
+            />
+
             <AgendarCitaModal
                 open={showCitaModal}
                 onClose={() => setShowCitaModal(false)}

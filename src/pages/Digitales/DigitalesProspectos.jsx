@@ -13,6 +13,8 @@ import { apiCitas } from "../../lib/apiCitas";
 import { useAuth } from "../../auth/AuthContext";
 import * as XLSX from "xlsx";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
+import NuevoProspectoModal from "./NuevoProspectoModal";
+import ResultadosIA from "./ResultadosIA";
 const PAGE_SIZE = 200;
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = {
@@ -1979,7 +1981,6 @@ export default function DigitalesProspectos() {
     const fileInputRef = useRef(null);
     const templatesDropdownRef = useRef(null);
     const ultimoPayloadGuardadoRef = useRef("");
-    const ultimoProspectoGuardadoIdRef = useRef(null);
     const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
     const [tplSelected, setTplSelected] = useState(null);
     const [tplDraft, setTplDraft] = useState({});
@@ -1991,6 +1992,7 @@ export default function DigitalesProspectos() {
     const VIEW_MODES = [
         { key: "tabla", label: "Tabla", Icon: Table2 },
         { key: "ejecutivo", label: "Ejecutivo BDC", Icon: TrendingUp },
+        { key: "resultados", label: "Resultados", Icon: BrainCircuit },
         { key: "graficos", label: "Gráficos", Icon: BarChart3 },
     ];
     const rolUsuario = useMemo(() => normalizeText(user?.rol?.nombre ||
@@ -2060,7 +2062,7 @@ export default function DigitalesProspectos() {
     const deferredQ = useDeferredValue(filters.q);
     const [page, setPage] = useState(1);
     const [openModal, setOpenModal] = useState(false);
-    const [mode, setMode] = useState("create");
+    const [openNuevoProspectoModal, setOpenNuevoProspectoModal] = useState(false);
     const [draft, setDraft] = useState(null);
     const [loadingCases, setLoadingCases] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
@@ -2366,7 +2368,6 @@ export default function DigitalesProspectos() {
     }
     function resetCacheProspectoGuardado() {
         ultimoPayloadGuardadoRef.current = "";
-        ultimoProspectoGuardadoIdRef.current = null;
     }
     const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
     const accessibleCases = useMemo(() => cases.filter((c) => {
@@ -2629,47 +2630,17 @@ export default function DigitalesProspectos() {
         XLSX.utils.book_append_sheet(wb, ws, "Prospectos");
         XLSX.writeFile(wb, `reporte_prospectos_${fecha}_${hora}.xlsx`, { compression: true });
     }
-    const openCreate = () => {
-        resetPlantillasModal();
-        resetCacheProspectoGuardado();
-        setTouchedSave(false);
-        setMode("create");
-        const now = new Date();
-        const nowLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-        setDraft({
-            id_exp: null,
-            agencia: !isAdmin ? contextoDigitalSesion?.agencia || "" : "",
-            anio_auto: "",
-            tiene_nombre: false,
-            cliente_nombre: "",
-            cliente_apellidos: "",
-            telefono: "",
-            correo: "",
-            linea: "",
-            origen: "",
-            pauta: "",
-            estado: "Contactado",
-            motivo_descalificacion: "",
-            cliente_interes: "",
-            comentarios: "",
-            asesor_digital: !isAdmin ? contextoDigitalSesion?.asesor_digital || "" : "",
-            asesor_solicita: "",
-            creado: nowLocal,
-            primer_contacto_at: "",
-            ultimo_contacto_at: "",
-            enganche_monto: "",
-            presupuesto_mensual: "",
-            buro_estado: "",
-            forma_pago: "",
-            tipo_cliente: "",
-            uso_vehiculo: "",
-            plazo_compra: "",
-            comprobacion_ingresos: "",
-            evidencias_existentes: [],
-            evidencias_nuevas: [],
-            delete_evidencia_ids: [],
-        });
-        setOpenModal(true);
+    const openCreate = () => { setOpenNuevoProspectoModal(true); };
+    const handleNuevoProspectoCreado = (prospectoCreado, opciones = {}) => {
+        const normalizado = normalizeProspecto(prospectoCreado || {});
+        if (normalizado?.id_exp) setCases((actuales) => { const mapa = new Map(actuales.map((item) => [item.id_exp, item])); mapa.set(normalizado.id_exp, normalizado); return Array.from(mapa.values()); });
+        if (opciones?.cerrar !== false) setOpenNuevoProspectoModal(false);
+        cargarProspectosPorLinea().catch((error) => console.error("No se pudo refrescar la lista después de crear el prospecto:", error));
+    };
+    const handlePlantillaNuevoProspectoEnviada = ({ telefono } = {}) => {
+        const tel = normalizaTelefonoMx(telefono);
+        if (tel) setTelefonosConChat((actuales) => { const siguiente = new Set(actuales); siguiente.add(tel); return siguiente; });
+        cargarTelefonosConChat().catch((error) => console.error("No se pudieron refrescar los chats después de enviar la plantilla:", error));
     };
     const closeAgendaModal = () => {
         setOpenAgendaModal(false);
@@ -2700,7 +2671,6 @@ export default function DigitalesProspectos() {
             "";
         try {
             setTouchedSave(false);
-            setMode("edit");
             setLoadingDetail(true);
             setOpenModal(true);
             const contextoPeticion = isAdmin &&
@@ -2815,7 +2785,7 @@ export default function DigitalesProspectos() {
     };
     function buildProspectoPayload() {
         const agenciaFinal = !isAdmin && contextoDigitalSesion?.agencia ? contextoDigitalSesion.agencia : draft.agencia || "";
-        const asesorDigitalFinal = mode === "edit" ? draft.asesor_digital || "" : !isAdmin && contextoDigitalSesion?.asesor_digital ? contextoDigitalSesion.asesor_digital : draft.asesor_digital || "";
+        const asesorDigitalFinal = draft.asesor_digital || "";
         const nombreCapturado = getNombreCompletoDraft(draft);
         const nombreFinal = draft.tiene_nombre && nombreCapturado ? nombreCapturado : "SIN NOMBRE";
         return {
@@ -2865,14 +2835,12 @@ export default function DigitalesProspectos() {
             alert("Selecciona un motivo de descalificación.");
             return null;
         }
-        if (missing.length || telInvalid || !telIsOk) {
+        if (missing.length || telInvalid || !telIsOk || !draft.id_exp) {
             return null;
         }
-        if (missing.length || telInvalid || !telIsOk)
-            return null;
         const payloadActual = buildProspectoPayload();
         const firmaActual = getFirmaPayloadProspecto(payloadActual);
-        const idGuardado = draft.id_exp || ultimoProspectoGuardadoIdRef.current;
+        const idGuardado = draft.id_exp;
         if (idGuardado && ultimoPayloadGuardadoRef.current === firmaActual) {
             return idGuardado;
         }
@@ -2893,20 +2861,12 @@ export default function DigitalesProspectos() {
         setSaving(true);
         try {
             const payload = buildProspectoPayload();
-            let idFinal = draft.id_exp;
-            if (!idFinal || mode === "create") {
-                const created = await api.digitalesCreateProspecto(payload);
-                idFinal = created?.id || created?.id_exp || created?.prospecto?.id || null;
-                if (!idFinal) {
-                    throw new Error("El backend guardó el prospecto, pero no devolvió su ID.");
-                }
-                setMode("edit");
+            const idFinal = draft.id_exp;
+            if (!idFinal) {
+                throw new Error("No se puede editar un prospecto sin ID. El alta debe realizarse desde NuevoProspectoModal.");
             }
-            else {
-                await api.digitalesUpdateProspecto(idFinal, payload);
-            }
+            await api.digitalesUpdateProspecto(idFinal, payload);
             ultimoPayloadGuardadoRef.current = getFirmaPayloadProspecto(payload);
-            ultimoProspectoGuardadoIdRef.current = idFinal;
             if (procesarEvidencias) {
                 const nuevas = draft.evidencias_nuevas || [];
                 if (nuevas.length > 0) {
@@ -3316,7 +3276,7 @@ export default function DigitalesProspectos() {
                         <Icon className="h-4 w-4" /> {label}
                     </button>))}
                 </div>
-                {viewMode !== "ejecutivo" ? (<button type="button" onClick={exportarExcelProspectos} disabled={loadingCases || sorted.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm hover:bg-slate-100 disabled:opacity-50">
+                {!["ejecutivo", "resultados"].includes(viewMode) ? (<button type="button" onClick={exportarExcelProspectos} disabled={loadingCases || sorted.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm hover:bg-slate-100 disabled:opacity-50">
                     <FileDown className="h-4 w-4" /> Exportar Excel
                 </button>) : null}
                 <button onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80">
@@ -3324,7 +3284,7 @@ export default function DigitalesProspectos() {
                 </button>
             </div>
         </div>
-        {viewMode !== "ejecutivo" ? (<>
+        {!["ejecutivo", "resultados"].includes(viewMode) ? (<>
             {/* KPIs arriba */}
             <div className="mb-5 overflow-hidden rounded-2xl bg-white">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5">
@@ -3500,6 +3460,8 @@ export default function DigitalesProspectos() {
                 </div>) : null}
             </div>
         </>) : null}
+        {/* Vista Resultados IA */}
+        {viewMode === "resultados" && <ResultadosIA numeroAsesorInicial={selectedNumeroAsesor !== "Todos" ? selectedNumeroAsesor : ""} agenciaInicial={filters.agencia !== "Todos" ? filters.agencia : ""} businessInicial={filters.linea !== "Todos" ? filters.linea : ""} />}
         {/* Vista Ejecutivo BDC */}
         {viewMode === "ejecutivo" && <DashboardEjecutivoBDC rows={accessibleCases} versionOperativa={versionOperativaBDC} />}
         {/* Vista Gráficos */}
@@ -3726,9 +3688,10 @@ export default function DigitalesProspectos() {
                 </div>
             </div>
         </div>)}
+        <NuevoProspectoModal open={openNuevoProspectoModal} onClose={() => setOpenNuevoProspectoModal(false)} onCreado={handleNuevoProspectoCreado} onPlantillaEnviada={handlePlantillaNuevoProspectoEnviada} numeroAsesor={numeroAsesorActivo || numeroUsuarioSesion || ""} user={user} isAdmin={isAdmin} />
         <ContextMenu ctxMenu={ctxMenu} onDelete={eliminarCaso} onClose={() => setCtxMenu({ open: false, row: null })} />
-        {/* Modal Editar/Crear */}
-        <Modal open={openModal} title={mode === "create" ? "Nuevo prospecto" : `Editar prospecto · ${draft?.id_exp}`} onClose={closeModal} footer={<>
+        {/* Modal exclusivo de edición; el alta vive en NuevoProspectoModal.jsx */}
+        <Modal open={openModal} title={`Editar prospecto · ${draft?.id_exp || ""}`} onClose={closeModal} footer={<>
             {draftTieneChat ? (<button type="button" onClick={(event) => {
                 event.stopPropagation();
                 navigate(`/comercial/prospectos/contacto?tel=${encodeURIComponent(telefonoDraft)}&direct=1`);

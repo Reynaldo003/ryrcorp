@@ -136,7 +136,6 @@ export default function ComercialTopNav() {
                 href: "/comercial/pruebas_manejo",
                 icon: SteeringWheelLab,
                 show: hasAnyPermission([
-                    "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
@@ -148,7 +147,6 @@ export default function ComercialTopNav() {
                 href: "/comercial/entregas",
                 icon: PackageCheck,
                 show: hasAnyPermission([
-                    "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
@@ -162,6 +160,7 @@ export default function ComercialTopNav() {
                 icon: BarChart2,
                 show: hasAnyPermission([
                     "CRM_DIGITALES",
+                    "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL",

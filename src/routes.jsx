@@ -457,9 +457,9 @@ export const router = createBrowserRouter(
                                                 "CRM_COORDINADOR_DIGITAL",
                                             ]}
                                         >
-                                        <React.Suspense fallback={<div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-[#131E5C]" /></div>}>
-                                            <CitasLayout />
-                                        </React.Suspense>
+                                            <React.Suspense fallback={<div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-[#131E5C]" /></div>}>
+                                                <CitasLayout />
+                                            </React.Suspense>
                                         </RequirePermission>
                                     ),
                                     children: [
@@ -520,7 +520,6 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission
                                             anyOf={[
-                                                "CRM_DIGITALES",
                                                 "CRM_VENTAS",
                                                 "USUARIOS_ADMIN",
                                                 "CRM_CALIDAD",
@@ -542,7 +541,6 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission
                                             anyOf={[
-                                                "CRM_DIGITALES",
                                                 "CRM_VENTAS",
                                                 "USUARIOS_ADMIN",
                                                 "CRM_CALIDAD",

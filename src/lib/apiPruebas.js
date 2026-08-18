@@ -784,6 +784,9 @@ export const api = {
         )
       : rejectMissingId("Falta el ID del prospecto."),
 
+  digitalesResultadosIA: (params = {}) =>
+    http(`/digitales/analitica/resultados-ia/${buildQuery(params)}`),
+
   digitalesCreateProspecto: (payload = {}) =>
     http("/digitales/api/prospectos/", {
       method: "POST",
