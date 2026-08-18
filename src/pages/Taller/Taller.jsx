@@ -156,7 +156,7 @@ const ETAPAS_FLUJO_TRABAJO = [
         numero: 5,
         nombre: "En espera de Diagnóstico",
         icon: ScanSearch,
-        color: "#6366F1",
+        color: "#D5232A",
         etapas: ["En espera de Diagnóstico"],
     },
     {
@@ -164,7 +164,7 @@ const ETAPAS_FLUJO_TRABAJO = [
         numero: 6,
         nombre: "En espera de DISS",
         icon: MapPin,
-        color: "#6366F1",
+        color: "#D5232A",
         etapas: ["En espera de DISS"],
     },
     {
@@ -172,7 +172,7 @@ const ETAPAS_FLUJO_TRABAJO = [
         numero: 7,
         nombre: "En espera de Autorización",
         icon: FileSignature,
-        color: "#6366F1",
+        color: "#D5232A",
         etapas: [
             "En espera de autorización de presupuesto",
             "En espera de Autorización",
@@ -183,7 +183,7 @@ const ETAPAS_FLUJO_TRABAJO = [
         numero: 8,
         nombre: "En espera de Piezas",
         icon: PackageOpen,
-        color: "#6366F1",
+        color: "#D5232A",
         etapas: ["En espera de refacciones", "En espera de Piezas"],
     },
     {
@@ -1100,6 +1100,7 @@ function SideContainerPanel({
     open,
     containers,
     orders,
+    selectedDate,
     panelState,
     onTogglePanel,
     onToggleContainer,
@@ -1129,9 +1130,13 @@ function SideContainerPanel({
     const totalOrders = containers.reduce(
         (sum, container) =>
             sum +
-            orders.filter((order) =>
-                orderBelongsToContainer(order, container),
-            ).length,
+            orders.filter((order) => {
+                if (!orderBelongsToContainer(order, container)) return false;
+                if (selectedDate) {
+                    return order.fecha_programada === selectedDate;
+                }
+                return true;
+            }).length,
         0,
     );
 
@@ -1171,9 +1176,13 @@ function SideContainerPanel({
                     <StageContainer
                         key={container.id}
                         container={container}
-                        orders={orders.filter((order) =>
-                            orderBelongsToContainer(order, container),
-                        )}
+                        orders={orders.filter((order) => {
+                            if (!orderBelongsToContainer(order, container)) return false;
+                            if (selectedDate) {
+                                return order.fecha_programada === selectedDate;
+                            }
+                            return true;
+                        })}
                         open={panelState.contenedores?.[container.id] !== false}
                         onToggle={() => onToggleContainer(container.id)}
                         onMoveOrder={onMoveOrder}
@@ -1189,6 +1198,7 @@ function BottomContainerPanel({
     open,
     containers,
     orders,
+    selectedDate,
     panelState,
     onTogglePanel,
     onToggleContainer,
@@ -1198,9 +1208,13 @@ function BottomContainerPanel({
     const totalOrders = containers.reduce(
         (sum, container) =>
             sum +
-            orders.filter((order) =>
-                orderBelongsToContainer(order, container),
-            ).length,
+            orders.filter((order) => {
+                if (!orderBelongsToContainer(order, container)) return false;
+                if (selectedDate) {
+                    return order.fecha_programada === selectedDate;
+                }
+                return true;
+            }).length,
         0,
     );
 
@@ -1249,9 +1263,13 @@ function BottomContainerPanel({
                             <StageContainer
                                 key={container.id}
                                 container={container}
-                                orders={orders.filter((order) =>
-                                    orderBelongsToContainer(order, container),
-                                )}
+                                orders={orders.filter((order) => {
+                                    if (!orderBelongsToContainer(order, container)) return false;
+                                    if (selectedDate) {
+                                        return order.fecha_programada === selectedDate;
+                                    }
+                                    return true;
+                                })}
                                 open={panelState.contenedores?.[container.id] !== false}
                                 onToggle={() => onToggleContainer(container.id)}
                                 onMoveOrder={onMoveOrder}
@@ -1268,6 +1286,7 @@ function BottomContainerPanel({
 
 function FlujoTrabajoSection({
     orders = [],
+    selectedDate,
     onStageSelect,
     onMoveOrder,
     onEdit,
@@ -1317,11 +1336,23 @@ function FlujoTrabajoSection({
                         const isTray = traysOpen || selectedStage === stage.id;
                         const anyTray = traysOpen || selectedStage !== null;
 
+                        const ordersForStage = orders.filter((order) => {
+                            if (!orderMatchesEtapas(order, stage.etapas)) return false;
+                            if (selectedDate) {
+                                return order.fecha_programada === selectedDate;
+                            }
+                            return true;
+                        });
+
                         if (isTray) {
                             return (
                                 <div key={stage.id} className="flex shrink-0 items-center gap-2">
                                     {index > 0 && anyTray ? (
-                                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                                        <span className="flex h-8 w-6 shrink-0 flex-col items-center justify-center gap-[3px]">
+                                            <span className="h-[2px] w-[2px] rounded-full bg-slate-300" />
+                                            <GripVertical className="h-3 w-3 text-slate-300" />
+                                            <span className="h-[2px] w-[2px] rounded-full bg-slate-300" />
+                                        </span>
                                     ) : null}
                                     <StageContainer
                                         container={{
@@ -1331,9 +1362,7 @@ function FlujoTrabajoSection({
                                             color: stage.color,
                                             etapaDestino: stage.etapas[0],
                                         }}
-                                        orders={orders.filter((order) =>
-                                            orderMatchesEtapas(order, stage.etapas),
-                                        )}
+                                        orders={ordersForStage}
                                         onClose={
                                             traysOpen
                                                 ? undefined
@@ -1348,16 +1377,18 @@ function FlujoTrabajoSection({
                             );
                         }
 
-                        const count = orders.filter((order) =>
-                            orderMatchesEtapas(order, stage.etapas),
-                        ).length;
+                        const count = ordersForStage.length;
                         const selected = selectedStage === stage.id;
                         const Icon = stage.icon;
 
                         return (
                             <div key={stage.id} className="flex shrink-0 items-center gap-2">
                                 {index > 0 && anyTray ? (
-                                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                                    <span className="flex h-8 w-6 shrink-0 flex-col items-center justify-center gap-[3px]">
+                                        <span className="h-[2px] w-[2px] rounded-full bg-slate-300" />
+                                        <GripVertical className="h-3 w-3 text-slate-300" />
+                                        <span className="h-[2px] w-[2px] rounded-full bg-slate-300" />
+                                    </span>
                                 ) : null}
                                 <button
                                     type="button"
@@ -1433,6 +1464,7 @@ function WorkshopBoardLayout({
 
             <FlujoTrabajoSection
                 orders={containerOrders || []}
+                selectedDate={selectedDate}
                 onMoveOrder={onMoveOrder}
                 onEdit={onEdit}
             />
@@ -1839,12 +1871,12 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 left-0 z-40 flex w-4 cursor-ew-resize items-center justify-start"
-                title="Modificar hora de inicio"
+                className="absolute inset-y-0 left-0 z-40 flex w-4 cursor-ew-resize items-center justify-center"
+                title="Arrastrar para cambiar hora de inicio"
             >
                 <span
-                    className="h-0 w-0 border-y-[9px] border-y-transparent border-r-[9px] transition group-hover:brightness-75"
-                    style={{ borderRightColor: visualStyle.borderColor }}
+                    className="h-7 w-[3px] rounded-full transition group-hover:brightness-75"
+                    style={{ backgroundColor: `${visualStyle.borderColor}55` }}
                 />
             </button>
 
@@ -1890,12 +1922,12 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 right-0 z-40 flex w-4 cursor-ew-resize items-center justify-end"
-                title="Modificar hora de fin"
+                className="absolute inset-y-0 right-0 z-40 flex w-4 cursor-ew-resize items-center justify-center"
+                title="Arrastrar para cambiar hora de fin"
             >
                 <span
-                    className="h-0 w-0 border-y-[9px] border-y-transparent border-l-[9px] transition group-hover:brightness-75"
-                    style={{ borderLeftColor: visualStyle.borderColor }}
+                    className="h-7 w-[3px] rounded-full transition group-hover:brightness-75"
+                    style={{ backgroundColor: `${visualStyle.borderColor}55` }}
                 />
             </button>
         </div>

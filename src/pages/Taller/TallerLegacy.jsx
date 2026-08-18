@@ -926,6 +926,7 @@ function SideContainerPanel({
     open,
     containers,
     orders,
+    selectedDate,
     panelState,
     onTogglePanel,
     onToggleContainer,
@@ -975,9 +976,13 @@ function SideContainerPanel({
                     <StageContainer
                         key={container.id}
                         container={container}
-                        orders={orders.filter((order) =>
-                            orderBelongsToContainer(order, container),
-                        )}
+                        orders={orders.filter((order) => {
+                            if (!orderBelongsToContainer(order, container)) return false;
+                            if (selectedDate) {
+                                return order.fecha_programada === selectedDate;
+                            }
+                            return true;
+                        })}
                         open={panelState.contenedores?.[container.id] !== false}
                         onToggle={() => onToggleContainer(container.id)}
                         onMoveOrder={onMoveOrder}
@@ -993,6 +998,7 @@ function BottomContainerPanel({
     open,
     containers,
     orders,
+    selectedDate,
     panelState,
     onTogglePanel,
     onToggleContainer,
@@ -1022,9 +1028,13 @@ function BottomContainerPanel({
                             <StageContainer
                                 key={container.id}
                                 container={container}
-                                orders={orders.filter((order) =>
-                                    orderBelongsToContainer(order, container),
-                                )}
+                                orders={orders.filter((order) => {
+                                    if (!orderBelongsToContainer(order, container)) return false;
+                                    if (selectedDate) {
+                                        return order.fecha_programada === selectedDate;
+                                    }
+                                    return true;
+                                })}
                                 open={panelState.contenedores?.[container.id] !== false}
                                 onToggle={() => onToggleContainer(container.id)}
                                 onMoveOrder={onMoveOrder}
@@ -1063,6 +1073,7 @@ function WorkshopBoardLayout({
                     open={panelState.izquierda}
                     containers={CONTENEDORES_TALLER.izquierda}
                     orders={containerOrders}
+                    selectedDate={selectedDate}
                     panelState={panelState}
                     onTogglePanel={onTogglePanel}
                     onToggleContainer={onToggleContainer}
@@ -1088,6 +1099,7 @@ function WorkshopBoardLayout({
                     open={panelState.derecha}
                     containers={CONTENEDORES_TALLER.derecha}
                     orders={containerOrders}
+                    selectedDate={selectedDate}
                     panelState={panelState}
                     onTogglePanel={onTogglePanel}
                     onToggleContainer={onToggleContainer}
@@ -1100,6 +1112,7 @@ function WorkshopBoardLayout({
                 open={panelState.inferior}
                 containers={CONTENEDORES_TALLER.inferior}
                 orders={containerOrders}
+                selectedDate={selectedDate}
                 panelState={panelState}
                 onTogglePanel={onTogglePanel}
                 onToggleContainer={onToggleContainer}
@@ -1511,12 +1524,12 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 left-0 z-40 flex w-4 cursor-ew-resize items-center justify-start"
-                title="Modificar hora de inicio"
+                className="absolute inset-y-0 left-0 z-40 flex w-4 cursor-ew-resize items-center justify-center"
+                title="Arrastrar para cambiar hora de inicio"
             >
                 <span
-                    className="h-0 w-0 border-y-[9px] border-y-transparent border-r-[9px] transition group-hover:brightness-75"
-                    style={{ borderRightColor: visualStyle.borderColor }}
+                    className="h-7 w-[3px] rounded-full transition group-hover:brightness-75"
+                    style={{ backgroundColor: `${visualStyle.borderColor}55` }}
                 />
             </button>
 
@@ -1562,12 +1575,12 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 right-0 z-40 flex w-4 cursor-ew-resize items-center justify-end"
-                title="Modificar hora de fin"
+                className="absolute inset-y-0 right-0 z-40 flex w-4 cursor-ew-resize items-center justify-center"
+                title="Arrastrar para cambiar hora de fin"
             >
                 <span
-                    className="h-0 w-0 border-y-[9px] border-y-transparent border-l-[9px] transition group-hover:brightness-75"
-                    style={{ borderLeftColor: visualStyle.borderColor }}
+                    className="h-7 w-[3px] rounded-full transition group-hover:brightness-75"
+                    style={{ backgroundColor: `${visualStyle.borderColor}55` }}
                 />
             </button>
         </div>
