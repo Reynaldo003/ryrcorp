@@ -1,10 +1,12 @@
 // src/pages/SafetyCulture/Safety.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
     BarChart3,
     Building2,
     CalendarDays,
+    ChevronLeft,
+    ChevronRight,
     CheckCircle2,
     ClipboardList,
     Eye,
@@ -27,6 +29,7 @@ import { apiSafety } from "../../lib/apiSafety";
 const BRAND_BLUE = "#131E5C";
 const API_BASE = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const MESES_LARGOS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 function cls(...values) { return values.filter(Boolean).join(" "); }
 function normalizeStr(value) { return String(value ?? "").trim(); }
@@ -149,6 +152,29 @@ function nombrePeriodo(periodo) {
     return `${MESES_CORTOS[mes - 1]} ${String(anio).slice(-2)}`;
 }
 
+function getWeeksOfMonth(year, month) {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDow = (firstDay.getDay() + 6) % 7;
+    const totalDays = lastDay.getDate();
+    const weeks = [];
+    let currentDay = 1;
+    for (let w = 0; currentDay <= totalDays; w++) {
+        const weekStart = currentDay;
+        const daysInWeek = [];
+        for (let d = 0; d < 7 && currentDay <= totalDays; d++) {
+            if (w === 0 && d < startDow) {
+                daysInWeek.push(null);
+            } else {
+                daysInWeek.push(currentDay);
+                currentDay++;
+            }
+        }
+        weeks.push({ weekIndex: w, days: daysInWeek, startDay: weekStart, endDay: daysInWeek.filter(Boolean).length ? Math.max(...daysInWeek.filter(Boolean)) : weekStart });
+    }
+    return weeks;
+}
+
 function Skeleton({ className = "" }) {
     return <div className={cls("animate-pulse rounded-md bg-slate-200/70", className)} />;
 }
@@ -248,15 +274,6 @@ function StatCard({ icon: Icon, label, value, detail, tone = "normal" }) {
                     {detail ? <div className="mt-1 text-xs font-semibold text-slate-500">{detail}</div> : null}
                 </div>
             </div>
-        </div>
-    );
-}
-
-function FilterBlock({ label, children }) {
-    return (
-        <div>
-            <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[#131E5C]">{label}</div>
-            {children}
         </div>
     );
 }
@@ -1093,6 +1110,12 @@ export default function Safety() {
         sort: "fecha_desc",
     });
 
+    const [showFechaPopup, setShowFechaPopup] = useState(false);
+    const [fechaFilterMode, setFechaFilterMode] = useState("dia");
+    const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+    const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+    const fechaPopupRef = useRef(null);
+
     async function refreshList() {
         setLoadingList(true);
         setErrorList("");
@@ -1439,6 +1462,244 @@ export default function Safety() {
 
     const selectedResumen = useMemo(() => obtenerResumenReporte(selected || {}), [selected]);
 
+    function FechaPopup() {
+        const hoyYMD = toYMDMexico(new Date());
+        const [dragStart, setDragStart] = useState(null);
+        const [dragEnd, setDragEnd] = useState(null);
+        const [isDragging, setIsDragging] = useState(false);
+
+        useEffect(() => {
+            if (showFechaPopup) {
+                setDragStart(null);
+                setDragEnd(null);
+                setIsDragging(false);
+            }
+        }, [showFechaPopup]);
+
+        useEffect(() => {
+            if (!showFechaPopup) return;
+            function handleUp() { setIsDragging(false); }
+            document.addEventListener("mouseup", handleUp);
+            return () => document.removeEventListener("mouseup", handleUp);
+        }, [showFechaPopup]);
+
+        useEffect(() => {
+            if (!showFechaPopup) return;
+            function handleClick(e) {
+                if (fechaPopupRef.current && !fechaPopupRef.current.contains(e.target)) {
+                    setShowFechaPopup(false);
+                }
+            }
+            document.addEventListener("mousedown", handleClick);
+            return () => document.removeEventListener("mousedown", handleClick);
+        }, [showFechaPopup]);
+
+        if (!showFechaPopup) return null;
+
+        const weeks = getWeeksOfMonth(calYear, calMonth);
+        const mesStr = String(calMonth + 1).padStart(2, "0");
+
+        function ymd(day) {
+            return `${calYear}-${mesStr}-${String(day).padStart(2, "0")}`;
+        }
+
+        function nav(delta) {
+            let m = calMonth + delta;
+            let y = calYear;
+            if (m < 0) { m = 11; y--; }
+            if (m > 11) { m = 0; y++; }
+            setCalMonth(m);
+            setCalYear(y);
+        }
+
+        function applyRange(fromYMD, toYMD) {
+            const [a, b] = fromYMD <= toYMD ? [fromYMD, toYMD] : [toYMD, fromYMD];
+            setFilters((prev) => ({ ...prev, rangoDesde: a, rangoHasta: b }));
+        }
+
+        function selectDay(day) {
+            const y = ymd(day);
+            applyRange(y, y);
+        }
+
+        function selectWeek(weekIndex) {
+            const week = weeks[weekIndex];
+            if (!week) return;
+            const validDays = week.days.filter(Boolean);
+            if (!validDays.length) return;
+            applyRange(ymd(validDays[0]), ymd(validDays[validDays.length - 1]));
+        }
+
+        function handleMouseDown(day) {
+            const y = ymd(day);
+            setDragStart(y);
+            setDragEnd(y);
+            setIsDragging(true);
+        }
+
+        function handleMouseEnter(day) {
+            if (!isDragging) return;
+            setDragEnd(ymd(day));
+        }
+
+        function handleMouseUp(day) {
+            if (!isDragging) return;
+            const y = ymd(day);
+            applyRange(dragStart, y);
+            setIsDragging(false);
+        }
+
+        function handleClickDay(day) {
+            selectDay(day);
+        }
+
+        function isInDragRange(dayYMD) {
+            if (!isDragging || !dragStart || !dragEnd) return false;
+            const [a, b] = dragStart <= dragEnd ? [dragStart, dragEnd] : [dragEnd, dragStart];
+            return dayYMD >= a && dayYMD <= b;
+        }
+
+        function isInFilterRange(dayYMD) {
+            const desde = filters.rangoDesde;
+            const hasta = filters.rangoHasta;
+            if (!desde && !hasta) return false;
+            const a = desde || hasta;
+            const b = hasta || desde;
+            if (a === b) return dayYMD === a;
+            return dayYMD >= a && dayYMD <= b;
+        }
+
+        return (
+            <div
+                ref={fechaPopupRef}
+                className="absolute top-full left-0 z-50 mt-2 w-[290px] rounded-xl border border-[#131E5C]/15 bg-white p-3 shadow-xl"
+                onMouseUp={() => setIsDragging(false)}
+            >
+                <div className="mb-2 flex gap-1 rounded-lg bg-slate-100 p-0.5">
+                    <button
+                        type="button"
+                        onClick={() => { setFechaFilterMode("dia"); setDragStart(null); setDragEnd(null); setIsDragging(false); }}
+                        className={cls(
+                            "flex-1 rounded-md py-1.5 text-[11px] font-black transition",
+                            fechaFilterMode === "dia" ? "bg-[#131E5C] text-white shadow" : "text-slate-600 hover:bg-white"
+                        )}
+                    >
+                        Día
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setFechaFilterMode("semana"); setDragStart(null); setDragEnd(null); setIsDragging(false); }}
+                        className={cls(
+                            "flex-1 rounded-md py-1.5 text-[11px] font-black transition",
+                            fechaFilterMode === "semana" ? "bg-[#131E5C] text-white shadow" : "text-slate-600 hover:bg-white"
+                        )}
+                    >
+                        Semana
+                    </button>
+                </div>
+
+                <div className="mb-2 flex items-center justify-between gap-1">
+                    <button type="button" onClick={() => nav(-1)} className="rounded-md p-1 text-[#131E5C] hover:bg-slate-100">
+                        <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <div className="flex items-center gap-1">
+                        <span className="text-[11px] font-black text-[#131E5C]">
+                            {MESES_LARGOS[calMonth]}
+                        </span>
+                        <select
+                            value={calYear}
+                            onChange={(e) => setCalYear(Number(e.target.value))}
+                            className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] font-black text-[#131E5C] outline-none cursor-pointer"
+                        >
+                            {Array.from({ length: 7 }, (_, i) => 2020 + i).map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button type="button" onClick={() => nav(1)} className="rounded-md p-1 text-[#131E5C] hover:bg-slate-100">
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div className="mb-1 grid grid-cols-7 gap-px">
+                    {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
+                        <div key={d} className="py-0.5 text-center text-[9px] font-extrabold uppercase text-slate-400">{d}</div>
+                    ))}
+                </div>
+
+                <div className="select-none">
+                    {weeks.map((wk) => (
+                        <div key={wk.weekIndex} className="flex gap-px">
+                            {fechaFilterMode === "semana" && (
+                                <button
+                                    type="button"
+                                    onClick={() => selectWeek(wk.weekIndex)}
+                                    className="mr-0.5 flex items-center justify-center rounded bg-[#131E5C]/10 px-1.5 text-[8px] font-black text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white whitespace-nowrap"
+                                    title={`Seleccionar semana ${wk.weekIndex + 1}`}
+                                >
+                                    Sem {wk.weekIndex + 1}
+                                </button>
+                            )}
+                            {wk.days.map((day, di) => {
+                                if (day === null) return <div key={di} className="flex-1" />;
+                                const dayYMD = ymd(day);
+                                const esHoy = dayYMD === hoyYMD;
+                                const inDrag = isInDragRange(dayYMD);
+                                const inFilter = isInFilterRange(dayYMD);
+
+                                return (
+                                    <button
+                                        key={di}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleMouseDown(day);
+                                        }}
+                                        onMouseEnter={() => handleMouseEnter(day)}
+                                        onMouseUp={() => handleMouseUp(day)}
+                                        onClick={() => handleClickDay(day)}
+                                        className={cls(
+                                            "flex-1 rounded py-1 text-center text-[11px] font-bold transition",
+                                            inDrag
+                                                ? "bg-[#131E5C] text-white"
+                                                : inFilter
+                                                    ? "bg-[#131E5C]/20 text-[#131E5C]"
+                                                    : "text-[#131E5C] hover:bg-[#131E5C]/10",
+                                            esHoy && !inDrag && "ring-1 ring-[#131E5C] font-black"
+                                        )}
+                                    >
+                                        {day}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                    {(filters.rangoDesde || filters.rangoHasta) ? (
+                        <div className="text-center text-[10px] font-bold text-[#131E5C]">
+                            {filters.rangoDesde === filters.rangoHasta
+                                ? filters.rangoDesde
+                                : `${filters.rangoDesde} → ${filters.rangoHasta}`}
+                            <button
+                                type="button"
+                                onClick={() => { setFilters((prev) => ({ ...prev, rangoDesde: "", rangoHasta: "" })); setDragStart(null); setDragEnd(null); }}
+                                className="ml-2 text-[10px] font-bold text-red-400 hover:text-red-600"
+                            >
+                                Limpiar
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="text-center text-[10px] font-semibold text-slate-300 italic">
+                            Arrastra para seleccionar rango
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     function resetFilters() {
         setFilters({
             q: "",
@@ -1448,6 +1709,7 @@ export default function Safety() {
             rangoHasta: "",
             sort: "fecha_desc",
         });
+        setShowFechaPopup(false);
     }
 
     function getHoyMexicoYMD() { return toYMDMexico(new Date()); }
@@ -1455,6 +1717,20 @@ export default function Safety() {
     function setHoy() {
         const hoy = getHoyMexicoYMD();
         setFilters((prev) => ({ ...prev, rangoDesde: hoy, rangoHasta: hoy }));
+    }
+
+    function setMesActual() {
+        const hoy = new Date();
+        const first = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const last = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+        setFilters((prev) => ({ ...prev, rangoDesde: toYMDMexico(first), rangoHasta: toYMDMexico(last) }));
+    }
+
+    function setMesPasado() {
+        const hoy = new Date();
+        const first = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+        const last = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+        setFilters((prev) => ({ ...prev, rangoDesde: toYMDMexico(first), rangoHasta: toYMDMexico(last) }));
     }
 
     const ViewToggle = () => (
@@ -1536,122 +1812,151 @@ export default function Safety() {
                 <StatCard icon={Paperclip} label="Evidencias" value={metricas.evidencias} detail={`${analitica.promedioEvidencias.toFixed(2)} por reporte`} />
             </div>
 
-            <div className="mb-5 p-4">
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
-                    <div className="xl:col-span-4">
-                        <FilterBlock label="Búsqueda">
-                            <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-3">
-                                <Search className="h-4 w-4 text-[#131E5C]" />
-                                <input
-                                    value={filters.q}
-                                    onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
-                                    placeholder="OS, cliente, técnico, desviación..."
-                                    className="w-full text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400"
-                                />
-                                {filters.q ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilters((prev) => ({ ...prev, q: "" }))}
-                                        className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-red-500"
-                                        aria-label="Limpiar búsqueda"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                ) : null}
-                            </div>
-                        </FilterBlock>
-                    </div>
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2 text-sm font-black text-[#131E5C]">
+                    <Search className="h-4 w-4" />
+                    Filtros de búsqueda
+                </div>
 
-                    <div className="xl:col-span-2">
-                        <FilterBlock label="Agencia">
-                            <select
-                                value={filters.agencia}
-                                onChange={(e) => setFilters((prev) => ({ ...prev, agencia: e.target.value }))}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-[#131E5C] outline-none"
+                <div className="mb-4">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-[#131E5C]/40 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#131E5C]/10">
+                        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                        <input
+                            value={filters.q}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+                            placeholder="Buscar por OS, cliente, técnico, agencia, desviación..."
+                            className="w-full bg-transparent text-sm font-semibold text-[#131E5C] outline-none placeholder:text-slate-400"
+                        />
+                        {filters.q ? (
+                            <button
+                                type="button"
+                                onClick={() => setFilters((prev) => ({ ...prev, q: "" }))}
+                                className="shrink-0 rounded-lg p-1 text-slate-400 transition hover:bg-slate-200/60 hover:text-red-500"
                             >
-                                {agencias.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="xl:col-span-2">
-                        <FilterBlock label="Estado general">
-                            <select
-                                value={filters.estadoGeneral}
-                                onChange={(e) => setFilters((prev) => ({ ...prev, estadoGeneral: e.target.value }))}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-[#131E5C] outline-none"
-                            >
-                                <option value="todos">Todos</option>
-                                <option value="con_hallazgos">Con hallazgos</option>
-                                <option value="sin_hallazgos">Sin hallazgos</option>
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="xl:col-span-2">
-                        <FilterBlock label="Ordenar por">
-                            <select
-                                value={filters.sort}
-                                onChange={(e) => setFilters((prev) => ({ ...prev, sort: e.target.value }))}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-[#131E5C] outline-none"
-                            >
-                                <option value="fecha_desc">Fecha más reciente</option>
-                                <option value="fecha_asc">Fecha más antigua</option>
-                                <option value="hallazgos_desc">Más hallazgos</option>
-                                <option value="cumplimiento_asc">Menor cumplimiento</option>
-                                <option value="cumplimiento_desc">Mayor cumplimiento</option>
-                                <option value="evidencias_desc">Más evidencias</option>
-                                <option value="tecnico_asc">Técnico A-Z</option>
-                                <option value="agencia_asc">Agencia A-Z</option>
-                                <option value="cliente_asc">Cliente A-Z</option>
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="xl:col-span-1">
-                        <FilterBlock label="Desde">
-                            <input
-                                type="date"
-                                value={filters.rangoDesde}
-                                onChange={(e) => setFilters((prev) => ({ ...prev, rangoDesde: e.target.value }))}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-[#131E5C] outline-none"
-                            />
-                        </FilterBlock>
-                    </div>
-
-                    <div className="xl:col-span-1">
-                        <FilterBlock label="Hasta">
-                            <input
-                                type="date"
-                                value={filters.rangoHasta}
-                                onChange={(e) => setFilters((prev) => ({ ...prev, rangoHasta: e.target.value }))}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-[#131E5C] outline-none"
-                            />
-                        </FilterBlock>
+                                <X className="h-4 w-4" />
+                            </button>
+                        ) : null}
                     </div>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button
-                        type="button"
-                        onClick={setHoy}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-emerald-700"
-                    >
-                        <CalendarDays className="h-4 w-4" />
-                        Hoy
-                    </button>
+                <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                        <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Agencia</label>
+                        <select
+                            value={filters.agencia}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, agencia: e.target.value }))}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-[#131E5C] outline-none transition focus:border-[#131E5C]/40 focus:bg-white focus:ring-2 focus:ring-[#131E5C]/10"
+                        >
+                            {agencias.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                    </div>
 
-                    <button
-                        type="button"
-                        onClick={resetFilters}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2.5 text-sm font-extrabold text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white"
-                    >
-                        <X className="h-4 w-4" />
-                        Limpiar filtros
-                    </button>
+                    <div>
+                        <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Estado general</label>
+                        <select
+                            value={filters.estadoGeneral}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, estadoGeneral: e.target.value }))}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-[#131E5C] outline-none transition focus:border-[#131E5C]/40 focus:bg-white focus:ring-2 focus:ring-[#131E5C]/10"
+                        >
+                            <option value="todos">Todos</option>
+                            <option value="con_hallazgos">Con hallazgos</option>
+                            <option value="sin_hallazgos">Sin hallazgos</option>
+                        </select>
+                    </div>
 
-                    <div className="flex items-center px-2 text-xs font-bold text-slate-400">
-                        Mostrando {reportesFiltrados.length} de {reportes.length} reportes
+                    <div>
+                        <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Ordenar por</label>
+                        <select
+                            value={filters.sort}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, sort: e.target.value }))}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-[#131E5C] outline-none transition focus:border-[#131E5C]/40 focus:bg-white focus:ring-2 focus:ring-[#131E5C]/10"
+                        >
+                            <option value="fecha_desc">Fecha más reciente</option>
+                            <option value="fecha_asc">Fecha más antigua</option>
+                            <option value="hallazgos_desc">Más hallazgos</option>
+                            <option value="cumplimiento_asc">Menor cumplimiento</option>
+                            <option value="cumplimiento_desc">Mayor cumplimiento</option>
+                            <option value="evidencias_desc">Más evidencias</option>
+                            <option value="tecnico_asc">Técnico A-Z</option>
+                            <option value="agencia_asc">Agencia A-Z</option>
+                            <option value="cliente_asc">Cliente A-Z</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                    <div className="mb-3 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Fechas</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={setHoy}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-emerald-600"
+                        >
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            Hoy
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={setMesActual}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-blue-600"
+                        >
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            Mes actual
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={setMesPasado}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-violet-500 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-violet-600"
+                        >
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            Mes pasado
+                        </button>
+
+                        <div className="h-5 w-px bg-slate-200" />
+
+                        <div className="relative inline-block">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!showFechaPopup) {
+                                        const hoy = new Date();
+                                        setCalMonth(hoy.getMonth());
+                                        setCalYear(hoy.getFullYear());
+                                    }
+                                    setShowFechaPopup((v) => !v);
+                                }}
+                                className={cls(
+                                    "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-extrabold transition",
+                                    showFechaPopup
+                                        ? "bg-[#131E5C] text-white shadow"
+                                        : "border border-[#131E5C]/20 bg-[#131E5C]/5 text-[#131E5C] hover:bg-[#131E5C]/10"
+                                )}
+                            >
+                                <CalendarDays className="h-3.5 w-3.5" />
+                                Seleccionar fecha
+                                {(filters.rangoDesde || filters.rangoHasta) && (
+                                    <span className="ml-0.5 rounded-full bg-white/25 px-1.5 py-0.5 text-[9px]">✓</span>
+                                )}
+                            </button>
+                            <FechaPopup />
+                        </div>
+
+                        <div className="h-5 w-px bg-slate-200" />
+
+                        <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-extrabold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                            Limpiar
+                        </button>
+
+                        <div className="ml-auto text-[11px] font-bold text-slate-400">
+                            {reportesFiltrados.length} de {reportes.length}
+                        </div>
                     </div>
                 </div>
             </div>
