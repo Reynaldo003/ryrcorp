@@ -2,7 +2,7 @@
 
 const API =
   import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-// import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+//import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const LOGIN_PATH = "/login";
 const ACCESS_REFRESH_MARGIN_SECONDS = 60;
@@ -917,8 +917,32 @@ export const api = {
     ),
 
   // Chats WhatsApp
-  digitalesChats: (params = {}) =>
-    http(`/digitales/chats/${buildQuery(withRequestContext(params))}`),
+  digitalesChats: ({
+    limit = 30,
+    q = "",
+    before = "",
+    before_id = "",
+    scope = "recientes",
+    dias = 3,
+    paginado = 1,
+    numero_asesor = "",
+    usuario = "",
+  } = {}) =>
+    http(
+      `/digitales/chats/${buildQuery(
+        withRequestContext({
+          limit,
+          q,
+          before,
+          before_id,
+          scope,
+          dias,
+          paginado,
+          numero_asesor,
+          usuario,
+        }),
+      )}`,
+    ),
 
   digitalesMarkRead: (input = {}) => {
     const payload = normalizeTelInput(input);
@@ -965,11 +989,12 @@ export const api = {
   digitalesContacto: (
     tel,
     {
-      limit = 20,
+      limit = 8,
       before_id = "",
       usuario = "",
       numero_asesor = "",
       mark_read = 1,
+      incluir_contexto = 1,
     } = {},
   ) =>
     http(
@@ -979,6 +1004,7 @@ export const api = {
           limit,
           before_id,
           mark_read,
+          incluir_contexto,
           usuario,
           numero_asesor,
         }),

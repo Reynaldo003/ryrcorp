@@ -1,27 +1,34 @@
 // src/app/NotificacionesWhatsappRoot.jsx
-import React, { useEffect, useMemo, useState } from "react";
-
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNotificacionesWhatsapp } from "../hooks/useNotificacionesWhatsapp";
-import { getAccessToken } from "../lib/apiClient";
+
+/*
+ * TEMPORALMENTE queda FALSE por defecto.
+ *
+ * Para volver a habilitar:
+ * VITE_NOTIFICACIONES_WS_ACTIVAS=true
+ *
+ * y volver a ejecutar npm run build.
+ */
+const NOTIFICACIONES_WS_ACTIVAS =
+    String(import.meta.env.VITE_NOTIFICACIONES_WS_ACTIVAS || "false")
+        .trim()
+        .toLowerCase() === "true";
 
 function WhatsAppToast({ notificacion, onClose }) {
     useEffect(() => {
-        if (!notificacion) return;
+        if (!notificacion) return undefined;
 
-        const timer = window.setTimeout(() => {
-            onClose();
-        }, 9000);
-
-        return () => {
-            window.clearTimeout(timer);
-        };
+        const timer = window.setTimeout(onClose, 9000);
+        return () => window.clearTimeout(timer);
     }, [notificacion, onClose]);
 
     if (!notificacion) return null;
 
     const nombre = notificacion.nombre || "Prospecto";
-    const mensaje = notificacion.mensaje || "Nuevo mensaje de WhatsApp";
+    const mensaje =
+        notificacion.mensaje || "Nuevo mensaje de WhatsApp";
 
     const abrirChat = () => {
         if (notificacion.url) {
@@ -45,7 +52,11 @@ function WhatsAppToast({ notificacion, onClose }) {
 
             <div className="flex items-start gap-3 p-4 pr-12">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                    <img src="/crm/whatsapp.svg" alt="WhatsApp" className="h-6 w-6" />
+                    <img
+                        src="/crm/whatsapp.svg"
+                        alt="WhatsApp"
+                        className="h-6 w-6"
+                    />
                 </div>
 
                 <div className="min-w-0 flex-1">
@@ -84,9 +95,17 @@ function WhatsAppToast({ notificacion, onClose }) {
     );
 }
 
-function ActivarNotificacionesCard({ permiso, onActivar, onClose }) {
-    if (permiso === "granted") return null;
-    if (permiso === "unsupported") return null;
+function ActivarNotificacionesCard({
+    permiso,
+    onActivar,
+    onClose,
+}) {
+    if (
+        permiso === "granted" ||
+        permiso === "unsupported"
+    ) {
+        return null;
+    }
 
     if (permiso === "denied") {
         return (
@@ -105,7 +124,7 @@ function ActivarNotificacionesCard({ permiso, onActivar, onClose }) {
                 </div>
 
                 <div className="mt-1 text-xs font-semibold text-slate-600">
-                    Actívalas desde el candado de la barra de dirección del navegador para recibir avisos cuando estés en otra pestaña.
+                    Actívalas desde el candado de la barra de dirección.
                 </div>
             </div>
         );
@@ -127,7 +146,7 @@ function ActivarNotificacionesCard({ permiso, onActivar, onClose }) {
             </div>
 
             <div className="mt-1 text-xs font-semibold text-slate-600">
-                Permite notificaciones para recibir avisos de WhatsApp cuando estés en otra pestaña.
+                Permite notificaciones para recibir avisos de WhatsApp.
             </div>
 
             <button
@@ -143,19 +162,10 @@ function ActivarNotificacionesCard({ permiso, onActivar, onClose }) {
 
 export default function NotificacionesWhatsappRoot() {
     const { user, ready, isAuthenticated } = useAuth();
-
-    const [cardNotificacionesCerrada, setCardNotificacionesCerrada] = useState(false);
-
-    const accessToken = useMemo(() => {
-        if (!ready || !isAuthenticated) return "";
-        return getAccessToken();
-    }, [ready, isAuthenticated, user]);
+    const [cardNotificacionesCerrada, setCardNotificacionesCerrada] =
+        useState(false);
 
     const {
-        estado,
-        numeroAsesor,
-        usuario,
-        esAdmin,
         permisoNotificaciones,
         ultimaNotificacion,
         limpiarUltimaNotificacion,
@@ -164,26 +174,18 @@ export default function NotificacionesWhatsappRoot() {
         user,
         ready,
         isAuthenticated,
-        accessToken,
+        activo: NOTIFICACIONES_WS_ACTIVAS,
     });
-
-    useEffect(() => {
-        if (!import.meta.env.DEV) return;
-
-        console.log("Estado notificaciones WhatsApp:", {
-            estado,
-            numeroAsesor,
-            usuario,
-            esAdmin,
-            permisoNotificaciones,
-            tieneJwt: Boolean(accessToken),
-        });
-    }, [estado, numeroAsesor, usuario, esAdmin, permisoNotificaciones, accessToken]);
 
     useEffect(() => {
         setCardNotificacionesCerrada(false);
     }, [permisoNotificaciones]);
 
+    /*
+     * Mientras la bandera esté apagada no renderizamos nada
+     * relacionado con las notificaciones.
+     */
+    if (!NOTIFICACIONES_WS_ACTIVAS) return null;
     if (!ready || !isAuthenticated) return null;
 
     return (
