@@ -107,6 +107,7 @@ function mapearCampana(c) {
     impresiones: numeroSeguro(c.impresiones),
     importe_gastado: decimalSeguro(c.importe_gastado),
     total_resultados: numeroSeguro(c.total_resultados),
+    messaging_first_reply: numeroSeguro(c.messaging_first_reply),
     id_concesionaria: c.id_concesionaria,
     objetivo_campana: c.objetivo_campana,
     inicio_campana: c.inicio_campana,
@@ -526,7 +527,7 @@ function VistaTabla({ datos }) {
               <td className="px-4 py-3 text-right text-gray-700">{c.alcance.toLocaleString()}</td>
               <td className="px-4 py-3 text-right text-gray-700">{c.impresiones.toLocaleString()}</td>
               <td className="px-4 py-3 text-right text-gray-700">${c.importe_gastado.toFixed(2)}</td>
-              <td className="px-4 py-3 text-right text-gray-700">{c.total_resultados}</td>
+              <td className="px-4 py-3 text-right text-gray-700">{c.messaging_first_reply}</td>
             </tr>
           ))}
           {datos.length === 0 && (

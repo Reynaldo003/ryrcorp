@@ -1,5 +1,4 @@
 // src/pages/Taller/Taller.jsx
-// VERSION V3: agenda + paneles laterales/inferior + tarjetas arrastrables.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Plus,
@@ -1474,8 +1473,8 @@ function ActivityBar({
     const secondary = isLunch || isTraining
         ? `${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`
         : [order.modelo, order.vin].filter(Boolean).join(" · ") ||
-          order.cliente ||
-          "Trabajo de taller";
+        order.cliente ||
+        "Trabajo de taller";
 
     const detail =
         order.tipo_bloque === "trabajo"
@@ -1665,7 +1664,7 @@ function TimelineRow({
             ? 0
             : ((dropMinutes - MINUTOS_INICIO_AGENDA) /
                 MINUTOS_TOTALES_AGENDA) *
-              100;
+            100;
 
     return (
         <div

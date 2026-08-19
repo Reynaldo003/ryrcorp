@@ -1,5 +1,4 @@
 // src/pages/Taller/Taller.jsx
-// VERSION V3: agenda + paneles laterales/inferior + tarjetas arrastrables.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Plus,
@@ -1821,8 +1820,8 @@ function ActivityBar({
     const secondary = isLunch || isTraining
         ? `${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`
         : [order.modelo, order.vin].filter(Boolean).join(" · ") ||
-          order.cliente ||
-          "Trabajo de taller";
+        order.cliente ||
+        "Trabajo de taller";
 
     const detail =
         order.tipo_bloque === "trabajo"
@@ -2012,7 +2011,7 @@ function TimelineRow({
             ? 0
             : ((dropMinutes - MINUTOS_INICIO_AGENDA) /
                 MINUTOS_TOTALES_AGENDA) *
-              100;
+            100;
 
     return (
         <div
@@ -2332,11 +2331,26 @@ export default function Taller() {
                         }));
 
                 /*
-                 * No inventamos fecha ni horario para ingresos que todavía
-                 * no se han arrastrado a la agenda. Esos registros deben vivir
-                 * solamente en sus contenedores operativos.
+                 * fecha_programada solamente existe cuando el registro
+                 * ya fue colocado explícitamente en la agenda.
+                 *
+                 * Los registros nuevos provenientes de Hoja de Ingresos
+                 * todavía no tienen fecha_programada, por lo que para
+                 * visualizarlos en las bandejas y en la tabla utilizamos
+                 * fecha_ingreso como fecha operativa.
                  */
-                const fechaProgramada = toYMD(row.fecha_programada);
+                const fechaProgramadaReal = toYMD(row.fecha_programada);
+                const fechaIngreso = toYMD(
+                    row.fecha_ingreso ||
+                    row.fecha_cita ||
+                    row.creado_en ||
+                    row.created_at,
+                );
+
+                const fechaOperativa =
+                    fechaProgramadaReal ||
+                    fechaIngreso;
+
                 const horaInicio = toHHMM(row.hora_inicio);
                 const horaFin = toHHMM(row.hora_fin);
                 const tecnico = canonicalTechnician(row.tecnico || "");
@@ -2356,57 +2370,116 @@ export default function Taller() {
                     0,
                 );
 
+                /*
+                 * IMPORTANTE:
+                 * Para considerar que realmente está en agenda exigimos
+                 * fecha_programada REAL, técnico y horario.
+                 *
+                 * fechaOperativa solamente sirve para que el ingreso
+                 * aparezca en la fecha correcta dentro de la interfaz.
+                 */
                 const tieneAgenda = Boolean(
                     tecnico &&
-                    fechaProgramada &&
+                    fechaProgramadaReal &&
                     horaInicio &&
                     horaFin,
                 );
 
                 return {
                     ...row,
+
                     id: String(row.id),
                     rowIds: [],
                     rows: [],
+
                     isManual:
                         row.isManual === true ||
                         row.is_manual === true ||
                         row.cliente_id == null,
+
                     manualRowId: null,
+
                     agencia: row.agencia || "",
                     no_orden: row.no_orden || "",
+
                     cliente:
-                        row.cliente ||
                         row.cliente_nombre ||
+                        row?.cliente?.nombre ||
                         row.nombre_cliente ||
+                        (typeof row.cliente === "string" ? row.cliente : "") ||
                         "Sin nombre",
+
                     telefono:
                         row.telefono ||
                         row.cliente_telefono ||
+                        row?.cliente?.telefono ||
                         "—",
+
                     correo:
                         row.correo ||
+                        row.correo_electronico ||
                         row.cliente_correo_electronico ||
+                        row?.cliente?.correo ||
+                        row?.cliente?.correo_electronico ||
                         "",
+
                     vin: row.vin || "",
                     modelo: row.modelo || "",
-                    fecha_ingreso: row.fecha_ingreso || row.creado_en,
-                    etapa: row.etapa || "Ingreso con Cita",
+
+                    fecha_ingreso:
+                        row.fecha_ingreso ||
+                        row.fecha_cita ||
+                        row.creado_en ||
+                        row.created_at ||
+                        null,
+
+                    /*
+                     * Esta fecha es la que utiliza actualmente la interfaz
+                     * para filtrar tabla y bandejas.
+                     *
+                     * Si aún no existe una programación en Taller,
+                     * se utiliza la fecha de ingreso.
+                     */
+                    fecha_programada: fechaOperativa,
+
+                    /*
+                     * Conservamos también la fecha real para distinguir
+                     * entre "ingresó este día" y "ya fue programado".
+                     */
+                    fecha_programada_real: fechaProgramadaReal,
+
+                    /*
+                     * Si Taller ya tiene etapa, la respetamos.
+                     * Si es un ingreso nuevo:
+                     *
+                     * citado=true  -> Ingreso con Cita
+                     * citado=false -> Ingreso Sin Cita
+                     */
+                    etapa:
+                        normalizeStr(row.etapa) ||
+                        getDefaultEtapa(row),
+
                     tecnico,
                     comentarios_taller: row.comentarios_taller || "",
                     tipo_bloque: row.tipo_bloque || "trabajo",
                     tipo_servicio: serviciosBase,
-                    fecha_programada: fechaProgramada,
-                    estatus_agenda: row.estatus_agenda || "Programado",
+
+                    estatus_agenda:
+                        row.estatus_agenda ||
+                        "Programado",
+
                     hora_inicio: horaInicio,
                     hora_fin: horaFin,
+
                     subtrabajos,
                     tieneAgenda,
+
                     horasTotales: Number(
                         row.horasTotales ??
                         row.horas_totales ??
                         horasTrabajos,
                     ),
+
                     horasAgenda: Number(
                         row.horasAgenda ??
                         row.horas_agenda ??

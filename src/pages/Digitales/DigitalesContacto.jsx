@@ -2309,16 +2309,73 @@ export default function DigitalesContacto() {
     }, [prospecto, activeChat]);
 
     const filteredChats = useMemo(() => {
-        const filterDef = CHAT_FILTERS.find((item) => item.key === chatFilter);
+        const filterDef = CHAT_FILTERS.find(
+            (item) => item.key === chatFilter
+        );
+
+        const busqueda = normalizeText(q);
+        const telefonoBusqueda = normalizaTelefonoMx(q);
+
         return chats.filter((chat) => {
-            if (chatFilter === "no_leidos" && !(chat.unread > 0)) return false;
+            if (
+                chatFilter === "no_leidos" &&
+                !(chat.unread > 0)
+            ) {
+                return false;
+            }
+
             if (filterDef?.estados) {
                 const estado = normalizeText(chat.estado);
-                if (!filterDef.estados.some((item) => estado.includes(normalizeText(item)))) return false;
+
+                const coincideEstado =
+                    filterDef.estados.some((item) =>
+                        estado.includes(
+                            normalizeText(item)
+                        )
+                    );
+
+                if (!coincideEstado) {
+                    return false;
+                }
             }
+
+            if (busqueda) {
+                const textoChat = normalizeText([
+                    chat.nombre,
+                    chat.telefono,
+                    chat.agencia,
+                    chat.estado,
+                    chat.asesor_digital,
+                    chat.usuario_crm_asignado,
+                    chat.last?.text,
+                ].filter(Boolean).join(" "));
+
+                const coincideTexto =
+                    textoChat.includes(busqueda);
+
+                const coincideTelefono =
+                    Boolean(
+                        telefonoBusqueda &&
+                        normalizaTelefonoMx(
+                            chat.telefono
+                        ).includes(telefonoBusqueda)
+                    );
+
+                if (
+                    !coincideTexto &&
+                    !coincideTelefono
+                ) {
+                    return false;
+                }
+            }
+
             return true;
         });
-    }, [chats, chatFilter]);
+    }, [
+        chats,
+        chatFilter,
+        q,
+    ]);
 
     const composerHint = useMemo(() => {
         if (!activeTel) return "Selecciona un chat para escribir…";
@@ -4507,7 +4564,77 @@ export default function DigitalesContacto() {
     }, [chatMenu]);
 
     useEffect(() => { qRef.current = q; }, [q]);
+    useEffect(() => {
+        let cancelado = false;
+        let timer = null;
 
+        if (isDirectChatMode) {
+            setLoadingList(false);
+            return () => {
+                cancelado = true;
+            };
+        }
+
+        const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
+
+        if (!numeroLinea) {
+            setChats([]);
+            setLoadingList(false);
+
+            return () => {
+                cancelado = true;
+            };
+        }
+
+        const busqueda = q.trim();
+
+        // Invalida cualquier búsqueda anterior que siga en vuelo.
+        chatsRequestRef.current += 1;
+
+        timer = window.setTimeout(async () => {
+            try {
+                setLoadingList(true);
+                setChatsHasMore(true);
+
+                chatsPaginationRef.current = {
+                    query: busqueda,
+                    scope: busqueda ? "busqueda" : "recientes",
+                    before: "",
+                    before_id: "",
+                    hasMore: true,
+                };
+
+                await refreshChats({
+                    numeroAsesor: numeroLinea,
+                    reset: true,
+                    query: busqueda,
+                });
+            } catch (error) {
+                if (!cancelado) {
+                    console.error(
+                        "No se pudo buscar en la lista de chats:",
+                        error
+                    );
+                }
+            } finally {
+                if (!cancelado) {
+                    setLoadingList(false);
+                }
+            }
+        }, busqueda ? CHAT_SEARCH_DELAY : 0);
+
+        return () => {
+            cancelado = true;
+
+            if (timer) {
+                window.clearTimeout(timer);
+            }
+        };
+    }, [
+        q,
+        numeroAsesorActivo,
+        isDirectChatMode,
+    ]);
     useEffect(() => {
         const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
         if (!numeroLinea) return;

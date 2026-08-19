@@ -180,11 +180,11 @@ function mapearOrden(item) {
         condicion_vehiculo: item.condicion_vehiculo || "",
         nombre_cliente: item.nombre_cliente || "Sin cliente",
         cumpleanos:
-        item.cumpleaños ??
-        item.cumpleanos ??
-        item.Cumpleaños ??
-        item.Cumpleanos ??
-        "",
+            item.cumpleaños ??
+            item.cumpleanos ??
+            item.Cumpleaños ??
+            item.Cumpleanos ??
+            "",
         telefono_cliente: item.telefono_cliente || "",
         telefono_cliente2: item.telefono_cliente2 || "",
         telefono_cliente3: item.telefono_cliente3 || "",
@@ -215,7 +215,7 @@ function estadoBadgeClass(estado) {
     return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
 }
 // ---- Cumpleaños ----
- 
+
 function diasParaCumpleanos(fechaCumpleanos) {
     const fecha = parseFechaLocal(fechaCumpleanos);
 
@@ -307,105 +307,104 @@ function KpiCard({ icon: Icon, label, value, sub, color }) {
 }
 
 // ---- KPI con gauge (reemplaza a Meses promedio + Contactables) ----
-        function KpiRetorno({ porcentaje, activos, total }) {
-            const pct = Number.isFinite(porcentaje)
-                ? Math.max(0, Math.min(100, porcentaje))
-                : 0;
+function KpiRetorno({ porcentaje, activos, total }) {
+    const pct = Number.isFinite(porcentaje)
+        ? Math.max(0, Math.min(100, porcentaje))
+        : 0;
 
-            return (
-                <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 transition hover:shadow-lg hover:shadow-slate-200/60">
-                    <div
-                        className="absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
-                        style={{ backgroundColor: "#378ADD" }}
-                    />
+    return (
+        <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 transition hover:shadow-lg hover:shadow-slate-200/60">
+            <div
+                className="absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+                style={{ backgroundColor: "#378ADD" }}
+            />
 
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                            <Gauge className="h-6 w-6" />
-                        </div>
-
-                        <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                            Retorno
-                        </div>
-                    </div>
-
-                    <div className="mt-3">
-                        <div className="text-3xl font-black text-slate-800">
-                            {pct.toFixed(1)}%
-                        </div>
-
-                        <div className="mt-1 text-sm font-medium text-slate-400">
-                            activos en servicio
-                        </div>
-                    </div>
-
-                    <div className="mt-4">
-                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                            <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{
-                                    width: `${pct}%`,
-                                    backgroundColor: ACCENT,
-                                }}
-                            />
-                        </div>
-
-                        <div className="mt-2 text-xs font-semibold text-slate-400">
-                            {numero(activos)} de {numero(total)} vehículos
-                        </div>
-                    </div>
+            <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <Gauge className="h-6 w-6" />
                 </div>
-            );
-        }
+
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                    Retorno
+                </div>
+            </div>
+
+            <div className="mt-3">
+                <div className="text-3xl font-black text-slate-800">
+                    {pct.toFixed(1)}%
+                </div>
+
+                <div className="mt-1 text-sm font-medium text-slate-400">
+                    activos en servicio
+                </div>
+            </div>
+
+            <div className="mt-4">
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                            width: `${pct}%`,
+                            backgroundColor: ACCENT,
+                        }}
+                    />
+                </div>
+
+                <div className="mt-2 text-xs font-semibold text-slate-400">
+                    {numero(activos)} de {numero(total)} vehículos
+                </div>
+            </div>
+        </div>
+    );
+}
 
 
 // ---- Filtros ----
-        function PillSelect({ value, onChange, children, icon: Icon }) {
-            return (
-                <div className="relative w-full">
-                    {Icon ? (
-                        <Icon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                    ) : null}
+function PillSelect({ value, onChange, children, icon: Icon }) {
+    return (
+        <div className="relative w-full">
+            {Icon ? (
+                <Icon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            ) : null}
 
-                    <select
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className={`h-9 w-full appearance-none rounded-full border border-slate-200 bg-white py-1 ${
-                            Icon ? "pl-7" : "pl-3"
-                        } pr-7 text-[11px] font-bold text-slate-600 outline-none transition hover:border-slate-300 focus:ring-2 focus:ring-blue-100`}
-                    >
-                        {children}
-                    </select>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={`h-9 w-full appearance-none rounded-full border border-slate-200 bg-white py-1 ${Icon ? "pl-7" : "pl-3"
+                    } pr-7 text-[11px] font-bold text-slate-600 outline-none transition hover:border-slate-300 focus:ring-2 focus:ring-blue-100`}
+            >
+                {children}
+            </select>
 
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
-                </div>
-            );
-        }
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+        </div>
+    );
+}
 
-        // ---- Tabla ----
-        function TablaClientes({ datos, onAbrirDetalle, onAbrirChat }) {
-            const datosTabla = [...datos]
-                .sort((a, b) => {
-                    const diasA = diasParaCumpleanos(a.cumpleanos);
-                    const diasB = diasParaCumpleanos(b.cumpleanos);
+// ---- Tabla ----
+function TablaClientes({ datos, onAbrirDetalle, onAbrirChat }) {
+    const datosTabla = [...datos]
+        .sort((a, b) => {
+            const diasA = diasParaCumpleanos(a.cumpleanos);
+            const diasB = diasParaCumpleanos(b.cumpleanos);
 
-                    const cumpleProximoA =
-                        diasA !== null && diasA >= 0 && diasA <= 5;
+            const cumpleProximoA =
+                diasA !== null && diasA >= 0 && diasA <= 5;
 
-                    const cumpleProximoB =
-                        diasB !== null && diasB >= 0 && diasB <= 5;
+            const cumpleProximoB =
+                diasB !== null && diasB >= 0 && diasB <= 5;
 
-                    if (cumpleProximoA && !cumpleProximoB) return -1;
-                    if (!cumpleProximoA && cumpleProximoB) return 1;
+            if (cumpleProximoA && !cumpleProximoB) return -1;
+            if (!cumpleProximoA && cumpleProximoB) return 1;
 
-                    if (cumpleProximoA && cumpleProximoB) {
-                        return diasA - diasB;
-                    }
+            if (cumpleProximoA && cumpleProximoB) {
+                return diasA - diasB;
+            }
 
-                    return 0;
-                })
-                .slice(0, 1000);
-                
+            return 0;
+        })
+        .slice(0, 1000);
+
     return (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
@@ -491,7 +490,7 @@ function KpiCard({ icon: Icon, label, value, sub, color }) {
                                                     );
                                                 })()}
                                             </div>
- 
+
 
                                             <div className="truncate text-xs text-slate-400">
                                                 {item.telefono_cliente ? formatTelefono(item.telefono_cliente) : "Sin teléfono"}
@@ -1643,12 +1642,12 @@ export default function Retencion() {
         return [...new Set(datosRaw.map((item) => item.mes))].filter(Boolean).sort((a, b) => a - b);
     }, [anio, opciones.anio_mes, datosRaw]);
 
-        const datosFiltrados = useMemo(() => {
-            let datos = datosRaw.filter((item) =>
-                DEALERS_RETENCION.some(
-                    (dealer) => normalizarTexto(item.agencia) === normalizarTexto(dealer)
-                )
-            );
+    const datosFiltrados = useMemo(() => {
+        let datos = datosRaw.filter((item) =>
+            DEALERS_RETENCION.some(
+                (dealer) => normalizarTexto(item.agencia) === normalizarTexto(dealer)
+            )
+        );
 
         if (semana !== "Todas") {
             const semanaNumero = Number(semana);
@@ -1673,26 +1672,26 @@ export default function Retencion() {
     }, [datosRaw, semana, busqueda]);
 
     const resumen = useMemo(() => {
-    const totalVehiculos = datosFiltrados.length;
-    const totalServicio = datosFiltrados.reduce((acc, item) => acc + item.total_ultimo_servicio, 0);
-    const totalMeses = datosFiltrados.reduce((acc, item) => acc + item.meses_desde_venta, 0);
-    const activos = datosFiltrados.filter((item) => normalizarTexto(item.estado_actividad) === "activo").length;
-    const inactivos = totalVehiculos - activos;
-    const conTelefono = datosFiltrados.filter((item) => item.telefono_cliente).length;
+        const totalVehiculos = datosFiltrados.length;
+        const totalServicio = datosFiltrados.reduce((acc, item) => acc + item.total_ultimo_servicio, 0);
+        const totalMeses = datosFiltrados.reduce((acc, item) => acc + item.meses_desde_venta, 0);
+        const activos = datosFiltrados.filter((item) => normalizarTexto(item.estado_actividad) === "activo").length;
+        const inactivos = totalVehiculos - activos;
+        const conTelefono = datosFiltrados.filter((item) => item.telefono_cliente).length;
 
-    return {
-        totalVehiculos,
-        totalServicio,
-        ticketPromedio: promedio(totalServicio, totalVehiculos),
-        mesesPromedio: promedio(totalMeses, totalVehiculos),
-        activos,
-        inactivos,
-        conTelefono,
-        retorno: promedio(activos, totalVehiculos) * 100,
-    };
-}, [datosFiltrados]);
+        return {
+            totalVehiculos,
+            totalServicio,
+            ticketPromedio: promedio(totalServicio, totalVehiculos),
+            mesesPromedio: promedio(totalMeses, totalVehiculos),
+            activos,
+            inactivos,
+            conTelefono,
+            retorno: promedio(activos, totalVehiculos) * 100,
+        };
+    }, [datosFiltrados]);
 
-        const filtrosActivos = useMemo(() => {
+    const filtrosActivos = useMemo(() => {
         const filtros = [];
 
         if (anio !== "Todos") {
@@ -1837,14 +1836,14 @@ export default function Retencion() {
         if (!clienteSeleccionado?.telefono_cliente) return;
         try {
             const nueva = await apiRetencion.crearTarea({
-            telefono_cliente: clienteSeleccionado.telefono_cliente,
-            nombre_cliente: clienteSeleccionado.nombre_cliente,
-            titulo: "Nueva tarea",
-            forma_contacto: "",
-            motivo_contacto: "",
-            resultado: "",
-            estado: "pendiente",
-        });     
+                telefono_cliente: clienteSeleccionado.telefono_cliente,
+                nombre_cliente: clienteSeleccionado.nombre_cliente,
+                titulo: "Nueva tarea",
+                forma_contacto: "",
+                motivo_contacto: "",
+                resultado: "",
+                estado: "pendiente",
+            });
             setTareas((prev) => [nueva, ...prev]);
         } catch (err) {
             setErrorTareas(err.message || "No se pudo crear la tarea.");
@@ -1873,18 +1872,18 @@ export default function Retencion() {
         }
     }
 
-        function abrirChatCliente(cliente) {
-    const telefonos = obtenerTelefonosCliente(cliente);
+    function abrirChatCliente(cliente) {
+        const telefonos = obtenerTelefonosCliente(cliente);
 
-    if (telefonos.length === 0) {
-        alert("Este cliente no tiene números de teléfono registrados.");
-        return;
+        if (telefonos.length === 0) {
+            alert("Este cliente no tiene números de teléfono registrados.");
+            return;
+        }
+
+        setClienteChat(cliente);
+        setDrawerTel(telefonos[0]);
+
     }
-
-    setClienteChat(cliente);
-    setDrawerTel(telefonos[0]);
-
-}
 
 
     if (loadingGeneral) {
@@ -1948,14 +1947,14 @@ export default function Retencion() {
                         </button>
                     </div>
 
-    
+
                 </div>
-                
+
             </div>
 
 
             {/* KPIs */}
-<               div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <               div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <KpiCard
                     icon={Car}
                     label="Vehículos"
@@ -2023,11 +2022,10 @@ export default function Retencion() {
                         <button
                             type="button"
                             onClick={() => setSegmento("Todos")}
-                            className={`h-full flex-1 rounded-full text-[11px] font-bold transition ${
-                                segmento === "Todos"
+                            className={`h-full flex-1 rounded-full text-[11px] font-bold transition ${segmento === "Todos"
                                     ? "text-white"
                                     : "text-slate-500 hover:bg-white"
-                            }`}
+                                }`}
                             style={segmento === "Todos" ? { backgroundColor: NAVY } : {}}
                         >
                             Todos
@@ -2038,11 +2036,10 @@ export default function Retencion() {
                                 key={item}
                                 type="button"
                                 onClick={() => setSegmento(item)}
-                                className={`h-full flex-1 rounded-full text-[11px] font-bold transition ${
-                                    segmento === item
+                                className={`h-full flex-1 rounded-full text-[11px] font-bold transition ${segmento === item
                                         ? "text-white"
                                         : "text-slate-500 hover:bg-white"
-                                }`}
+                                    }`}
                                 style={segmento === item ? { backgroundColor: NAVY } : {}}
                             >
                                 {item.replace("Segmento ", "S")}
@@ -2198,15 +2195,15 @@ export default function Retencion() {
             />
 
             <ChatDrawer
-            open={Boolean(drawerTel)}
-            telefono={drawerTel}
-            numeroAsesor="522711076834"
-            clienteRetencion={clienteChat}
-            onTelefonoChange={setDrawerTel}
-            onClose={() => setDrawerTel("")}
-        />
+                open={Boolean(drawerTel)}
+                telefono={drawerTel}
+                numeroAsesor="522711076834"
+                clienteRetencion={clienteChat}
+                onTelefonoChange={setDrawerTel}
+                onClose={() => setDrawerTel("")}
+            />
 
-        
+
         </div>
     );
 }
