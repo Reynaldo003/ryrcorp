@@ -29,10 +29,15 @@ import {
     UploadCloud,
     Eye,
     Palette,
+    TableProperties,
+    BarChart3,
+
+
 } from "lucide-react";
 import { apiAvaluos } from "../../lib/apiAvaluos";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
+import ReactECharts from "echarts-for-react";
 
 const BRAND_BLUE = "#131E5C";
 const API_BASE = (
@@ -610,6 +615,472 @@ function normalizarEvidenciasAvaluo(item) {
     }));
 }
 
+        function GraficasAvaluos({ rows }) {
+            const porDealer = useMemo(() => {
+                const conteo = {};
+
+                rows.forEach((row) => {
+                    const dealer = row.agencia || "Sin dealer";
+                    conteo[dealer] = (conteo[dealer] || 0) + 1;
+                });
+
+                return Object.entries(conteo)
+                    .map(([name, value]) => ({ name, value }))
+                    .sort((a, b) => b.value - a.value);
+            }, [rows]);
+
+            const porAsesor = useMemo(() => {
+                const conteo = {};
+
+                rows.forEach((row) => {
+                    const asesor = row.asesor_ventas || "Sin asesor";
+                    conteo[asesor] = (conteo[asesor] || 0) + 1;
+                });
+
+                return Object.entries(conteo)
+                    .map(([name, value]) => ({ name, value }))
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 10);
+            }, [rows]);
+
+            const porMarca = useMemo(() => {
+                const conteo = {};
+
+                rows.forEach((row) => {
+                    const marca = row.marca_auto || "Sin marca";
+                    conteo[marca] = (conteo[marca] || 0) + 1;
+                });
+
+                return Object.entries(conteo)
+                    .map(([name, value]) => ({ name, value }))
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 10);
+            }, [rows]);
+
+            const porEtapa = useMemo(() => {
+                const conteo = {};
+
+                rows.forEach((row) => {
+                    const etapa = row.etapa_proceso || "Sin etapa";
+                    conteo[etapa] = (conteo[etapa] || 0) + 1;
+                });
+
+                return Object.entries(conteo).map(([name, value]) => ({
+                    name,
+                    value,
+                }));
+            }, [rows]);
+
+            const porTipoToma = useMemo(() => {
+                const conteo = {};
+
+                rows.forEach((row) => {
+                    const tipo = row.tipo_toma || "Sin tipo";
+                    conteo[tipo] = (conteo[tipo] || 0) + 1;
+                });
+
+                return Object.entries(conteo).map(([name, value]) => ({
+                    name,
+                    value,
+                }));
+            }, [rows]);
+
+            const porFecha = useMemo(() => {
+                const conteo = {};
+
+                rows.forEach((row) => {
+                    if (!row.fecha_avaluo) return;
+
+                    const fecha = String(row.fecha_avaluo).slice(0, 10);
+                    conteo[fecha] = (conteo[fecha] || 0) + 1;
+                });
+
+                return Object.entries(conteo)
+                    .map(([fecha, value]) => ({ fecha, value }))
+                    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+                    .slice(-15);
+            }, [rows]);
+
+            const totalAvaluos = rows.length || 1;
+
+            const porcentaje = (valor) => {
+                return ((valor / totalAvaluos) * 100).toFixed(1);
+            };
+
+          const dealerPrincipal = porDealer[0] || { name: "Sin datos", value: 0 };
+            const marcaPrincipal = porMarca[0] || { name: "Sin datos", value: 0 };
+
+            const etapaPrincipal =
+                [...porEtapa].sort((a, b) => b.value - a.value)[0] || {
+                    name: "Sin datos",
+                    value: 0,
+                };  
+
+            const opcionDealer = {
+                tooltip: { trigger: "axis" },
+                grid: {
+                    left: 20,
+                    right: 50,
+                    top: 20,
+                    bottom: 20,
+                    containLabel: true,
+                },
+                xAxis: {
+                    type: "value",
+                    minInterval: 1,
+                },
+                yAxis: {
+                    type: "category",
+                    data: porDealer.map((item) => item.name),
+                },
+                
+              series: [
+                {
+                    type: "bar",
+                    data: porDealer.map((item) => item.value),
+                    barWidth: 20,
+                    itemStyle: {
+                        borderRadius: [0, 6, 6, 0],
+                        color: BRAND_BLUE,
+                    },
+                    label: {
+                        show: true,
+                        position: "right",
+                        formatter: (params) =>
+                            `${params.value} (${porcentaje(params.value)}%)`,
+                        fontSize: 11,
+                        fontWeight: "bold",
+                        color: "#131E5C",
+                    },
+                },
+            ],
+        };
+
+            const opcionAsesor = {
+                tooltip: { trigger: "axis" },
+                grid: {
+                    left: 20,
+                    right: 55,
+                    top: 20,
+                    bottom: 20,
+                    containLabel: true,
+                },
+                xAxis: {
+                    type: "value",
+                    minInterval: 1,
+                },
+                yAxis: {
+                    type: "category",
+                    inverse: true,
+                    data: porAsesor.map((item) => item.name),
+                    axisLabel: {
+                        width: 110,
+                        overflow: "truncate",
+                    },
+                },
+              series: [
+                    {
+                        type: "bar",
+                        data: porAsesor.map((item) => item.value),
+                        barWidth: 18,
+                        itemStyle: {
+                            borderRadius: [0, 6, 6, 0],
+                            color: BRAND_BLUE,
+                        },
+                        label: {
+                            show: true,
+                            position: "right",
+                            formatter: (params) =>
+                                `${params.value} (${porcentaje(params.value)}%)`,
+                            fontSize: 10,
+                            fontWeight: "bold",
+                            color: "#131E5C",
+                        },
+                    },
+                ],
+            };
+
+            const opcionMarca = {
+                tooltip: { trigger: "axis" },
+                grid: {
+                    left: 20,
+                    right: 55,
+                    top: 20,
+                    bottom: 20,
+                    containLabel: true,
+                },
+                xAxis: {
+                    type: "value",
+                    minInterval: 1,
+                },
+                yAxis: {
+                    type: "category",
+                    inverse: true,
+                    data: porMarca.map((item) => item.name),
+                },
+                
+                series: [
+                    {
+                        type: "bar",
+                        data: porMarca.map((item) => item.value),
+                        barWidth: 18,
+                        itemStyle: {
+                            borderRadius: [0, 6, 6, 0],
+                            color: BRAND_BLUE,
+                        },
+                        label: {
+                            show: true,
+                            position: "right",
+                            formatter: (params) =>
+                                `${params.value} (${porcentaje(params.value)}%)`,
+                            fontSize: 10,
+                            fontWeight: "bold",
+                            color: "#131E5C",
+                        },
+                    },
+                ],
+
+            };
+
+            const opcionEtapa = {
+                tooltip: { trigger: "item" },
+                legend: {
+                    bottom: 0,
+                    textStyle: { fontSize: 11 },
+                },
+                
+              series: [
+                    {
+                        type: "pie",
+                        radius: ["44%", "64%"],
+                        center: ["50%", "45%"],
+                        data: porEtapa, 
+                        label: {
+                            show: true,
+                            formatter: (params) =>
+                                `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                            fontSize: 10,
+                            fontWeight: "bold",
+                            lineHeight: 12,
+                        },
+                        labelLine: {
+                            show: true,
+                            length: 8,
+                            length2: 8,
+                        },
+                    },
+                ],
+            };
+
+            const opcionTipoToma = {
+                tooltip: { trigger: "item" },
+                legend: {
+                    bottom: 0,
+                    textStyle: { fontSize: 11 },
+                },
+               
+             series: [
+                {
+                    type: "pie",
+                    radius: ["44%", "64%"],
+                    center: ["50%", "45%"],
+                    data: porTipoToma,
+                    label: {
+                        show: true,
+                        formatter: (params) =>
+                            `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                        fontSize: 10,
+                        fontWeight: "bold",
+                        lineHeight: 12,
+                    },
+                    labelLine: {
+                        show: true,
+                        length: 8,
+                        length2: 8,
+                    },
+                },
+            ],
+            };
+
+            const opcionFecha = {
+                tooltip: { trigger: "axis" },
+                grid: {
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                    bottom: 40,
+                    containLabel: true,
+                },
+                xAxis: {
+                    type: "category",
+                    data: porFecha.map((item) => item.fecha),
+                    axisLabel: {
+                        rotate: 35,
+                        fontSize: 10,
+                    },
+                },
+                yAxis: {
+                    type: "value",
+                    minInterval: 1,
+                },
+
+                series: [
+                    {
+                        type: "line",
+                        smooth: true,
+                        data: porFecha.map((item) => item.value),
+                        symbolSize: 7,
+                        lineStyle: {
+                            width: 3,
+                        },
+                        areaStyle: {},
+                        label: {
+                            show: true,
+                            position: "top",
+                            formatter: "{c}",
+                            fontSize: 10,
+                            fontWeight: "bold",
+                            color: "#131E5C",
+                        },
+                    },
+                ],
+            };
+
+            return (
+                <>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-400">
+                    Total avalúos
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
+                    {rows.length}
+                </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-400">
+                    Dealer principal
+                </p>
+                <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                    {dealerPrincipal.name}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                    {dealerPrincipal.value} avalúos · {porcentaje(dealerPrincipal.value)}%
+                </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-400">
+                    Marca principal
+                </p>
+                <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                    {marcaPrincipal.name}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                    {marcaPrincipal.value} avalúos · {porcentaje(marcaPrincipal.value)}%
+                </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-400">
+                    Etapa principal
+                </p>
+                <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                    {etapaPrincipal.name}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                    {etapaPrincipal.value} avalúos · {porcentaje(etapaPrincipal.value)}%
+                </p>
+            </div>
+        </div>
+
+                    <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                    Avalúos por dealer
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Distribución de avalúos registrados
+                                </p>
+                            </div>
+
+                            <ReactECharts option={opcionDealer} style={{ height: 260 }} notMerge />
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                    Avalúos por asesor
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Top 10 asesores con más avalúos
+                                </p>
+                            </div>
+
+                            <ReactECharts option={opcionAsesor} style={{ height: 260 }} notMerge />
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                    Avalúos por marca
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Marcas con mayor número de avalúos
+                                </p>
+                            </div>
+
+                            <ReactECharts option={opcionMarca} style={{ height: 260 }} notMerge />
+                        </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                    Etapa del proceso
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Distribución actual de los avalúos
+                                </p>
+                            </div>
+
+                            <ReactECharts option={opcionEtapa} style={{ height: 280 }} notMerge />
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                    Tipo de toma
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Distribución por origen de toma
+                                </p>
+                            </div>
+
+                            <ReactECharts option={opcionTipoToma} style={{ height: 280 }} notMerge />
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                    Avalúos por fecha
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Evolución de avalúos registrados
+                                </p>
+                            </div>
+
+                            <ReactECharts option={opcionFecha} style={{ height: 280 }} notMerge />
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
 export default function RegistroAvaluos() {
     const { user } = useAuth();
     const fileInputRef = useRef(null);
@@ -651,6 +1122,7 @@ export default function RegistroAvaluos() {
     // ─────────────────────────────────────────────────────────────────────────
 
     const [avaluos, setAvaluos] = useState([]);
+    const [viewMode, setViewMode] = useState("tabla");
     const [ctxMenu, setCtxMenu] = useState({
         open: false,
         x: 0,
@@ -1355,6 +1827,7 @@ export default function RegistroAvaluos() {
             rangoHasta: "",
         });
     };
+//----------
 
     const setHoy = () => {
         const hoy = toYMDLocal(new Date());
@@ -1364,6 +1837,72 @@ export default function RegistroAvaluos() {
             rangoHasta: hoy,
         }));
     };
+    const setAyer = () => {
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
+
+        const fecha = toYMDLocal(ayer);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: fecha,
+            rangoHasta: fecha,
+        }));
+    };
+
+    const setSemana = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy);
+
+        const dia = hoy.getDay();
+        const diferencia = dia === 0 ? 6 : dia - 1;
+
+        inicio.setDate(hoy.getDate() - diferencia);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+    const setUltimos7Dias = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy);
+
+        inicio.setDate(hoy.getDate() - 6);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+    const setUltimos30Dias = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy);
+
+        inicio.setDate(hoy.getDate() - 29);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+    const setEsteMes = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
 
     const totalEvidenciasDraft =
         (draft?.evidencias_existentes?.length || 0) +
@@ -1384,18 +1923,50 @@ export default function RegistroAvaluos() {
                     ) : null}
                 </div>
 
-                <button
-                    onClick={openCreate}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80"
-                >
-                    <Plus className="h-4 w-4" />
-                    Nuevo Avalúo
-                </button>
+                <div className="flex items-center gap-2 sm:ml-auto">
+                    <div className="inline-flex rounded-lg border border-[#131E5C]/20 bg-white p-1 shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("tabla")}
+                            className={[
+                                "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+                                viewMode === "tabla"
+                                    ? "bg-[#131E5C] text-white"
+                                    : "text-[#131E5C] hover:bg-slate-100",
+                            ].join(" ")}
+                        >
+                            <TableProperties className="h-4 w-4" />
+                            Tabla
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("graficas")}
+                            className={[
+                                "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+                                viewMode === "graficas"
+                                    ? "bg-[#131E5C] text-white"
+                                    : "text-[#131E5C] hover:bg-slate-100",
+                            ].join(" ")}
+                        >
+                            <BarChart3 className="h-4 w-4" />
+                            Gráficas
+                        </button>
+                    </div>
+
+                    <button
+                        onClick={openCreate}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80"
+                    >
+                        <Plus className="h-4 w-4" />
+                        Nuevo Avalúo
+                    </button>
+                </div>
             </div>
 
             <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                 <div className="grid gap-3 md:grid-cols-12">
-                    <div className="md:col-span-6">
+                    <div className="md:col-span-4">
                         <FilterBlock label="Búsqueda">
                             <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
                                 <Search className="h-4 w-4 text-[#131E5C]" />
@@ -1420,7 +1991,7 @@ export default function RegistroAvaluos() {
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                         <FilterBlock label="Dealer">
                             <select
                                 value={filters.agencia}
@@ -1442,25 +2013,62 @@ export default function RegistroAvaluos() {
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Acciones">
-                            <div className="grid grid-cols-2 gap-2">
+                    <div className="md:col-span-6">
+                       <FilterBlock label="Acciones">
+                            <div className="flex flex-nowrap items-center gap-2">
                                 <button
                                     onClick={setHoy}
-                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                                 >
                                     <CalendarDays className="h-4 w-4" />
                                     Hoy
                                 </button>
+
+                                <button
+                                    onClick={setAyer}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+                                >
+                                    Ayer
+                                </button>
+
+                                <button
+                                    onClick={setSemana}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-600"
+                                >
+                                    Semana
+                                </button>
+
+                                <button
+                                    onClick={setUltimos7Dias}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-600"
+                                >
+                                    7 días
+                                </button>
+
+                                <button
+                                    onClick={setUltimos30Dias}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
+                                >
+                                    30 días
+                                </button>
+
+                                <button
+                                    onClick={setEsteMes}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
+                                >
+                                    Este mes
+                                </button>
+
                                 <button
                                     onClick={resetFilters}
-                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
                                 >
                                     <X className="h-4 w-4" />
                                     Limpiar
                                 </button>
                             </div>
                         </FilterBlock>
+
                     </div>
 
                     <div className="md:col-span-6">
@@ -1496,6 +2104,14 @@ export default function RegistroAvaluos() {
                     </div>
                 </div>
             </div>
+
+                {viewMode === "graficas" ? (
+                    <GraficasAvaluos rows={sorted} />
+                ) : null}
+
+                {viewMode === "tabla" ? (
+                    <>
+
 
             <MobileCardList
                 rows={sorted}
@@ -1741,6 +2357,9 @@ export default function RegistroAvaluos() {
                     />
                 </div>
             </div>
+
+            </>
+            ) : null}
 
             <Modal
                 open={openModal}

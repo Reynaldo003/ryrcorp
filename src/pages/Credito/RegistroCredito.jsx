@@ -22,11 +22,19 @@ import {
     Wallet,
     BadgeDollarSign,
     Check,
+    TableProperties,
+    BarChart3,
+    
+
 } from "lucide-react";
 import { apiCredito } from "../../lib/apiCredito";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
+import ReactECharts from "echarts-for-react";
+import * as echarts from "echarts";
+
+
 
 const BRAND_BLUE = "#131E5C";
 
@@ -334,6 +342,490 @@ function MobileCardList({ rows, loading, onEdit, onContext }) {
     );
 }
 
+//-------------
+
+            function GraficasSolicitudes({ rows }) {
+                const porDealer = useMemo(() => {
+                    const conteo = {};
+
+                    rows.forEach((row) => {
+                        const dealer = row.agencia || "Sin dealer";
+                        conteo[dealer] = (conteo[dealer] || 0) + 1;
+                    });
+
+                    return Object.entries(conteo)
+                        .map(([name, value]) => ({ name, value }))
+                        .sort((a, b) => b.value - a.value);
+                }, [rows]);
+
+                const porFinanciamiento = useMemo(() => {
+                    const conteo = {};
+
+                    rows.forEach((row) => {
+                        const estado = row.estado_financiamiento || "Sin estado";
+                        conteo[estado] = (conteo[estado] || 0) + 1;
+                    });
+
+                    return Object.entries(conteo).map(([name, value]) => ({
+                        name,
+                        value,
+                    }));
+                }, [rows]);
+
+                const porCompra = useMemo(() => {
+                    const conteo = {};
+
+                    rows.forEach((row) => {
+                        const estado = row.estado_compra || "Sin estado";
+                        conteo[estado] = (conteo[estado] || 0) + 1;
+                    });
+
+                    return Object.entries(conteo).map(([name, value]) => ({
+                        name,
+                        value,
+                    }));
+                }, [rows]);
+
+                const porAsesor = useMemo(() => {
+                    const conteo = {};
+
+                    rows.forEach((row) => {
+                        const asesor = row.asesor_ventas || "Sin asesor";
+                        conteo[asesor] = (conteo[asesor] || 0) + 1;
+                    });
+
+                    return Object.entries(conteo)
+                        .map(([name, value]) => ({ name, value }))
+                        .sort((a, b) => b.value - a.value)
+                        .slice(0, 10);
+                }, [rows]);
+
+                const porProducto = useMemo(() => {
+                    const conteo = {};
+
+                    rows.forEach((row) => {
+                        const producto = row.producto_financiero || "Sin producto";
+                        conteo[producto] = (conteo[producto] || 0) + 1;
+                    });
+
+                    return Object.entries(conteo)
+                        .map(([name, value]) => ({ name, value }))
+                        .sort((a, b) => b.value - a.value);
+                }, [rows]);
+
+                const porFecha = useMemo(() => {
+                    const conteo = {};
+
+                    rows.forEach((row) => {
+                        if (!row.creado) return;
+
+                        const fecha = String(row.creado).slice(0, 10);
+                        conteo[fecha] = (conteo[fecha] || 0) + 1;
+                    });
+
+                    return Object.entries(conteo)
+                        .map(([fecha, value]) => ({ fecha, value }))
+                        .sort((a, b) => a.fecha.localeCompare(b.fecha))
+                        .slice(-15);
+                }, [rows]);
+
+
+                const totalSolicitudes = rows.length || 1;
+
+                const porcentaje = (valor) => {
+                    return ((valor / totalSolicitudes) * 100).toFixed(1);
+                };
+
+                const dealerPrincipal = porDealer[0] || { name: "Sin datos", value: 0 };
+
+                const financiamientoPrincipal =
+                    [...porFinanciamiento].sort((a, b) => b.value - a.value)[0] || {
+                        name: "Sin datos",
+                        value: 0,
+                    };
+
+                const productoPrincipal = porProducto[0] || {
+                    name: "Sin datos",
+                    value: 0,
+                };
+
+
+                const opcionDealer = {
+                    tooltip: { trigger: "axis" },
+                    grid: {
+                        left: 20,
+                        right: 55,
+                        top: 20,
+                        bottom: 20,
+                        containLabel: true,
+                    },
+                    xAxis: {
+                        type: "value",
+                        minInterval: 1,
+                    },
+                    yAxis: {
+                        type: "category",
+                        data: porDealer.map((item) => item.name),
+                    },
+                    
+                    series: [{
+                        type: "bar",
+                        data: porDealer.map((item) => item.value),
+                        barWidth: 20,
+                        itemStyle: {
+                            borderRadius: [0, 6, 6, 0],
+                            color: BRAND_BLUE,
+                        },
+                        label: {
+                            show: true,
+                            position: "right",
+                            formatter: (params) =>
+                                `${params.value} (${porcentaje(params.value)}%)`,
+                            fontSize: 11,
+                            fontWeight: "bold",
+                            color: "#131E5C",
+                        },
+                    }],
+                };
+
+                const opcionFinanciamiento = {
+                    tooltip: { trigger: "item" },
+                    legend: {
+                        bottom: 0,
+                        textStyle: { fontSize: 11 },
+                    },
+                    
+                    series: [{
+                        type: "pie",
+                        radius: ["44%", "64%"],
+                        center: ["50%", "45%"],
+                        data: porFinanciamiento,
+                      label: {
+                        show: true,
+                        formatter: (params) =>
+                            `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                        fontSize: 9,
+                        fontWeight: "bold",
+                        width: 85,
+                        overflow: "break",
+                        lineHeight: 12,
+                    },
+                    labelLine: {
+                        show: true,
+                        length: 8,
+                        length2: 5,
+                    },
+                    }],
+                };
+
+                const opcionCompra = {
+                    tooltip: { trigger: "item" },
+                    legend: {
+                        bottom: 0,
+                        textStyle: { fontSize: 11 },
+                    },
+                                    
+                    series: [{
+                        type: "pie",
+                        radius: ["44%", "64%"],
+                        center: ["50%", "45%"],
+                        data: porCompra,
+                        label: {
+                            show: true,
+                            formatter: (params) =>
+                                `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                            fontSize: 9,
+                            fontWeight: "bold",
+                            width: 85,
+                            overflow: "break",
+                            lineHeight: 12,
+                        },
+                        labelLine: {
+                            show: true,
+                            length: 8,
+                            length2: 5,
+                        },
+                    }],
+
+                };
+
+                const opcionAsesor = {
+                    tooltip: { trigger: "axis" },
+                    grid: {
+                        left: 20,
+                        right: 30,
+                        top: 20,
+                        bottom: 20,
+                        containLabel: true,
+                    },
+                    xAxis: {
+                        type: "value",
+                        minInterval: 1,
+                    },
+                    yAxis: {
+                        type: "category",
+                        inverse: true,
+                        data: porAsesor.map((item) => item.name),
+                        axisLabel: {
+                            width: 110,
+                            overflow: "truncate",
+                        },
+                    },
+                    series: [{
+                        type: "bar",
+                        data: porAsesor.map((item) => item.value),
+                        barWidth: 18,
+                        itemStyle: {
+                            borderRadius: [0, 6, 6, 0],
+                            color: BRAND_BLUE,
+                        },
+                        label: {
+                            show: true,
+                            position: "right",
+                            formatter: (params) =>
+                                `${params.value} (${porcentaje(params.value)}%)`,
+                            fontSize: 10,
+                            fontWeight: "bold",
+                            color: "#131E5C",
+                        },
+                    }],
+                };
+
+
+                const opcionProducto = {
+                    tooltip: { trigger: "item" },
+                    legend: {
+                        bottom: 0,
+                        textStyle: { fontSize: 11 },
+                    },
+                  series: [{
+                    type: "pie",
+                    radius: ["42%", "64%"],
+                    center: ["50%", "45%"],
+                    avoidLabelOverlap: true,
+                    data: porProducto,
+                    label: {
+                        show: true,
+                        formatter: (params) =>
+                            `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                        fontSize: 10,
+                        fontWeight: "bold",
+                        lineHeight: 12,
+                    },
+                    labelLine: {
+                        show: true,
+                        length: 10,
+                        length2: 10,
+                    },
+                }],
+                };
+
+                const opcionFecha = {
+                    tooltip: { trigger: "axis" },
+                    grid: {
+                        left: 20,
+                        right: 20,
+                        top: 20,
+                        bottom: 40,
+                        containLabel: true,
+                    },
+                    xAxis: {
+                        type: "category",
+                        data: porFecha.map((item) => item.fecha),
+                        axisLabel: {
+                            rotate: 35,
+                            fontSize: 10,
+                        },
+                    },
+                    yAxis: {
+                        type: "value",
+                        minInterval: 1,
+                    },
+                    series: [{
+                        type: "line",
+                        smooth: true,
+                        data: porFecha.map((item) => item.value),
+                        symbolSize: 7,
+                        lineStyle: { width: 3 },
+                        areaStyle: {},
+                        label: {
+                            show: true,
+                            position: "top",
+                            formatter: "{c}",
+                            fontSize: 10,
+                            fontWeight: "bold",
+                            color: "#131E5C",
+                        },
+                    }],
+                };
+
+                return (
+                    <>
+
+                <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <p className="text-xs font-semibold text-slate-400">
+                            Total solicitudes
+                        </p>
+
+                        <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
+                            {rows.length}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <p className="text-xs font-semibold text-slate-400">
+                            Dealer principal
+                        </p>
+
+                        <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                            {dealerPrincipal.name}
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                            {dealerPrincipal.value} solicitudes · {porcentaje(dealerPrincipal.value)}%
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <p className="text-xs font-semibold text-slate-400">
+                            Financiamiento principal
+                        </p>
+
+                        <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                            {financiamientoPrincipal.name}
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                            {financiamientoPrincipal.value} solicitudes · {porcentaje(financiamientoPrincipal.value)}%
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <p className="text-xs font-semibold text-slate-400">
+                            Producto principal
+                        </p>
+
+                        <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                            {productoPrincipal.name}
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                            {productoPrincipal.value} solicitudes · {porcentaje(productoPrincipal.value)}%
+                        </p>
+                    </div>
+                </div>
+
+                        <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                        Solicitudes por dealer
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        Distribución de solicitudes registradas
+                                    </p>
+                                </div>
+
+                                <ReactECharts
+                                    option={opcionDealer}
+                                    style={{ height: 260 }}
+                                    notMerge
+                                />
+                            </div>
+
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                        Estado de financiamiento
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        Situación actual de las solicitudes
+                                    </p>
+                                </div>
+
+                                <ReactECharts
+                                    option={opcionFinanciamiento}
+                                    style={{ height: 260 }}
+                                    notMerge
+                                />
+                            </div>
+
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                        Estado de compra
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        Seguimiento del proceso de compra
+                                    </p>
+                                </div>
+
+                                <ReactECharts
+                                    option={opcionCompra}
+                                    style={{ height: 260 }}
+                                    notMerge
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                        Solicitudes por asesor
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        Top 10 asesores con más solicitudes
+                                    </p>
+                                </div>
+
+                                <ReactECharts
+                                    option={opcionAsesor}
+                                    style={{ height: 280 }}
+                                    notMerge
+                                />
+                            </div>
+
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                        Producto financiero
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        Distribución por tipo de producto
+                                    </p>
+                                </div>
+
+                                <ReactECharts
+                                    option={opcionProducto}
+                                    style={{ height: 280 }}
+                                    notMerge
+                                />
+                            </div>
+
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
+                                        Solicitudes por fecha
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        Evolución de solicitudes registradas
+                                    </p>
+                                </div>
+
+                                <ReactECharts
+                                    option={opcionFecha}
+                                    style={{ height: 280 }}
+                                    notMerge
+                                />
+                            </div>
+                        </div>
+                    </>
+                );
+            }
+            
+
 export default function RegistroCredito() {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -379,6 +871,8 @@ export default function RegistroCredito() {
     const [inlineDrafts, setInlineDrafts] = useState({});
     const [savingInline, setSavingInline] = useState({});
     const [authError, setAuthError] = useState("");
+
+    const [viewMode, setViewMode] = useState("tabla");
 
     const DEALERS = useMemo(
         () => ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Chirey", "JAECOO R&R"],
@@ -446,6 +940,7 @@ export default function RegistroCredito() {
         "Sergio Rene Delgado Sarmiento",
         "Yoseth Ruiz Castellanos",
         "JOSE ALBERTO SEDAS FLORES",
+        "Julio Ramirez Lopez",
     ];
 
     const FUENTE = [
@@ -952,6 +1447,72 @@ export default function RegistroCredito() {
         const hoy = toYMDLocal(new Date());
         setFilters((p) => ({ ...p, rangoDesde: hoy, rangoHasta: hoy }));
     };
+
+    const setAyer = () => {
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const fecha = toYMDLocal(ayer);
+
+    setFilters((p) => ({
+        ...p,
+        rangoDesde: fecha,
+        rangoHasta: fecha,
+    }));
+};
+
+    const setSemana = () => {
+        const hoy = new Date();
+        const dia = hoy.getDay();
+        const diferenciaLunes = dia === 0 ? -6 : 1 - dia;
+
+        const inicio = new Date(hoy);
+        inicio.setDate(hoy.getDate() + diferenciaLunes);
+
+        setFilters((p) => ({
+            ...p,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+    const setUltimos7Dias = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy);
+        inicio.setDate(hoy.getDate() - 6);
+
+        setFilters((p) => ({
+            ...p,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+    const setUltimos30Dias = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy);
+        inicio.setDate(hoy.getDate() - 29);
+
+        setFilters((p) => ({
+            ...p,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+    const setEsteMes = () => {
+        const hoy = new Date();
+        const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+        setFilters((p) => ({
+            ...p,
+            rangoDesde: toYMDLocal(inicio),
+            rangoHasta: toYMDLocal(hoy),
+        }));
+    };
+
+
+
+
     if (!canAccessCredito) {
         return (
             <div className="w-full">
@@ -962,29 +1523,68 @@ export default function RegistroCredito() {
         );
     }
     return (
-        <div className="w-full">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">Solicitudes de Credito</h2>
-                    {!isAdmin && userAgencia ? (
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                            Agencia asignada:{" "}<span className="text-[#131E5C]">{userAgencias.join(", ")}</span>
-                        </p>
-                    ) : null}
-                </div>
+                <div className="w-full">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
+                            Solicitudes de Credito
+                        </h2>
 
-                <button
-                    onClick={openCreate}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm bg-[#131E5C] hover:bg-[#131E5C]/80 text-white shadow-sm"
-                >
-                    <Plus className="h-4 w-4" />
-                    Nueva Solicitud
-                </button>
-            </div>
+                        {!isAdmin && userAgencia ? (
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                                Agencia asignada:{" "}
+                                <span className="text-[#131E5C]">
+                                    {userAgencias.join(", ")}
+                                </span>
+                            </p>
+                        ) : null}
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:ml-auto">
+                        <div className="inline-flex rounded-lg border border-[#131E5C]/20 bg-white p-1 shadow-sm">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("tabla")}
+                                className={[
+                                    "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+                                    viewMode === "tabla"
+                                        ? "bg-[#131E5C] text-white"
+                                        : "text-[#131E5C] hover:bg-slate-100",
+                                ].join(" ")}
+                            >
+                                <TableProperties className="h-4 w-4" />
+                                Tabla
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("graficas")}
+                                className={[
+                                    "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+                                    viewMode === "graficas"
+                                        ? "bg-[#131E5C] text-white"
+                                        : "text-[#131E5C] hover:bg-slate-100",
+                                ].join(" ")}
+                            >
+                                <BarChart3 className="h-4 w-4" />
+                                Gráficas
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={openCreate}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Nueva Solicitud
+                        </button>
+                    </div>
+                </div> 
+
 
             <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                 <div className="grid gap-3 md:grid-cols-12">
-                    <div className="md:col-span-6">
+                    <div className="md:col-span-4">
                         <FilterBlock label="Búsqueda">
                             <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
                                 <Search className="h-4 w-4 text-[#131E5C]" />
@@ -1007,7 +1607,7 @@ export default function RegistroCredito() {
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                         <FilterBlock label="Dealer">
                             <select
                                 value={filters.agencia}
@@ -1023,20 +1623,56 @@ export default function RegistroCredito() {
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-3">
+
+                    <div className="md:col-span-6">
                         <FilterBlock label="Acciones">
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-nowrap items-center gap-2">
                                 <button
                                     onClick={setHoy}
-                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
-                                    title="Mostrar solo registros del día de hoy"
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                                 >
                                     <CalendarDays className="h-4 w-4" />
                                     Hoy
                                 </button>
+
+                                <button
+                                    onClick={setAyer}
+                                    className="inline-flex items-center justify-center rounded-lg bg-amber-400 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+                                >
+                                    Ayer
+                                </button>
+
+                                <button
+                                    onClick={setSemana}
+                                    className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-600"
+                                >
+                                    Semana
+                                </button>
+
+                                <button
+                                    onClick={setUltimos7Dias}
+                                    className="inline-flex items-center justify-center rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-600"
+                                >
+                                    7 días
+                                </button>
+
+                                <button
+                                    onClick={setUltimos30Dias}
+                                    className="inline-flex items-center justify-center rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
+                                >
+                                    30 días
+                                </button>
+
+                                <button
+                                    onClick={setEsteMes}
+                                    className="inline-flex items-center justify-center rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
+                                >
+                                    Este mes
+                                </button>
+
                                 <button
                                     onClick={resetFilters}
-                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C] px-3 py-2 text-sm font-semibold bg-white text-[#131E5C] hover:text-white hover:bg-[#131E5C]"
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
                                 >
                                     <X className="h-4 w-4" />
                                     Limpiar
@@ -1069,12 +1705,19 @@ export default function RegistroCredito() {
                 </div>
             </div>
 
-            <MobileCardList
-                rows={sorted}
-                loading={loadingList}
-                onEdit={openEdit}
-                onContext={onRowContextMenu}
-            />
+                {viewMode === "graficas" ? (
+                    <GraficasSolicitudes rows={sorted} />
+                ) : null}
+                
+                {viewMode === "tabla" ? (
+                    <>
+                        <MobileCardList
+                            rows={sorted}
+                            loading={loadingList}
+                            onEdit={openEdit}
+                            onContext={onRowContextMenu}
+                        />
+
 
             <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
                 <div className="overflow-auto">
@@ -1230,6 +1873,10 @@ export default function RegistroCredito() {
                     />
                 </div>
             </div>
+                </>
+            ) : null}
+
+
 
             <Modal
                 open={openModal}
