@@ -2330,15 +2330,6 @@ export default function Taller() {
                             orden: index,
                         }));
 
-                /*
-                 * fecha_programada solamente existe cuando el registro
-                 * ya fue colocado explícitamente en la agenda.
-                 *
-                 * Los registros nuevos provenientes de Hoja de Ingresos
-                 * todavía no tienen fecha_programada, por lo que para
-                 * visualizarlos en las bandejas y en la tabla utilizamos
-                 * fecha_ingreso como fecha operativa.
-                 */
                 const fechaProgramadaReal = toYMD(row.fecha_programada);
                 const fechaIngreso = toYMD(
                     row.fecha_ingreso ||
@@ -2369,15 +2360,6 @@ export default function Taller() {
                     (sum, work) => sum + Number(work.horas || 0),
                     0,
                 );
-
-                /*
-                 * IMPORTANTE:
-                 * Para considerar que realmente está en agenda exigimos
-                 * fecha_programada REAL, técnico y horario.
-                 *
-                 * fechaOperativa solamente sirve para que el ingreso
-                 * aparezca en la fecha correcta dentro de la interfaz.
-                 */
                 const tieneAgenda = Boolean(
                     tecnico &&
                     fechaProgramadaReal &&
@@ -2432,29 +2414,8 @@ export default function Taller() {
                         row.creado_en ||
                         row.created_at ||
                         null,
-
-                    /*
-                     * Esta fecha es la que utiliza actualmente la interfaz
-                     * para filtrar tabla y bandejas.
-                     *
-                     * Si aún no existe una programación en Taller,
-                     * se utiliza la fecha de ingreso.
-                     */
                     fecha_programada: fechaOperativa,
-
-                    /*
-                     * Conservamos también la fecha real para distinguir
-                     * entre "ingresó este día" y "ya fue programado".
-                     */
                     fecha_programada_real: fechaProgramadaReal,
-
-                    /*
-                     * Si Taller ya tiene etapa, la respetamos.
-                     * Si es un ingreso nuevo:
-                     *
-                     * citado=true  -> Ingreso con Cita
-                     * citado=false -> Ingreso Sin Cita
-                     */
                     etapa:
                         normalizeStr(row.etapa) ||
                         getDefaultEtapa(row),

@@ -1997,12 +1997,6 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                             horas: 0,
                             orden: index,
                         }));
-
-                /*
-                 * No inventamos fecha ni horario para ingresos que todavía
-                 * no se han arrastrado a la agenda. Esos registros deben vivir
-                 * solamente en sus contenedores operativos.
-                 */
                 const fechaProgramada = toYMD(row.fecha_programada);
                 const horaInicio = toHHMM(row.hora_inicio);
                 const horaFin = toHHMM(row.hora_fin);
