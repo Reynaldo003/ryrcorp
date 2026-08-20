@@ -1416,7 +1416,7 @@ function FlujoTrabajoSection({
                                         {String(stage.numero).padStart(2, "0")}
                                     </span>
 
-                                    <span className="mt-px line-clamp-2 min-h-[30px] text-[10px] font-bold leading-tight text-slate-700">
+            <span className="mt-px line-clamp-3 min-h-[40px] text-[10px] font-bold leading-tight text-slate-700">
                                         {stage.nombre}
                                     </span>
 
@@ -1434,6 +1434,145 @@ function FlujoTrabajoSection({
                 </div>
             </div>
         </section>
+    );
+}
+
+function UnassignedOrdersPool({ orders, onEdit, onReschedule }) {
+    const [collapsed, setCollapsed] = useState(false);
+
+    if (orders.length === 0) return null;
+
+    return (
+        <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+            <button
+                type="button"
+                onClick={() => setCollapsed((v) => !v)}
+                className="flex w-full items-center justify-between gap-3 bg-white px-4 py-3 text-left"
+            >
+                <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                        <UserCog className="h-4.5 w-4.5" />
+                    </span>
+                    <div className="min-w-0">
+                        <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
+                            Sin asignar
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2">
+                            <span className="truncate text-sm font-black text-[#001E50]">
+                                Órdenes pendientes de técnico
+                            </span>
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">
+                                {orders.length}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span className="hidden text-[10px] font-bold text-slate-400 sm:block">
+                        Arrastra al técnico en el cronograma
+                    </span>
+                    {collapsed ? (
+                        <ChevronDown className="h-5 w-5 text-slate-400" />
+                    ) : (
+                        <ChevronUp className="h-5 w-5 text-slate-400" />
+                    )}
+                </div>
+            </button>
+
+            {collapsed ? null : (
+                <div className="overflow-x-auto border-t border-amber-100 bg-[#FFFBEB]/40 pb-2 pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex items-start gap-2.5 px-3">
+                        {orders.map((order) => (
+                            <UnassignedCard
+                                key={order.id}
+                                order={order}
+                                onEdit={onEdit}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+        </section>
+    );
+}
+
+function UnassignedCard({ order, onEdit }) {
+    const categoryKey = getCategoryKey(order);
+    const legend = LEGEND_CHIPS[categoryKey] || LEGEND_CHIPS.reparacion;
+
+    function handleDragStart(event) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData(
+            "application/x-taller-order-id",
+            String(order.id),
+        );
+        event.dataTransfer.setData("text/plain", String(order.id));
+    }
+
+    const cliente =
+        order.cliente && order.cliente !== "Sin nombre"
+            ? order.cliente
+            : "Sin nombre";
+
+    return (
+        <article
+            draggable
+            onDragStart={handleDragStart}
+            onClick={() => onEdit(order)}
+            className="group flex h-[160px] w-[130px] shrink-0 cursor-grab flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_8px_20px_rgba(15,23,42,.10)] active:cursor-grabbing active:translate-y-0 active:opacity-80 active:shadow-[0_12px_24px_rgba(15,23,42,.14)]"
+        >
+            <span
+                className="block h-[4px] w-full shrink-0"
+                style={{ backgroundColor: legend.borderColor }}
+            />
+
+            <div className="flex flex-1 flex-col items-center px-2 pt-2.5 pb-2 text-center">
+                <span
+                    className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[7px] font-bold"
+                    style={{
+                        backgroundColor: `${legend.borderColor}12`,
+                        borderColor: `${legend.borderColor}30`,
+                        color: legend.color,
+                    }}
+                >
+                    <legend.icon className="h-2.5 w-2.5" />
+                    {legend.label}
+                </span>
+
+                <span className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-400">
+                    {order.no_orden ? `OR ${order.no_orden}` : "SIN ORDEN"}
+                </span>
+
+                <span className="mt-1 line-clamp-2 w-full text-[10px] font-semibold leading-snug text-[#001E50]">
+                    {cliente}
+                </span>
+
+                {order.modelo ? (
+                    <span className="mt-1 w-full truncate text-[9px] font-semibold text-slate-500">
+                        {order.modelo}
+                    </span>
+                ) : null}
+                {order.vin ? (
+                    <span className="mt-px w-full truncate text-[8px] font-medium text-slate-400">
+                        {order.vin}
+                    </span>
+                ) : null}
+
+                {(order.fecha_cita || order.fecha_ingreso || order.fecha_programada) ? (
+                    <span className="mt-1.5 inline-flex items-center gap-0.5 text-[8px] font-medium text-slate-400">
+                        <CalendarDays className="h-2.5 w-2.5" />
+                        {order.fecha_cita || order.fecha_ingreso || order.fecha_programada}
+                    </span>
+                ) : null}
+                {order.hora_inicio ? (
+                    <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-white/70 px-1.5 py-0.5 text-[9px] font-black tabular-nums" style={{ color: legend.color }}>
+                        <Clock3 className="h-2.5 w-2.5" />
+                        {order.hora_inicio}
+                    </span>
+                ) : null}
+            </div>
+        </article>
     );
 }
 
@@ -2099,7 +2238,7 @@ function AgendaBoard({
     }
 
     return (
-        <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
                 <div>
                     <div className="text-xs font-black tracking-tight text-[#001E50]">
@@ -2136,7 +2275,7 @@ function AgendaBoard({
                 </div>
             </div>
 
-            <div className="overflow-x-auto" onScroll={handleScroll}>
+            <div className="min-h-0 flex-1 overflow-auto" onScroll={handleScroll}>
                 <div
                     style={{
                         minWidth: `${ANCHO_TECNICO + ANCHO_MINIMO_LINEA}px`,
@@ -2545,6 +2684,15 @@ export default function Taller() {
                     order.hora_inicio &&
                     order.hora_fin
                 ),
+            ),
+        [filtered],
+    );
+
+    const unassignedOrders = useMemo(
+        () =>
+            filtered.filter(
+                (order) =>
+                    order.tipo_bloque === "trabajo" && !order.tecnico,
             ),
         [filtered],
     );
@@ -3532,6 +3680,11 @@ export default function Taller() {
                             onEdit={openEdit}
                         />
                     </div>
+                    <UnassignedOrdersPool
+                        orders={unassignedOrders}
+                        onEdit={openEdit}
+                        onReschedule={openEdit}
+                    />
                     <div>
                         <AgendaBoard
                             orders={agendaOrders}
