@@ -1,1331 +1,5028 @@
-import React, { useEffect, useMemo, useState, useRef, lazy, Suspense } from "react";
+// src/pages/Home.jsx
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ArrowRight,
-    ClipboardList,
-    Filter,
-    KanbanSquare,
-    Users,
+    Activity,
+    Building2,
     CalendarDays,
     CarFront,
-    SmilePlus,
-    TriangleAlert,
-    RefreshCw,
-    BarChart3,
-    X,
-    SlidersHorizontal,
-    Building2,
-    UserRound,
-    Funnel,
-    ChevronRight,
+    CheckCircle2,
     Gauge,
+    Handshake,
+    RefreshCw,
+    Route,
+    SlidersHorizontal,
+    Sparkles,
+    Target,
+    TriangleAlert,
+    Trophy,
+    UserRound,
+    Users,
+    X,
 } from "lucide-react";
 
-const EChartsLazy = lazy(() => import("echarts-for-react"));
+import { api as apiDigitales } from "../lib/apiPruebas";
+import { api as apiConformidad } from "../lib/api";
+import { apiCitas } from "../lib/apiCitas";
+import { apiTraficoPiso } from "../lib/apiTraficoPiso";
+import { apiPruebaManejo } from "../lib/apiPruebaManejo";
+import { apiEntregas } from "../lib/apiEntregas";
+import { apiEncuestas } from "../lib/apiEncuestas";
+import { getAccessToken, http } from "../lib/apiClient";
 
-// ─── Paleta principal 
-const NAVY = "#0E1A5C";
-const NAVY_MID = "#1A3BAE";
-const BLUE2 = "#3B6AD4";
-const BLUE3 = "#6B97E8";
-const BLUE_PALE = "#C6D4F5";
-const GOLD = "#C8860A";
-const GOLD2 = "#E0A82A";
-const GOLD3 = "#F5CC6A";
-const SURFACE = "#F5F6FA";
-const BORDER = "#E7E9F2";
-const TEXT_MUTED = "#6B7299";
-const SUCCESS = "#1A7F5C";
-const WARNING = "#B7791F";
-const DANGER = "#B42318";
+const ECharts = lazy(() => import("echarts-for-react"));
 
-const CACHE_TTL_MS = 1000 * 60 * 10;
-
-const API_URL =
-    import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-
-const RUTAS_API = {
-    casos: "/conformidad/api/casos/",
-    prospectos: "/digitales/api/prospectos/",
-    citas: "/citas/api/citas/",
-    registroPiso: "/citas/api/registro-piso/",
-    pruebas: "/citas/api/pruebas-manejo/",
-    entregas: "/citas/api/entregas/",
-    encuestas: "/api/encuestas/satisfaccion/",
+const C = {
+    navy: "#101A52",
+    navy2: "#1D318D",
+    blue: "#3566D6",
+    cyan: "#30A7C5",
+    green: "#1A8F68",
+    amber: "#C98B18",
+    orange: "#D56835",
+    red: "#C04444",
+    purple: "#7357B8",
+    ink: "#172033",
+    muted: "#6B7280",
+    border: "#E6E9F0",
+    soft: "#F5F7FB",
+    white: "#FFFFFF",
 };
 
-const ORDEN_CARGA = ["prospectos", "citas", "registroPiso", "pruebas", "entregas", "casos", "encuestas"];
+const PALETA = [
+    C.navy,
+    C.blue,
+    C.green,
+    C.amber,
+    C.purple,
+    C.cyan,
+    C.orange,
+    C.red,
+];
 
-const CAMPOS_POR_MODULO = {
-    casos: { fecha: ["fecha_reclamacion", "fecha_atencion", "creado", "creado_en"], asesor: ["asesor", "asesor_digital", "asesor_piso", "asesor_ventas"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
-    prospectos: { fecha: ["creado", "created_at", "ultimo_contacto_at", "actualizado"], asesor: ["asesor_digital", "asesor", "asesor_piso", "asesor_ventas"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
-    citas: { fecha: ["fecha_hora_cita", "fecha", "creado_en", "created_at"], asesor: ["asesor_digital", "asesor_piso", "asesor", "asesor_ventas"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
-    registroPiso: { fecha: ["fecha_hora_cita", "fecha", "creado_en", "created_at"], asesor: ["asesor_piso", "asesor_digital", "asesor", "asesor_ventas"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
-    pruebas: { fecha: ["fecha_hora_cita", "fecha", "creado_en", "created_at"], asesor: ["asesor_piso", "asesor_digital", "asesor", "asesor_ventas"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
-    entregas: { fecha: ["fecha_hora_entrega", "fecha", "creado_en", "created_at"], asesor: ["asesor_ventas", "asesor_piso", "asesor_digital", "asesor"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
-    encuestas: { fecha: ["creado", "created_at", "fecha", "creado_en"], asesor: ["asesor_ventas", "asesor", "asesor_digital", "asesor_piso"], dealer: ["dealer", "agencia", "sucursal", "distribuidor"] },
+const CACHE_TTL = 5 * 60 * 1000;
+
+const DATOS_VACIOS = {
+    prospectos: [],
+    citas: [],
+    traficoPiso: [],
+    pruebas: [],
+    entregas: [],
+    encuestas: [],
+    casos: [],
 };
 
-const FILTROS_INICIALES = { fechaInicio: "", fechaFin: "", asesor: "todos", dealer: "todos" };
-const MODULOS_CON_FILTRO_ASESOR = new Set(["prospectos", "citas", "registroPiso", "pruebas", "entregas"]);
+const FILTROS_INICIALES = {
+    fechaInicio: "",
+    fechaFin: "",
+    agencia: "todas",
+    asesorDigital: "todos",
+    asesorPiso: "todos",
+};
 
-function parsearJsonSeguro(valor, fallback = null) {
-    try { return JSON.parse(valor); } catch { return fallback; }
-}
-function limpiarTokenSesion(valor) {
-    const token = String(valor || "").replace(/^Bearer\s+/i, "").trim();
-    if (!token || token === "undefined" || token === "null") return "";
-    return token;
-}
-function pareceJwt(valor) { return limpiarTokenSesion(valor).split(".").length === 3; }
-function leerPayloadJwt(token) {
-    try {
-        const partes = limpiarTokenSesion(token).split(".");
-        if (partes.length !== 3) return null;
-        const base64 = partes[1].replace(/-/g, "+").replace(/_/g, "/");
-        return JSON.parse(window.atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=")));
-    } catch { return null; }
-}
-function tokenJwtExpirado(token) {
-    const payload = leerPayloadJwt(token);
-    if (!payload?.exp) return false;
-    return Date.now() >= (Number(payload.exp) - 30) * 1000;
-}
-function obtenerJwtDeObjeto(obj) {
-    if (!obj || typeof obj !== "object") return "";
-    const candidatos = [obj?.access, obj?.access_token, obj?.accessToken, obj?.jwt, obj?.auth?.access, obj?.auth?.access_token, obj?.auth?.accessToken, obj?.auth?.jwt, obj?.tokens?.access, obj?.tokens?.access_token, obj?.tokens?.accessToken, obj?.session?.access, obj?.session?.access_token, obj?.session?.accessToken, obj?.token, obj?.authToken, obj?.auth?.token, obj?.session?.token];
-    for (const c of candidatos) { const t = limpiarTokenSesion(c); if (pareceJwt(t) && !tokenJwtExpirado(t)) return t; }
-    return "";
-}
-function obtenerRefreshDeObjeto(obj) {
-    if (!obj || typeof obj !== "object") return "";
-    const candidatos = [obj?.refresh, obj?.refresh_token, obj?.refreshToken, obj?.auth?.refresh, obj?.auth?.refresh_token, obj?.auth?.refreshToken, obj?.tokens?.refresh, obj?.tokens?.refresh_token, obj?.tokens?.refreshToken, obj?.session?.refresh, obj?.session?.refresh_token, obj?.session?.refreshToken];
-    for (const c of candidatos) { const t = limpiarTokenSesion(c); if (pareceJwt(t) && !tokenJwtExpirado(t)) return t; }
-    return "";
-}
-function extraerTokenDeStorage(storage) {
-    if (!storage) return "";
-    for (const k of ["@token_access_jwt", "access", "accessToken", "auth.access", "access_token", "jwt", "token", "authToken", "crm_token"]) {
-        const t = limpiarTokenSesion(storage.getItem(k));
-        if (pareceJwt(t) && !tokenJwtExpirado(t)) return t;
-    }
-    for (const k of ["auth", "crm_auth", "session", "user_session"]) {
-        const obj = parsearJsonSeguro(storage.getItem(k), null);
-        const t = obtenerJwtDeObjeto(obj);
-        if (t) return t;
-    }
-    return "";
-}
-function extraerRefreshDeStorage(storage) {
-    if (!storage) return "";
-    for (const k of ["@token_refresh_jwt", "refresh", "refreshToken", "auth.refresh", "refresh_token"]) {
-        const t = limpiarTokenSesion(storage.getItem(k));
-        if (pareceJwt(t) && !tokenJwtExpirado(t)) return t;
-    }
-    for (const k of ["auth", "crm_auth", "session", "user_session"]) {
-        const obj = parsearJsonSeguro(storage.getItem(k), null);
-        const t = obtenerRefreshDeObjeto(obj);
-        if (t) return t;
-    }
-    return "";
-}
-function obtenerTokenSesion() {
-    if (typeof window === "undefined") return "";
-    return extraerTokenDeStorage(window.localStorage) || extraerTokenDeStorage(window.sessionStorage) || "";
-}
-function obtenerRefreshSesion() {
-    if (typeof window === "undefined") return "";
-    return extraerRefreshDeStorage(window.localStorage) || extraerRefreshDeStorage(window.sessionStorage) || "";
-}
-function guardarJwtSesion({ access, refresh } = {}) {
-    if (typeof window === "undefined") return;
-    const accessToken = limpiarTokenSesion(access);
-    const refreshToken = limpiarTokenSesion(refresh);
-    if (!pareceJwt(accessToken)) return;
-    const prev = parsearJsonSeguro(window.localStorage.getItem("auth"), {}) || {};
-    const upd = { ...prev, token: accessToken, access: accessToken, ...(pareceJwt(refreshToken) ? { refresh: refreshToken } : {}) };
-    window.localStorage.setItem("auth", JSON.stringify(upd));
-    window.localStorage.setItem("@token_access_jwt", accessToken);
-    window.localStorage.setItem("auth.access", accessToken);
-    window.localStorage.setItem("access", accessToken);
-    if (pareceJwt(refreshToken)) {
-        window.localStorage.setItem("@token_refresh_jwt", refreshToken);
-        window.localStorage.setItem("auth.refresh", refreshToken);
-        window.localStorage.setItem("refresh", refreshToken);
-    }
-}
-function limpiarJwtSesionExpirada() {
-    if (typeof window === "undefined") return;
-    ["@token_access_jwt", "@token_refresh_jwt", "auth.access", "auth.refresh", "access", "accessToken", "refresh", "refreshToken"].forEach(k => { try { window.localStorage.removeItem(k); } catch { } });
-    const auth = parsearJsonSeguro(window.localStorage.getItem("auth"), null);
-    if (auth && typeof auth === "object") {
-        ["access", "refresh", "access_token", "refresh_token", "jwt"].forEach(k => delete auth[k]);
-        if (pareceJwt(auth.token)) delete auth.token;
-        window.localStorage.setItem("auth", JSON.stringify(auth));
-    }
-}
-function resolverUrl(ruta) {
-    if (/^https?:\/\//i.test(ruta)) return ruta;
-    const path = ruta.startsWith("/") ? ruta : `/${ruta}`;
-    return API_URL ? `${API_URL.replace(/\/+$/, "")}${path}` : path;
-}
-let refrescoEnVuelo = null;
-async function renovarAccessToken() {
-    if (refrescoEnVuelo) return refrescoEnVuelo;
-    refrescoEnVuelo = (async () => {
-        const refresh = obtenerRefreshSesion();
-        if (!refresh) throw new Error("No hay refresh token JWT disponible.");
-        const respuesta = await fetch(resolverUrl("/conformidad/api/auth/token/refresh/"), {
-            method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, credentials: "omit", body: JSON.stringify({ refresh }),
-        });
-        const payload = await respuesta.json().catch(() => ({}));
-        if (!respuesta.ok || !payload?.access) { limpiarJwtSesionExpirada(); throw new Error(payload?.detail || "No se pudo renovar la sesión JWT."); }
-        guardarJwtSesion({ access: payload.access, refresh });
-        return payload.access;
-    })();
-    try { return await refrescoEnVuelo; } finally { refrescoEnVuelo = null; }
-}
-async function obtenerTokenSesionVigente() {
-    const token = obtenerTokenSesion();
-    if (token && !tokenJwtExpirado(token)) return token;
-    try { return await renovarAccessToken(); } catch { return ""; }
-}
-async function headersBase() {
-    const token = await obtenerTokenSesionVigente();
-    const headers = { Accept: "application/json", "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return headers;
-}
-function normalizarLista(payload) {
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload?.results)) return payload.results;
-    if (Array.isArray(payload?.data)) return payload.data;
-    if (Array.isArray(payload?.items)) return payload.items;
-    return [];
-}
-async function solicitarJson(url, { intentarRefresh = true } = {}) {
-    const respuesta = await fetch(url, { method: "GET", headers: await headersBase(), credentials: "omit" });
-    if ((respuesta.status === 401 || respuesta.status === 403) && intentarRefresh) {
-        try { await renovarAccessToken(); return solicitarJson(url, { intentarRefresh: false }); } catch { }
-    }
-    if (!respuesta.ok) { const texto = await respuesta.text().catch(() => ""); throw new Error(`HTTP ${respuesta.status} en ${url}${texto ? ` - ${texto}` : ""}`); }
-    return respuesta.json();
-}
-async function solicitarTodasLasPaginas(ruta) {
-    const primeraUrl = resolverUrl(ruta);
-    const primeraPagina = await solicitarJson(primeraUrl);
-    if (Array.isArray(primeraPagina)) return primeraPagina;
-    const acumulado = [...normalizarLista(primeraPagina)];
-    const siguienteUrl = primeraPagina?.next ? resolverUrl(primeraPagina.next) : null;
-    const total = Number(primeraPagina?.count);
-    if (!siguienteUrl) return acumulado;
-    let limit = null, offsetInicial = null;
-    try {
-        const u = new URL(siguienteUrl);
-        const lp = u.searchParams.get("limit") || u.searchParams.get("page_size");
-        const op = u.searchParams.get("offset");
-        if (lp) limit = Number(lp);
-        if (op) offsetInicial = Number(op);
-    } catch { }
-    const puedeParalelizar = Number.isFinite(total) && total > 0 && Number.isFinite(limit) && limit > 0 && Number.isFinite(offsetInicial);
-    if (puedeParalelizar) {
-        const restantes = Math.max(0, total - acumulado.length);
-        const paginasRestantes = Math.ceil(restantes / limit);
-        const maxConcurrencia = 6;
-        const urls = [];
-        for (let i = 0; i < paginasRestantes; i++) {
-            const offset = offsetInicial + i * limit;
-            try { const u = new URL(siguienteUrl); u.searchParams.set("offset", String(offset)); urls.push(u.toString()); } catch { urls.push(null); }
-        }
-        if (urls.every(Boolean)) {
-            for (let i = 0; i < urls.length; i += maxConcurrencia) {
-                const lote = urls.slice(i, i + maxConcurrencia);
-                const resultados = await Promise.all(lote.map(u => solicitarJson(u)));
-                resultados.forEach(p => acumulado.push(...normalizarLista(p)));
-            }
-            return acumulado;
-        }
-    }
-    let siguiente = siguienteUrl, pagina = 0;
-    while (siguiente && pagina < 40) {
-        const payload = await solicitarJson(siguiente);
-        acumulado.push(...normalizarLista(payload));
-        siguiente = payload?.next ? resolverUrl(payload.next) : null;
-        pagina++;
-    }
-    return acumulado;
-}
-function obtenerCacheKey() {
-    const token = obtenerTokenSesion();
-    return `home-dashboard-v5-${token ? token.slice(-12) : "anon"}`;
-}
-function leerCache() {
-    if (typeof window === "undefined") return null;
-    try {
-        const raw = window.sessionStorage.getItem(obtenerCacheKey());
-        if (!raw) return null;
-        const data = JSON.parse(raw);
-        if (!data?.timestamp || !data?.payload) return null;
-        if (Date.now() - data.timestamp > CACHE_TTL_MS) return null;
-        return data.payload;
-    } catch { return null; }
-}
-function guardarCache(payload) {
-    if (typeof window === "undefined") return;
-    try { window.sessionStorage.setItem(obtenerCacheKey(), JSON.stringify({ timestamp: Date.now(), payload })); } catch { }
+const CAMPOS = {
+    prospectos: {
+        fecha: [
+            "creado",
+            "primer_contacto_at",
+            "ultimo_contacto_at",
+            "actualizado",
+        ],
+        agencia: ["agencia", "sucursal", "dealer"],
+    },
+    citas: {
+        fecha: ["fecha_hora_cita", "creado_en", "fecha"],
+        agencia: ["agencia", "sucursal", "dealer"],
+    },
+    traficoPiso: {
+        fecha: ["fecha_hora_cita", "creado_en", "fecha"],
+        agencia: ["agencia", "sucursal", "dealer"],
+    },
+    pruebas: {
+        fecha: ["fecha_hora_cita", "creado_en", "fecha"],
+        agencia: ["agencia", "sucursal", "dealer"],
+    },
+    entregas: {
+        fecha: ["fecha_hora_entrega", "creado_en", "fecha"],
+        agencia: ["agencia", "sucursal", "dealer"],
+    },
+    encuestas: {
+        fecha: ["creado", "created_at", "creado_en", "fecha"],
+        agencia: ["agencia", "sucursal", "dealer"],
+    },
+    casos: {
+        fecha: [
+            "fecha_reclamacion",
+            "fecha_atencion",
+            "creado_en",
+            "creado",
+            "fecha",
+        ],
+        agencia: ["agencia", "sucursal", "dealer", "distribuidor"],
+    },
+};
+
+function cls(...valores) {
+    return valores.filter(Boolean).join(" ");
 }
 
-function formatearNumero(valor) { return new Intl.NumberFormat("es-MX").format(Number(valor || 0)); }
-function formatearPorcentaje(valor) { return `${redondear(valor, 1)}%`; }
-function redondear(valor, decimales = 1) { const n = Number(valor || 0); return Number.isFinite(n) ? Number(n.toFixed(decimales)) : 0; }
-function numeroSeguro(valor) { const n = Number(valor); return Number.isFinite(n) ? n : 0; }
-function promedio(valores) {
-    const limpios = valores.filter(v => Number.isFinite(Number(v)));
-    if (!limpios.length) return 0;
-    return limpios.reduce((a, v) => a + Number(v), 0) / limpios.length;
+function texto(valor, fallback = "") {
+    const value = String(valor ?? "").trim();
+    return value || fallback;
 }
-function porcentaje(parte, total) { if (!total) return 0; return (parte / total) * 100; }
-function normalizarTexto(valor, fallback = "Sin dato") { const t = String(valor ?? "").trim(); return t || fallback; }
-function normalizarAgencia(valor) { return normalizarTexto(valor, "Sin agencia"); }
-function crearFechaSegura(valor) { if (!valor) return null; const f = new Date(valor); return Number.isNaN(f.getTime()) ? null : f; }
-function obtenerFecha(item, campos) { for (const c of campos) { const f = crearFechaSegura(item?.[c]); if (f) return f; } return null; }
-function extraerCampo(item, campos = [], fallback = "") {
-    for (const c of campos) { const v = item?.[c]; if (v !== undefined && v !== null && String(v).trim()) return String(v).trim(); }
+
+function num(valor) {
+    const value = Number(valor ?? 0);
+    return Number.isFinite(value) ? value : 0;
+}
+
+function limitar(valor, min = 0, max = 100) {
+    return Math.min(max, Math.max(min, num(valor)));
+}
+
+function porcentaje(parte, total) {
+    return total ? (num(parte) / num(total)) * 100 : 0;
+}
+
+function fmt(valor) {
+    return new Intl.NumberFormat("es-MX").format(num(valor));
+}
+
+function fmtPct(valor) {
+    return `${num(valor).toFixed(1)}%`;
+}
+
+function fmtDecimal(valor, decimales = 1) {
+    return num(valor).toFixed(decimales);
+}
+
+function campo(item, campos = [], fallback = "") {
+    for (const key of campos) {
+        const value = item?.[key];
+
+        if (
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ""
+        ) {
+            return value;
+        }
+    }
+
     return fallback;
 }
-function inicioDelDia(fecha) { const c = new Date(fecha); c.setHours(0, 0, 0, 0); return c; }
-function finDelDia(fecha) { const c = new Date(fecha); c.setHours(23, 59, 59, 999); return c; }
-function formatearFechaInput(fecha) { return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`; }
-function obtenerRangoDesdeDias(dias) {
-    const hoy = new Date();
-    const fin = finDelDia(hoy);
-    if (!dias) return { fechaInicio: "", fechaFin: formatearFechaInput(hoy) };
-    const inicio = inicioDelDia(hoy);
-    inicio.setDate(inicio.getDate() - dias + 1);
-    return { fechaInicio: formatearFechaInput(inicio), fechaFin: formatearFechaInput(fin) };
-}
-function detectarPeriodoActivo(fechaInicio, fechaFin) {
-    if (!fechaInicio || !fechaFin) return null;
-    const inicio = crearFechaSegura(`${fechaInicio}T00:00:00`);
-    const fin = crearFechaSegura(`${fechaFin}T23:59:59`);
-    if (!inicio || !fin) return null;
-    const hoy = new Date();
-    if (Math.abs(finDelDia(hoy).getTime() - fin.getTime()) > 36 * 60 * 60 * 1000) return null;
-    const dias = Math.round((finDelDia(fin).getTime() - inicioDelDia(inicio).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    return [30, 90, 180].includes(dias) ? dias : null;
-}
-function estaEnRango(fecha, fechaInicio, fechaFin) {
-    if (!fecha) return false;
-    let inicio = fechaInicio ? crearFechaSegura(`${fechaInicio}T00:00:00`) : null;
-    let fin = fechaFin ? crearFechaSegura(`${fechaFin}T23:59:59`) : null;
-    if (inicio && fin && inicio > fin) { const t = inicio; inicio = fin; fin = t; }
-    if (inicio && fecha < inicio) return false;
-    if (fin && fecha > fin) return false;
-    return true;
-}
-function claveMes(fecha) { return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`; }
-function etiquetaMes(fecha) { return new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" }).format(fecha).replace(".", ""); }
-function construirSerieMensual(data, rango) {
-    const fechaFinBase = rango.fechaFin ? crearFechaSegura(`${rango.fechaFin}T23:59:59`) : finDelDia(new Date());
-    const meses = rango.fechaInicio && rango.fechaFin ? 12 : 6;
-    const fin = fechaFinBase || finDelDia(new Date());
-    const serie = [];
-    for (let i = meses - 1; i >= 0; i--) {
-        const base = new Date(fin.getFullYear(), fin.getMonth() - i, 1);
-        serie.push({ clave: claveMes(base), mes: etiquetaMes(base), prospectos: 0, reclamaciones: 0, encuestas: 0, entregas: 0, citas: 0, registrosPiso: 0 });
-    }
-    const mapa = new Map(serie.map(s => [s.clave, s]));
-    const registrar = (lista, campo, getFecha) => lista.forEach(item => {
-        const f = getFecha(item);
-        if (!f) return;
-        const c = claveMes(f);
-        if (mapa.has(c)) mapa.get(c)[campo]++;
-    });
-    registrar(data.prospectos, "prospectos", i => obtenerFecha(i, CAMPOS_POR_MODULO.prospectos.fecha));
-    registrar(data.casos, "reclamaciones", i => obtenerFecha(i, CAMPOS_POR_MODULO.casos.fecha));
-    registrar(data.encuestas, "encuestas", i => obtenerFecha(i, CAMPOS_POR_MODULO.encuestas.fecha));
-    registrar(data.entregas, "entregas", i => obtenerFecha(i, CAMPOS_POR_MODULO.entregas.fecha));
-    registrar(data.citas, "citas", i => obtenerFecha(i, CAMPOS_POR_MODULO.citas.fecha));
-    registrar(data.registroPiso, "registrosPiso", i => obtenerFecha(i, CAMPOS_POR_MODULO.registroPiso.fecha));
-    return serie;
-}
-function agruparConteo(lista, obtenerClave) {
-    const mapa = new Map();
-    lista.forEach(item => { const k = obtenerClave(item); mapa.set(k, (mapa.get(k) || 0) + 1); });
-    return [...mapa.entries()].map(([name, value]) => ({ name, value }));
-}
-function scoreEncuesta(encuesta) {
-    return promedio([numeroSeguro(encuesta?.atencion_asesor), numeroSeguro(encuesta?.seguimiento_asesor), numeroSeguro(encuesta?.tiempo_entrega_unidad), numeroSeguro(encuesta?.experiencia_recepcion)]);
-}
-function scoreCierreAgencia(item) {
-    return numeroSeguro(item.prospectos) + numeroSeguro(item.citas) * 1.5 + numeroSeguro(item.pruebas) * 2 + numeroSeguro(item.entregas) * 3 + numeroSeguro(item.registroPiso) * 1.2 + numeroSeguro(item.casos) * 1.2;
-}
-function obtenerDealerItem(item, modulo) { return normalizarAgencia(extraerCampo(item, CAMPOS_POR_MODULO[modulo]?.dealer, "Sin agencia")); }
-function obtenerAsesorItem(item, modulo) { return normalizarTexto(extraerCampo(item, CAMPOS_POR_MODULO[modulo]?.asesor, "Sin asignar"), "Sin asignar"); }
-function obtenerFechaItem(item, modulo) { return obtenerFecha(item, CAMPOS_POR_MODULO[modulo]?.fecha || []); }
-function filtrarModulo(lista, modulo, filtros) {
-    return lista.filter(item => {
-        const fecha = obtenerFechaItem(item, modulo);
-        if ((filtros.fechaInicio || filtros.fechaFin) && !estaEnRango(fecha, filtros.fechaInicio, filtros.fechaFin)) return false;
-        if (filtros.dealer !== "todos" && obtenerDealerItem(item, modulo) !== filtros.dealer) return false;
-        if (filtros.asesor !== "todos" && MODULOS_CON_FILTRO_ASESOR.has(modulo) && obtenerAsesorItem(item, modulo) !== filtros.asesor) return false;
-        return true;
-    });
+
+function fechaSegura(valor) {
+    if (!valor) return null;
+
+    const fecha = new Date(valor);
+
+    return Number.isNaN(fecha.getTime())
+        ? null
+        : fecha;
 }
 
-function ChartFallback({ height = 320 }) {
-    return (
-        <div className="flex items-center justify-center rounded-xl border border-dashed"
-            style={{ height, borderColor: BORDER, backgroundColor: "#FAFBFD" }}>
-            <RefreshCw size={18} className="animate-spin" style={{ color: TEXT_MUTED }} />
-        </div>
+function fechaItem(item, modulo) {
+    return fechaSegura(
+        campo(
+            item,
+            CAMPOS[modulo]?.fecha
+        )
     );
 }
-function Grafica({ option, height = 320, onEvents }) {
+
+function agenciaItem(item, modulo) {
+    return texto(
+        campo(
+            item,
+            CAMPOS[modulo]?.agencia
+        ),
+        "Sin agencia"
+    );
+}
+
+function fechaInput(fecha) {
+    return `${fecha.getFullYear()}-${String(
+        fecha.getMonth() + 1
+    ).padStart(2, "0")}-${String(
+        fecha.getDate()
+    ).padStart(2, "0")}`;
+}
+
+function rangoDias(dias) {
+    if (!dias) {
+        return {
+            fechaInicio: "",
+            fechaFin: "",
+        };
+    }
+
+    const fin = new Date();
+    const inicio = new Date();
+
+    inicio.setDate(
+        inicio.getDate() - dias + 1
+    );
+
+    return {
+        fechaInicio: fechaInput(inicio),
+        fechaFin: fechaInput(fin),
+    };
+}
+
+function enRango(fecha, inicio, fin) {
+    if (!inicio && !fin) return true;
+    if (!fecha) return false;
+
+    const desde = inicio
+        ? new Date(`${inicio}T00:00:00`)
+        : null;
+
+    const hasta = fin
+        ? new Date(`${fin}T23:59:59.999`)
+        : null;
+
     return (
-        <Suspense fallback={<ChartFallback height={height} />}>
-            <EChartsLazy option={option} style={{ height }} notMerge lazyUpdate onEvents={onEvents} opts={{ renderer: "canvas" }} />
+        (!desde || fecha >= desde) &&
+        (!hasta || fecha <= hasta)
+    );
+}
+
+function esSi(valor) {
+    if (valor === true || valor === 1) {
+        return true;
+    }
+
+    return [
+        "1",
+        "true",
+        "si",
+        "sí",
+        "yes",
+        "asistio",
+        "asistió",
+        "entregada",
+        "reportada",
+    ].includes(
+        texto(valor).toLowerCase()
+    );
+}
+
+function entregaRealizada(item) {
+    return esSi(
+        item?.entrega_reportada ??
+        item?.entregada ??
+        item?.realizada
+    );
+}
+
+function asesorDigital(item) {
+    return texto(
+        item?.asesor_digital,
+        "Sin asignar"
+    );
+}
+
+function asesorPiso(item) {
+    return texto(
+        item?.asesor_piso ??
+        item?.asesor_ventas ??
+        item?.asesor_asignado,
+        "Sin asignar"
+    );
+}
+
+function asesorEntrega(item) {
+    return texto(
+        item?.asesor_ventas ??
+        item?.asesor_piso,
+        "Sin asignar"
+    );
+}
+
+/*
+ * Convierte una URL absoluta devuelta por DRF:
+ *
+ * https://crm.../ruta/?page=2
+ *
+ * en:
+ *
+ * /ruta/?page=2
+ *
+ * porque nuestro apiClient ya conoce el host del backend.
+ */
+function normalizarSiguiente(url) {
+    if (!url) return "";
+
+    try {
+        const parsed = new URL(
+            String(url),
+            window.location.origin
+        );
+
+        return `${parsed.pathname}${parsed.search}`;
+    } catch {
+        return String(url).replace(
+            /^https?:\/\/[^/]+/i,
+            ""
+        );
+    }
+}
+
+function listaPayload(data) {
+    if (Array.isArray(data)) {
+        return data;
+    }
+
+    if (Array.isArray(data?.results)) {
+        return data.results;
+    }
+
+    if (Array.isArray(data?.data)) {
+        return data.data;
+    }
+
+    if (Array.isArray(data?.items)) {
+        return data.items;
+    }
+
+    return [];
+}
+
+/*
+ * Algunos de tus APIs ya descargan todas las páginas.
+ * Otros, como tráfico de piso, pueden devolver:
+ *
+ * {
+ *   count,
+ *   next,
+ *   results
+ * }
+ *
+ * Esta función soporta ambos casos sin duplicar autenticación.
+ */
+async function cargarCompleto(loader) {
+    const primero = await loader();
+
+    if (Array.isArray(primero)) {
+        return primero;
+    }
+
+    const resultados = [
+        ...listaPayload(primero)
+    ];
+
+    let next = normalizarSiguiente(
+        primero?.next
+    );
+
+    const visitados = new Set();
+
+    while (
+        next &&
+        !visitados.has(next)
+    ) {
+        visitados.add(next);
+
+        const pagina = await http(next);
+
+        resultados.push(
+            ...listaPayload(pagina)
+        );
+
+        next = normalizarSiguiente(
+            pagina?.next
+        );
+    }
+
+    return resultados;
+}
+
+function cacheKey() {
+    const token =
+        getAccessToken?.() || "";
+
+    return `crm-home-analitica-v8-${token
+        ? token.slice(-16)
+        : "anon"
+        }`;
+}
+
+function leerCache() {
+    try {
+        const raw =
+            sessionStorage.getItem(
+                cacheKey()
+            );
+
+        if (!raw) {
+            return null;
+        }
+
+        const parsed =
+            JSON.parse(raw);
+
+        if (
+            !parsed?.ts ||
+            Date.now() - parsed.ts > CACHE_TTL
+        ) {
+            return null;
+        }
+
+        return parsed.data || null;
+    } catch {
+        return null;
+    }
+}
+
+function guardarCache(data) {
+    try {
+        sessionStorage.setItem(
+            cacheKey(),
+            JSON.stringify({
+                ts: Date.now(),
+                data,
+            })
+        );
+    } catch {
+        // No bloqueamos el dashboard
+        // si sessionStorage está lleno.
+    }
+}
+
+function filtrarBase(data, filtros) {
+    const salida = {};
+
+    Object.keys(
+        DATOS_VACIOS
+    ).forEach((modulo) => {
+        salida[modulo] = (
+            data[modulo] || []
+        ).filter((item) => {
+            const fecha =
+                fechaItem(
+                    item,
+                    modulo
+                );
+
+            if (
+                !enRango(
+                    fecha,
+                    filtros.fechaInicio,
+                    filtros.fechaFin
+                )
+            ) {
+                return false;
+            }
+
+            if (
+                filtros.agencia !== "todas" &&
+                agenciaItem(
+                    item,
+                    modulo
+                ) !== filtros.agencia
+            ) {
+                return false;
+            }
+
+            return true;
+        });
+    });
+
+    return salida;
+}
+
+function agrupar(lista, obtenerValor) {
+    const map = new Map();
+
+    lista.forEach((item) => {
+        const key = texto(
+            obtenerValor(item),
+            "Sin dato"
+        );
+
+        map.set(
+            key,
+            (map.get(key) || 0) + 1
+        );
+    });
+
+    return [
+        ...map.entries()
+    ]
+        .map(
+            ([name, value]) => ({
+                name,
+                value,
+            })
+        )
+        .sort(
+            (a, b) =>
+                b.value - a.value
+        );
+}
+
+function puntuacionEncuesta(encuesta) {
+    const campos = [
+        "atencion_asesor",
+        "seguimiento_asesor",
+        "tiempo_entrega_unidad",
+        "experiencia_recepcion",
+    ];
+
+    const valores = campos
+        .map(
+            (key) =>
+                Number(encuesta?.[key])
+        )
+        .filter(Number.isFinite);
+
+    if (!valores.length) {
+        return null;
+    }
+
+    return (
+        valores.reduce(
+            (total, value) =>
+                total + value,
+            0
+        ) / valores.length
+    );
+}
+
+function inicioBucket(fecha, modo) {
+    const nueva = new Date(fecha);
+
+    nueva.setHours(
+        0,
+        0,
+        0,
+        0
+    );
+
+    if (modo === "semana") {
+        const dia =
+            (nueva.getDay() + 6) % 7;
+
+        nueva.setDate(
+            nueva.getDate() - dia
+        );
+    }
+
+    if (modo === "mes") {
+        nueva.setDate(1);
+    }
+
+    return nueva;
+}
+
+function avanzarBucket(fecha, modo) {
+    const nueva =
+        new Date(fecha);
+
+    if (modo === "dia") {
+        nueva.setDate(
+            nueva.getDate() + 1
+        );
+    } else if (modo === "semana") {
+        nueva.setDate(
+            nueva.getDate() + 7
+        );
+    } else {
+        nueva.setMonth(
+            nueva.getMonth() + 1
+        );
+    }
+
+    return nueva;
+}
+
+function keyBucket(fecha, modo) {
+    if (modo === "mes") {
+        return `${fecha.getFullYear()}-${String(
+            fecha.getMonth() + 1
+        ).padStart(2, "0")}`;
+    }
+
+    return fechaInput(fecha);
+}
+
+function labelBucket(fecha, modo) {
+    if (modo === "mes") {
+        return new Intl.DateTimeFormat(
+            "es-MX",
+            {
+                month: "short",
+                year: "2-digit",
+            }
+        )
+            .format(fecha)
+            .replace(".", "");
+    }
+
+    return new Intl.DateTimeFormat(
+        "es-MX",
+        {
+            day: "2-digit",
+            month: "short",
+        }
+    )
+        .format(fecha)
+        .replace(".", "");
+}
+
+function construirTimeline(
+    base,
+    filtros
+) {
+    const fechas =
+        Object.entries(base)
+            .flatMap(
+                ([modulo, lista]) =>
+                    lista
+                        .map(
+                            (item) =>
+                                fechaItem(
+                                    item,
+                                    modulo
+                                )
+                        )
+                        .filter(Boolean)
+            );
+
+    let inicio =
+        filtros.fechaInicio
+            ? new Date(
+                `${filtros.fechaInicio}T00:00:00`
+            )
+            : null;
+
+    let fin =
+        filtros.fechaFin
+            ? new Date(
+                `${filtros.fechaFin}T23:59:59`
+            )
+            : null;
+
+    if (
+        !inicio &&
+        fechas.length
+    ) {
+        inicio = new Date(
+            Math.min(
+                ...fechas.map(
+                    (fecha) =>
+                        fecha.getTime()
+                )
+            )
+        );
+    }
+
+    if (
+        !fin &&
+        fechas.length
+    ) {
+        fin = new Date(
+            Math.max(
+                ...fechas.map(
+                    (fecha) =>
+                        fecha.getTime()
+                )
+            )
+        );
+    }
+
+    if (!inicio || !fin) {
+        fin = new Date();
+        inicio = new Date();
+
+        inicio.setDate(
+            inicio.getDate() - 179
+        );
+    }
+
+    const dias = Math.max(
+        1,
+        Math.ceil(
+            (fin - inicio) /
+            86400000
+        )
+    );
+
+    const modo =
+        dias <= 45
+            ? "dia"
+            : dias <= 240
+                ? "semana"
+                : "mes";
+
+    let cursor =
+        inicioBucket(
+            inicio,
+            modo
+        );
+
+    const final =
+        inicioBucket(
+            fin,
+            modo
+        );
+
+    const buckets = [];
+
+    while (
+        cursor <= final &&
+        buckets.length < 400
+    ) {
+        buckets.push({
+            key: keyBucket(
+                cursor,
+                modo
+            ),
+            label: labelBucket(
+                cursor,
+                modo
+            ),
+            prospectos: 0,
+            citas: 0,
+            traficoPiso: 0,
+            pruebas: 0,
+            entregas: 0,
+        });
+
+        cursor =
+            avanzarBucket(
+                cursor,
+                modo
+            );
+    }
+
+    const map = new Map(
+        buckets.map(
+            (bucket) => [
+                bucket.key,
+                bucket,
+            ]
+        )
+    );
+
+    const agregar = (
+        lista,
+        modulo,
+        key,
+        filtro = () => true
+    ) => {
+        lista.forEach((item) => {
+            if (!filtro(item)) {
+                return;
+            }
+
+            const fecha =
+                fechaItem(
+                    item,
+                    modulo
+                );
+
+            if (!fecha) {
+                return;
+            }
+
+            const bucket =
+                map.get(
+                    keyBucket(
+                        inicioBucket(
+                            fecha,
+                            modo
+                        ),
+                        modo
+                    )
+                );
+
+            if (bucket) {
+                bucket[key]++;
+            }
+        });
+    };
+
+    agregar(
+        base.prospectos,
+        "prospectos",
+        "prospectos"
+    );
+
+    agregar(
+        base.citas,
+        "citas",
+        "citas"
+    );
+
+    agregar(
+        base.traficoPiso,
+        "traficoPiso",
+        "traficoPiso"
+    );
+
+    agregar(
+        base.pruebas,
+        "pruebas",
+        "pruebas"
+    );
+
+    agregar(
+        base.entregas,
+        "entregas",
+        "entregas",
+        entregaRealizada
+    );
+
+    return {
+        modo,
+        buckets,
+    };
+}
+
+function rankingDigital(
+    base,
+    seleccionado = "todos"
+) {
+    const map = new Map();
+
+    const obtener = (nombre) => {
+        const key = texto(
+            nombre,
+            "Sin asignar"
+        );
+
+        if (!map.has(key)) {
+            map.set(
+                key,
+                {
+                    asesor: key,
+                    prospectos: 0,
+                    citas: 0,
+                    asistencias: 0,
+                    handoff: 0,
+                    score: 0,
+                }
+            );
+        }
+
+        return map.get(key);
+    };
+
+    base.prospectos.forEach(
+        (item) => {
+            obtener(
+                asesorDigital(item)
+            ).prospectos++;
+        }
+    );
+
+    base.citas.forEach(
+        (item) => {
+            const asesor =
+                obtener(
+                    asesorDigital(item)
+                );
+
+            asesor.citas++;
+
+            if (
+                esSi(item?.asistencia)
+            ) {
+                asesor.asistencias++;
+            }
+
+            if (
+                texto(
+                    item?.asesor_piso ??
+                    item?.asesor_asignado
+                )
+            ) {
+                asesor.handoff++;
+            }
+        }
+    );
+
+    const rows = [
+        ...map.values()
+    ].filter(
+        (item) =>
+            item.asesor !==
+            "Sin asignar"
+    );
+
+    const maxVol = Math.max(
+        1,
+        ...rows.map(
+            (item) =>
+                item.prospectos
+        )
+    );
+
+    rows.forEach((item) => {
+        item.conversionCita =
+            porcentaje(
+                item.citas,
+                item.prospectos
+            );
+
+        item.asistencia =
+            porcentaje(
+                item.asistencias,
+                item.citas
+            );
+
+        item.tasaHandoff =
+            porcentaje(
+                item.handoff,
+                item.citas
+            );
+
+        /*
+         * Score digital.
+         *
+         * 40% conversión prospecto -> cita
+         * 30% asistencia
+         * 20% handoff a asesor de piso
+         * 10% volumen relativo
+         */
+        item.score =
+            limitar(
+                item.conversionCita * 0.40 +
+                item.asistencia * 0.30 +
+                item.tasaHandoff * 0.20 +
+                porcentaje(
+                    item.prospectos,
+                    maxVol
+                ) * 0.10
+            );
+    });
+
+    const filtradas =
+        seleccionado === "todos"
+            ? rows
+            : rows.filter(
+                (item) =>
+                    item.asesor ===
+                    seleccionado
+            );
+
+    return filtradas.sort(
+        (a, b) =>
+            b.score - a.score
+    );
+}
+
+function rankingPiso(
+    base,
+    seleccionado = "todos"
+) {
+    const map = new Map();
+
+    const obtener = (nombre) => {
+        const key = texto(
+            nombre,
+            "Sin asignar"
+        );
+
+        if (!map.has(key)) {
+            map.set(
+                key,
+                {
+                    asesor: key,
+                    citas: 0,
+                    citasAsistidas: 0,
+                    trafico: 0,
+                    pruebas: 0,
+                    pruebasAsistidas: 0,
+                    entregas: 0,
+                    score: 0,
+                }
+            );
+        }
+
+        return map.get(key);
+    };
+
+    base.citas.forEach(
+        (item) => {
+            const asesor =
+                obtener(
+                    asesorPiso(item)
+                );
+
+            asesor.citas++;
+
+            if (
+                esSi(item?.asistencia)
+            ) {
+                asesor.citasAsistidas++;
+            }
+        }
+    );
+
+    base.traficoPiso.forEach(
+        (item) => {
+            obtener(
+                asesorPiso(item)
+            ).trafico++;
+        }
+    );
+
+    base.pruebas.forEach(
+        (item) => {
+            const asesor =
+                obtener(
+                    asesorPiso(item)
+                );
+
+            asesor.pruebas++;
+
+            if (
+                esSi(item?.asistencia)
+            ) {
+                asesor.pruebasAsistidas++;
+            }
+        }
+    );
+
+    base.entregas
+        .filter(
+            entregaRealizada
+        )
+        .forEach(
+            (item) => {
+                obtener(
+                    asesorEntrega(item)
+                ).entregas++;
+            }
+        );
+
+    const rows = [
+        ...map.values()
+    ].filter(
+        (item) =>
+            item.asesor !==
+            "Sin asignar"
+    );
+
+    const maxTrafico = Math.max(
+        1,
+        ...rows.map(
+            (item) =>
+                item.trafico
+        )
+    );
+
+    const maxPruebas = Math.max(
+        1,
+        ...rows.map(
+            (item) =>
+                item.pruebasAsistidas
+        )
+    );
+
+    const maxEntregas = Math.max(
+        1,
+        ...rows.map(
+            (item) =>
+                item.entregas
+        )
+    );
+
+    rows.forEach((item) => {
+        item.tasaAsistencia =
+            porcentaje(
+                item.citasAsistidas,
+                item.citas
+            );
+
+        item.pruebaPorTrafico =
+            porcentaje(
+                item.pruebasAsistidas,
+                item.trafico
+            );
+
+        item.entregaPorTrafico =
+            porcentaje(
+                item.entregas,
+                item.trafico
+            );
+
+        /*
+         * Score de piso.
+         *
+         * Las entregas tienen el peso
+         * más alto porque son el resultado
+         * comercial final del asesor de ventas.
+         */
+        item.score =
+            limitar(
+                porcentaje(
+                    item.entregas,
+                    maxEntregas
+                ) * 0.30 +
+                porcentaje(
+                    item.pruebasAsistidas,
+                    maxPruebas
+                ) * 0.25 +
+                item.tasaAsistencia * 0.20 +
+                porcentaje(
+                    item.trafico,
+                    maxTrafico
+                ) * 0.15 +
+                limitar(
+                    item.entregaPorTrafico
+                ) * 0.10
+            );
+    });
+
+    const filtradas =
+        seleccionado === "todos"
+            ? rows
+            : rows.filter(
+                (item) =>
+                    item.asesor ===
+                    seleccionado
+            );
+
+    return filtradas.sort(
+        (a, b) =>
+            b.score - a.score
+    );
+}
+
+function construirHeatmapTrafico(
+    lista
+) {
+    const dias = [
+        "Lun",
+        "Mar",
+        "Mié",
+        "Jue",
+        "Vie",
+        "Sáb",
+        "Dom",
+    ];
+
+    const horas =
+        Array.from(
+            {
+                length: 13,
+            },
+            (_, index) =>
+                index + 8
+        );
+
+    const map = new Map();
+
+    lista.forEach((item) => {
+        const fecha =
+            fechaItem(
+                item,
+                "traficoPiso"
+            );
+
+        if (!fecha) {
+            return;
+        }
+
+        const dia =
+            (fecha.getDay() + 6) % 7;
+
+        const hora =
+            fecha.getHours();
+
+        if (
+            hora < 8 ||
+            hora > 20
+        ) {
+            return;
+        }
+
+        const key =
+            `${dia}-${hora}`;
+
+        map.set(
+            key,
+            (map.get(key) || 0) + 1
+        );
+    });
+
+    const data = [];
+
+    dias.forEach(
+        (_, diaIndex) => {
+            horas.forEach(
+                (hora, horaIndex) => {
+                    data.push([
+                        horaIndex,
+                        diaIndex,
+                        map.get(
+                            `${diaIndex}-${hora}`
+                        ) || 0,
+                    ]);
+                }
+            );
+        }
+    );
+
+    return {
+        dias,
+        horas: horas.map(
+            (hora) =>
+                `${String(hora).padStart(
+                    2,
+                    "0"
+                )}:00`
+        ),
+        data,
+        max: Math.max(
+            1,
+            ...data.map(
+                (item) =>
+                    item[2]
+            )
+        ),
+    };
+}
+
+function Grafica({
+    option,
+    height = 320,
+    onEvents,
+}) {
+    return (
+        <Suspense
+            fallback={
+                <div
+                    className="animate-pulse rounded-2xl bg-slate-100"
+                    style={{
+                        height,
+                    }}
+                />
+            }
+        >
+            <ECharts
+                option={option}
+                style={{
+                    width: "100%",
+                    height,
+                }}
+                notMerge
+                lazyUpdate
+                onEvents={onEvents}
+                opts={{
+                    renderer: "canvas",
+                }}
+            />
         </Suspense>
     );
 }
 
-function GraficaTendenciaAreas({ timeline, periodoLabel }) {
-    const option = useMemo(() => ({
-        animationDuration: 800,
-        animationEasing: "cubicOut",
-        textStyle: { fontFamily: "inherit" },
-        tooltip: {
-            trigger: "axis",
-            backgroundColor: "#0A1240",
-            borderWidth: 0,
-            textStyle: { color: "#E8D9A0", fontSize: 12 },
-            padding: [10, 14],
-            extraCssText: "border-radius:12px",
-            axisPointer: { type: "line", lineStyle: { color: `${GOLD}55`, type: "dashed", width: 1 } },
-        },
-        legend: {
-            bottom: 0,
-            itemWidth: 10, itemHeight: 10, itemGap: 20,
-            textStyle: { fontSize: 11, color: TEXT_MUTED },
-            data: ["Prospectos", "Citas", "Piso", "Entregas"],
-        },
-        grid: { left: 4, right: 8, top: 10, bottom: 46, containLabel: true },
-        xAxis: {
-            type: "category",
-            data: timeline.map(t => t.mes),
-            boundaryGap: false,
-            axisLine: { show: false },
-            axisTick: { show: false },
-            splitLine: { show: false },
-            axisLabel: { color: TEXT_MUTED, fontSize: 10 },
-        },
-        yAxis: {
-            type: "value",
-            axisLine: { show: false },
-            axisTick: { show: false },
-            splitLine: { lineStyle: { color: `${BORDER}`, type: "dashed" } },
-            axisLabel: { color: TEXT_MUTED, fontSize: 10, formatter: v => new Intl.NumberFormat("es-MX", { notation: "compact" }).format(v) },
-        },
-        series: [
-            {
-                name: "Prospectos", type: "line", stack: "total", smooth: 0.5,
-                data: timeline.map(t => t.prospectos),
-                lineStyle: { width: 0 },
-                showSymbol: false,
-                areaStyle: {
-                    color: {
-                        type: "linear", x: 0, y: 0, x2: 0, y2: 1,
-                        colorStops: [{ offset: 0, color: `${NAVY}CC` }, { offset: 1, color: `${NAVY}22` }]
-                    },
-                },
-                emphasis: { focus: "series" },
-            },
-            {
-                name: "Citas", type: "line", stack: "total", smooth: 0.5,
-                data: timeline.map(t => t.citas),
-                lineStyle: { width: 0 },
-                showSymbol: false,
-                areaStyle: {
-                    color: {
-                        type: "linear", x: 0, y: 0, x2: 0, y2: 1,
-                        colorStops: [{ offset: 0, color: `${NAVY_MID}CC` }, { offset: 1, color: `${NAVY_MID}22` }]
-                    },
-                },
-                emphasis: { focus: "series" },
-            },
-            {
-                name: "Piso", type: "line", stack: "total", smooth: 0.5,
-                data: timeline.map(t => t.registrosPiso),
-                lineStyle: { width: 0 },
-                showSymbol: false,
-                areaStyle: {
-                    color: {
-                        type: "linear", x: 0, y: 0, x2: 0, y2: 1,
-                        colorStops: [{ offset: 0, color: `${GOLD}BB` }, { offset: 1, color: `${GOLD}18` }]
-                    },
-                },
-                emphasis: { focus: "series" },
-            },
-            {
-                name: "Entregas", type: "line", stack: "total", smooth: 0.5,
-                data: timeline.map(t => t.entregas),
-                lineStyle: { width: 0 },
-                showSymbol: false,
-                areaStyle: {
-                    color: {
-                        type: "linear", x: 0, y: 0, x2: 0, y2: 1,
-                        colorStops: [{ offset: 0, color: `${GOLD2}AA` }, { offset: 1, color: `${GOLD2}10` }]
-                    },
-                },
-                emphasis: { focus: "series" },
-            },
-        ],
-    }), [timeline]);
-
-    return <Grafica option={option} height={340} />;
-}
-
-const HEAT_COLS = [
-    { key: "prospectos", label: "Prospectos" },
-    { key: "citas", label: "Citas" },
-    { key: "registroPiso", label: "Piso" },
-    { key: "pruebas", label: "Pruebas" },
-    { key: "entregas", label: "Entregas" },
-];
-
-function heatBg(t) {
-    // 0 → pálido azul grisáceo,  1 → navy oscuro
-    const r = Math.round(180 - t * 160);
-    const g = Math.round(185 - t * 145);
-    const b = Math.round(220 - t * 150);
-    return `rgb(${r},${g},${b})`;
-}
-
-function GraficaHeatmapDealer({ data }) {
-    const colMaxes = useMemo(() =>
-        HEAT_COLS.map(c => Math.max(1, ...data.map(d => d[c.key] || 0))),
-        [data]);
-
+function ChartCard({
+    title,
+    subtitle,
+    action,
+    children,
+    className = "",
+}) {
     return (
-        <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 3 }}>
-                <thead>
-                    <tr>
-                        <th style={{ width: 120, textAlign: "left", fontSize: 10, fontWeight: 600, color: TEXT_MUTED, paddingBottom: 6, paddingRight: 8 }}></th>
-                        {HEAT_COLS.map(c => (
-                            <th key={c.key} style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, textAlign: "center", paddingBottom: 6, minWidth: 64 }}>
-                                {c.label}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {data.map((row, ri) => (
-                        <tr key={row.agencia}>
-                            <td style={{ fontSize: 11, color: TEXT_MUTED, textAlign: "right", paddingRight: 8, whiteSpace: "nowrap", fontWeight: 500 }}>
-                                {row.agencia}
-                            </td>
-                            {HEAT_COLS.map((c, ci) => {
-                                const v = row[c.key] || 0;
-                                const t = v / colMaxes[ci];
-                                const bg = v ? heatBg(t) : "#F0F2FA";
-                                const textC = t > 0.5 ? "#fff" : t > 0.2 ? "#1A2560" : "#9AA5C8";
-                                return (
-                                    <td key={c.key} style={{
-                                        background: bg, color: textC, borderRadius: 6,
-                                        height: 38, textAlign: "center", verticalAlign: "middle",
-                                        fontSize: 12, fontWeight: 600,
-                                        transition: "transform .15s",
-                                        cursor: "default",
-                                    }}
-                                        title={`${c.label} · ${row.agencia}: ${v}`}
-                                    >
-                                        {v || "–"}
-                                    </td>
-                                );
-                            })}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {/* Leyenda de intensidad */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, justifyContent: "flex-end" }}>
-                <span style={{ fontSize: 10, color: TEXT_MUTED }}>Menos</span>
-                {[0, 0.2, 0.4, 0.6, 0.8, 1].map(t => (
-                    <div key={t} style={{ width: 18, height: 10, borderRadius: 3, background: heatBg(t) }} />
-                ))}
-                <span style={{ fontSize: 10, color: TEXT_MUTED }}>Más</span>
-            </div>
-        </div>
-    );
-}
-
-const TREEMAP_COLORES = [
-    { bg: NAVY, text: "#ffffff" },
-    { bg: GOLD, text: "#ffffff" },
-    { bg: NAVY_MID, text: "#ffffff" },
-    { bg: GOLD2, text: "#ffffff" },
-    { bg: BLUE2, text: "#ffffff" },
-    { bg: GOLD3, text: NAVY },
-];
-
-function GraficaTreemapEstatus({ data }) {
-    const sorted = useMemo(() => [...data].sort((a, b) => b.value - a.value), [data]);
-    const total = sorted.reduce((s, d) => s + d.value, 0);
-
-    const [grande, ...resto] = sorted;
-
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%", minHeight: 320 }}>
-            {/* Fila 1: el más grande solo */}
-            {grande && (
-                <div style={{
-                    flex: 1.1,
-                    borderRadius: 14, padding: "24px 28px",
-                    background: TREEMAP_COLORES[0].bg,
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
-                }}>
-                    <span style={{ fontSize: 18, fontWeight: 600, color: TREEMAP_COLORES[0].text }}>{grande.name}</span>
-                    <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 38, fontWeight: 700, color: TREEMAP_COLORES[0].text, lineHeight: 1 }}>{formatearNumero(grande.value)}</div>
-                        <div style={{ fontSize: 13, color: `${TREEMAP_COLORES[0].text}99`, marginTop: 4 }}>{redondear(porcentaje(grande.value, total), 1)}%</div>
-                    </div>
-                </div>
+        <section
+            className={cls(
+                "min-w-0 overflow-hidden rounded-3xl border bg-white shadow-[0_16px_50px_-38px_rgba(16,26,82,.45)]",
+                className
             )}
-            {/* Fila 2: los demás distribuidos en partes iguales */}
-            <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${resto.length}, 1fr)`, gap: 8 }}>
-                {resto.map((d, i) => {
-                    const col = TREEMAP_COLORES[(i + 1) % TREEMAP_COLORES.length];
-                    const pct = redondear(porcentaje(d.value, total), 1);
-                    return (
-                        <div key={d.name} style={{
-                            borderRadius: 12, padding: "16px 14px 14px",
-                            background: col.bg,
-                            display: "flex", flexDirection: "column", justifyContent: "space-between",
-                        }}
-                            title={`${d.name}: ${d.value} (${pct}%)`}
-                        >
-                            <div style={{ fontSize: 13, fontWeight: 600, color: `${col.text}CC`, lineHeight: 1.3 }}>
-                                {d.name}
-                            </div>
-                            <div>
-                                <div style={{ fontSize: 28, fontWeight: 700, color: col.text, lineHeight: 1 }}>{formatearNumero(d.value)}</div>
-                                <div style={{ fontSize: 12, color: `${col.text}99`, marginTop: 4 }}>{pct}%</div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-function GaugeRadial({ score, label, encuestas }) {
-    const SIZE = 90;
-    const R = 32;
-    const SW = 7;
-    const CX = SIZE / 2;
-    const CY = SIZE / 2;
-    const START = Math.PI * 0.75;
-    const SWEEP = Math.PI * 1.5;
-    const t = Math.max(0, Math.min(1, (score - 1) / 4));
-
-    const arc = (from, to) => {
-        const x1 = CX + R * Math.cos(from), y1 = CY + R * Math.sin(from);
-        const x2 = CX + R * Math.cos(to), y2 = CY + R * Math.sin(to);
-        const large = (to - from) > Math.PI ? 1 : 0;
-        return `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`;
-    };
-
-    const endAngle = START + SWEEP * t;
-    const color = score >= 4 ? NAVY_MID : score >= 3 ? GOLD : DANGER;
-
-    return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 88 }}>
-            <svg width={SIZE} height={SIZE} style={{ overflow: "visible" }}>
-                {/* Track */}
-                <path d={arc(START, START + SWEEP)} fill="none" stroke="#E7E9F2" strokeWidth={SW} strokeLinecap="round" />
-                {/* Value */}
-                {t > 0 && (
-                    <path d={arc(START, endAngle)} fill="none" stroke={color} strokeWidth={SW} strokeLinecap="round" />
-                )}
-                {/* Score text */}
-                <text x={CX} y={CY - 4} textAnchor="middle" dominantBaseline="middle"
-                    style={{ fontSize: 15, fontWeight: 700, fill: color, fontFamily: "inherit" }}>
-                    {score.toFixed(1)}
-                </text>
-                <text x={CX} y={CY + 11} textAnchor="middle"
-                    style={{ fontSize: 9, fill: TEXT_MUTED, fontFamily: "inherit" }}>
-                    / 5
-                </text>
-            </svg>
-            <div style={{ fontSize: 10, fontWeight: 600, color: "#334155", textAlign: "center", lineHeight: 1.3, maxWidth: 88 }}>
-                {label}
-            </div>
-            {encuestas !== undefined && (
-                <div style={{ fontSize: 9, color: TEXT_MUTED }}>{encuestas} enc.</div>
-            )}
-        </div>
-    );
-}
-
-function GraficaGaugesSatisfaccion({ data }) {
-    const sorted = useMemo(() => [...data].sort((a, b) => b.promedio - a.promedio), [data]);
-
-    return (
-        <div>
-            {/* Leyenda */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-                {[{ l: "≥ 4.0 Excelente", c: NAVY_MID }, { l: "3–3.9 Aceptable", c: GOLD }, { l: "< 3 Bajo", c: DANGER }].map(item => (
-                    <span key={item.l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#475569" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: item.c }} />
-                        {item.l}
-                    </span>
-                ))}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
-                {sorted.map(d => (
-                    <GaugeRadial key={d.agencia} score={d.promedio} label={d.agencia} encuestas={d.encuestas} />
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function GraficaBarrasReclamaciones({ data }) {
-    const sorted = useMemo(() => [...data].sort((a, b) => b.value - a.value), [data]);
-    const maxVal = Math.max(1, ...sorted.map(d => d.value));
-
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {sorted.map((d, i) => {
-                const pct = (d.value / maxVal) * 100;
-                const intensity = 1 - i / sorted.length;
-                const bg = i === 0 ? NAVY : `rgba(14,26,92,${0.15 + intensity * 0.55})`;
-                const textC = i === 0 ? "#fff" : intensity > 0.5 ? "#fff" : NAVY;
-                return (
-                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ fontSize: 11, color: TEXT_MUTED, minWidth: 110, maxWidth: 110, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                            title={d.name}>{d.name}</div>
-                        <div style={{ flex: 1, position: "relative", height: 28, background: "#EEF0F8", borderRadius: 6, overflow: "hidden" }}>
-                            <div style={{
-                                position: "absolute", left: 0, top: 0, bottom: 0,
-                                width: `${pct}%`, background: bg, borderRadius: 6,
-                                transition: "width .5s cubic-bezier(.4,0,.2,1)",
-                                display: "flex", alignItems: "center", paddingLeft: 10, gap: 6,
-                            }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: textC, whiteSpace: "nowrap" }}>
-                                    {formatearNumero(d.value)}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-const SWIM_COLS = [
-    { key: "prospectos", label: "Prospectos", color: NAVY },
-    { key: "citas", label: "Citas", color: NAVY_MID },
-    { key: "registroPiso", label: "Piso", color: BLUE2 },
-    { key: "pruebas", label: "Pruebas", color: GOLD },
-    { key: "entregas", label: "Entregas", color: GOLD2 },
-];
-
-function GraficaSwimlanesAsesores({ data }) {
-    const enriched = useMemo(() =>
-        data.map(d => ({ ...d, total: SWIM_COLS.reduce((s, c) => s + (d[c.key] || 0), 0) }))
-            .sort((a, b) => b.total - a.total),
-        [data]);
-
-    const maxTotal = Math.max(1, ...enriched.map(d => d.total));
-
-    return (
-        <div>
-            {/* Leyenda */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-                {SWIM_COLS.map(c => (
-                    <span key={c.key} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: TEXT_MUTED }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 2, background: c.color }} />
-                        {c.label}
-                    </span>
-                ))}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {enriched.map(d => (
-                    <div key={d.asesor} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ fontSize: 11, color: TEXT_MUTED, minWidth: 140, maxWidth: 140, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                            title={d.asesor}>{d.asesor}</div>
-                        {/* Barra con segmentos proporcionales al total máximo */}
-                        <div style={{ flex: d.total / maxTotal, maxFlex: 1, display: "flex", height: 22, borderRadius: 6, overflow: "hidden", gap: 1, minWidth: 20 }}>
-                            {SWIM_COLS.map(c => {
-                                const v = d[c.key] || 0;
-                                if (!v) return null;
-                                return (
-                                    <div key={c.key} title={`${c.label}: ${v}`}
-                                        style={{ flex: v, background: c.color, height: "100%", transition: "flex .4s", minWidth: 1 }} />
-                                );
-                            })}
-                        </div>
-                        {/* Relleno para mantener alineación cuando la barra es corta */}
-                        <div style={{ flex: 1 - d.total / maxTotal }} />
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "#334155", minWidth: 36, textAlign: "right" }}>
-                            {formatearNumero(d.total)}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function Toolbar({ onAbrirFiltros, onActualizar, refrescando, totalRegistros }) {
-    return (
-        <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold"
-                style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "#fff" }}>
-                {totalRegistros ? `${formatearNumero(totalRegistros)} registros filtrados` : "Sin resultados"}
-            </div>
-            <button type="button" onClick={onAbrirFiltros}
-                className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition xl:hidden"
-                style={{ borderColor: "rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" }}>
-                <SlidersHorizontal size={16} /> Filtros
-            </button>
-            <button type="button" onClick={onActualizar}
-                className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition"
-                style={{ borderColor: "rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" }}>
-                <RefreshCw size={16} className={refrescando ? "animate-spin" : ""} /> Actualizar
-            </button>
-        </div>
-    );
-}
-
-function BarraEmbudo({ etapas, asistenciaGeneral }) {
-    const maximo = Math.max(1, ...etapas.map(e => e.cantidad));
-    return (
-        <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <Gauge size={16} style={{ color: NAVY }} />
-                    <h2 className="text-sm font-bold text-slate-900">Embudo comercial</h2>
-                </div>
-                <span className="text-xs font-semibold" style={{ color: SUCCESS }}>
-                    Asistencia general {formatearPorcentaje(asistenciaGeneral)}
-                </span>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-                {etapas.map((etapa, idx) => {
-                    const anchoRelativo = Math.max(14, (etapa.cantidad / maximo) * 100);
-                    const conversion = idx === 0 ? null : redondear(porcentaje(etapa.cantidad, etapas[idx - 1].cantidad), 0);
-                    return (
-                        <div key={etapa.etapa} className="flex flex-col gap-2">
-                            <div className="flex items-baseline justify-between">
-                                <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEXT_MUTED }}>
-                                    {etapa.etapa}
-                                </p>
-                                {conversion !== null && (
-                                    <span className="text-[11px] font-bold" style={{ color: conversion < 40 ? DANGER : SUCCESS }}>
-                                        {conversion}%
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-2xl font-bold tabular-nums text-slate-900">{formatearNumero(etapa.cantidad)}</p>
-                            <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "#EEF0F8" }}>
-                                <div className="h-full rounded-full transition-all duration-500"
-                                    style={{ width: `${anchoRelativo}%`, backgroundColor: NAVY }} />
-                            </div>
-                            {idx < etapas.length - 1 && <ArrowRight size={12} className="self-end" style={{ color: "#C8CEDF" }} />}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-function MetricCard({ icon: Icon, title, value, sub, accent = NAVY }) {
-    return (
-        <div className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
-            <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl"
-                    style={{ backgroundColor: `${accent}14`, color: accent }}>
-                    <Icon size={16} />
-                </div>
+            style={{
+                borderColor: C.border,
+            }}
+        >
+            <div
+                className="flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                style={{
+                    borderColor: C.border,
+                }}
+            >
                 <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEXT_MUTED }}>{title}</p>
-                    <p className="text-lg font-bold tabular-nums text-slate-900 leading-tight">{value}</p>
-                </div>
-            </div>
-            {sub && <p className="mt-2 text-[11px]" style={{ color: TEXT_MUTED }}>{sub}</p>}
-        </div>
-    );
-}
+                    <h3 className="truncate text-sm font-extrabold text-slate-900">
+                        {title}
+                    </h3>
 
-function ChartCard({ title, subtitle, action, children }) {
-    return (
-        <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-                    {subtitle && <p className="mt-0.5 text-xs" style={{ color: TEXT_MUTED }}>{subtitle}</p>}
+                    {subtitle ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                            {subtitle}
+                        </p>
+                    ) : null}
                 </div>
-                {action && (
-                    <span className="self-start rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                        style={{ backgroundColor: SURFACE, color: TEXT_MUTED }}>
+
+                {action ? (
+                    <div className="shrink-0">
                         {action}
-                    </span>
-                )}
-            </div>
-            {children}
-        </div>
-    );
-}
-
-function EmptyChart({ text = "No hay datos suficientes para mostrar esta gráfica.", height = 280 }) {
-    return (
-        <div className="flex items-center justify-center rounded-xl border border-dashed text-center text-sm"
-            style={{ height, borderColor: BORDER, backgroundColor: SURFACE, color: TEXT_MUTED }}>
-            <div className="max-w-sm px-6">{text}</div>
-        </div>
-    );
-}
-
-function LoadingState() {
-    return (
-        <div className="space-y-6 animate-pulse">
-            <div className="rounded-2xl p-6" style={{ backgroundColor: NAVY }}>
-                <div className="h-5 w-48 rounded bg-white/20" />
-                <div className="mt-3 h-4 w-80 max-w-full rounded bg-white/10" />
-            </div>
-            <div className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
-                <div className="grid grid-cols-5 gap-3">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className="space-y-2">
-                            <div className="h-3 w-16 rounded bg-slate-200" />
-                            <div className="h-6 w-12 rounded bg-slate-200" />
-                            <div className="h-1.5 w-full rounded-full bg-slate-100" />
-                        </div>
-                    ))}
-                </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
-                        <div className="h-9 w-9 rounded-xl bg-slate-200" />
-                        <div className="mt-3 h-3 w-20 rounded bg-slate-200" />
-                        <div className="mt-2 h-6 w-16 rounded bg-slate-100" />
                     </div>
-                ))}
+                ) : null}
             </div>
-        </div>
+
+            <div className="p-3 sm:p-5">
+                {children}
+            </div>
+        </section>
     );
 }
 
-function PeriodButton({ active, children, onClick }) {
+function Kpi({
+    icon: Icon,
+    title,
+    value,
+    detail,
+    tone = C.navy,
+    onClick,
+    active = false,
+}) {
     return (
-        <button type="button" onClick={onClick}
-            className="rounded-xl px-3 py-2 text-sm font-semibold transition"
-            style={active
-                ? { backgroundColor: NAVY, color: "#fff" }
-                : { border: `1px solid ${BORDER}`, backgroundColor: "#fff", color: "#475569" }}>
-            {children}
+        <button
+            type="button"
+            onClick={onClick}
+            className={cls(
+                "group min-w-0 rounded-3xl border bg-white p-4 text-left shadow-[0_14px_45px_-36px_rgba(16,26,82,.5)] transition",
+                onClick &&
+                "hover:-translate-y-0.5 hover:shadow-lg",
+                active &&
+                "ring-2 ring-offset-1"
+            )}
+            style={{
+                borderColor: C.border,
+                "--tw-ring-color": tone,
+            }}
+        >
+            <div className="flex items-start justify-between gap-3">
+                <div
+                    className="grid h-10 w-10 place-items-center rounded-2xl"
+                    style={{
+                        backgroundColor:
+                            `${tone}12`,
+                        color: tone,
+                    }}
+                >
+                    <Icon size={18} />
+                </div>
+
+                <Activity
+                    size={14}
+                    className="text-slate-300 transition group-hover:text-slate-500"
+                />
+            </div>
+
+            <p className="mt-4 text-xs font-bold uppercase tracking-[.12em] text-slate-400">
+                {title}
+            </p>
+
+            <p className="mt-1 truncate text-2xl font-black text-slate-950">
+                {value}
+            </p>
+
+            <p className="mt-1 truncate text-xs text-slate-500">
+                {detail}
+            </p>
         </button>
     );
 }
 
-function SelectFiltro({ label, value, onChange, options = [], icon: Icon }) {
+function Badge({
+    children,
+    tone = C.navy,
+}) {
     return (
-        <label className="block space-y-2">
-            <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEXT_MUTED }}>
-                {Icon ? <Icon size={13} /> : null}{label}
+        <span
+            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold"
+            style={{
+                color: tone,
+                backgroundColor:
+                    `${tone}12`,
+            }}
+        >
+            {children}
+        </span>
+    );
+}
+
+function Empty({ text }) {
+    return (
+        <div className="grid min-h-[260px] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center text-sm text-slate-500">
+            {text}
+        </div>
+    );
+}
+
+function Loading() {
+    return (
+        <div className="min-h-screen space-y-5">
+            <div className="h-36 animate-pulse rounded-3xl bg-slate-200" />
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                {Array.from({
+                    length: 6,
+                }).map(
+                    (_, index) => (
+                        <div
+                            key={index}
+                            className="h-36 animate-pulse rounded-3xl bg-slate-100"
+                        />
+                    )
+                )}
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-2">
+                {Array.from({
+                    length: 4,
+                }).map(
+                    (_, index) => (
+                        <div
+                            key={index}
+                            className="h-96 animate-pulse rounded-3xl bg-slate-100"
+                        />
+                    )
+                )}
+            </div>
+        </div>
+    );
+}
+
+function Select({
+    label,
+    value,
+    onChange,
+    options,
+    icon: Icon,
+}) {
+    return (
+        <label className="min-w-0">
+            <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
+                {Icon ? (
+                    <Icon size={12} />
+                ) : null}
+
+                {label}
             </span>
-            <select value={value} onChange={onChange}
-                className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:ring-2"
-                style={{ borderColor: BORDER }}>
-                {options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+
+            <select
+                value={value}
+                onChange={
+                    (event) =>
+                        onChange(
+                            event.target.value
+                        )
+                }
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-[#3566D6]"
+            >
+                {options.map(
+                    (option) => (
+                        <option
+                            key={
+                                option.value
+                            }
+                            value={
+                                option.value
+                            }
+                        >
+                            {option.label}
+                        </option>
+                    )
+                )}
             </select>
         </label>
     );
 }
 
-function InputFecha({ label, value, onChange }) {
+function PanelFiltros({
+    filtros,
+    setFiltros,
+    agencias,
+    digitales,
+    piso,
+    onCerrar,
+}) {
+    const rapido = (dias) => {
+        setFiltros(
+            (prev) => ({
+                ...prev,
+                ...rangoDias(dias),
+            })
+        );
+    };
+
     return (
-        <label className="block space-y-2">
-            <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEXT_MUTED }}>
-                <CalendarDays size={13} />{label}
-            </span>
-            <input type="date" value={value} onChange={onChange}
-                className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:ring-2"
-                style={{ borderColor: BORDER }} />
-        </label>
+        <div
+            className="rounded-3xl border bg-white p-4 shadow-sm"
+            style={{
+                borderColor: C.border,
+            }}
+        >
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-sm font-extrabold text-slate-900">
+                        Filtros de análisis
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-slate-500">
+                        Los filtros se aplican sin
+                        volver a consultar el
+                        servidor.
+                    </p>
+                </div>
+
+                {onCerrar ? (
+                    <button
+                        type="button"
+                        onClick={onCerrar}
+                        className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500"
+                    >
+                        <X size={16} />
+                    </button>
+                ) : null}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+                {[30, 90, 180].map(
+                    (dias) => (
+                        <button
+                            key={dias}
+                            type="button"
+                            onClick={() =>
+                                rapido(dias)
+                            }
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                        >
+                            {dias} días
+                        </button>
+                    )
+                )}
+
+                <button
+                    type="button"
+                    onClick={() =>
+                        rapido(0)
+                    }
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600"
+                >
+                    Todo
+                </button>
+
+                {filtros.agencia !==
+                    "todas" ||
+                    filtros.asesorDigital !==
+                    "todos" ||
+                    filtros.asesorPiso !==
+                    "todos" ? (
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setFiltros(
+                                (prev) => ({
+                                    ...prev,
+                                    agencia:
+                                        "todas",
+                                    asesorDigital:
+                                        "todos",
+                                    asesorPiso:
+                                        "todos",
+                                })
+                            )
+                        }
+                        className="rounded-full px-3 py-1.5 text-xs font-bold text-red-600"
+                        style={{
+                            background:
+                                "#FEF2F2",
+                        }}
+                    >
+                        Limpiar selección
+                    </button>
+                ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <label>
+                    <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
+                        Desde
+                    </span>
+
+                    <input
+                        type="date"
+                        value={
+                            filtros.fechaInicio
+                        }
+                        onChange={
+                            (event) =>
+                                setFiltros(
+                                    (
+                                        prev
+                                    ) => ({
+                                        ...prev,
+                                        fechaInicio:
+                                            event
+                                                .target
+                                                .value,
+                                    })
+                                )
+                        }
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none"
+                    />
+                </label>
+
+                <label>
+                    <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
+                        Hasta
+                    </span>
+
+                    <input
+                        type="date"
+                        value={
+                            filtros.fechaFin
+                        }
+                        onChange={
+                            (event) =>
+                                setFiltros(
+                                    (
+                                        prev
+                                    ) => ({
+                                        ...prev,
+                                        fechaFin:
+                                            event
+                                                .target
+                                                .value,
+                                    })
+                                )
+                        }
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none"
+                    />
+                </label>
+
+                <Select
+                    label="Agencia"
+                    icon={Building2}
+                    value={
+                        filtros.agencia
+                    }
+                    onChange={(value) =>
+                        setFiltros(
+                            (prev) => ({
+                                ...prev,
+                                agencia:
+                                    value,
+                            })
+                        )
+                    }
+                    options={[
+                        {
+                            value:
+                                "todas",
+                            label:
+                                "Todas las agencias",
+                        },
+                        ...agencias.map(
+                            (value) => ({
+                                value,
+                                label: value,
+                            })
+                        ),
+                    ]}
+                />
+
+                <Select
+                    label="Asesor digital"
+                    icon={UserRound}
+                    value={
+                        filtros.asesorDigital
+                    }
+                    onChange={(value) =>
+                        setFiltros(
+                            (prev) => ({
+                                ...prev,
+                                asesorDigital:
+                                    value,
+                            })
+                        )
+                    }
+                    options={[
+                        {
+                            value:
+                                "todos",
+                            label:
+                                "Todos los digitales",
+                        },
+                        ...digitales.map(
+                            (value) => ({
+                                value,
+                                label: value,
+                            })
+                        ),
+                    ]}
+                />
+
+                <Select
+                    label="Asesor de piso"
+                    icon={Users}
+                    value={
+                        filtros.asesorPiso
+                    }
+                    onChange={(value) =>
+                        setFiltros(
+                            (prev) => ({
+                                ...prev,
+                                asesorPiso:
+                                    value,
+                            })
+                        )
+                    }
+                    options={[
+                        {
+                            value:
+                                "todos",
+                            label:
+                                "Todos los asesores",
+                        },
+                        ...piso.map(
+                            (value) => ({
+                                value,
+                                label: value,
+                            })
+                        ),
+                    ]}
+                />
+            </div>
+
+            <p className="mt-3 text-[11px] leading-5 text-slate-400">
+                Asesor digital afecta sus
+                gráficas de prospectos/citas.
+                Asesor de piso afecta citas,
+                tráfico de piso, pruebas y
+                entregas. El resumen ejecutivo
+                conserva el universo por fecha y
+                agencia para no mezclar cohortes
+                sin relación directa.
+            </p>
+        </div>
     );
 }
 
-function PanelFiltros({ abierto, onClose, filtros, setFiltros, dealersDisponibles, asesoresDisponibles, aplicarPeriodoRapido, periodoActivo }) {
-    const limpiarFiltros = () => setFiltros(FILTROS_INICIALES);
-    const contenido = (
-        <div className="flex h-full flex-col rounded-2xl border bg-white p-4 xl:sticky xl:top-24 xl:h-auto xl:max-h-[calc(100vh-7rem)] xl:overflow-auto"
-            style={{ borderColor: BORDER }}>
-            <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"
-                    style={{ backgroundColor: `${NAVY}14`, color: NAVY }}>
-                    <Filter size={14} />Filtros operativos
-                </div>
-                <button type="button" onClick={onClose}
-                    className="grid h-9 w-9 place-items-center rounded-xl border text-slate-500 transition hover:bg-slate-50 xl:hidden"
-                    style={{ borderColor: BORDER }}>
-                    <X size={16} />
-                </button>
-            </div>
-            <div className="space-y-4">
-                <div className="rounded-xl p-3" style={{ backgroundColor: SURFACE }}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEXT_MUTED }}>Ventanas rápidas</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                        <PeriodButton active={periodoActivo === 30} onClick={() => aplicarPeriodoRapido(30)}>30 días</PeriodButton>
-                        <PeriodButton active={periodoActivo === 90} onClick={() => aplicarPeriodoRapido(90)}>90 días</PeriodButton>
-                        <PeriodButton active={periodoActivo === 180} onClick={() => aplicarPeriodoRapido(180)}>180 días</PeriodButton>
-                        <PeriodButton active={periodoActivo === 0} onClick={() => aplicarPeriodoRapido(0)}>Todo</PeriodButton>
-                    </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                    <InputFecha label="Fecha inicio" value={filtros.fechaInicio} onChange={e => setFiltros(p => ({ ...p, fechaInicio: e.target.value }))} />
-                    <InputFecha label="Fecha fin" value={filtros.fechaFin} onChange={e => setFiltros(p => ({ ...p, fechaFin: e.target.value }))} />
-                </div>
-                <SelectFiltro label="Dealer / agencia" icon={Building2} value={filtros.dealer}
-                    onChange={e => setFiltros(p => ({ ...p, dealer: e.target.value }))}
-                    options={[{ value: "todos", label: "Todos los dealers" }, ...dealersDisponibles.map(d => ({ value: d, label: d }))]} />
-                <SelectFiltro label="Asesor" icon={UserRound} value={filtros.asesor}
-                    onChange={e => setFiltros(p => ({ ...p, asesor: e.target.value }))}
-                    options={[{ value: "todos", label: "Todos los asesores" }, ...asesoresDisponibles.map(a => ({ value: a, label: a }))]} />
-            </div>
-            <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
-                <button type="button" onClick={limpiarFiltros}
-                    className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    style={{ borderColor: BORDER }}>
-                    Limpiar filtros
-                </button>
-            </div>
-        </div>
-    );
+function TablaRanking({
+    data,
+    tipo,
+    onSelect,
+}) {
+    if (!data.length) {
+        return (
+            <Empty text="No hay suficientes registros atribuibles a asesores en este periodo." />
+        );
+    }
+
+    const digital =
+        tipo === "digital";
+
     return (
-        <>
-            <div className="hidden xl:block">{contenido}</div>
-            {abierto ? (
-                <div className="fixed inset-0 z-50 xl:hidden">
-                    <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
-                    <div className="absolute right-0 top-0 h-full w-full max-w-md p-3">{contenido}</div>
-                </div>
-            ) : null}
-        </>
+        <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+                <thead>
+                    <tr className="border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400">
+                        <th className="px-3 py-3">
+                            #
+                        </th>
+
+                        <th className="px-3 py-3">
+                            Asesor
+                        </th>
+
+                        <th className="px-3 py-3 text-right">
+                            {digital
+                                ? "Prospectos"
+                                : "Tráfico"}
+                        </th>
+
+                        <th className="px-3 py-3 text-right">
+                            {digital
+                                ? "Citas"
+                                : "Pruebas"}
+                        </th>
+
+                        <th className="px-3 py-3 text-right">
+                            {digital
+                                ? "Asistencia"
+                                : "Entregas"}
+                        </th>
+
+                        <th className="px-3 py-3 text-right">
+                            {digital
+                                ? "Handoff"
+                                : "Conv. entrega"}
+                        </th>
+
+                        <th className="px-3 py-3 text-right">
+                            Índice
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {data.map(
+                        (
+                            row,
+                            index
+                        ) => (
+                            <tr
+                                key={
+                                    row.asesor
+                                }
+                                onClick={() =>
+                                    onSelect?.(
+                                        row.asesor
+                                    )
+                                }
+                                className="cursor-pointer border-b border-slate-50 transition hover:bg-slate-50"
+                            >
+                                <td className="px-3 py-3 font-black text-slate-400">
+                                    {index +
+                                        1}
+                                </td>
+
+                                <td className="max-w-[260px] truncate px-3 py-3 font-bold text-slate-800">
+                                    {
+                                        row.asesor
+                                    }
+                                </td>
+
+                                <td className="px-3 py-3 text-right font-semibold">
+                                    {fmt(
+                                        digital
+                                            ? row.prospectos
+                                            : row.trafico
+                                    )}
+                                </td>
+
+                                <td className="px-3 py-3 text-right font-semibold">
+                                    {fmt(
+                                        digital
+                                            ? row.citas
+                                            : row.pruebasAsistidas
+                                    )}
+                                </td>
+
+                                <td className="px-3 py-3 text-right font-semibold">
+                                    {digital
+                                        ? fmtPct(
+                                            row.asistencia
+                                        )
+                                        : fmt(
+                                            row.entregas
+                                        )}
+                                </td>
+
+                                <td className="px-3 py-3 text-right font-semibold">
+                                    {digital
+                                        ? fmtPct(
+                                            row.tasaHandoff
+                                        )
+                                        : fmtPct(
+                                            row.entregaPorTrafico
+                                        )}
+                                </td>
+
+                                <td className="px-3 py-3 text-right">
+                                    <Badge
+                                        tone={
+                                            row.score >=
+                                                70
+                                                ? C.green
+                                                : row.score >=
+                                                    45
+                                                    ? C.amber
+                                                    : C.red
+                                        }
+                                    >
+                                        {fmtDecimal(
+                                            row.score,
+                                            0
+                                        )}
+                                        /100
+                                    </Badge>
+                                </td>
+                            </tr>
+                        )
+                    )}
+                </tbody>
+            </table>
+        </div>
     );
 }
 
 export default function Home() {
-    const [loading, setLoading] = useState(true);
-    const [refrescando, setRefrescando] = useState(false);
-    const [errores, setErrores] = useState([]);
-    const [menuFiltrosAbierto, setMenuFiltrosAbierto] = useState(false);
-    const [filtros, setFiltros] = useState(() => ({ ...FILTROS_INICIALES, ...obtenerRangoDesdeDias(180) }));
-    const [data, setData] = useState({ casos: [], prospectos: [], citas: [], registroPiso: [], pruebas: [], entregas: [], encuestas: [] });
-    const [coreListo, setCoreListo] = useState(false);
-    const montado = useRef(true);
+    const [data, setData] =
+        useState(DATOS_VACIOS);
 
-    useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
+    const [loading, setLoading] =
+        useState(true);
 
-    const cargarDatos = async ({ forzar = false } = {}) => {
-        if (forzar) setRefrescando(true); else setLoading(true);
-        try {
-            if (!forzar) {
-                const cache = leerCache();
-                if (cache) { setData(cache.data); setErrores(cache.errores || []); setLoading(false); setCoreListo(true); return; }
+    const [
+        refrescando,
+        setRefrescando,
+    ] = useState(false);
+
+    const [errores, setErrores] =
+        useState([]);
+
+    const [tab, setTab] =
+        useState("resumen");
+
+    const [
+        mostrarFiltros,
+        setMostrarFiltros,
+    ] = useState(false);
+
+    const [filtros, setFiltros] =
+        useState(() => ({
+            ...FILTROS_INICIALES,
+            ...rangoDias(180),
+        }));
+
+    /*
+     * No hacemos fetch manual ni manejamos
+     * JWT aquí.
+     *
+     * Cada módulo usa ahora su API oficial.
+     */
+    const cargar = useCallback(
+        async ({
+            forzar = false,
+        } = {}) => {
+            if (forzar) {
+                setRefrescando(true);
+            } else {
+                setLoading(true);
             }
-            const siguienteData = { casos: [], prospectos: [], citas: [], registroPiso: [], pruebas: [], entregas: [], encuestas: [] };
-            const modulosConError = [];
-            const modulosCore = new Set(["prospectos", "citas", "registroPiso", "pruebas", "entregas"]);
-            let coreRestantes = modulosCore.size;
 
-            await Promise.all(ORDEN_CARGA.map(async nombre => {
-                const ruta = RUTAS_API[nombre];
-                try {
-                    const registros = await solicitarTodasLasPaginas(ruta);
-                    if (!montado.current) return;
-                    siguienteData[nombre] = Array.isArray(registros) ? registros : [];
-                } catch { modulosConError.push(nombre); }
-                finally {
-                    if (modulosCore.has(nombre)) {
-                        coreRestantes--;
-                        if (coreRestantes === 0 && montado.current) { setData({ ...siguienteData }); setCoreListo(true); }
+            try {
+                if (!forzar) {
+                    const cache =
+                        leerCache();
+
+                    if (cache) {
+                        setData(cache);
+                        setLoading(
+                            false
+                        );
+                        return;
                     }
                 }
-            }));
 
-            if (!montado.current) return;
-            guardarCache({ data: siguienteData, errores: modulosConError });
-            setData(siguienteData);
-            setErrores(modulosConError);
-            setCoreListo(true);
-        } catch { setErrores(["dashboard"]); }
-        finally { if (montado.current) { setLoading(false); setRefrescando(false); } }
-    };
+                const tareas = {
+                    prospectos: () =>
+                        cargarCompleto(
+                            () =>
+                                apiDigitales.digitalesListProspectos(
+                                    {
+                                        todos: 1,
+                                        ligero: 1,
+                                        page_size:
+                                            500,
+                                    }
+                                )
+                        ),
 
-    useEffect(() => { cargarDatos(); }, []);  // eslint-disable-line
+                    citas: () =>
+                        cargarCompleto(
+                            () =>
+                                apiCitas.list(
+                                    {
+                                        page_size:
+                                            500,
+                                    }
+                                )
+                        ),
 
-    const periodoActivo = useMemo(() => detectarPeriodoActivo(filtros.fechaInicio, filtros.fechaFin), [filtros.fechaInicio, filtros.fechaFin]);
+                    traficoPiso: () =>
+                        cargarCompleto(
+                            () =>
+                                apiTraficoPiso.list(
+                                    {
+                                        page_size:
+                                            500,
+                                    }
+                                )
+                        ),
 
-    const dealersDisponibles = useMemo(() => {
-        const vals = new Set();
-        Object.keys(CAMPOS_POR_MODULO).forEach(modulo => (data[modulo] || []).forEach(item => {
-            const d = obtenerDealerItem(item, modulo);
-            if (d && d !== "Sin agencia") vals.add(d);
-        }));
-        return [...vals].sort((a, b) => a.localeCompare(b, "es"));
-    }, [data]);
+                    pruebas: () =>
+                        cargarCompleto(
+                            () =>
+                                apiPruebaManejo.list(
+                                    {
+                                        page_size:
+                                            500,
+                                    }
+                                )
+                        ),
 
-    const asesoresDisponibles = useMemo(() => {
-        const vals = new Set();
-        ["prospectos", "citas", "registroPiso", "pruebas", "entregas", "encuestas", "casos"].forEach(modulo =>
-            (data[modulo] || []).forEach(item => {
-                const a = obtenerAsesorItem(item, modulo);
-                if (a && a !== "Sin asignar") vals.add(a);
-            })
+                    entregas: () =>
+                        cargarCompleto(
+                            () =>
+                                apiEntregas.list(
+                                    {
+                                        page_size:
+                                            500,
+                                    }
+                                )
+                        ),
+
+                    encuestas: () =>
+                        cargarCompleto(
+                            () =>
+                                apiEncuestas.list()
+                        ),
+
+                    casos: () =>
+                        cargarCompleto(
+                            () =>
+                                apiConformidad.listCasos()
+                        ),
+                };
+
+                const entries =
+                    Object.entries(
+                        tareas
+                    );
+
+                const resultados =
+                    await Promise.allSettled(
+                        entries.map(
+                            (
+                                [,
+                                    fn]
+                            ) =>
+                                fn()
+                        )
+                    );
+
+                const siguiente = {
+                    ...DATOS_VACIOS,
+                };
+
+                const fallos = [];
+
+                resultados.forEach(
+                    (
+                        resultado,
+                        index
+                    ) => {
+                        const key =
+                            entries[index][0];
+
+                        if (
+                            resultado.status ===
+                            "fulfilled"
+                        ) {
+                            siguiente[
+                                key
+                            ] =
+                                Array.isArray(
+                                    resultado.value
+                                )
+                                    ? resultado.value
+                                    : [];
+                        } else {
+                            fallos.push(
+                                key
+                            );
+
+                            console.error(
+                                `Error cargando ${key}:`,
+                                resultado.reason
+                            );
+                        }
+                    }
+                );
+
+                setData(
+                    siguiente
+                );
+
+                setErrores(
+                    fallos
+                );
+
+                guardarCache(
+                    siguiente
+                );
+            } finally {
+                setLoading(false);
+                setRefrescando(false);
+            }
+        },
+        []
+    );
+
+    useEffect(() => {
+        cargar();
+    }, [cargar]);
+
+    /*
+     * El filtro general solo considera:
+     *
+     * - rango de fechas
+     * - agencia
+     *
+     * Los filtros de asesor se usan únicamente
+     * en sus dashboards correspondientes.
+     *
+     * Esto evita atribuir una entrega de piso
+     * a un asesor digital sin evidencia de que
+     * pertenezca al mismo prospecto.
+     */
+    const base = useMemo(
+        () =>
+            filtrarBase(
+                data,
+                filtros
+            ),
+        [
+            data,
+            filtros.fechaInicio,
+            filtros.fechaFin,
+            filtros.agencia,
+        ]
+    );
+
+    const agencias = useMemo(
+        () => {
+            const set =
+                new Set();
+
+            Object.keys(
+                DATOS_VACIOS
+            ).forEach(
+                (modulo) => {
+                    (
+                        data[
+                        modulo
+                        ] || []
+                    ).forEach(
+                        (item) => {
+                            const agencia =
+                                agenciaItem(
+                                    item,
+                                    modulo
+                                );
+
+                            if (
+                                agencia !==
+                                "Sin agencia"
+                            ) {
+                                set.add(
+                                    agencia
+                                );
+                            }
+                        }
+                    );
+                }
+            );
+
+            return [
+                ...set,
+            ].sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        "es"
+                    )
+            );
+        },
+        [data]
+    );
+
+    const digitales = useMemo(
+        () =>
+            [
+                ...new Set(
+                    [
+                        ...data.prospectos.map(
+                            asesorDigital
+                        ),
+                        ...data.citas.map(
+                            asesorDigital
+                        ),
+                    ].filter(
+                        (value) =>
+                            value !==
+                            "Sin asignar"
+                    )
+                ),
+            ].sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        "es"
+                    )
+            ),
+        [data]
+    );
+
+    const piso = useMemo(
+        () =>
+            [
+                ...new Set(
+                    [
+                        ...data.citas.map(
+                            asesorPiso
+                        ),
+                        ...data.traficoPiso.map(
+                            asesorPiso
+                        ),
+                        ...data.pruebas.map(
+                            asesorPiso
+                        ),
+                        ...data.entregas.map(
+                            asesorEntrega
+                        ),
+                    ].filter(
+                        (value) =>
+                            value !==
+                            "Sin asignar"
+                    )
+                ),
+            ].sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        "es"
+                    )
+            ),
+        [data]
+    );
+
+    const analitica = useMemo(
+        () => {
+            const entregasRealizadas =
+                base.entregas.filter(
+                    entregaRealizada
+                );
+
+            const pruebasRealizadas =
+                base.pruebas.filter(
+                    (item) =>
+                        esSi(
+                            item?.asistencia
+                        )
+                );
+
+            const citasAsistidas =
+                base.citas.filter(
+                    (item) =>
+                        esSi(
+                            item?.asistencia
+                        )
+                );
+
+            const encuestasConScore =
+                base.encuestas
+                    .map(
+                        puntuacionEncuesta
+                    )
+                    .filter(
+                        (value) =>
+                            value !== null
+                    );
+
+            const satisfaccion =
+                encuestasConScore.length
+                    ? encuestasConScore.reduce(
+                        (
+                            total,
+                            value
+                        ) =>
+                            total +
+                            value,
+                        0
+                    ) /
+                    encuestasConScore.length
+                    : 0;
+
+            const estadosCerrados =
+                new Set([
+                    "cerrado",
+                    "cerrada",
+                    "resuelto",
+                    "resuelta",
+                    "solucionado",
+                    "solucionada",
+                    "finalizado",
+                    "finalizada",
+                    "concluido",
+                    "concluida",
+                ]);
+
+            const casosAbiertos =
+                base.casos.filter(
+                    (item) =>
+                        !estadosCerrados.has(
+                            texto(
+                                item?.estado
+                            ).toLowerCase()
+                        )
+                ).length;
+
+            const digital =
+                rankingDigital(
+                    base,
+                    filtros.asesorDigital
+                );
+
+            const floor =
+                rankingPiso(
+                    base,
+                    filtros.asesorPiso
+                );
+
+            const timeline =
+                construirTimeline(
+                    base,
+                    filtros
+                );
+
+            const porAgencia =
+                new Map();
+
+            const obtenerAgencia = (
+                agencia
+            ) => {
+                const key =
+                    texto(
+                        agencia,
+                        "Sin agencia"
+                    );
+
+                if (
+                    !porAgencia.has(
+                        key
+                    )
+                ) {
+                    porAgencia.set(
+                        key,
+                        {
+                            agencia:
+                                key,
+                            prospectos:
+                                0,
+                            citas: 0,
+                            trafico:
+                                0,
+                            pruebas:
+                                0,
+                            entregas:
+                                0,
+                        }
+                    );
+                }
+
+                return porAgencia.get(
+                    key
+                );
+            };
+
+            base.prospectos.forEach(
+                (item) => {
+                    obtenerAgencia(
+                        agenciaItem(
+                            item,
+                            "prospectos"
+                        )
+                    ).prospectos++;
+                }
+            );
+
+            base.citas.forEach(
+                (item) => {
+                    obtenerAgencia(
+                        agenciaItem(
+                            item,
+                            "citas"
+                        )
+                    ).citas++;
+                }
+            );
+
+            base.traficoPiso.forEach(
+                (item) => {
+                    obtenerAgencia(
+                        agenciaItem(
+                            item,
+                            "traficoPiso"
+                        )
+                    ).trafico++;
+                }
+            );
+
+            pruebasRealizadas.forEach(
+                (item) => {
+                    obtenerAgencia(
+                        agenciaItem(
+                            item,
+                            "pruebas"
+                        )
+                    ).pruebas++;
+                }
+            );
+
+            entregasRealizadas.forEach(
+                (item) => {
+                    obtenerAgencia(
+                        agenciaItem(
+                            item,
+                            "entregas"
+                        )
+                    ).entregas++;
+                }
+            );
+
+            const agenciasPerf =
+                [
+                    ...porAgencia.values(),
+                ]
+                    .filter(
+                        (item) =>
+                            item.agencia !==
+                            "Sin agencia"
+                    )
+                    .sort(
+                        (a, b) =>
+                            b.entregas -
+                            a.entregas ||
+                            b.trafico -
+                            a.trafico
+                    );
+
+            return {
+                entregasRealizadas,
+                pruebasRealizadas,
+                citasAsistidas,
+                satisfaccion,
+                casosAbiertos,
+                digital,
+                floor,
+                timeline,
+                agenciasPerf,
+
+                estados: agrupar(
+                    base.prospectos,
+                    (item) =>
+                        item?.estado
+                ).slice(0, 8),
+
+                vehiculos: agrupar(
+                    [
+                        ...base.prospectos,
+                        ...base.citas,
+                        ...base.traficoPiso,
+                    ],
+                    (item) =>
+                        item?.auto_interes ??
+                        item?.modelo_version
+                ).slice(0, 10),
+
+                heatmap:
+                    construirHeatmapTrafico(
+                        base.traficoPiso
+                    ),
+
+                resumen: {
+                    prospectos:
+                        base
+                            .prospectos
+                            .length,
+
+                    citas:
+                        base.citas
+                            .length,
+
+                    trafico:
+                        base
+                            .traficoPiso
+                            .length,
+
+                    pruebas:
+                        pruebasRealizadas.length,
+
+                    entregas:
+                        entregasRealizadas.length,
+
+                    asistenciaCitas:
+                        porcentaje(
+                            citasAsistidas.length,
+                            base.citas
+                                .length
+                        ),
+
+                    citaPorProspecto:
+                        porcentaje(
+                            base.citas
+                                .length,
+                            base
+                                .prospectos
+                                .length
+                        ),
+
+                    pruebaPorTrafico:
+                        porcentaje(
+                            pruebasRealizadas.length,
+                            base
+                                .traficoPiso
+                                .length
+                        ),
+
+                    entregaPorTrafico:
+                        porcentaje(
+                            entregasRealizadas.length,
+                            base
+                                .traficoPiso
+                                .length
+                        ),
+
+                    satisfaccion,
+
+                    encuestas:
+                        base.encuestas
+                            .length,
+
+                    casosAbiertos,
+                },
+            };
+        },
+        [
+            base,
+            filtros.asesorDigital,
+            filtros.asesorPiso,
+        ]
+    );
+
+    /*
+     * Opciones de ECharts.
+     *
+     * Todas tienen:
+     * - tooltip
+     * - hover
+     * - toolbox
+     * - exportación
+     *
+     * Algunas además tienen:
+     * - zoom
+     * - selección por click
+     * - visualMap
+     */
+    const opciones = useMemo(
+        () => {
+            const grid = {
+                left: 45,
+                right: 20,
+                top: 35,
+                bottom: 45,
+                containLabel: true,
+            };
+
+            const toolbox = {
+                right: 4,
+                top: 0,
+                feature: {
+                    saveAsImage: {
+                        title:
+                            "Guardar imagen",
+                        pixelRatio: 2,
+                    },
+                    restore: {
+                        title:
+                            "Restaurar",
+                    },
+                },
+                iconStyle: {
+                    borderColor:
+                        "#9AA2B5",
+                },
+            };
+
+            const timeline = {
+                color: PALETA,
+
+                tooltip: {
+                    trigger: "axis",
+                },
+
+                legend: {
+                    bottom: 0,
+                    textStyle: {
+                        color:
+                            C.muted,
+                        fontSize: 10,
+                    },
+                },
+
+                toolbox,
+
+                grid: {
+                    ...grid,
+                    bottom: 62,
+                },
+
+                xAxis: {
+                    type: "category",
+
+                    data:
+                        analitica
+                            .timeline
+                            .buckets
+                            .map(
+                                (
+                                    item
+                                ) =>
+                                    item.label
+                            ),
+
+                    axisLabel: {
+                        color:
+                            C.muted,
+                        fontSize:
+                            10,
+                    },
+
+                    axisLine: {
+                        lineStyle: {
+                            color:
+                                C.border,
+                        },
+                    },
+                },
+
+                yAxis: {
+                    type: "value",
+
+                    axisLabel: {
+                        color:
+                            C.muted,
+                        fontSize:
+                            10,
+                    },
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                dataZoom: [
+                    {
+                        type: "inside",
+                    },
+                    {
+                        type: "slider",
+                        height: 14,
+                        bottom: 28,
+                        borderColor:
+                            "transparent",
+                        fillerColor:
+                            "#CBD7F5",
+                        backgroundColor:
+                            "#F0F2F7",
+                    },
+                ],
+
+                series: [
+                    [
+                        "Prospectos",
+                        "prospectos",
+                        C.navy,
+                    ],
+                    [
+                        "Citas",
+                        "citas",
+                        C.blue,
+                    ],
+                    [
+                        "Tráfico de piso",
+                        "traficoPiso",
+                        C.amber,
+                    ],
+                    [
+                        "Pruebas",
+                        "pruebas",
+                        C.green,
+                    ],
+                    [
+                        "Entregas",
+                        "entregas",
+                        C.purple,
+                    ],
+                ].map(
+                    ([
+                        name,
+                        key,
+                        color,
+                    ]) => ({
+                        name,
+                        type:
+                            "line",
+                        smooth:
+                            0.28,
+                        showSymbol:
+                            false,
+
+                        lineStyle: {
+                            width:
+                                2.4,
+                            color,
+                        },
+
+                        itemStyle: {
+                            color,
+                        },
+
+                        areaStyle:
+                            key ===
+                                "prospectos"
+                                ? {
+                                    color:
+                                        `${color}10`,
+                                }
+                                : undefined,
+
+                        data:
+                            analitica
+                                .timeline
+                                .buckets
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item[
+                                        key
+                                        ]
+                                ),
+                    })
+                ),
+            };
+
+            const embudo = {
+                tooltip: {
+                    trigger: "item",
+                    formatter:
+                        "{b}: {c}",
+                },
+
+                toolbox,
+
+                series: [
+                    {
+                        type:
+                            "funnel",
+
+                        top: 25,
+                        bottom: 10,
+                        left: "8%",
+                        width: "84%",
+
+                        minSize:
+                            "22%",
+                        maxSize:
+                            "100%",
+
+                        sort:
+                            "none",
+
+                        gap: 4,
+
+                        label: {
+                            show:
+                                true,
+                            position:
+                                "inside",
+
+                            formatter:
+                                (
+                                    params
+                                ) =>
+                                    `${params.name}\n${fmt(
+                                        params.value
+                                    )}`,
+
+                            color:
+                                "#fff",
+                            fontWeight:
+                                700,
+                            fontSize:
+                                11,
+                        },
+
+                        itemStyle: {
+                            borderColor:
+                                "#fff",
+                            borderWidth:
+                                2,
+                            borderRadius:
+                                8,
+                        },
+
+                        data: [
+                            {
+                                name:
+                                    "Prospectos",
+                                value:
+                                    analitica
+                                        .resumen
+                                        .prospectos,
+                                itemStyle:
+                                {
+                                    color:
+                                        C.navy,
+                                },
+                            },
+                            {
+                                name:
+                                    "Citas",
+                                value:
+                                    analitica
+                                        .resumen
+                                        .citas,
+                                itemStyle:
+                                {
+                                    color:
+                                        C.blue,
+                                },
+                            },
+                            {
+                                name:
+                                    "Tráfico de piso",
+                                value:
+                                    analitica
+                                        .resumen
+                                        .trafico,
+                                itemStyle:
+                                {
+                                    color:
+                                        C.amber,
+                                },
+                            },
+                            {
+                                name:
+                                    "Pruebas realizadas",
+                                value:
+                                    analitica
+                                        .resumen
+                                        .pruebas,
+                                itemStyle:
+                                {
+                                    color:
+                                        C.green,
+                                },
+                            },
+                            {
+                                name:
+                                    "Entregas realizadas",
+                                value:
+                                    analitica
+                                        .resumen
+                                        .entregas,
+                                itemStyle:
+                                {
+                                    color:
+                                        C.purple,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            const agenciasChart = {
+                color: [
+                    C.navy,
+                    C.blue,
+                    C.amber,
+                    C.green,
+                    C.purple,
+                ],
+
+                tooltip: {
+                    trigger: "axis",
+                    axisPointer: {
+                        type:
+                            "shadow",
+                    },
+                },
+
+                legend: {
+                    bottom: 0,
+                    textStyle: {
+                        fontSize:
+                            10,
+                    },
+                },
+
+                toolbox,
+
+                grid: {
+                    ...grid,
+                    bottom: 55,
+                },
+
+                xAxis: {
+                    type: "category",
+
+                    data:
+                        analitica.agenciasPerf.map(
+                            (
+                                item
+                            ) =>
+                                item.agencia
+                        ),
+
+                    axisLabel: {
+                        interval:
+                            0,
+
+                        rotate:
+                            analitica
+                                .agenciasPerf
+                                .length >
+                                5
+                                ? 28
+                                : 0,
+
+                        fontSize:
+                            9,
+
+                        color:
+                            C.muted,
+                    },
+                },
+
+                yAxis: {
+                    type:
+                        "value",
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+
+                    axisLabel: {
+                        color:
+                            C.muted,
+                        fontSize:
+                            10,
+                    },
+                },
+
+                series: [
+                    [
+                        "Prospectos",
+                        "prospectos",
+                    ],
+                    [
+                        "Citas",
+                        "citas",
+                    ],
+                    [
+                        "Tráfico",
+                        "trafico",
+                    ],
+                    [
+                        "Pruebas",
+                        "pruebas",
+                    ],
+                    [
+                        "Entregas",
+                        "entregas",
+                    ],
+                ].map(
+                    ([
+                        name,
+                        key,
+                    ]) => ({
+                        name,
+                        type:
+                            "bar",
+                        barMaxWidth:
+                            24,
+
+                        emphasis: {
+                            focus:
+                                "series",
+                        },
+
+                        data:
+                            analitica.agenciasPerf.map(
+                                (
+                                    item
+                                ) =>
+                                    item[
+                                    key
+                                    ]
+                            ),
+                    })
+                ),
+            };
+
+            const estados = {
+                color: PALETA,
+
+                tooltip: {
+                    trigger: "item",
+                    formatter:
+                        "{b}<br/>{c} · {d}%",
+                },
+
+                toolbox,
+
+                legend: {
+                    type:
+                        "scroll",
+                    bottom: 0,
+
+                    textStyle: {
+                        fontSize:
+                            10,
+                        color:
+                            C.muted,
+                    },
+                },
+
+                series: [
+                    {
+                        type:
+                            "pie",
+
+                        radius: [
+                            "48%",
+                            "72%",
+                        ],
+
+                        center: [
+                            "50%",
+                            "45%",
+                        ],
+
+                        minAngle:
+                            4,
+
+                        itemStyle: {
+                            borderColor:
+                                "#fff",
+                            borderWidth:
+                                3,
+                            borderRadius:
+                                7,
+                        },
+
+                        label: {
+                            show:
+                                false,
+                        },
+
+                        emphasis: {
+                            label: {
+                                show:
+                                    true,
+                                formatter:
+                                    "{b}\n{d}%",
+                                fontWeight:
+                                    700,
+                            },
+                        },
+
+                        data:
+                            analitica.estados,
+                    },
+                ],
+            };
+
+            const vehiculos = {
+                tooltip: {
+                    trigger: "axis",
+                    axisPointer: {
+                        type:
+                            "shadow",
+                    },
+                },
+
+                toolbox,
+                grid,
+
+                xAxis: {
+                    type: "value",
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+
+                    axisLabel: {
+                        color:
+                            C.muted,
+                        fontSize:
+                            10,
+                    },
+                },
+
+                yAxis: {
+                    type:
+                        "category",
+
+                    inverse:
+                        true,
+
+                    data:
+                        analitica.vehiculos.map(
+                            (
+                                item
+                            ) =>
+                                item.name
+                        ),
+
+                    axisLabel: {
+                        width:
+                            110,
+                        overflow:
+                            "truncate",
+                        color:
+                            C.muted,
+                        fontSize:
+                            10,
+                    },
+                },
+
+                series: [
+                    {
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.vehiculos.map(
+                                (
+                                    item,
+                                    index
+                                ) => ({
+                                    value:
+                                        item.value,
+
+                                    itemStyle:
+                                    {
+                                        color:
+                                            PALETA[
+                                            index %
+                                            PALETA.length
+                                            ],
+
+                                        borderRadius:
+                                            [
+                                                0,
+                                                8,
+                                                8,
+                                                0,
+                                            ],
+                                    },
+                                })
+                            ),
+
+                        barMaxWidth:
+                            18,
+
+                        label: {
+                            show:
+                                true,
+                            position:
+                                "right",
+                            color:
+                                C.ink,
+                            fontWeight:
+                                700,
+                            fontSize:
+                                10,
+                        },
+                    },
+                ],
+            };
+
+            const digitalBars = {
+                tooltip: {
+                    trigger: "axis",
+
+                    axisPointer: {
+                        type:
+                            "shadow",
+                    },
+                },
+
+                toolbox,
+
+                legend: {
+                    bottom: 0,
+
+                    textStyle: {
+                        fontSize:
+                            10,
+                    },
+                },
+
+                grid: {
+                    ...grid,
+                    left: 130,
+                    bottom: 50,
+                },
+
+                xAxis: {
+                    type:
+                        "value",
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                yAxis: {
+                    type:
+                        "category",
+
+                    inverse:
+                        true,
+
+                    data:
+                        analitica.digital
+                            .slice(
+                                0,
+                                10
+                            )
+                            .map(
+                                (
+                                    item
+                                ) =>
+                                    item.asesor
+                            ),
+
+                    axisLabel: {
+                        width:
+                            110,
+                        overflow:
+                            "truncate",
+                        fontSize:
+                            10,
+                        color:
+                            C.muted,
+                    },
+                },
+
+                series: [
+                    {
+                        name:
+                            "Prospectos",
+
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.digital
+                                .slice(
+                                    0,
+                                    10
+                                )
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item.prospectos
+                                ),
+
+                        itemStyle: {
+                            color:
+                                C.navy,
+
+                            borderRadius:
+                                [
+                                    0,
+                                    6,
+                                    6,
+                                    0,
+                                ],
+                        },
+                    },
+                    {
+                        name:
+                            "Citas",
+
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.digital
+                                .slice(
+                                    0,
+                                    10
+                                )
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item.citas
+                                ),
+
+                        itemStyle: {
+                            color:
+                                C.blue,
+
+                            borderRadius:
+                                [
+                                    0,
+                                    6,
+                                    6,
+                                    0,
+                                ],
+                        },
+                    },
+                    {
+                        name:
+                            "Asistencias",
+
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.digital
+                                .slice(
+                                    0,
+                                    10
+                                )
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item.asistencias
+                                ),
+
+                        itemStyle: {
+                            color:
+                                C.green,
+
+                            borderRadius:
+                                [
+                                    0,
+                                    6,
+                                    6,
+                                    0,
+                                ],
+                        },
+                    },
+                ],
+            };
+
+            const digitalScatter = {
+                tooltip: {
+                    formatter:
+                        (
+                            params
+                        ) =>
+                            `${params.data.name}<br/>` +
+                            `Prospectos: ${params.data.value[0]}<br/>` +
+                            `Conversión a cita: ${fmtPct(
+                                params.data.value[1]
+                            )}<br/>` +
+                            `Asistencias: ${params.data.value[2]}<br/>` +
+                            `Índice: ${fmtDecimal(
+                                params.data.score,
+                                0
+                            )}/100`,
+                },
+
+                toolbox,
+                grid,
+
+                xAxis: {
+                    name:
+                        "Prospectos",
+
+                    nameLocation:
+                        "middle",
+
+                    nameGap:
+                        28,
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                yAxis: {
+                    name:
+                        "Conversión a cita %",
+
+                    nameLocation:
+                        "middle",
+
+                    nameGap:
+                        42,
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                series: [
+                    {
+                        type:
+                            "scatter",
+
+                        data:
+                            analitica.digital.map(
+                                (
+                                    item
+                                ) => ({
+                                    name:
+                                        item.asesor,
+
+                                    score:
+                                        item.score,
+
+                                    value:
+                                        [
+                                            item.prospectos,
+                                            item.conversionCita,
+                                            item.asistencias,
+                                        ],
+
+                                    symbolSize:
+                                        12 +
+                                        Math.min(
+                                            32,
+                                            item.asistencias *
+                                            2
+                                        ),
+
+                                    itemStyle:
+                                    {
+                                        color:
+                                            item.score >=
+                                                70
+                                                ? C.green
+                                                : item.score >=
+                                                    45
+                                                    ? C.amber
+                                                    : C.red,
+
+                                        opacity:
+                                            0.8,
+                                    },
+                                })
+                            ),
+
+                        emphasis: {
+                            focus:
+                                "series",
+                            scale:
+                                1.25,
+                        },
+                    },
+                ],
+            };
+
+            const pisoBars = {
+                tooltip: {
+                    trigger: "axis",
+
+                    axisPointer: {
+                        type:
+                            "shadow",
+                    },
+                },
+
+                toolbox,
+
+                legend: {
+                    bottom: 0,
+
+                    textStyle: {
+                        fontSize:
+                            10,
+                    },
+                },
+
+                grid: {
+                    ...grid,
+                    left: 130,
+                    bottom: 50,
+                },
+
+                xAxis: {
+                    type:
+                        "value",
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                yAxis: {
+                    type:
+                        "category",
+
+                    inverse:
+                        true,
+
+                    data:
+                        analitica.floor
+                            .slice(
+                                0,
+                                10
+                            )
+                            .map(
+                                (
+                                    item
+                                ) =>
+                                    item.asesor
+                            ),
+
+                    axisLabel: {
+                        width:
+                            110,
+                        overflow:
+                            "truncate",
+                        fontSize:
+                            10,
+                        color:
+                            C.muted,
+                    },
+                },
+
+                series: [
+                    {
+                        name:
+                            "Tráfico de piso",
+
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.floor
+                                .slice(
+                                    0,
+                                    10
+                                )
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item.trafico
+                                ),
+
+                        itemStyle: {
+                            color:
+                                C.amber,
+
+                            borderRadius:
+                                [
+                                    0,
+                                    6,
+                                    6,
+                                    0,
+                                ],
+                        },
+                    },
+                    {
+                        name:
+                            "Pruebas realizadas",
+
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.floor
+                                .slice(
+                                    0,
+                                    10
+                                )
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item.pruebasAsistidas
+                                ),
+
+                        itemStyle: {
+                            color:
+                                C.green,
+
+                            borderRadius:
+                                [
+                                    0,
+                                    6,
+                                    6,
+                                    0,
+                                ],
+                        },
+                    },
+                    {
+                        name:
+                            "Entregas",
+
+                        type:
+                            "bar",
+
+                        data:
+                            analitica.floor
+                                .slice(
+                                    0,
+                                    10
+                                )
+                                .map(
+                                    (
+                                        item
+                                    ) =>
+                                        item.entregas
+                                ),
+
+                        itemStyle: {
+                            color:
+                                C.purple,
+
+                            borderRadius:
+                                [
+                                    0,
+                                    6,
+                                    6,
+                                    0,
+                                ],
+                        },
+                    },
+                ],
+            };
+
+            const pisoScatter = {
+                tooltip: {
+                    formatter:
+                        (
+                            params
+                        ) =>
+                            `${params.data.name}<br/>` +
+                            `Tráfico: ${params.data.value[0]}<br/>` +
+                            `Entregas: ${params.data.value[1]}<br/>` +
+                            `Pruebas: ${params.data.value[2]}<br/>` +
+                            `Índice: ${fmtDecimal(
+                                params.data.score,
+                                0
+                            )}/100`,
+                },
+
+                toolbox,
+                grid,
+
+                xAxis: {
+                    name:
+                        "Tráfico de piso",
+
+                    nameLocation:
+                        "middle",
+
+                    nameGap:
+                        28,
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                yAxis: {
+                    name:
+                        "Entregas realizadas",
+
+                    nameLocation:
+                        "middle",
+
+                    nameGap:
+                        35,
+
+                    splitLine: {
+                        lineStyle: {
+                            color:
+                                "#EEF0F5",
+                        },
+                    },
+                },
+
+                series: [
+                    {
+                        type:
+                            "scatter",
+
+                        data:
+                            analitica.floor.map(
+                                (
+                                    item
+                                ) => ({
+                                    name:
+                                        item.asesor,
+
+                                    score:
+                                        item.score,
+
+                                    value:
+                                        [
+                                            item.trafico,
+                                            item.entregas,
+                                            item.pruebasAsistidas,
+                                        ],
+
+                                    symbolSize:
+                                        12 +
+                                        Math.min(
+                                            34,
+                                            item.pruebasAsistidas *
+                                            2.5
+                                        ),
+
+                                    itemStyle:
+                                    {
+                                        color:
+                                            item.score >=
+                                                70
+                                                ? C.green
+                                                : item.score >=
+                                                    45
+                                                    ? C.amber
+                                                    : C.red,
+
+                                        opacity:
+                                            0.82,
+                                    },
+                                })
+                            ),
+
+                        emphasis: {
+                            scale:
+                                1.25,
+                        },
+                    },
+                ],
+            };
+
+            const heat = {
+                tooltip: {
+                    formatter:
+                        (
+                            params
+                        ) =>
+                            `${analitica.heatmap.dias[
+                            params.value[1]
+                            ]} ${analitica.heatmap.horas[
+                            params.value[0]
+                            ]}<br/>${params.value[2]} registros de tráfico`,
+                },
+
+                toolbox,
+
+                grid: {
+                    left: 45,
+                    right: 25,
+                    top: 20,
+                    bottom: 55,
+                },
+
+                xAxis: {
+                    type:
+                        "category",
+
+                    data:
+                        analitica
+                            .heatmap
+                            .horas,
+
+                    splitArea: {
+                        show:
+                            true,
+                    },
+
+                    axisLabel: {
+                        fontSize:
+                            9,
+                        rotate:
+                            35,
+                        color:
+                            C.muted,
+                    },
+                },
+
+                yAxis: {
+                    type:
+                        "category",
+
+                    data:
+                        analitica
+                            .heatmap
+                            .dias,
+
+                    splitArea: {
+                        show:
+                            true,
+                    },
+
+                    axisLabel: {
+                        fontSize:
+                            10,
+                        color:
+                            C.muted,
+                    },
+                },
+
+                visualMap: {
+                    min: 0,
+
+                    max:
+                        analitica
+                            .heatmap
+                            .max,
+
+                    calculable:
+                        true,
+
+                    orient:
+                        "horizontal",
+
+                    left:
+                        "center",
+
+                    bottom:
+                        0,
+
+                    inRange: {
+                        color: [
+                            "#F2F5FC",
+                            "#9EB7EE",
+                            C.navy,
+                        ],
+                    },
+
+                    textStyle: {
+                        fontSize:
+                            9,
+                        color:
+                            C.muted,
+                    },
+                },
+
+                series: [
+                    {
+                        type:
+                            "heatmap",
+
+                        data:
+                            analitica
+                                .heatmap
+                                .data,
+
+                        label: {
+                            show:
+                                analitica
+                                    .heatmap
+                                    .max <
+                                25,
+
+                            fontSize:
+                                9,
+                        },
+
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur:
+                                    10,
+
+                                shadowColor:
+                                    "rgba(0,0,0,.18)",
+                            },
+                        },
+                    },
+                ],
+            };
+
+            return {
+                timeline,
+                embudo,
+                agenciasChart,
+                estados,
+                vehiculos,
+                digitalBars,
+                digitalScatter,
+                pisoBars,
+                pisoScatter,
+                heat,
+            };
+        },
+        [analitica]
+    );
+
+    if (loading) {
+        return <Loading />;
+    }
+
+    const totalCargado =
+        Object.values(data).reduce(
+            (total, lista) =>
+                total +
+                lista.length,
+            0
         );
-        return [...vals].sort((a, b) => a.localeCompare(b, "es"));
-    }, [data]);
 
-    const aplicarPeriodoRapido = (dias) => {
-        const rango = obtenerRangoDesdeDias(dias);
-        setFiltros(prev => ({ ...prev, fechaInicio: rango.fechaInicio, fechaFin: rango.fechaFin }));
-    };
+    const topDigital =
+        analitica.digital[0];
 
-    const analitica = useMemo(() => {
-        const casosFiltrados = filtrarModulo(data.casos, "casos", filtros);
-        const prospectosFiltrados = filtrarModulo(data.prospectos, "prospectos", filtros);
-        const citasFiltradas = filtrarModulo(data.citas, "citas", filtros);
-        const registroPisoFiltrado = filtrarModulo(data.registroPiso, "registroPiso", filtros);
-        const pruebasFiltradas = filtrarModulo(data.pruebas, "pruebas", filtros);
-        const entregasFiltradas = filtrarModulo(data.entregas, "entregas", filtros);
-        const encuestasFiltradas = filtrarModulo(data.encuestas, "encuestas", filtros);
+    const topPiso =
+        analitica.floor[0];
 
-        const estadosCierre = new Set(["cerrado", "cerrada", "resuelto", "resuelta", "solucionado", "solucionada", "concluido", "concluida", "finalizado", "finalizada"]);
-        const reclamacionesAbiertas = casosFiltrados.filter(i => !estadosCierre.has(String(i?.estado || "").trim().toLowerCase())).length;
+    const totDigital =
+        analitica.digital.reduce(
+            (total, item) => ({
+                prospectos:
+                    total.prospectos +
+                    item.prospectos,
 
-        const asistenciaTotal = citasFiltradas.filter(i => Boolean(i?.asistencia)).length + registroPisoFiltrado.filter(i => Boolean(i?.asistencia)).length + pruebasFiltradas.filter(i => Boolean(i?.asistencia)).length;
-        const totalEventos = citasFiltradas.length + registroPisoFiltrado.length + pruebasFiltradas.length;
+                citas:
+                    total.citas +
+                    item.citas,
 
-        const resumen = {
-            totalProspectos: prospectosFiltrados.length,
-            totalCitas: citasFiltradas.length,
-            totalPruebas: pruebasFiltradas.length,
-            totalEntregas: entregasFiltradas.length,
-            totalRegistrosPiso: registroPisoFiltrado.length,
-            conversionProspectoEntrega: redondear(porcentaje(entregasFiltradas.length, prospectosFiltrados.length), 1),
-            asistenciaGeneral: redondear(porcentaje(asistenciaTotal, totalEventos), 1),
-            promedioEncuestas: redondear(promedio(encuestasFiltradas.map(scoreEncuesta)), 1),
-            reclamacionesAbiertas,
-            encuestasTotales: encuestasFiltradas.length,
-            casosTotales: casosFiltrados.length,
-            totalRegistrosFiltrados: casosFiltrados.length + prospectosFiltrados.length + citasFiltradas.length + registroPisoFiltrado.length + pruebasFiltradas.length + entregasFiltradas.length + encuestasFiltradas.length,
-        };
+                asistencias:
+                    total.asistencias +
+                    item.asistencias,
 
-        const embudo = [
-            { etapa: "Prospectos", cantidad: prospectosFiltrados.length },
-            { etapa: "Citas", cantidad: citasFiltradas.length },
-            { etapa: "Piso", cantidad: registroPisoFiltrado.length },
-            { etapa: "Pruebas", cantidad: pruebasFiltradas.length },
-            { etapa: "Entregas", cantidad: entregasFiltradas.length },
-        ];
-
-        const agenciasMap = new Map();
-        const asegurarAgencia = agencia => {
-            const n = normalizarAgencia(agencia);
-            if (!agenciasMap.has(n)) agenciasMap.set(n, { agencia: n, prospectos: 0, citas: 0, pruebas: 0, entregas: 0, registroPiso: 0, casos: 0, encuestas: 0, _sumaEncuestas: 0 });
-            return agenciasMap.get(n);
-        };
-        prospectosFiltrados.forEach(i => { asegurarAgencia(obtenerDealerItem(i, "prospectos")).prospectos++; });
-        citasFiltradas.forEach(i => { asegurarAgencia(obtenerDealerItem(i, "citas")).citas++; });
-        registroPisoFiltrado.forEach(i => { asegurarAgencia(obtenerDealerItem(i, "registroPiso")).registroPiso++; });
-        pruebasFiltradas.forEach(i => { asegurarAgencia(obtenerDealerItem(i, "pruebas")).pruebas++; });
-        entregasFiltradas.forEach(i => { asegurarAgencia(obtenerDealerItem(i, "entregas")).entregas++; });
-        casosFiltrados.forEach(i => { asegurarAgencia(obtenerDealerItem(i, "casos")).casos++; });
-        encuestasFiltradas.forEach(i => { const a = asegurarAgencia(obtenerDealerItem(i, "encuestas")); a.encuestas++; a._sumaEncuestas += scoreEncuesta(i); });
-
-        const rendimientoPorAgencia = [...agenciasMap.values()]
-            .map(i => ({ ...i, promedioSatisfaccion: i.encuestas ? redondear(i._sumaEncuestas / i.encuestas, 1) : 0, actividadTotal: i.prospectos + i.citas + i.pruebas + i.entregas + i.registroPiso + i.casos }))
-            .sort((a, b) => scoreCierreAgencia(b) - scoreCierreAgencia(a))
-            .slice(0, 8);
-
-        const estatusProspectos = agruparConteo(prospectosFiltrados, i => normalizarTexto(i?.estado, "Sin estado")).sort((a, b) => b.value - a.value).slice(0, 6);
-        const origenReclamaciones = agruparConteo(casosFiltrados, i => normalizarTexto(i?.origen, "Sin origen")).sort((a, b) => b.value - a.value).slice(0, 6);
-        const satisfaccionPorAgencia = encuestasFiltradas.length
-            ? [...agenciasMap.values()].filter(i => i.encuestas > 0).map(i => ({ agencia: i.agencia, promedio: redondear(i._sumaEncuestas / i.encuestas, 1), encuestas: i.encuestas })).sort((a, b) => b.promedio - a.promedio).slice(0, 8)
-            : [];
-
-        const asesoresMap = new Map();
-        const asegurarAsesor = nombre => {
-            const a = normalizarTexto(nombre, "Sin asignar");
-            if (!asesoresMap.has(a)) asesoresMap.set(a, { asesor: a, prospectos: 0, citas: 0, registroPiso: 0, entregas: 0, pruebas: 0 });
-            return asesoresMap.get(a);
-        };
-        prospectosFiltrados.forEach(i => { asegurarAsesor(obtenerAsesorItem(i, "prospectos")).prospectos++; });
-        citasFiltradas.forEach(i => { asegurarAsesor(obtenerAsesorItem(i, "citas")).citas++; });
-        registroPisoFiltrado.forEach(i => { asegurarAsesor(obtenerAsesorItem(i, "registroPiso")).registroPiso++; });
-        pruebasFiltradas.forEach(i => { asegurarAsesor(obtenerAsesorItem(i, "pruebas")).pruebas++; });
-        entregasFiltradas.forEach(i => { asegurarAsesor(obtenerAsesorItem(i, "entregas")).entregas++; });
-
-        const topAsesores = [...asesoresMap.values()]
-            .sort((a, b) => (b.entregas * 3 + b.pruebas * 2 + b.registroPiso * 1.3 + b.citas * 1.5 + b.prospectos) - (a.entregas * 3 + a.pruebas * 2 + a.registroPiso * 1.3 + a.citas * 1.5 + a.prospectos))
-            .slice(0, 8);
-
-        const timeline = construirSerieMensual(
-            { prospectos: prospectosFiltrados, casos: casosFiltrados, encuestas: encuestasFiltradas, entregas: entregasFiltradas, citas: citasFiltradas, registroPiso: registroPisoFiltrado },
-            { fechaInicio: filtros.fechaInicio, fechaFin: filtros.fechaFin }
+                handoff:
+                    total.handoff +
+                    item.handoff,
+            }),
+            {
+                prospectos: 0,
+                citas: 0,
+                asistencias: 0,
+                handoff: 0,
+            }
         );
 
-        return { resumen, embudo, rendimientoPorAgencia, estatusProspectos, origenReclamaciones, satisfaccionPorAgencia, topAsesores, timeline };
-    }, [data, filtros]);
+    const totPiso =
+        analitica.floor.reduce(
+            (total, item) => ({
+                trafico:
+                    total.trafico +
+                    item.trafico,
 
-    if (loading) return <LoadingState />;
+                pruebas:
+                    total.pruebas +
+                    item.pruebasAsistidas,
 
-    const hayDatos = data.casos.length || data.prospectos.length || data.citas.length || data.registroPiso.length || data.pruebas.length || data.entregas.length || data.encuestas.length;
-    const totalRegistrosFiltrados = analitica.resumen.totalRegistrosFiltrados;
-    const periodoLabel = periodoActivo ? `Últimos ${periodoActivo} días` : "Rango personalizado";
+                entregas:
+                    total.entregas +
+                    item.entregas,
+
+                citas:
+                    total.citas +
+                    item.citas,
+
+                citasAsistidas:
+                    total.citasAsistidas +
+                    item.citasAsistidas,
+            }),
+            {
+                trafico: 0,
+                pruebas: 0,
+                entregas: 0,
+                citas: 0,
+                citasAsistidas: 0,
+            }
+        );
+
+    const tabs = [
+        {
+            id: "resumen",
+            label:
+                "Resumen ejecutivo",
+            icon: Gauge,
+        },
+        {
+            id: "digital",
+            label:
+                "Asesores digitales",
+            icon: UserRound,
+        },
+        {
+            id: "piso",
+            label:
+                "Asesores de piso",
+            icon: Users,
+        },
+    ];
 
     return (
-        <div className="min-h-screen space-y-6" >
-            {/* Header */}
-            <div className="relative overflow-hidden rounded-2xl p-6" style={{ backgroundColor: NAVY }}>
-                <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-h-screen space-y-5 pb-10">
+            <header
+                className="relative overflow-hidden rounded-[30px] px-5 py-6 text-white sm:px-7"
+                style={{
+                    background:
+                        `linear-gradient(135deg, ${C.navy} 0%, ${C.navy2} 55%, #274BAF 100%)`,
+                }}
+            >
+                <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10" />
+
+                <div className="pointer-events-none absolute right-16 top-10 h-28 w-28 rounded-full bg-white/[.04] blur-xl" />
+
+                <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                     <div className="min-w-0">
-                        <h1 className="truncate text-lg font-extrabold text-white sm:text-xl">Métricas del CRM</h1>
-                        <p className="mt-1 text-sm text-white/75">Panel operativo · prospectos, citas, piso, pruebas y entregas.</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge tone="#FFFFFF">
+                                Business Intelligence
+                            </Badge>
+
+                            <span className="text-xs text-white/60">
+                                {fmt(
+                                    totalCargado
+                                )}{" "}
+                                registros cargados
+                            </span>
+                        </div>
+
+                        <h1 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">
+                            Centro de rendimiento
+                            comercial
+                        </h1>
+
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-white/70">
+                            Prospectos, citas,
+                            tráfico de piso,
+                            pruebas de manejo,
+                            entregas,
+                            satisfacción y
+                            desempeño por asesor
+                            en una sola vista
+                            interactiva.
+                        </p>
                     </div>
-                    <Toolbar onAbrirFiltros={() => setMenuFiltrosAbierto(true)} onActualizar={() => cargarDatos({ forzar: true })} refrescando={refrescando} totalRegistros={totalRegistrosFiltrados} />
+
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setMostrarFiltros(
+                                    (
+                                        value
+                                    ) =>
+                                        !value
+                                )
+                            }
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-xs font-bold backdrop-blur transition hover:bg-white/15"
+                        >
+                            <SlidersHorizontal
+                                size={15}
+                            />
+
+                            Filtros
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                cargar({
+                                    forzar:
+                                        true,
+                                })
+                            }
+                            disabled={
+                                refrescando
+                            }
+                            className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-xs font-black text-[#101A52] transition hover:bg-slate-100 disabled:opacity-60"
+                        >
+                            <RefreshCw
+                                size={15}
+                                className={
+                                    refrescando
+                                        ? "animate-spin"
+                                        : ""
+                                }
+                            />
+
+                            Actualizar
+                        </button>
+                    </div>
                 </div>
+            </header>
+
+            {errores.length ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                    <TriangleAlert
+                        size={18}
+                        className="mt-0.5 shrink-0"
+                    />
+
+                    <div>
+                        <p className="text-sm font-bold">
+                            El dashboard cargó
+                            parcialmente
+                        </p>
+
+                        <p className="mt-1 text-xs">
+                            No se pudieron
+                            consultar:{" "}
+                            {errores.join(
+                                ", "
+                            )}
+                            . Los demás módulos
+                            siguen disponibles.
+                        </p>
+                    </div>
+                </div>
+            ) : null}
+
+            {mostrarFiltros ? (
+                <PanelFiltros
+                    filtros={filtros}
+                    setFiltros={
+                        setFiltros
+                    }
+                    agencias={
+                        agencias
+                    }
+                    digitales={
+                        digitales
+                    }
+                    piso={piso}
+                    onCerrar={() =>
+                        setMostrarFiltros(
+                            false
+                        )
+                    }
+                />
+            ) : null}
+
+            <div
+                className="flex gap-2 overflow-x-auto rounded-2xl border bg-white p-1.5"
+                style={{
+                    borderColor:
+                        C.border,
+                }}
+            >
+                {tabs.map(
+                    ({
+                        id,
+                        label,
+                        icon: Icon,
+                    }) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() =>
+                                setTab(
+                                    id
+                                )
+                            }
+                            className={cls(
+                                "inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition",
+                                tab ===
+                                    id
+                                    ? "text-white shadow-sm"
+                                    : "text-slate-500 hover:bg-slate-50"
+                            )}
+                            style={
+                                tab ===
+                                    id
+                                    ? {
+                                        backgroundColor:
+                                            C.navy,
+                                    }
+                                    : undefined
+                            }
+                        >
+                            <Icon
+                                size={15}
+                            />
+
+                            {label}
+                        </button>
+                    )
+                )}
             </div>
 
-            {!hayDatos ? (
-                <div className="rounded-2xl border bg-white p-10 text-center" style={{ borderColor: BORDER }}>
-                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl" style={{ backgroundColor: SURFACE, color: TEXT_MUTED }}><BarChart3 size={20} /></div>
-                    <h2 className="mt-4 text-lg font-semibold text-slate-900">Aún no hay datos para construir el panel</h2>
-                    <p className="mt-2 text-sm" style={{ color: TEXT_MUTED }}>En cuanto existan registros en los módulos del CRM, aquí se mostrarán automáticamente las métricas y gráficas.</p>
-                </div>
-            ) : (
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-                    <div className="space-y-6">
-                        {errores.length ? (
-                            <div className="rounded-2xl border p-4" style={{ borderColor: "#F2D9A8", backgroundColor: "#FDF6E8", color: "#7A5318" }}>
-                                <div className="flex items-start gap-3">
-                                    <TriangleAlert className="mt-0.5" size={18} />
-                                    <div>
-                                        <p className="font-semibold">Algunos módulos no se cargaron por completo</p>
-                                        <p className="mt-1 text-sm">Revisa los endpoints de: {errores.join(", ")}. El resto del panel se calculó con la información disponible.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : null}
+            {tab ===
+                "resumen" ? (
+                <>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                        <Kpi
+                            icon={
+                                UserRound
+                            }
+                            title="Prospectos"
+                            value={fmt(
+                                analitica
+                                    .resumen
+                                    .prospectos
+                            )}
+                            detail={`${fmtPct(
+                                analitica
+                                    .resumen
+                                    .citaPorProspecto
+                            )} generan cita`}
+                            tone={
+                                C.navy
+                            }
+                            onClick={() =>
+                                setTab(
+                                    "digital"
+                                )
+                            }
+                        />
 
-                        {!coreListo ? (
-                            <ChartFallback height={140} />
-                        ) : (
-                            <BarraEmbudo etapas={analitica.embudo} asistenciaGeneral={analitica.resumen.asistenciaGeneral} />
-                        )}
+                        <Kpi
+                            icon={
+                                CalendarDays
+                            }
+                            title="Citas"
+                            value={fmt(
+                                analitica
+                                    .resumen
+                                    .citas
+                            )}
+                            detail={`${fmtPct(
+                                analitica
+                                    .resumen
+                                    .asistenciaCitas
+                            )} asistencia`}
+                            tone={
+                                C.blue
+                            }
+                            onClick={() =>
+                                setTab(
+                                    "digital"
+                                )
+                            }
+                        />
 
-                        {!totalRegistrosFiltrados ? (
-                            <div className="rounded-2xl border bg-white p-10 text-center" style={{ borderColor: BORDER }}>
-                                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl" style={{ backgroundColor: SURFACE, color: TEXT_MUTED }}><Funnel size={20} /></div>
-                                <h2 className="mt-4 text-lg font-semibold text-slate-900">No hay coincidencias con los filtros actuales</h2>
-                                <p className="mt-2 text-sm" style={{ color: TEXT_MUTED }}>Ajusta el rango de fechas, asesor o dealer para volver a visualizar actividad operativa.</p>
-                            </div>
-                        ) : (
-                            <>
-                                {/* KPIs */}
-                                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                                    <MetricCard icon={SmilePlus} title="Satisfacción" value={`${analitica.resumen.promedioEncuestas}/5`} accent={SUCCESS} sub={`${formatearNumero(analitica.resumen.encuestasTotales)} encuestas`} />
-                                    <MetricCard icon={ClipboardList} title="Reclamaciones abiertas" value={formatearNumero(analitica.resumen.reclamacionesAbiertas)} accent={DANGER} sub={`${formatearNumero(analitica.resumen.casosTotales)} totales en periodo`} />
-                                    <MetricCard icon={CarFront} title="Conversión a entrega" value={formatearPorcentaje(analitica.resumen.conversionProspectoEntrega)} accent={NAVY} sub="Prospecto → entrega" />
-                                    <MetricCard icon={Users} title="Asistencia general" value={formatearPorcentaje(analitica.resumen.asistenciaGeneral)} accent={WARNING} sub="Citas, piso y pruebas" />
-                                </div>
+                        <Kpi
+                            icon={Route}
+                            title="Tráfico de piso"
+                            value={fmt(
+                                analitica
+                                    .resumen
+                                    .trafico
+                            )}
+                            detail="Atención presencial registrada"
+                            tone={
+                                C.amber
+                            }
+                            onClick={() =>
+                                setTab(
+                                    "piso"
+                                )
+                            }
+                        />
 
-                                {/* Gráfica 1 — Tendencia áreas apiladas */}
-                                <ChartCard title="Tendencia consolidada" action={periodoLabel}>
-                                    {analitica.timeline.some(t => t.prospectos || t.citas || t.registrosPiso || t.entregas) ? (
-                                        <GraficaTendenciaAreas timeline={analitica.timeline} periodoLabel={periodoLabel} />
-                                    ) : (
-                                        <EmptyChart text="No hay suficiente actividad histórica para construir la tendencia." height={340} />
-                                    )}
-                                </ChartCard>
+                        <Kpi
+                            icon={
+                                CarFront
+                            }
+                            title="Pruebas realizadas"
+                            value={fmt(
+                                analitica
+                                    .resumen
+                                    .pruebas
+                            )}
+                            detail={`${fmtPct(
+                                analitica
+                                    .resumen
+                                    .pruebaPorTrafico
+                            )} vs. tráfico`}
+                            tone={
+                                C.green
+                            }
+                            onClick={() =>
+                                setTab(
+                                    "piso"
+                                )
+                            }
+                        />
 
-                                <div className="grid gap-4 xl:grid-cols-2">
-                                    {/* Gráfica 2 — Heatmap por dealer */}
-                                    <ChartCard title="Carga operativa por dealer" subtitle="Intensidad por módulo">
-                                        {analitica.rendimientoPorAgencia.length ? (
-                                            <GraficaHeatmapDealer data={analitica.rendimientoPorAgencia} />
-                                        ) : (
-                                            <EmptyChart text="No hay actividad por dealer suficiente en el periodo seleccionado." height={280} />
-                                        )}
-                                    </ChartCard>
+                        <Kpi
+                            icon={
+                                CheckCircle2
+                            }
+                            title="Entregas realizadas"
+                            value={fmt(
+                                analitica
+                                    .resumen
+                                    .entregas
+                            )}
+                            detail={`${fmtPct(
+                                analitica
+                                    .resumen
+                                    .entregaPorTrafico
+                            )} vs. tráfico`}
+                            tone={
+                                C.purple
+                            }
+                            onClick={() =>
+                                setTab(
+                                    "piso"
+                                )
+                            }
+                        />
 
-                                    {/* Gráfica 3 — Treemap de estatus */}
-                                    <ChartCard title="Distribución de estatus de prospectos" action="Top 6 estatus">
-                                        {analitica.estatusProspectos.length ? (
-                                            <GraficaTreemapEstatus data={analitica.estatusProspectos} />
-                                        ) : (
-                                            <EmptyChart text="No se encontraron estatus de prospectos para mostrar." height={280} />
-                                        )}
-                                    </ChartCard>
-                                </div>
-
-                                <div className="grid gap-4 xl:grid-cols-2">
-                                    {/* Gráfica 4 — Gauges radiales satisfacción */}
-                                    <ChartCard title="Satisfacción por dealer" action={`${formatearNumero(analitica.resumen.encuestasTotales)} encuestas`}>
-                                        {analitica.satisfaccionPorAgencia.length ? (
-                                            <GraficaGaugesSatisfaccion data={analitica.satisfaccionPorAgencia} />
-                                        ) : (
-                                            <EmptyChart text="Aún no hay suficientes encuestas para comparar satisfacción por dealer." height={280} />
-                                        )}
-                                    </ChartCard>
-
-                                    {/* Gráfica 5 — Barras horizontales reclamaciones */}
-                                    <ChartCard title="Origen de reclamaciones" action={`${formatearNumero(analitica.resumen.casosTotales)} reclamaciones`}>
-                                        {analitica.origenReclamaciones.length ? (
-                                            <GraficaBarrasReclamaciones data={analitica.origenReclamaciones} />
-                                        ) : (
-                                            <EmptyChart text="No hay reclamaciones suficientes para identificar orígenes dominantes." height={280} />
-                                        )}
-                                    </ChartCard>
-                                </div>
-
-                                {/* Gráfica 6 — Swimlanes asesores */}
-                                <ChartCard title="Asesores más destacados" action="Top 8 asesores">
-                                    {analitica.topAsesores.length ? (
-                                        <GraficaSwimlanesAsesores data={analitica.topAsesores} />
-                                    ) : (
-                                        <EmptyChart text="No hay suficiente información de asesores para comparar rendimiento." height={320} />
-                                    )}
-                                </ChartCard>
-                            </>
-                        )}
+                        <Kpi
+                            icon={
+                                Sparkles
+                            }
+                            title="Satisfacción"
+                            value={
+                                analitica
+                                    .resumen
+                                    .encuestas
+                                    ? `${fmtDecimal(
+                                        analitica
+                                            .resumen
+                                            .satisfaccion
+                                    )}/5`
+                                    : "—"
+                            }
+                            detail={`${fmt(
+                                analitica
+                                    .resumen
+                                    .encuestas
+                            )} encuestas · ${fmt(
+                                analitica
+                                    .resumen
+                                    .casosAbiertos
+                            )} casos abiertos`}
+                            tone={
+                                C.cyan
+                            }
+                        />
                     </div>
 
-                    <PanelFiltros
-                        abierto={menuFiltrosAbierto}
-                        onClose={() => setMenuFiltrosAbierto(false)}
-                        filtros={filtros}
-                        setFiltros={setFiltros}
-                        dealersDisponibles={dealersDisponibles}
-                        asesoresDisponibles={asesoresDisponibles}
-                        aplicarPeriodoRapido={aplicarPeriodoRapido}
-                        periodoActivo={periodoActivo}
-                    />
-                </div>
-            )}
+                    <div className="grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
+                        <ChartCard
+                            title="Tendencia comercial consolidada"
+                            subtitle={`Agrupación automática por ${analitica.timeline.modo}. Usa zoom, leyenda y exportación.`}
+                        >
+                            <Grafica
+                                option={
+                                    opciones.timeline
+                                }
+                                height={
+                                    360
+                                }
+                            />
+                        </ChartCard>
 
-            <button type="button" onClick={() => setMenuFiltrosAbierto(true)}
-                className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:scale-[1.02] xl:hidden"
-                style={{ backgroundColor: NAVY }}>
-                <SlidersHorizontal size={16} /> Filtros
-            </button>
+                        <ChartCard
+                            title="Embudo operativo"
+                            subtitle="Volumen por etapa; no asume que todos los registros pertenecen a la misma cohorte."
+                        >
+                            <Grafica
+                                option={
+                                    opciones.embudo
+                                }
+                                height={
+                                    360
+                                }
+                            />
+                        </ChartCard>
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-2">
+                        <ChartCard
+                            title="Rendimiento por agencia"
+                            subtitle="Haz clic en una agencia para usarla como filtro."
+                        >
+                            {analitica
+                                .agenciasPerf
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.agenciasChart
+                                    }
+                                    height={
+                                        350
+                                    }
+                                    onEvents={{
+                                        click:
+                                            (
+                                                params
+                                            ) => {
+                                                if (
+                                                    params?.name
+                                                ) {
+                                                    setFiltros(
+                                                        (
+                                                            prev
+                                                        ) => ({
+                                                            ...prev,
+                                                            agencia:
+                                                                params.name,
+                                                        })
+                                                    );
+                                                }
+                                            },
+                                    }}
+                                />
+                            ) : (
+                                <Empty text="No hay agencias suficientes para comparar." />
+                            )}
+                        </ChartCard>
+
+                        <ChartCard
+                            title="Estado de prospectos"
+                            subtitle="Distribución de cartera digital por estatus."
+                        >
+                            {analitica
+                                .estados
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.estados
+                                    }
+                                    height={
+                                        350
+                                    }
+                                />
+                            ) : (
+                                <Empty text="No hay prospectos en el periodo seleccionado." />
+                            )}
+                        </ChartCard>
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-2">
+                        <ChartCard
+                            title="Demanda por vehículo"
+                            subtitle="Interés acumulado en prospectos, citas y tráfico de piso."
+                        >
+                            {analitica
+                                .vehiculos
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.vehiculos
+                                    }
+                                    height={
+                                        350
+                                    }
+                                />
+                            ) : (
+                                <Empty text="No hay modelos o vehículos suficientes para analizar demanda." />
+                            )}
+                        </ChartCard>
+
+                        <ChartCard
+                            title="Mapa horario de tráfico de piso"
+                            subtitle="Identifica horas y días con mayor presión de atención presencial."
+                        >
+                            {base
+                                .traficoPiso
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.heat
+                                    }
+                                    height={
+                                        350
+                                    }
+                                />
+                            ) : (
+                                <Empty text="No existen registros de tráfico de piso en este periodo." />
+                            )}
+                        </ChartCard>
+                    </div>
+                </>
+            ) : null}
+
+            {tab ===
+                "digital" ? (
+                <>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                        <Kpi
+                            icon={Users}
+                            title="Prospectos gestionados"
+                            value={fmt(
+                                totDigital.prospectos
+                            )}
+                            detail="Atribuidos a asesor digital"
+                            tone={
+                                C.navy
+                            }
+                        />
+
+                        <Kpi
+                            icon={
+                                CalendarDays
+                            }
+                            title="Citas generadas"
+                            value={fmt(
+                                totDigital.citas
+                            )}
+                            detail={`${fmtPct(
+                                porcentaje(
+                                    totDigital.citas,
+                                    totDigital.prospectos
+                                )
+                            )} conversión`}
+                            tone={
+                                C.blue
+                            }
+                        />
+
+                        <Kpi
+                            icon={
+                                CheckCircle2
+                            }
+                            title="Citas asistidas"
+                            value={fmt(
+                                totDigital.asistencias
+                            )}
+                            detail={`${fmtPct(
+                                porcentaje(
+                                    totDigital.asistencias,
+                                    totDigital.citas
+                                )
+                            )} asistencia`}
+                            tone={
+                                C.green
+                            }
+                        />
+
+                        <Kpi
+                            icon={
+                                Handshake
+                            }
+                            title="Handoff a piso"
+                            value={fmt(
+                                totDigital.handoff
+                            )}
+                            detail={`${fmtPct(
+                                porcentaje(
+                                    totDigital.handoff,
+                                    totDigital.citas
+                                )
+                            )} de citas`}
+                            tone={
+                                C.cyan
+                            }
+                        />
+
+                        <Kpi
+                            icon={Target}
+                            title="Conversión a cita"
+                            value={fmtPct(
+                                porcentaje(
+                                    totDigital.citas,
+                                    totDigital.prospectos
+                                )
+                            )}
+                            detail="Citas / prospectos"
+                            tone={
+                                C.amber
+                            }
+                        />
+
+                        <Kpi
+                            icon={Trophy}
+                            title="Mejor índice"
+                            value={
+                                topDigital
+                                    ? fmtDecimal(
+                                        topDigital.score,
+                                        0
+                                    )
+                                    : "—"
+                            }
+                            detail={
+                                topDigital?.asesor ||
+                                "Sin datos"
+                            }
+                            tone={
+                                C.purple
+                            }
+                        />
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-2">
+                        <ChartCard
+                            title="Producción por asesor digital"
+                            subtitle="Haz clic en una barra para aislar al asesor."
+                        >
+                            {analitica
+                                .digital
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.digitalBars
+                                    }
+                                    height={
+                                        390
+                                    }
+                                    onEvents={{
+                                        click:
+                                            (
+                                                params
+                                            ) => {
+                                                if (
+                                                    params?.name
+                                                ) {
+                                                    setFiltros(
+                                                        (
+                                                            prev
+                                                        ) => ({
+                                                            ...prev,
+                                                            asesorDigital:
+                                                                params.name,
+                                                        })
+                                                    );
+                                                }
+                                            },
+                                    }}
+                                />
+                            ) : (
+                                <Empty text="No hay datos atribuibles a asesores digitales." />
+                            )}
+                        </ChartCard>
+
+                        <ChartCard
+                            title="Matriz volumen vs. conversión"
+                            subtitle="Tamaño = citas asistidas. Color = índice relativo."
+                        >
+                            {analitica
+                                .digital
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.digitalScatter
+                                    }
+                                    height={
+                                        390
+                                    }
+                                    onEvents={{
+                                        click:
+                                            (
+                                                params
+                                            ) => {
+                                                if (
+                                                    params
+                                                        ?.data
+                                                        ?.name
+                                                ) {
+                                                    setFiltros(
+                                                        (
+                                                            prev
+                                                        ) => ({
+                                                            ...prev,
+                                                            asesorDigital:
+                                                                params
+                                                                    .data
+                                                                    .name,
+                                                        })
+                                                    );
+                                                }
+                                            },
+                                    }}
+                                />
+                            ) : (
+                                <Empty text="No hay datos para construir la matriz." />
+                            )}
+                        </ChartCard>
+                    </div>
+
+                    <ChartCard
+                        title="Ranking de asesores digitales"
+                        subtitle="Índice: 40% conversión a cita + 30% asistencia + 20% handoff + 10% volumen relativo."
+                        action={
+                            filtros.asesorDigital !==
+                                "todos" ? (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setFiltros(
+                                            (
+                                                prev
+                                            ) => ({
+                                                ...prev,
+                                                asesorDigital:
+                                                    "todos",
+                                            })
+                                        )
+                                    }
+                                    className="text-xs font-bold text-blue-600"
+                                >
+                                    Ver todos
+                                </button>
+                            ) : null
+                        }
+                    >
+                        <TablaRanking
+                            data={
+                                analitica.digital
+                            }
+                            tipo="digital"
+                            onSelect={(
+                                asesor
+                            ) =>
+                                setFiltros(
+                                    (
+                                        prev
+                                    ) => ({
+                                        ...prev,
+                                        asesorDigital:
+                                            asesor,
+                                    })
+                                )
+                            }
+                        />
+                    </ChartCard>
+                </>
+            ) : null}
+
+            {tab ===
+                "piso" ? (
+                <>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                        <Kpi
+                            icon={Route}
+                            title="Tráfico atendido"
+                            value={fmt(
+                                totPiso.trafico
+                            )}
+                            detail="Registros atribuidos a piso"
+                            tone={
+                                C.amber
+                            }
+                        />
+
+                        <Kpi
+                            icon={
+                                CarFront
+                            }
+                            title="Pruebas realizadas"
+                            value={fmt(
+                                totPiso.pruebas
+                            )}
+                            detail={`${fmtPct(
+                                porcentaje(
+                                    totPiso.pruebas,
+                                    totPiso.trafico
+                                )
+                            )} vs. tráfico`}
+                            tone={
+                                C.green
+                            }
+                        />
+
+                        <Kpi
+                            icon={
+                                CheckCircle2
+                            }
+                            title="Entregas"
+                            value={fmt(
+                                totPiso.entregas
+                            )}
+                            detail={`${fmtPct(
+                                porcentaje(
+                                    totPiso.entregas,
+                                    totPiso.trafico
+                                )
+                            )} vs. tráfico`}
+                            tone={
+                                C.purple
+                            }
+                        />
+
+                        <Kpi
+                            icon={
+                                CalendarDays
+                            }
+                            title="Citas asignadas"
+                            value={fmt(
+                                totPiso.citas
+                            )}
+                            detail={`${fmtPct(
+                                porcentaje(
+                                    totPiso.citasAsistidas,
+                                    totPiso.citas
+                                )
+                            )} asistencia`}
+                            tone={
+                                C.blue
+                            }
+                        />
+
+                        <Kpi
+                            icon={Target}
+                            title="Conv. tráfico → entrega"
+                            value={fmtPct(
+                                porcentaje(
+                                    totPiso.entregas,
+                                    totPiso.trafico
+                                )
+                            )}
+                            detail="Indicador operativo"
+                            tone={
+                                C.cyan
+                            }
+                        />
+
+                        <Kpi
+                            icon={Trophy}
+                            title="Mejor índice"
+                            value={
+                                topPiso
+                                    ? fmtDecimal(
+                                        topPiso.score,
+                                        0
+                                    )
+                                    : "—"
+                            }
+                            detail={
+                                topPiso?.asesor ||
+                                "Sin datos"
+                            }
+                            tone={
+                                C.navy
+                            }
+                        />
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-2">
+                        <ChartCard
+                            title="Rendimiento de asesores de piso"
+                            subtitle="Tráfico de piso, pruebas realizadas y entregas. Haz clic para filtrar."
+                        >
+                            {analitica
+                                .floor
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.pisoBars
+                                    }
+                                    height={
+                                        390
+                                    }
+                                    onEvents={{
+                                        click:
+                                            (
+                                                params
+                                            ) => {
+                                                if (
+                                                    params?.name
+                                                ) {
+                                                    setFiltros(
+                                                        (
+                                                            prev
+                                                        ) => ({
+                                                            ...prev,
+                                                            asesorPiso:
+                                                                params.name,
+                                                        })
+                                                    );
+                                                }
+                                            },
+                                    }}
+                                />
+                            ) : (
+                                <Empty text="No hay datos atribuibles a asesores de piso." />
+                            )}
+                        </ChartCard>
+
+                        <ChartCard
+                            title="Matriz tráfico vs. entregas"
+                            subtitle="Tamaño = pruebas realizadas. Color = índice relativo."
+                        >
+                            {analitica
+                                .floor
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.pisoScatter
+                                    }
+                                    height={
+                                        390
+                                    }
+                                    onEvents={{
+                                        click:
+                                            (
+                                                params
+                                            ) => {
+                                                if (
+                                                    params
+                                                        ?.data
+                                                        ?.name
+                                                ) {
+                                                    setFiltros(
+                                                        (
+                                                            prev
+                                                        ) => ({
+                                                            ...prev,
+                                                            asesorPiso:
+                                                                params
+                                                                    .data
+                                                                    .name,
+                                                        })
+                                                    );
+                                                }
+                                            },
+                                    }}
+                                />
+                            ) : (
+                                <Empty text="No hay datos para construir la matriz." />
+                            )}
+                        </ChartCard>
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
+                        <ChartCard
+                            title="Demanda horaria de tráfico de piso"
+                            subtitle="Útil para dimensionar cobertura de asesores y guardias."
+                        >
+                            {base
+                                .traficoPiso
+                                .length ? (
+                                <Grafica
+                                    option={
+                                        opciones.heat
+                                    }
+                                    height={
+                                        360
+                                    }
+                                />
+                            ) : (
+                                <Empty text="No hay tráfico de piso en este periodo." />
+                            )}
+                        </ChartCard>
+
+                        <ChartCard
+                            title="Ranking de asesores de piso"
+                            subtitle="Índice relativo: entregas, pruebas, asistencia y volumen. Las entregas tienen el mayor peso."
+                            action={
+                                filtros.asesorPiso !==
+                                    "todos" ? (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setFiltros(
+                                                (
+                                                    prev
+                                                ) => ({
+                                                    ...prev,
+                                                    asesorPiso:
+                                                        "todos",
+                                                })
+                                            )
+                                        }
+                                        className="text-xs font-bold text-blue-600"
+                                    >
+                                        Ver todos
+                                    </button>
+                                ) : null
+                            }
+                        >
+                            <TablaRanking
+                                data={
+                                    analitica.floor
+                                }
+                                tipo="piso"
+                                onSelect={(
+                                    asesor
+                                ) =>
+                                    setFiltros(
+                                        (
+                                            prev
+                                        ) => ({
+                                            ...prev,
+                                            asesorPiso:
+                                                asesor,
+                                        })
+                                    )
+                                }
+                            />
+                        </ChartCard>
+                    </div>
+                </>
+            ) : null}
         </div>
     );
 }
