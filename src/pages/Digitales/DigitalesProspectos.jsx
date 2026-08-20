@@ -3595,7 +3595,7 @@ export default function DigitalesProspectos() {
         {viewMode === "tabla" && (<div className="min-w-0">
             {/* Tabla principal */}
             <div className="flex-1 min-w-0">
-                <div className="hidden overflow-hidden rounded-xl bg-white border border-black/10 shadow-sm lg:block">
+                <div className="hidden overflow-hidden rounded-lg bg-white border border-black/10 shadow-sm lg:block">
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
                             <thead className="border-b border-slate-200 bg-white">
