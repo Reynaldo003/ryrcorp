@@ -108,18 +108,6 @@ export default function ComercialTopNav() {
                 ]),
             },
             {
-                label: "Control piso",
-                href: "/comercial/control_piso",
-                icon: Building2,
-                show: hasAnyPermission([
-                    "CRM_DIGITALES",
-                    "CRM_VENTAS",
-                    "USUARIOS_ADMIN",
-                    "CRM_CALIDAD",
-                    "CRM_COORDINADOR_DIGITAL",
-                ]),
-            },
-            {
                 label: "Tráfico piso",
                 href: "/comercial/trafico_piso",
                 icon: UsersRound,

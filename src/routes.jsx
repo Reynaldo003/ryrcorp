@@ -678,6 +678,7 @@ export const router = createBrowserRouter(
                                         "CRM_VENTAS",
                                         "USUARIOS_ADMIN",
                                         "CRM_CALIDAD",
+                                        "CRM_COORDINADOR_DIGITAL",
                                     ]}
                                 >
                                     <FinancierosLayout />
@@ -698,6 +699,8 @@ export const router = createBrowserRouter(
                                                 "CRM_VENTAS",
                                                 "USUARIOS_ADMIN",
                                                 "CRM_CALIDAD",
+                                                "CRM_COORDINADOR_DIGITAL",
+                                                "CRM_DIGITALES",
                                             ]}
                                         >
                                             <CreditoLayout />

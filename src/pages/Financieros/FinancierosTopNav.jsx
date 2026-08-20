@@ -25,8 +25,11 @@ export default function FinancierosTopNav() {
     const { hasAnyPermission } = useAuth();
 
     const tabs = useMemo(() => {
-        const permisosFinancieros = [
+        const permisosDigitales = [
+            "CRM_COORDINADOR_DIGITAL",
             "CRM_DIGITALES",
+        ];
+        const permisosFinancieros = [
             "CRM_FINANCIEROS",
             "CRM_VENTAS",
             "USUARIOS_ADMIN",
@@ -38,7 +41,7 @@ export default function FinancierosTopNav() {
                 label: "Solicitudes Crédito",
                 href: "/financieros/credito",
                 icon: CreditCard,
-                show: hasAnyPermission(permisosFinancieros),
+                show: hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosDigitales),
             },
             {
                 label: "Long Drive",

@@ -253,7 +253,7 @@ export default function Sidebar() {
                 to: "/financieros",
                 label: "Servicios Financieros",
                 icon: TrendingUp,
-                show: hasAnyPermission(["CRM_FINANCIEROS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+                show: hasAnyPermission(["CRM_FINANCIEROS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES"]),
             },
             {
                 section: "Herramientas",

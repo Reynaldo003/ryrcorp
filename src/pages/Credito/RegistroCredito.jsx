@@ -24,7 +24,7 @@ import {
     Check,
     TableProperties,
     BarChart3,
-    
+
 
 } from "lucide-react";
 import { apiCredito } from "../../lib/apiCredito";
@@ -344,487 +344,487 @@ function MobileCardList({ rows, loading, onEdit, onContext }) {
 
 //-------------
 
-            function GraficasSolicitudes({ rows }) {
-                const porDealer = useMemo(() => {
-                    const conteo = {};
+function GraficasSolicitudes({ rows }) {
+    const porDealer = useMemo(() => {
+        const conteo = {};
 
-                    rows.forEach((row) => {
-                        const dealer = row.agencia || "Sin dealer";
-                        conteo[dealer] = (conteo[dealer] || 0) + 1;
-                    });
+        rows.forEach((row) => {
+            const dealer = row.agencia || "Sin dealer";
+            conteo[dealer] = (conteo[dealer] || 0) + 1;
+        });
 
-                    return Object.entries(conteo)
-                        .map(([name, value]) => ({ name, value }))
-                        .sort((a, b) => b.value - a.value);
-                }, [rows]);
+        return Object.entries(conteo)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [rows]);
 
-                const porFinanciamiento = useMemo(() => {
-                    const conteo = {};
+    const porFinanciamiento = useMemo(() => {
+        const conteo = {};
 
-                    rows.forEach((row) => {
-                        const estado = row.estado_financiamiento || "Sin estado";
-                        conteo[estado] = (conteo[estado] || 0) + 1;
-                    });
+        rows.forEach((row) => {
+            const estado = row.estado_financiamiento || "Sin estado";
+            conteo[estado] = (conteo[estado] || 0) + 1;
+        });
 
-                    return Object.entries(conteo).map(([name, value]) => ({
-                        name,
-                        value,
-                    }));
-                }, [rows]);
+        return Object.entries(conteo).map(([name, value]) => ({
+            name,
+            value,
+        }));
+    }, [rows]);
 
-                const porCompra = useMemo(() => {
-                    const conteo = {};
+    const porCompra = useMemo(() => {
+        const conteo = {};
 
-                    rows.forEach((row) => {
-                        const estado = row.estado_compra || "Sin estado";
-                        conteo[estado] = (conteo[estado] || 0) + 1;
-                    });
+        rows.forEach((row) => {
+            const estado = row.estado_compra || "Sin estado";
+            conteo[estado] = (conteo[estado] || 0) + 1;
+        });
 
-                    return Object.entries(conteo).map(([name, value]) => ({
-                        name,
-                        value,
-                    }));
-                }, [rows]);
+        return Object.entries(conteo).map(([name, value]) => ({
+            name,
+            value,
+        }));
+    }, [rows]);
 
-                const porAsesor = useMemo(() => {
-                    const conteo = {};
+    const porAsesor = useMemo(() => {
+        const conteo = {};
 
-                    rows.forEach((row) => {
-                        const asesor = row.asesor_ventas || "Sin asesor";
-                        conteo[asesor] = (conteo[asesor] || 0) + 1;
-                    });
+        rows.forEach((row) => {
+            const asesor = row.asesor_ventas || "Sin asesor";
+            conteo[asesor] = (conteo[asesor] || 0) + 1;
+        });
 
-                    return Object.entries(conteo)
-                        .map(([name, value]) => ({ name, value }))
-                        .sort((a, b) => b.value - a.value)
-                        .slice(0, 10);
-                }, [rows]);
+        return Object.entries(conteo)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10);
+    }, [rows]);
 
-                const porProducto = useMemo(() => {
-                    const conteo = {};
+    const porProducto = useMemo(() => {
+        const conteo = {};
 
-                    rows.forEach((row) => {
-                        const producto = row.producto_financiero || "Sin producto";
-                        conteo[producto] = (conteo[producto] || 0) + 1;
-                    });
+        rows.forEach((row) => {
+            const producto = row.producto_financiero || "Sin producto";
+            conteo[producto] = (conteo[producto] || 0) + 1;
+        });
 
-                    return Object.entries(conteo)
-                        .map(([name, value]) => ({ name, value }))
-                        .sort((a, b) => b.value - a.value);
-                }, [rows]);
+        return Object.entries(conteo)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [rows]);
 
-                const porFecha = useMemo(() => {
-                    const conteo = {};
+    const porFecha = useMemo(() => {
+        const conteo = {};
 
-                    rows.forEach((row) => {
-                        if (!row.creado) return;
+        rows.forEach((row) => {
+            if (!row.creado) return;
 
-                        const fecha = String(row.creado).slice(0, 10);
-                        conteo[fecha] = (conteo[fecha] || 0) + 1;
-                    });
+            const fecha = String(row.creado).slice(0, 10);
+            conteo[fecha] = (conteo[fecha] || 0) + 1;
+        });
 
-                    return Object.entries(conteo)
-                        .map(([fecha, value]) => ({ fecha, value }))
-                        .sort((a, b) => a.fecha.localeCompare(b.fecha))
-                        .slice(-15);
-                }, [rows]);
-
-
-                const totalSolicitudes = rows.length || 1;
-
-                const porcentaje = (valor) => {
-                    return ((valor / totalSolicitudes) * 100).toFixed(1);
-                };
-
-                const dealerPrincipal = porDealer[0] || { name: "Sin datos", value: 0 };
-
-                const financiamientoPrincipal =
-                    [...porFinanciamiento].sort((a, b) => b.value - a.value)[0] || {
-                        name: "Sin datos",
-                        value: 0,
-                    };
-
-                const productoPrincipal = porProducto[0] || {
-                    name: "Sin datos",
-                    value: 0,
-                };
+        return Object.entries(conteo)
+            .map(([fecha, value]) => ({ fecha, value }))
+            .sort((a, b) => a.fecha.localeCompare(b.fecha))
+            .slice(-15);
+    }, [rows]);
 
 
-                const opcionDealer = {
-                    tooltip: { trigger: "axis" },
-                    grid: {
-                        left: 20,
-                        right: 55,
-                        top: 20,
-                        bottom: 20,
-                        containLabel: true,
-                    },
-                    xAxis: {
-                        type: "value",
-                        minInterval: 1,
-                    },
-                    yAxis: {
-                        type: "category",
-                        data: porDealer.map((item) => item.name),
-                    },
-                    
-                    series: [{
-                        type: "bar",
-                        data: porDealer.map((item) => item.value),
-                        barWidth: 20,
-                        itemStyle: {
-                            borderRadius: [0, 6, 6, 0],
-                            color: BRAND_BLUE,
-                        },
-                        label: {
-                            show: true,
-                            position: "right",
-                            formatter: (params) =>
-                                `${params.value} (${porcentaje(params.value)}%)`,
-                            fontSize: 11,
-                            fontWeight: "bold",
-                            color: "#131E5C",
-                        },
-                    }],
-                };
+    const totalSolicitudes = rows.length || 1;
 
-                const opcionFinanciamiento = {
-                    tooltip: { trigger: "item" },
-                    legend: {
-                        bottom: 0,
-                        textStyle: { fontSize: 11 },
-                    },
-                    
-                    series: [{
-                        type: "pie",
-                        radius: ["44%", "64%"],
-                        center: ["50%", "45%"],
-                        data: porFinanciamiento,
-                      label: {
-                        show: true,
-                        formatter: (params) =>
-                            `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
-                        fontSize: 9,
-                        fontWeight: "bold",
-                        width: 85,
-                        overflow: "break",
-                        lineHeight: 12,
-                    },
-                    labelLine: {
-                        show: true,
-                        length: 8,
-                        length2: 5,
-                    },
-                    }],
-                };
+    const porcentaje = (valor) => {
+        return ((valor / totalSolicitudes) * 100).toFixed(1);
+    };
 
-                const opcionCompra = {
-                    tooltip: { trigger: "item" },
-                    legend: {
-                        bottom: 0,
-                        textStyle: { fontSize: 11 },
-                    },
-                                    
-                    series: [{
-                        type: "pie",
-                        radius: ["44%", "64%"],
-                        center: ["50%", "45%"],
-                        data: porCompra,
-                        label: {
-                            show: true,
-                            formatter: (params) =>
-                                `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
-                            fontSize: 9,
-                            fontWeight: "bold",
-                            width: 85,
-                            overflow: "break",
-                            lineHeight: 12,
-                        },
-                        labelLine: {
-                            show: true,
-                            length: 8,
-                            length2: 5,
-                        },
-                    }],
+    const dealerPrincipal = porDealer[0] || { name: "Sin datos", value: 0 };
 
-                };
+    const financiamientoPrincipal =
+        [...porFinanciamiento].sort((a, b) => b.value - a.value)[0] || {
+            name: "Sin datos",
+            value: 0,
+        };
 
-                const opcionAsesor = {
-                    tooltip: { trigger: "axis" },
-                    grid: {
-                        left: 20,
-                        right: 30,
-                        top: 20,
-                        bottom: 20,
-                        containLabel: true,
-                    },
-                    xAxis: {
-                        type: "value",
-                        minInterval: 1,
-                    },
-                    yAxis: {
-                        type: "category",
-                        inverse: true,
-                        data: porAsesor.map((item) => item.name),
-                        axisLabel: {
-                            width: 110,
-                            overflow: "truncate",
-                        },
-                    },
-                    series: [{
-                        type: "bar",
-                        data: porAsesor.map((item) => item.value),
-                        barWidth: 18,
-                        itemStyle: {
-                            borderRadius: [0, 6, 6, 0],
-                            color: BRAND_BLUE,
-                        },
-                        label: {
-                            show: true,
-                            position: "right",
-                            formatter: (params) =>
-                                `${params.value} (${porcentaje(params.value)}%)`,
-                            fontSize: 10,
-                            fontWeight: "bold",
-                            color: "#131E5C",
-                        },
-                    }],
-                };
+    const productoPrincipal = porProducto[0] || {
+        name: "Sin datos",
+        value: 0,
+    };
 
 
-                const opcionProducto = {
-                    tooltip: { trigger: "item" },
-                    legend: {
-                        bottom: 0,
-                        textStyle: { fontSize: 11 },
-                    },
-                  series: [{
-                    type: "pie",
-                    radius: ["42%", "64%"],
-                    center: ["50%", "45%"],
-                    avoidLabelOverlap: true,
-                    data: porProducto,
-                    label: {
-                        show: true,
-                        formatter: (params) =>
-                            `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
-                        fontSize: 10,
-                        fontWeight: "bold",
-                        lineHeight: 12,
-                    },
-                    labelLine: {
-                        show: true,
-                        length: 10,
-                        length2: 10,
-                    },
-                }],
-                };
+    const opcionDealer = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 55,
+            top: 20,
+            bottom: 20,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+        yAxis: {
+            type: "category",
+            data: porDealer.map((item) => item.name),
+        },
 
-                const opcionFecha = {
-                    tooltip: { trigger: "axis" },
-                    grid: {
-                        left: 20,
-                        right: 20,
-                        top: 20,
-                        bottom: 40,
-                        containLabel: true,
-                    },
-                    xAxis: {
-                        type: "category",
-                        data: porFecha.map((item) => item.fecha),
-                        axisLabel: {
-                            rotate: 35,
-                            fontSize: 10,
-                        },
-                    },
-                    yAxis: {
-                        type: "value",
-                        minInterval: 1,
-                    },
-                    series: [{
-                        type: "line",
-                        smooth: true,
-                        data: porFecha.map((item) => item.value),
-                        symbolSize: 7,
-                        lineStyle: { width: 3 },
-                        areaStyle: {},
-                        label: {
-                            show: true,
-                            position: "top",
-                            formatter: "{c}",
-                            fontSize: 10,
-                            fontWeight: "bold",
-                            color: "#131E5C",
-                        },
-                    }],
-                };
+        series: [{
+            type: "bar",
+            data: porDealer.map((item) => item.value),
+            barWidth: 20,
+            itemStyle: {
+                borderRadius: [0, 6, 6, 0],
+                color: BRAND_BLUE,
+            },
+            label: {
+                show: true,
+                position: "right",
+                formatter: (params) =>
+                    `${params.value} (${porcentaje(params.value)}%)`,
+                fontSize: 11,
+                fontWeight: "bold",
+                color: "#131E5C",
+            },
+        }],
+    };
 
-                return (
-                    <>
+    const opcionFinanciamiento = {
+        tooltip: { trigger: "item" },
+        legend: {
+            bottom: 0,
+            textStyle: { fontSize: 11 },
+        },
 
-                <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold text-slate-400">
-                            Total solicitudes
-                        </p>
+        series: [{
+            type: "pie",
+            radius: ["44%", "64%"],
+            center: ["50%", "45%"],
+            data: porFinanciamiento,
+            label: {
+                show: true,
+                formatter: (params) =>
+                    `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                fontSize: 9,
+                fontWeight: "bold",
+                width: 85,
+                overflow: "break",
+                lineHeight: 12,
+            },
+            labelLine: {
+                show: true,
+                length: 8,
+                length2: 5,
+            },
+        }],
+    };
 
-                        <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
-                            {rows.length}
-                        </p>
-                    </div>
+    const opcionCompra = {
+        tooltip: { trigger: "item" },
+        legend: {
+            bottom: 0,
+            textStyle: { fontSize: 11 },
+        },
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold text-slate-400">
-                            Dealer principal
-                        </p>
+        series: [{
+            type: "pie",
+            radius: ["44%", "64%"],
+            center: ["50%", "45%"],
+            data: porCompra,
+            label: {
+                show: true,
+                formatter: (params) =>
+                    `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                fontSize: 9,
+                fontWeight: "bold",
+                width: 85,
+                overflow: "break",
+                lineHeight: 12,
+            },
+            labelLine: {
+                show: true,
+                length: 8,
+                length2: 5,
+            },
+        }],
 
-                        <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
-                            {dealerPrincipal.name}
-                        </p>
+    };
 
-                        <p className="mt-1 text-xs font-bold text-slate-500">
-                            {dealerPrincipal.value} solicitudes · {porcentaje(dealerPrincipal.value)}%
-                        </p>
-                    </div>
+    const opcionAsesor = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 30,
+            top: 20,
+            bottom: 20,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+        yAxis: {
+            type: "category",
+            inverse: true,
+            data: porAsesor.map((item) => item.name),
+            axisLabel: {
+                width: 110,
+                overflow: "truncate",
+            },
+        },
+        series: [{
+            type: "bar",
+            data: porAsesor.map((item) => item.value),
+            barWidth: 18,
+            itemStyle: {
+                borderRadius: [0, 6, 6, 0],
+                color: BRAND_BLUE,
+            },
+            label: {
+                show: true,
+                position: "right",
+                formatter: (params) =>
+                    `${params.value} (${porcentaje(params.value)}%)`,
+                fontSize: 10,
+                fontWeight: "bold",
+                color: "#131E5C",
+            },
+        }],
+    };
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold text-slate-400">
-                            Financiamiento principal
-                        </p>
 
-                        <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
-                            {financiamientoPrincipal.name}
-                        </p>
+    const opcionProducto = {
+        tooltip: { trigger: "item" },
+        legend: {
+            bottom: 0,
+            textStyle: { fontSize: 11 },
+        },
+        series: [{
+            type: "pie",
+            radius: ["42%", "64%"],
+            center: ["50%", "45%"],
+            avoidLabelOverlap: true,
+            data: porProducto,
+            label: {
+                show: true,
+                formatter: (params) =>
+                    `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                fontSize: 10,
+                fontWeight: "bold",
+                lineHeight: 12,
+            },
+            labelLine: {
+                show: true,
+                length: 10,
+                length2: 10,
+            },
+        }],
+    };
 
-                        <p className="mt-1 text-xs font-bold text-slate-500">
-                            {financiamientoPrincipal.value} solicitudes · {porcentaje(financiamientoPrincipal.value)}%
-                        </p>
-                    </div>
+    const opcionFecha = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: 40,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "category",
+            data: porFecha.map((item) => item.fecha),
+            axisLabel: {
+                rotate: 35,
+                fontSize: 10,
+            },
+        },
+        yAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+        series: [{
+            type: "line",
+            smooth: true,
+            data: porFecha.map((item) => item.value),
+            symbolSize: 7,
+            lineStyle: { width: 3 },
+            areaStyle: {},
+            label: {
+                show: true,
+                position: "top",
+                formatter: "{c}",
+                fontSize: 10,
+                fontWeight: "bold",
+                color: "#131E5C",
+            },
+        }],
+    };
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold text-slate-400">
-                            Producto principal
-                        </p>
+    return (
+        <>
 
-                        <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
-                            {productoPrincipal.name}
-                        </p>
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Total solicitudes
+                    </p>
 
-                        <p className="mt-1 text-xs font-bold text-slate-500">
-                            {productoPrincipal.value} solicitudes · {porcentaje(productoPrincipal.value)}%
-                        </p>
-                    </div>
+                    <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
+                        {rows.length}
+                    </p>
                 </div>
 
-                        <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <div className="mb-2">
-                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                        Solicitudes por dealer
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Distribución de solicitudes registradas
-                                    </p>
-                                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Dealer principal
+                    </p>
 
-                                <ReactECharts
-                                    option={opcionDealer}
-                                    style={{ height: 260 }}
-                                    notMerge
-                                />
-                            </div>
+                    <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                        {dealerPrincipal.name}
+                    </p>
 
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <div className="mb-2">
-                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                        Estado de financiamiento
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Situación actual de las solicitudes
-                                    </p>
-                                </div>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                        {dealerPrincipal.value} solicitudes · {porcentaje(dealerPrincipal.value)}%
+                    </p>
+                </div>
 
-                                <ReactECharts
-                                    option={opcionFinanciamiento}
-                                    style={{ height: 260 }}
-                                    notMerge
-                                />
-                            </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Financiamiento principal
+                    </p>
 
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <div className="mb-2">
-                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                        Estado de compra
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Seguimiento del proceso de compra
-                                    </p>
-                                </div>
+                    <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                        {financiamientoPrincipal.name}
+                    </p>
 
-                                <ReactECharts
-                                    option={opcionCompra}
-                                    style={{ height: 260 }}
-                                    notMerge
-                                />
-                            </div>
-                        </div>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                        {financiamientoPrincipal.value} solicitudes · {porcentaje(financiamientoPrincipal.value)}%
+                    </p>
+                </div>
 
-                        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <div className="mb-2">
-                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                        Solicitudes por asesor
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Top 10 asesores con más solicitudes
-                                    </p>
-                                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Producto principal
+                    </p>
 
-                                <ReactECharts
-                                    option={opcionAsesor}
-                                    style={{ height: 280 }}
-                                    notMerge
-                                />
-                            </div>
+                    <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                        {productoPrincipal.name}
+                    </p>
 
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <div className="mb-2">
-                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                        Producto financiero
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Distribución por tipo de producto
-                                    </p>
-                                </div>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                        {productoPrincipal.value} solicitudes · {porcentaje(productoPrincipal.value)}%
+                    </p>
+                </div>
+            </div>
 
-                                <ReactECharts
-                                    option={opcionProducto}
-                                    style={{ height: 280 }}
-                                    notMerge
-                                />
-                            </div>
+            <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Solicitudes por dealer
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Distribución de solicitudes registradas
+                        </p>
+                    </div>
 
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                                <div className="mb-2">
-                                    <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                        Solicitudes por fecha
-                                    </h3>
-                                    <p className="text-xs text-slate-400">
-                                        Evolución de solicitudes registradas
-                                    </p>
-                                </div>
+                    <ReactECharts
+                        option={opcionDealer}
+                        style={{ height: 260 }}
+                        notMerge
+                    />
+                </div>
 
-                                <ReactECharts
-                                    option={opcionFecha}
-                                    style={{ height: 280 }}
-                                    notMerge
-                                />
-                            </div>
-                        </div>
-                    </>
-                );
-            }
-            
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Estado de financiamiento
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Situación actual de las solicitudes
+                        </p>
+                    </div>
+
+                    <ReactECharts
+                        option={opcionFinanciamiento}
+                        style={{ height: 260 }}
+                        notMerge
+                    />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Estado de compra
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Seguimiento del proceso de compra
+                        </p>
+                    </div>
+
+                    <ReactECharts
+                        option={opcionCompra}
+                        style={{ height: 260 }}
+                        notMerge
+                    />
+                </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Solicitudes por asesor
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Top 10 asesores con más solicitudes
+                        </p>
+                    </div>
+
+                    <ReactECharts
+                        option={opcionAsesor}
+                        style={{ height: 280 }}
+                        notMerge
+                    />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Producto financiero
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Distribución por tipo de producto
+                        </p>
+                    </div>
+
+                    <ReactECharts
+                        option={opcionProducto}
+                        style={{ height: 280 }}
+                        notMerge
+                    />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Solicitudes por fecha
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Evolución de solicitudes registradas
+                        </p>
+                    </div>
+
+                    <ReactECharts
+                        option={opcionFecha}
+                        style={{ height: 280 }}
+                        notMerge
+                    />
+                </div>
+            </div>
+        </>
+    );
+}
+
 
 export default function RegistroCredito() {
     const { user } = useAuth();
@@ -842,7 +842,7 @@ export default function RegistroCredito() {
     }, [rol, permisos]);
 
     const canAccessCredito = useMemo(() => {
-        return isAdmin || permisos.includes("CRM_FINANCIEROS") || permisos.includes("CRM_VENTAS") || permisos.includes("CRM_CALIDAD");
+        return isAdmin || permisos.includes("CRM_FINANCIEROS") || permisos.includes("CRM_VENTAS") || permisos.includes("CRM_DIGITALES") || permisos.includes("CRM_COORDINADOR_DIGITAL") || permisos.includes("CRM_CALIDAD");
     }, [isAdmin, permisos]);
 
     const userAgencias = useMemo(() => {
@@ -1449,16 +1449,16 @@ export default function RegistroCredito() {
     };
 
     const setAyer = () => {
-    const ayer = new Date();
-    ayer.setDate(ayer.getDate() - 1);
-    const fecha = toYMDLocal(ayer);
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
+        const fecha = toYMDLocal(ayer);
 
-    setFilters((p) => ({
-        ...p,
-        rangoDesde: fecha,
-        rangoHasta: fecha,
-    }));
-};
+        setFilters((p) => ({
+            ...p,
+            rangoDesde: fecha,
+            rangoHasta: fecha,
+        }));
+    };
 
     const setSemana = () => {
         const hoy = new Date();
@@ -1523,63 +1523,63 @@ export default function RegistroCredito() {
         );
     }
     return (
-                <div className="w-full">
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                        <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
-                            Solicitudes de Credito
-                        </h2>
+        <div className="w-full">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">
+                        Solicitudes de Credito
+                    </h2>
 
-                        {!isAdmin && userAgencia ? (
-                            <p className="mt-1 text-xs font-semibold text-slate-500">
-                                Agencia asignada:{" "}
-                                <span className="text-[#131E5C]">
-                                    {userAgencias.join(", ")}
-                                </span>
-                            </p>
-                        ) : null}
-                    </div>
+                    {!isAdmin && userAgencia ? (
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Agencia asignada:{" "}
+                            <span className="text-[#131E5C]">
+                                {userAgencias.join(", ")}
+                            </span>
+                        </p>
+                    ) : null}
+                </div>
 
-                    <div className="flex items-center gap-2 sm:ml-auto">
-                        <div className="inline-flex rounded-lg border border-[#131E5C]/20 bg-white p-1 shadow-sm">
-                            <button
-                                type="button"
-                                onClick={() => setViewMode("tabla")}
-                                className={[
-                                    "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
-                                    viewMode === "tabla"
-                                        ? "bg-[#131E5C] text-white"
-                                        : "text-[#131E5C] hover:bg-slate-100",
-                                ].join(" ")}
-                            >
-                                <TableProperties className="h-4 w-4" />
-                                Tabla
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setViewMode("graficas")}
-                                className={[
-                                    "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
-                                    viewMode === "graficas"
-                                        ? "bg-[#131E5C] text-white"
-                                        : "text-[#131E5C] hover:bg-slate-100",
-                                ].join(" ")}
-                            >
-                                <BarChart3 className="h-4 w-4" />
-                                Gráficas
-                            </button>
-                        </div>
+                <div className="flex items-center gap-2 sm:ml-auto">
+                    <div className="inline-flex rounded-lg border border-[#131E5C]/20 bg-white p-1 shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("tabla")}
+                            className={[
+                                "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+                                viewMode === "tabla"
+                                    ? "bg-[#131E5C] text-white"
+                                    : "text-[#131E5C] hover:bg-slate-100",
+                            ].join(" ")}
+                        >
+                            <TableProperties className="h-4 w-4" />
+                            Tabla
+                        </button>
 
                         <button
-                            onClick={openCreate}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80"
+                            type="button"
+                            onClick={() => setViewMode("graficas")}
+                            className={[
+                                "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+                                viewMode === "graficas"
+                                    ? "bg-[#131E5C] text-white"
+                                    : "text-[#131E5C] hover:bg-slate-100",
+                            ].join(" ")}
                         >
-                            <Plus className="h-4 w-4" />
-                            Nueva Solicitud
+                            <BarChart3 className="h-4 w-4" />
+                            Gráficas
                         </button>
                     </div>
-                </div> 
+
+                    <button
+                        onClick={openCreate}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80"
+                    >
+                        <Plus className="h-4 w-4" />
+                        Nueva Solicitud
+                    </button>
+                </div>
+            </div>
 
 
             <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -1705,174 +1705,174 @@ export default function RegistroCredito() {
                 </div>
             </div>
 
-                {viewMode === "graficas" ? (
-                    <GraficasSolicitudes rows={sorted} />
-                ) : null}
-                
-                {viewMode === "tabla" ? (
-                    <>
-                        <MobileCardList
-                            rows={sorted}
-                            loading={loadingList}
-                            onEdit={openEdit}
-                            onContext={onRowContextMenu}
-                        />
+            {viewMode === "graficas" ? (
+                <GraficasSolicitudes rows={sorted} />
+            ) : null}
 
-
-            <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
-                <div className="overflow-auto">
-                    <table className="min-w-full text-left text-sm">
-                        <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
-                            <tr>
-                                <th className="px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("creado")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Fecha de Ingreso
-                                        <span className="opacity-60">
-                                            {sort.key === "creado" ? (
-                                                sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />
-                                            ) : (
-                                                <ArrowUpDown className="h-4" />
-                                            )}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("agencia")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Dealer
-                                        <span className="opacity-60">
-                                            {sort.key === "agencia" ? (
-                                                sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />
-                                            ) : (
-                                                <ArrowUpDown className="h-4" />
-                                            )}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("cliente_nombre")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Cliente
-                                        <span className="opacity-60">
-                                            {sort.key === "cliente_nombre" ? (
-                                                sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />
-                                            ) : (
-                                                <ArrowUpDown className="h-4" />
-                                            )}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="px-4 py-3">ID Solicitud Credito</th>
-                                <th className="px-4 py-3">Asesor Ventas</th>
-                                <th className="px-4 py-3">Estado Financiamiento</th>
-                                <th className="px-4 py-3">Estado Compra</th>
-                            </tr>
-                        </thead>
-
-                        <tbody className="divide-y divide-black/30">
-                            {loadingList ? (
-                                <>
-                                    {Array.from({ length: 8 }).map((_, i) => (
-                                        <SkeletonRow key={i} />
-                                    ))}
-                                </>
-                            ) : (
-                                <>
-                                    {sorted.map((row) => {
-                                        const nombreCliente = row?.cliente?.nombre || "—";
-
-                                        return (
-                                            <tr
-                                                key={row.id}
-                                                onDoubleClick={() => openEdit(row)}
-                                                onContextMenu={(e) => onRowContextMenu(e, row)}
-                                                className="cursor-pointer hover:bg-white/[0.04]"
-                                                title="Doble clic para editar"
-                                            >
-                                                <td className="px-4 py-3 text-[#131E5C]">
-                                                    {row.creado ? toDTLocal(row.creado).replace("T", " ") : "—"}
-                                                </td>
-
-                                                <td className="px-4 py-3 font-semibold text-[#131E5C]">{row.agencia || "—"}</td>
-
-                                                <td className="px-4 py-3 text-[#131E5C]">
-                                                    <div className="font-bold">{nombreCliente}</div>
-                                                </td>
-
-                                                <td className="px-4 py-3 text-[#131E5C]">
-                                                    <InlineInput
-                                                        value={inlineDrafts[row.id]?.id_soli_cred ?? row.id_soli_cred ?? ""}
-                                                        saving={!!savingInline[`${row.id}-id_soli_cred`]}
-                                                        placeholder="ID / folio"
-                                                        onChange={(e) => handleInlineIdChange(row.id, e.target.value)}
-                                                        onBlur={() => commitInlineId(row)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Enter") {
-                                                                e.preventDefault();
-                                                                commitInlineId(row);
-                                                            }
-                                                        }}
-                                                    />
-                                                </td>
-
-                                                <td className="px-4 py-3 text-[#131E5C]">{row.asesor_ventas || "—"}</td>
-
-                                                <td className="px-4 py-3 text-[#131E5C]">
-                                                    <InlineSelect
-                                                        value={row.estado_financiamiento || ""}
-                                                        options={ESTADOS_FINANCIAMIENTO}
-                                                        saving={!!savingInline[`${row.id}-estado_financiamiento`]}
-                                                        onChange={(value) => updateInlineField(row, "estado_financiamiento", value)}
-                                                    />
-                                                </td>
-
-                                                <td className="px-4 py-3 text-[#131E5C]">
-                                                    <InlineSelect
-                                                        value={row.estado_compra || ""}
-                                                        options={ESTADOS_COMPRA}
-                                                        saving={!!savingInline[`${row.id}-estado_compra`]}
-                                                        onChange={(value) => updateInlineField(row, "estado_compra", value)}
-                                                    />
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-
-                                    {sorted.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} className="px-4 py-10 text-center text-[#131E5C]">
-                                                No hay resultados con esos filtros.
-                                            </td>
-                                        </tr>
-                                    ) : null}
-                                </>
-                            )}
-                        </tbody>
-                    </table>
-
-                    <ContextMenu
-                        ctxMenu={ctxMenu}
-                        onDelete={async (row) => {
-                            await eliminarSolicitud(row);
-                            setCtxMenu({ open: false, x: 0, y: 0, row: null });
-                        }}
-                        onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })}
+            {viewMode === "tabla" ? (
+                <>
+                    <MobileCardList
+                        rows={sorted}
+                        loading={loadingList}
+                        onEdit={openEdit}
+                        onContext={onRowContextMenu}
                     />
-                </div>
-            </div>
+
+
+                    <div className="hidden overflow-hidden rounded-lg shadow-lg bg-white/[0.03] lg:block">
+                        <div className="overflow-auto">
+                            <table className="min-w-full text-left text-sm">
+                                <thead className="font-vw-header text-xs bg-[#131E5C] text-white border border-black">
+                                    <tr>
+                                        <th className="px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort("creado")}
+                                                className="inline-flex items-center gap-1 text-xs font-bold"
+                                            >
+                                                Fecha de Ingreso
+                                                <span className="opacity-60">
+                                                    {sort.key === "creado" ? (
+                                                        sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />
+                                                    ) : (
+                                                        <ArrowUpDown className="h-4" />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </th>
+
+                                        <th className="px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort("agencia")}
+                                                className="inline-flex items-center gap-1 text-xs font-bold"
+                                            >
+                                                Dealer
+                                                <span className="opacity-60">
+                                                    {sort.key === "agencia" ? (
+                                                        sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />
+                                                    ) : (
+                                                        <ArrowUpDown className="h-4" />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </th>
+
+                                        <th className="px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort("cliente_nombre")}
+                                                className="inline-flex items-center gap-1 text-xs font-bold"
+                                            >
+                                                Cliente
+                                                <span className="opacity-60">
+                                                    {sort.key === "cliente_nombre" ? (
+                                                        sort.dir === "asc" ? <ChevronUp className="h-4" /> : <ChevronDown className="h-4" />
+                                                    ) : (
+                                                        <ArrowUpDown className="h-4" />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </th>
+
+                                        <th className="px-4 py-3">ID Solicitud Credito</th>
+                                        <th className="px-4 py-3">Asesor Ventas</th>
+                                        <th className="px-4 py-3">Estado Financiamiento</th>
+                                        <th className="px-4 py-3">Estado Compra</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody className="divide-y divide-black/30">
+                                    {loadingList ? (
+                                        <>
+                                            {Array.from({ length: 8 }).map((_, i) => (
+                                                <SkeletonRow key={i} />
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {sorted.map((row) => {
+                                                const nombreCliente = row?.cliente?.nombre || "—";
+
+                                                return (
+                                                    <tr
+                                                        key={row.id}
+                                                        onDoubleClick={() => openEdit(row)}
+                                                        onContextMenu={(e) => onRowContextMenu(e, row)}
+                                                        className="cursor-pointer hover:bg-white/[0.04]"
+                                                        title="Doble clic para editar"
+                                                    >
+                                                        <td className="px-4 py-3 text-[#131E5C]">
+                                                            {row.creado ? toDTLocal(row.creado).replace("T", " ") : "—"}
+                                                        </td>
+
+                                                        <td className="px-4 py-3 font-semibold text-[#131E5C]">{row.agencia || "—"}</td>
+
+                                                        <td className="px-4 py-3 text-[#131E5C]">
+                                                            <div className="font-bold">{nombreCliente}</div>
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-[#131E5C]">
+                                                            <InlineInput
+                                                                value={inlineDrafts[row.id]?.id_soli_cred ?? row.id_soli_cred ?? ""}
+                                                                saving={!!savingInline[`${row.id}-id_soli_cred`]}
+                                                                placeholder="ID / folio"
+                                                                onChange={(e) => handleInlineIdChange(row.id, e.target.value)}
+                                                                onBlur={() => commitInlineId(row)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === "Enter") {
+                                                                        e.preventDefault();
+                                                                        commitInlineId(row);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-[#131E5C]">{row.asesor_ventas || "—"}</td>
+
+                                                        <td className="px-4 py-3 text-[#131E5C]">
+                                                            <InlineSelect
+                                                                value={row.estado_financiamiento || ""}
+                                                                options={ESTADOS_FINANCIAMIENTO}
+                                                                saving={!!savingInline[`${row.id}-estado_financiamiento`]}
+                                                                onChange={(value) => updateInlineField(row, "estado_financiamiento", value)}
+                                                            />
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-[#131E5C]">
+                                                            <InlineSelect
+                                                                value={row.estado_compra || ""}
+                                                                options={ESTADOS_COMPRA}
+                                                                saving={!!savingInline[`${row.id}-estado_compra`]}
+                                                                onChange={(value) => updateInlineField(row, "estado_compra", value)}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+
+                                            {sorted.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} className="px-4 py-10 text-center text-[#131E5C]">
+                                                        No hay resultados con esos filtros.
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+                                        </>
+                                    )}
+                                </tbody>
+                            </table>
+
+                            <ContextMenu
+                                ctxMenu={ctxMenu}
+                                onDelete={async (row) => {
+                                    await eliminarSolicitud(row);
+                                    setCtxMenu({ open: false, x: 0, y: 0, row: null });
+                                }}
+                                onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })}
+                            />
+                        </div>
+                    </div>
                 </>
             ) : null}
 
