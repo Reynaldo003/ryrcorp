@@ -2,7 +2,7 @@ export const ASESORES_PISO = [
     "Adrian Galvez Roldan",
     "Aura Marlizeth Fernandez Lopez",
     "Bianca Isabel Chavez Alarcon",
-    "Blanca Patricia Hernández Hernández",
+    "Blanca Patricia Hernandez Hernandez",
     "Candy Denisse Marquez Cortes",
     "Carlos Arturo Garces Vengas",
     "Cesar Ivan Salazar Reyes",

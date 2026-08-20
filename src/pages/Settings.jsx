@@ -1,31 +1,23 @@
 // src/pages/Settings.jsx
-
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ArrowLeft, Users, Plus, RefreshCw, Upload, Eye, EyeOff,
-    Building2, ChevronDown, Pencil, Save, AtSign, Mail,
-    User, Lock, Briefcase, Phone, Search
+    ArrowLeft, AtSign, Building2, ChevronDown, Eye, EyeOff,
+    Lock, Mail, Phone, Plus, RefreshCw, Save, Search, Upload, User, Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
 import PhoneInput from "react-phone-number-input";
 import flags from "react-phone-number-input/flags";
 import "react-phone-number-input/style.css";
+import { useAuth } from "../auth/AuthContext";
 import { ensureFreshAccessToken } from "../lib/apiPruebas";
 
 const API = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-const DEALERS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
+const AGENCIAS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
+const MAX_TELEFONOS = 5;
+const REGEX_USUARIO = /^[A-Za-z0-9._-]+$/;
+const REGEX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REGEX_TELEFONO_BD = /^\d{8,15}$/;
 
-async function obtenerTokenVigente(tokenFallback) {
-    try {
-        const fresh = await ensureFreshAccessToken();
-        return fresh || tokenFallback || "";
-    } catch {
-        return tokenFallback || "";
-    }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
     { bg: "#e0e7ff", text: "#3730a3" },
     { bg: "#d1fae5", text: "#065f46" },
@@ -34,1278 +26,583 @@ const AVATAR_COLORS = [
     { bg: "#e0f2fe", text: "#0369a1" },
 ];
 
-function getInitials(u) {
-    return ((u.nombre?.[0] ?? "") + (u.apellidos?.[0] ?? "")).toUpperCase();
+async function obtenerTokenVigente(tokenFallback) {
+    try {
+        return (await ensureFreshAccessToken()) || tokenFallback || "";
+    } catch {
+        return tokenFallback || "";
+    }
 }
 
-function getAvatarColor(id) {
-    return AVATAR_COLORS[(id ?? 0) % AVATAR_COLORS.length];
-}
-
-// ─── Estilos base ─────────────────────────────────────────────────────────────
-const inputBase = (err) => ({
+const inputBase = (error = false) => ({
     width: "100%",
     padding: "9px 12px",
-    border: `1px solid ${err ? "#fca5a5" : "#e2e8f0"}`,
+    border: `1px solid ${error ? "#fca5a5" : "#e2e8f0"}`,
     borderRadius: 10,
     fontSize: 13,
     color: "#0f172a",
     background: "#fff",
     outline: "none",
     boxSizing: "border-box",
-    transition: "border-color 0.15s, box-shadow 0.15s",
+    transition: "border-color .15s, box-shadow .15s",
     fontFamily: "inherit",
 });
 
-// ─── Componentes de formulario ────────────────────────────────────────────────
-function FLabel({ children }) {
+function telefonoParaInput(valor) {
+    const numero = String(valor || "").replace(/\D/g, "");
+    return numero ? `+${numero}` : "";
+}
+
+function telefonoParaBD(valor) {
+    return String(valor || "").replace(/\D/g, "");
+}
+
+function separarTelefonos(valor) {
+    const telefonos = String(valor || "").split("|").map(telefonoParaInput).filter(Boolean);
+    return telefonos.length ? telefonos : [""];
+}
+
+function limpiarTelefonos(lista = []) {
+    return lista.map(telefonoParaBD).filter(Boolean);
+}
+
+function hayTelefonosDuplicados(lista = []) {
+    const telefonos = limpiarTelefonos(lista);
+    return new Set(telefonos).size !== telefonos.length;
+}
+
+function telefonoInvalido(lista = []) {
+    return limpiarTelefonos(lista).find(telefono => !REGEX_TELEFONO_BD.test(telefono)) || "";
+}
+
+function passwordRequisitos(valor = "") {
+    return {
+        longitud: valor.length >= 8,
+        mayuscula: /[A-Z]/.test(valor),
+        numero: /[0-9]/.test(valor),
+        simbolo: /[^A-Za-z0-9]/.test(valor),
+    };
+}
+
+function passwordValido(valor = "") {
+    return Object.values(passwordRequisitos(valor)).every(Boolean);
+}
+
+function mensajeApi(data, fallback) {
+    if (!data || typeof data !== "object") return fallback;
+    if (data.detail) return String(data.detail);
+
+    const partes = Object.entries(data).map(([campo, valor]) =>
+        `${campo}: ${Array.isArray(valor) ? valor.join(", ") : String(valor)}`
+    );
+
+    return partes.join(" | ") || fallback;
+}
+
+function initials(usuario = {}) {
+    return `${usuario.nombre?.[0] || ""}${usuario.apellidos?.[0] || ""}`.toUpperCase();
+}
+
+function avatarColor(id) {
+    return AVATAR_COLORS[(Number(id) || 0) % AVATAR_COLORS.length];
+}
+
+function Label({ children }) {
+    return <span className="crm-label">{children}</span>;
+}
+
+function Alerta({ mensaje }) {
+    if (!mensaje) return null;
+    const ok = mensaje.startsWith("✓");
+
     return (
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
-            {children}
-        </span>
+        <div role="alert" className={`crm-alert ${ok ? "ok" : "error"}`}>
+            {mensaje}
+        </div>
     );
 }
 
-function FInput({ label, value, onChange, type = "text", placeholder, disabled = false, error }) {
-    return (
-        <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <FLabel>{label}</FLabel>
-            <input
-                type={type} value={value} onChange={onChange}
-                placeholder={placeholder} disabled={disabled}
-                style={{
-                    ...inputBase(error),
-                    background: disabled ? "#f8fafc" : "#fff",
-                    opacity: disabled ? 0.65 : 1,
-                    cursor: disabled ? "not-allowed" : "text",
-                }}
-                onFocus={e => {
-                    if (disabled) return;
-                    e.target.style.borderColor = "#131E5C";
-                    e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)";
-                }}
-                onBlur={e => {
-                    e.target.style.borderColor = error ? "#fca5a5" : "#e2e8f0";
-                    e.target.style.boxShadow = "none";
-                }}
+function Avatar({ usuario, size = 34 }) {
+    const color = avatarColor(usuario?.id ?? usuario?.id_usuario);
+
+    if (usuario?.foto_url || usuario?.photo) {
+        return (
+            <img
+                src={usuario.foto_url || usuario.photo}
+                alt={usuario.nombre || "Usuario"}
+                style={{ width: size, height: size }}
+                className="crm-avatar-img"
             />
-            {error && <span style={{ fontSize: 11, color: "#ef4444" }}>{error}</span>}
-        </label>
-    );
-}
+        );
+    }
 
-function FSelect({ label, value, onChange, children }) {
     return (
-        <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <FLabel>{label}</FLabel>
-            <select
-                value={value} onChange={onChange}
-                style={{ ...inputBase(), cursor: "pointer", appearance: "auto" }}
-                onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-            >
-                {children}
-            </select>
-        </label>
-    );
-}
-
-// ─── Checkbox de agencia (estilo original) ────────────────────────────────────
-function AgencyCheck({ label, checked, onChange }) {
-    return (
-        <label
+        <div
+            className="crm-avatar"
             style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 14px", borderRadius: 10, cursor: "pointer",
-                border: "1px solid #e2e8f0",
-                background: checked ? "#f0f4ff" : "#f8fafc",
-                transition: "background 0.12s, border-color 0.12s",
-                borderColor: checked ? "#c7d2fe" : "#e2e8f0",
+                width: size,
+                height: size,
+                background: color.bg,
+                color: color.text,
+                fontSize: size * 0.35,
             }}
         >
-            <input type="checkbox" checked={checked} onChange={onChange} style={{ width: 15, height: 15, accentColor: "#131E5C", cursor: "pointer" }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{label}</span>
-        </label>
-    );
-}
-
-// ─── Avatar ───────────────────────────────────────────────────────────────────
-function Avatar({ user, size = 32 }) {
-    const color = getAvatarColor(user.id);
-    if (user.foto_url || user.photo) {
-        return <img src={user.foto_url || user.photo} alt={user.nombre} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
-    }
-    return (
-        <div style={{
-            width: size, height: size, borderRadius: "50%",
-            background: color.bg, color: color.text,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: size * 0.36, fontWeight: 700, flexShrink: 0,
-        }}>
-            {getInitials(user)}
+            {initials(usuario)}
         </div>
     );
 }
 
-// ─── Badges ───────────────────────────────────────────────────────────────────
-const ROLE_MAP = {
-    Administrador: { bg: "#ede9fe", color: "#5b21b6" },
-    Gerente: { bg: "#fef3c7", color: "#92400e" },
-    Vendedor: { bg: "#d1fae5", color: "#065f46" },
-};
+function InputCampo({
+    icon: Icon,
+    label,
+    value,
+    onChange,
+    type = "text",
+    placeholder,
+    error = "",
+    correcto = "",
+    contador = "",
+    sinIcono = false,
+}) {
+    const color = error
+        ? "#fca5a5"
+        : correcto
+            ? "#86efac"
+            : "#e2e8f0";
 
-function RoleBadge({ rol }) {
-    const s = ROLE_MAP[rol] ?? ROLE_MAP.Vendedor;
-    return (
-        <span style={{ background: s.bg, color: s.color, fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600 }}>
-            {rol}
-        </span>
-    );
-}
-
-function StatusPill({ estado }) {
-    const ok = estado === "Activo";
-    return (
-        <span style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            background: ok ? "#dcfce7" : "#fee2e2",
-            color: ok ? "#15803d" : "#b91c1c",
-            fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
-        }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: ok ? "#16a34a" : "#dc2626" }} />
-            {estado}
-        </span>
-    );
-}
-
-// ─── MODAL ────────────────────────────────────────────────────────────────────
-function ModalDivider({ label }) {
-    return (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 14px" }}>
-            <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.06em" }}>{label}</span>
-            <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
-        </div>
-    );
-}
-
-function UserModal({ user, roles, token, onClose, onSaved }) {
-    const isNew = !user?.id;
-    const [form, setForm] = useState({
-        nombre: user?.nombre ?? "", apellidos: user?.apellidos ?? "",
-        usuario: user?.usuario ?? "", correo: user?.correo ?? "",
-        telefono: user?.telefono ?? "",
-        id_rol: user?.id_rol ?? "", estado: user?.estado ?? "Activo",
-        agencies: user?.agencies ?? [],
-    });
-    const [foto, setFoto] = useState(null);
-    const [fotoPreview, setFotoPreview] = useState(user?.foto_url ?? null);
-    const [password, setPassword] = useState("");
-    const [password2, setPassword2] = useState("");
-    const [showP, setShowP] = useState(false);
-    const [showP2, setShowP2] = useState(false);
-    const [errors, setErrors] = useState({});
-    const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState("");
-    const [visible, setVisible] = useState(false);
-
-    useEffect(() => {
-        requestAnimationFrame(() => setVisible(true));
-    }, []);
-
-    function handleClose() {
-        setVisible(false);
-        setTimeout(onClose, 280);
-    }
-
-    function set(field, val) {
-        setForm(f => ({ ...f, [field]: val }));
-        setErrors(e => ({ ...e, [field]: undefined }));
-    }
-
-    function toggleAgency(ag) {
-        set("agencies", form.agencies.includes(ag)
-            ? form.agencies.filter(a => a !== ag)
-            : [...form.agencies, ag]);
-    }
-
-    function handleFoto(e) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setFoto(file);
-        setFotoPreview(URL.createObjectURL(file));
-    }
-
-    function validate() {
-        const errs = {};
-        if (!form.nombre.trim()) errs.nombre = "Requerido";
-        if (!form.apellidos.trim()) errs.apellidos = "Requerido";
-        if (!form.usuario.trim()) errs.usuario = "Requerido";
-        if (!form.correo.trim()) errs.correo = "Requerido";
-        if (password && password !== password2) errs.password2 = "Las contraseñas no coinciden";
-        setErrors(errs);
-        return Object.keys(errs).length === 0;
-    }
-
-    async function handleSave() {
-        if (!validate()) return;
-        setLoading(true); setMsg("");
-        const fd = new FormData();
-        fd.append("nombre", form.nombre); fd.append("apellidos", form.apellidos);
-        fd.append("usuario", form.usuario); fd.append("correo", form.correo);
-        if (form.telefono) fd.append("telefono", form.telefono);
-        fd.append("id_rol", form.id_rol); fd.append("estado", form.estado);
-        fd.append("agencia", form.agencies.join("|"));
-        if (password) fd.append("contrasena", password);
-        if (foto) fd.append("foto", foto);
-        try {
-            const url = isNew
-                ? `${API}/conformidad/api/admin/usuarios/`
-                : `${API}/conformidad/api/admin/usuarios/${user.id}/`;
-            const access = await obtenerTokenVigente(token);
-            const res = await fetch(url, {
-                method: isNew ? "POST" : "PATCH",
-                headers: { Authorization: `Bearer ${access}` },
-                body: fd
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                const errores = data?.errors || data;
-                let mensaje = data?.detail || "No se pudo guardar.";
-                if (errores && typeof errores === "object") {
-                    const partes = [];
-                    for (const [campo, valor] of Object.entries(errores))
-                        partes.push(`${campo}: ${Array.isArray(valor) ? valor.join(", ") : valor}`);
-                    if (partes.length) mensaje = partes.join(" | ");
-                }
-                throw new Error(mensaje);
-            }
-            setMsg(isNew ? "✓ Usuario creado" : "✓ Cambios guardados");
-            setTimeout(() => { onSaved(); handleClose(); }, 900);
-        } catch (err) {
-            setMsg(`Error: ${err.message}`);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    const previewUser = { ...user, ...form, foto_url: fotoPreview, id: user?.id ?? 0 };
-    const color = getAvatarColor(user?.id ?? 0);
-
-    return (
-        <>
-            {/* Overlay semitransparente */}
-            <div
-                onClick={handleClose}
-                style={{
-                    position: "fixed", inset: 0,
-                    background: "rgba(15, 23, 42, 0.3)",
-                    backdropFilter: "blur(2px)",
-                    zIndex: 200,
-                    opacity: visible ? 1 : 0,
-                    transition: "opacity 0.28s ease",
-                }}
-            />
-
-            {/* Panel lateral derecho */}
-            <div style={{
-                position: "fixed", top: 0, right: 0, bottom: 0,
-                width: 420,
-                background: "#fff",
-                zIndex: 201,
-                display: "flex", flexDirection: "column",
-                boxShadow: "-8px 0 40px rgba(0,0,0,0.12)",
-                transform: visible ? "translateX(0)" : "translateX(100%)",
-                transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
-            }}>
-
-                {/* Header con avatar grande */}
-                <div style={{
-                    background: "linear-gradient(135deg, #131E5C 0%, #1a2d8a 100%)",
-                    padding: "20px 20px 24px",
-                    position: "relative",
-                    flexShrink: 0,
-                }}>
-                    {/* Botón cerrar */}
-                    <button onClick={handleClose} style={{
-                        position: "absolute", top: 14, right: 14,
-                        width: 30, height: 30, borderRadius: 8,
-                        background: "rgba(255,255,255,0.15)",
-                        border: "1px solid rgba(255,255,255,0.2)",
-                        cursor: "pointer", color: "#fff", fontSize: 14,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>✕</button>
-
-                    {/* Avatar + nombre */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ position: "relative" }}>
-                            <Avatar user={previewUser} size={58} />
-                            <label style={{
-                                position: "absolute", bottom: 0, right: 0,
-                                width: 20, height: 20, borderRadius: "50%",
-                                background: "#4f46e5", border: "2px solid #fff",
-                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                                <Upload size={9} color="#fff" />
-                                <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleFoto} />
-                            </label>
-                        </div>
-                        <div>
-                            <p style={{ fontSize: 16, fontWeight: 700, color: "#fff", margin: "0 0 2px" }}>
-                                {form.nombre || "Nombre"} {form.apellidos}
-                            </p>
-                            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", margin: "0 0 6px" }}>
-                                @{form.usuario || "usuario"}
-                            </p>
-                            <div style={{ display: "flex", gap: 6 }}>
-                                <span style={{
-                                    fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
-                                    background: form.estado === "Activo" ? "#dcfce7" : "#fee2e2",
-                                    color: form.estado === "Activo" ? "#15803d" : "#b91c1c",
-                                }}>
-                                    {form.estado}
-                                </span>
-                                {roles.find(r => String(r.id_rol) === String(form.id_rol)) && (
-                                    <span style={{
-                                        fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
-                                        background: "rgba(255,255,255,0.15)", color: "#e0e7ff",
-                                    }}>
-                                        {roles.find(r => String(r.id_rol) === String(form.id_rol))?.nombre}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Contenido scrollable */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-
-                    {/* Datos personales */}
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em", margin: "0 0 12px", textTransform: "uppercase" }}>Datos personales</p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-                        <FInput label="Nombre(s)" error={errors.nombre} value={form.nombre} onChange={e => set("nombre", e.target.value)} placeholder="Nombre(s)" />
-                        <FInput label="Apellidos" error={errors.apellidos} value={form.apellidos} onChange={e => set("apellidos", e.target.value)} placeholder="Apellidos" />
-                        <FInput label="Usuario" error={errors.usuario} value={form.usuario} onChange={e => set("usuario", e.target.value)} placeholder="usuario" />
-                        <FInput label="Correo" error={errors.correo} type="email" value={form.correo} onChange={e => set("correo", e.target.value)} placeholder="correo@ejemplo.com" />
-                        <PhoneField label="Teléfono" value={form.telefono} onChange={v => set("telefono", v || "")} placeholder="55 1234 5678" />
-                    </div>
-
-                    {/* Rol y Estado */}
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em", margin: "0 0 12px", textTransform: "uppercase" }}>Rol y estado</p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-                        <FSelect label="Rol" value={form.id_rol} onChange={e => set("id_rol", e.target.value)}>
-                            <option value="">Selecciona rol...</option>
-                            {roles.map(r => <option key={r.id_rol} value={String(r.id_rol)}>{r.nombre}</option>)}
-                        </FSelect>
-                        <FSelect label="Estado" value={form.estado} onChange={e => set("estado", e.target.value)}>
-                            <option>Activo</option><option>Inactivo</option>
-                        </FSelect>
-                    </div>
-
-                    {/* Contraseña */}
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em", margin: "0 0 12px", textTransform: "uppercase" }}>Cambiar contraseña</p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-                        {[[" Nueva contraseña", password, setPassword, showP, setShowP, "Dejar vacío", null],
-                        ["Confirmar", password2, setPassword2, showP2, setShowP2, "Repetir", errors.password2]
-                        ].map(([label, val, setVal, show, setShow, ph, err]) => (
-                            <label key={label} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                <FLabel>{label}</FLabel>
-                                <div style={{ position: "relative" }}>
-                                    <input
-                                        type={show ? "text" : "password"} value={val}
-                                        onChange={e => setVal(e.target.value)} placeholder={ph}
-                                        style={{ ...inputBase(err), paddingRight: 36 }}
-                                        onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                                        onBlur={e => { e.target.style.borderColor = err ? "#fca5a5" : "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-                                    />
-                                    <button type="button" onClick={() => setShow(v => !v)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex" }}>
-                                        {show ? <EyeOff size={13} /> : <Eye size={13} />}
-                                    </button>
-                                </div>
-                                {err && <span style={{ fontSize: 11, color: "#ef4444" }}>{err}</span>}
-                            </label>
-                        ))}
-                    </div>
-
-                    {/* Agencias */}
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em", margin: "0 0 12px", textTransform: "uppercase" }}>Agencias asignadas</p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                        {DEALERS.map(ag => (
-                            <AgencyCheck key={ag} label={ag} checked={form.agencies.includes(ag)} onChange={() => toggleAgency(ag)} />
-                        ))}
-                    </div>
-                </div>
-
-                {/* Footer fijo */}
-                <div style={{
-                    padding: "14px 20px", borderTop: "1px solid #f1f5f9",
-                    background: "#fff", flexShrink: 0,
-                    display: "flex", flexDirection: "column", gap: 10,
-                }}>
-                    {msg && (
-                        <div style={{
-                            padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 500, textAlign: "center",
-                            background: msg.startsWith("✓") ? "#dcfce7" : "#fee2e2",
-                            color: msg.startsWith("✓") ? "#15803d" : "#b91c1c",
-                        }}>
-                            {msg}
-                        </div>
-                    )}
-                    <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={handleClose} style={{
-                            flex: 1, padding: "10px", borderRadius: 9, fontSize: 13,
-                            cursor: "pointer", border: "1px solid #e2e8f0",
-                            background: "#fff", color: "#374151", fontWeight: 500,
-                        }}>
-                            Cancelar
-                        </button>
-                        <button onClick={handleSave} disabled={loading} style={{
-                            flex: 2, padding: "10px", borderRadius: 9, fontSize: 13,
-                            cursor: loading ? "not-allowed" : "pointer", border: "none",
-                            background: loading ? "#94a3b8" : "#131E5C",
-                            color: "#fff", fontWeight: 600,
-                        }}>
-                            {loading ? "Guardando..." : (isNew ? "Crear usuario" : "Guardar cambios")}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </>
-    );
-}
-
-// ─── TABLA POR AGENCIA ────────────────────────────────────────────────────────
-function AgencyBlock({ agency, users, onEdit }) {
-    const [open, setOpen] = useState(true);
-    const agUsers = users.filter(u => {
-        const agencias = Array.isArray(u.agencies) ? u.agencies : String(u.agencia || "").split("|");
-        return agencias.some(a => a.trim() === agency);
-    });
-
-    return (
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", marginBottom: 10, background: "#fff" }}>
-            <div
-                onClick={() => setOpen(v => !v)}
-                style={{ padding: "11px 18px", background: "#131E5C", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-            >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Building2 size={13} color="#fff" />
-                    </div>
-                    <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{agency}</span>
-                    <span style={{ background: "rgba(255,255,255,0.15)", color: "#e0e7ff", fontSize: 11, padding: "1px 9px", borderRadius: 20, fontWeight: 500 }}>
-                        {agUsers.length} {agUsers.length === 1 ? "usuario" : "usuarios"}
-                    </span>
-                </div>
-                <div style={{ color: "rgba(255,255,255,0.7)", transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
-                    <ChevronDown size={15} />
-                </div>
-            </div>
-
-            {open && (
-                <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead>
-                            <tr style={{ background: "#fafafa" }}>
-                                {["", "Nombre", "Usuario", "Rol", "Estado", "Correo"].map((h, i) => (
-                                    <th key={i} style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, color: "#94a3b8", fontWeight: 600, borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {agUsers.length === 0 ? (
-                                <tr><td colSpan={6} style={{ textAlign: "center", padding: "24px 0", fontSize: 13, color: "#94a3b8" }}>Sin usuarios en esta agencia</td></tr>
-                            ) : agUsers.map((u, idx) => (
-                                <tr
-                                    key={u.id}
-                                    onDoubleClick={() => onEdit(u)}
-                                    style={{ borderBottom: idx < agUsers.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.1s", cursor: "pointer" }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = "#f8fafc")}
-                                    onMouseLeave={e => (e.currentTarget.style.background = "")}
-                                >
-                                    <td style={{ padding: "10px 14px" }}><Avatar user={u} size={32} /></td>
-                                    <td style={{ padding: "10px 14px" }}>
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{u.nombre} {u.apellidos}</span>
-                                    </td>
-                                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b" }}>@{u.usuario}</td>
-                                    <td style={{ padding: "10px 14px" }}><RoleBadge rol={u.rol || u.nombre_rol} /></td>
-                                    <td style={{ padding: "10px 14px" }}><StatusPill estado={u.estado || "Activo"} /></td>
-                                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#94a3b8", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.correo}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    );
-}
-function FilterSelect({ label, value, onChange, options }) {
-    return (
-        <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                {label}
-            </span>
-            <select
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                style={{ ...inputBase(), cursor: "pointer", minWidth: 160, background: "#fff" }}
-            >
-                {options.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-        </label>
-    );
-}
-
-// ─── TABLA ÚNICA (reemplaza las 5 tablas por agencia) ─────────────────────────
-function UsersTableUnificada({ users, onEdit }) {
-    return (
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
-            <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                        <tr style={{ background: "#fafafa" }}>
-                            {["", "Nombre", "Usuario", "Agencia", "Rol", "Estado", "Correo"].map((h, i) => (
-                                <th key={i} style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, color: "#94a3b8", fontWeight: 600, borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>
-                                    {h}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} style={{ textAlign: "center", padding: "24px 0", fontSize: 13, color: "#94a3b8" }}>
-                                    Sin usuarios que coincidan con los filtros
-                                </td>
-                            </tr>
-                        ) : users.map((u, idx) => (
-                            <tr
-                                key={u.id}
-                                onDoubleClick={() => onEdit(u)}
-                                style={{ borderBottom: idx < users.length - 1 ? "1px solid #f8fafc" : "none", cursor: "pointer" }}
-                                onMouseEnter={e => (e.currentTarget.style.background = "#f8fafc")}
-                                onMouseLeave={e => (e.currentTarget.style.background = "")}
-                            >
-                                <td style={{ padding: "10px 14px" }}><Avatar user={u} size={32} /></td>
-                                <td style={{ padding: "10px 14px" }}>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{u.nombre} {u.apellidos}</span>
-                                </td>
-                                <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b" }}>@{u.usuario}</td>
-                                <td style={{ padding: "10px 14px", fontSize: 12, color: "#374151" }}>
-                                    {(u.agencies || []).join(", ")}
-                                </td>
-                                <td style={{ padding: "10px 14px" }}><RoleBadge rol={u.rol || u.nombre_rol} /></td>
-                                <td style={{ padding: "10px 14px" }}><StatusPill estado={u.estado || "Activo"} /></td>
-                                <td style={{ padding: "10px 14px", fontSize: 12, color: "#94a3b8", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {u.correo}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
-// ─── PERFIL USUARIO NORMAL ────────────────────────────────────────────────────
-function PerfilUsuario({ token, user }) {
-    console.log("=== USER KEYS:", Object.keys(user || {}));
-    console.log("=== USER JSON:", JSON.stringify(user));
-    const [formData, setFormData] = useState({
-        nombre: user?.nombre || "",
-        apellidos: user?.apellidos || "",
-        usuario: user?.usuario || "",
-        correo: user?.correo || "",
-        telefono: user?.telefono || "",
-    });
-    const [foto, setFoto] = useState(null);
-    const [fotoPreview, setFotoPreview] = useState(user?.foto_url || "");
-    const [msg, setMsg] = useState("");
-    const [loading, setLoading] = useState(false);
-
-    // Estado para cambio de contraseña
-    const [showPassModal, setShowPassModal] = useState(false);
-    const [passForm, setPassForm] = useState({ actual: "", nueva: "", confirmar: "" });
-    const [showPass, setShowPass] = useState({ actual: false, nueva: false, confirmar: false });
-    const [passMsg, setPassMsg] = useState("");
-    const [passLoading, setPassLoading] = useState(false);
-
-    const initials = ((user?.nombre?.[0] ?? "") + (user?.apellidos?.[0] ?? "")).toUpperCase();
-    const avatarColor = AVATAR_COLORS[(user?.id ?? 0) % AVATAR_COLORS.length];
-    const miembroDesde = user?.date_joined
-        ? new Date(user.date_joined).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })
-        : "—";
-
-    const guardarCambios = async () => {
-        setLoading(true); setMsg("");
-
-        const userId = user?.id_usuario;
-        if (!userId) {
-            setMsg(`Error: ID no encontrado. Campos disponibles: ${Object.keys(user || {}).join(", ")}`);
-            setLoading(false);
-            return;
-        }
-
-        const fd = new FormData();
-        fd.append("nombre", formData.nombre);
-        fd.append("apellidos", formData.apellidos);
-        fd.append("usuario", formData.usuario);
-        fd.append("correo", formData.correo);
-        if (formData.telefono) fd.append("telefono", formData.telefono);
-        if (foto) fd.append("foto", foto);
-
-        try {
-            const access = await obtenerTokenVigente(token);
-            const res = await fetch(`${API}/conformidad/api/perfil/`, {
-                method: "PATCH",
-                headers: { Authorization: `Bearer ${access}` },
-                body: fd,
-            });
-            const responseText = await res.text();
-            if (res.ok) {
-                setMsg("✓ Datos actualizados correctamente");
-                setFoto(null);
-
-                try {
-                    const accessMe = await obtenerTokenVigente(token);
-                    const meRes = await fetch(`${API}/conformidad/api/auth/me/`, {
-                        headers: { Authorization: `Bearer ${accessMe}` },
-                    });
-                    if (meRes.ok) {
-                        const updatedUser = await meRes.json();
-                        localStorage.setItem("crm.user", JSON.stringify(updatedUser));
-                        localStorage.setItem("user", JSON.stringify(updatedUser));
-                        const auth = JSON.parse(localStorage.getItem("auth") || "{}");
-                        localStorage.setItem("auth", JSON.stringify({ ...auth, user: updatedUser }));
-                    }
-                } catch (e) {
-                    console.error("Error refrescando usuario:", e);
-                }
-
-                setTimeout(() => window.location.reload(), 800);
-            } else {
-                let err = {};
-                try { err = JSON.parse(responseText); } catch { }
-                setMsg(`Error: ${err.detail || responseText || "No se pudo actualizar"}`);
-            }
-        } catch (e) {
-            setMsg("Error de conexión");
-        } finally {
-            setLoading(false);
-            setTimeout(() => setMsg(""), 6000);
-        }
-    };
-    const cambiarContrasena = async () => {
-        if (passForm.nueva.length < 8) return setPassMsg("Mínimo 8 caracteres.");
-        if (!/[A-Z]/.test(passForm.nueva)) return setPassMsg("Agrega al menos una mayúscula.");
-        if (!/[0-9]/.test(passForm.nueva)) return setPassMsg("Agrega al menos un número.");
-        if (!/[^A-Za-z0-9]/.test(passForm.nueva)) return setPassMsg("Agrega al menos un símbolo.");
-        if (passForm.nueva !== passForm.confirmar) return setPassMsg("Las contraseñas no coinciden.");
-
-        setPassLoading(true); setPassMsg("");
-        const fd = new FormData();
-        fd.append("contrasena", passForm.nueva);
-        try {
-            const access = await obtenerTokenVigente(token);
-            const res = await fetch(`${API}/conformidad/api/admin/usuarios/${userId}/`, {
-                method: "PUT",
-                headers: { Authorization: `Bearer ${access}` },
-                body: fd,
-            });
-            if (res.ok) {
-                setPassMsg("✓ Contraseña actualizada correctamente");
-                setPassForm({ nueva: "", confirmar: "" });
-                setTimeout(() => { setShowPassModal(false); setPassMsg(""); }, 1200);
-            } else {
-                const err = await res.json().catch(() => ({}));
-                setPassMsg(`Error: ${err.detail || "No se pudo cambiar"}`);
-            }
-        } catch { setPassMsg("Error de conexión"); }
-        finally { setPassLoading(false); }
-    };
-
-    return (
-        <div style={{ maxWidth: 1500, margin: "0 auto", padding: "32px 20px", fontFamily: "system-ui, sans-serif" }}>
-            {/* Header perfil */}
-            {/* Header perfil */}
-            <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden", marginBottom: 20 }}>
-                <div style={{ height: 80, background: "linear-gradient(135deg, #131E5C 0%, #1a2d8a 100%)", position: "relative" }}>
-                    {/* Círculos decorativos */}
-                    <div style={{ position: "absolute", right: 160, top: -20, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
-                    <div style={{ position: "absolute", right: 60, top: 10, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
-                </div>
-                <div style={{ padding: "0 28px 24px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 16 }}>
-                        {/* Avatar — muestra foto si existe */}
-                        <div style={{ position: "relative", marginTop: -40 }}>
-                            <label style={{ cursor: "pointer", display: "block" }}>
-                                {(fotoPreview && fotoPreview !== "") ? (<img
-                                    src={fotoPreview || user.foto_url}
-                                    style={{ width: 88, height: 88, borderRadius: "50%", border: "4px solid #fff", objectFit: "cover", display: "block", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}
-                                    alt="foto de perfil"
-                                />
-                                ) : (
-                                    <div style={{ width: 88, height: 88, borderRadius: "50%", border: "4px solid #fff", background: avatarColor.bg, color: avatarColor.text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 700, boxShadow: "0 4px 12px rgba(0,0,0,0.12)" }}>
-                                        {initials}
-                                    </div>
-                                )}
-                                {/* Botón cámara */}
-                                <div style={{ position: "absolute", bottom: 2, right: 2, width: 28, height: 28, borderRadius: "50%", background: "#131E5C", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <Upload size={12} color="#fff" />
-                                </div>
-                                <input type="file" accept="image/*" style={{ display: "none" }}
-                                    onChange={e => { const f = e.target.files[0]; if (f) { setFoto(f); setFotoPreview(URL.createObjectURL(f)); } }} />
-                            </label>
-                        </div>
-
-                        {/* Info nombre */}
-                        <div style={{ flex: 1, marginLeft: 18, paddingTop: 10 }}>
-                            <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>
-                                {formData.nombre} {formData.apellidos}
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5, flexWrap: "wrap" }}>
-                                <span style={{ background: "#ede9fe", color: "#5b21b6", fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600 }}>
-                                    {user?.rol || user?.nombre_rol || "Usuario"}
-                                </span>
-                                {user?.agencia && (
-                                    <span style={{ fontSize: 12, color: "#64748b" }}>
-                                        Agencia asignada: <strong>{user.agencia}</strong>
-                                    </span>
-                                )}
-                                {miembroDesde !== "—" && (
-                                    <span style={{ fontSize: 12, color: "#64748b" }}>
-                                        Miembro desde: <strong>{miembroDesde}</strong>
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Contenido principal — dos columnas */}
-            {/* Contenido principal */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, alignItems: "start" }}>
-                {/* Columna izquierda */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-                    {/* Información personal */}
-                    <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "24px 28px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                            <div>
-                                <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Información personal</div>
-                                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>Actualiza tus datos personales y de contacto.</div>
-                            </div>
-                            <button onClick={guardarCambios} disabled={loading}
-                                style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: loading ? "#94a3b8" : "#131E5C", color: "#fff", fontSize: 13, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                                <Save size={14} />
-                                {loading ? "Guardando..." : "Guardar cambios"}
-                            </button>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                            {[
-                                ["Nombre(s)", "nombre", "text", "Reynaldo"],
-                                ["Apellidos", "apellidos", "text", "Vallejo"],
-                                ["Usuario", "usuario", "text", "rey"],
-                                ["Correo electrónico", "correo", "email", "correo@gmail.com"],
-                                ["Teléfono", "telefono", "tel", "5512345678"],
-                            ].map(([label, field, type, ph]) => (
-                                <div key={field} style={field === "telefono" ? { gridColumn: "1 / -1" } : {}}>
-                                    <FLabel>{label}</FLabel>
-                                    <input type={type} value={formData[field]}
-                                        onChange={e => setFormData(p => ({ ...p, [field]: e.target.value }))}
-                                        placeholder={ph}
-                                        style={{ ...inputBase(false), marginTop: 6 }}
-                                        onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                                        onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-                                    />
-                                </div>
-                            ))}
-
-                            {/* Foto de perfil */}
-                            <div style={{ gridColumn: "1 / -1" }}>
-                                <FLabel>Foto de perfil <span style={{ color: "#94a3b8", fontWeight: 400 }}>(opcional)</span></FLabel>
-                                <label style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 6, padding: "12px 18px", borderRadius: 12, border: "1px dashed #c7d2fe", background: "#f8faff", cursor: "pointer" }}>
-                                    <div style={{ width: 36, height: 36, borderRadius: 9, background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                        <Upload size={16} color="#131E5C" />
-                                    </div>
-                                    <div>
-                                        <p style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", margin: 0 }}>
-                                            {foto ? foto.name : "Arrastra una imagen o haz clic para seleccionar"}
-                                        </p>
-                                        <p style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0 0" }}>JPG, PNG o WEBP. Máx. 2MB</p>
-                                    </div>
-                                    <input type="file" accept="image/*" style={{ display: "none" }}
-                                        onChange={e => { const f = e.target.files[0]; if (f) { setFoto(f); setFotoPreview(URL.createObjectURL(f)); } }} />
-                                </label>
-                            </div>
-                        </div>
-
-                        {msg && (
-                            <div style={{ marginTop: 14, padding: "8px 14px", borderRadius: 8, background: msg.startsWith("✓") ? "#dcfce7" : "#fee2e2", color: msg.startsWith("✓") ? "#15803d" : "#b91c1c", fontSize: 12, fontWeight: 500, textAlign: "center" }}>
-                                {msg}
-                            </div>
-                        )}
-                        <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 12 }}>Al guardar cambios, tu información se actualizará en todo el sistema.</p>
-                    </div>
-
-                </div>
-
-                {/* Columna derecha — Seguridad */}
-                <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "24px 24px" }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>Seguridad y acceso</div>
-                    <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>Administra tu contraseña.</div>
-
-                    {/* Cambiar contraseña */}
-                    <div style={{ padding: "16px", borderRadius: 12, border: "1px solid #f1f5f9", background: "#fafafa", marginBottom: 12 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 9, background: "#eff2ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <Lock size={16} color="#131E5C" />
-                            </div>
-                            <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Cambiar contraseña</div>
-                                <div style={{ fontSize: 11, color: "#94a3b8" }}>Te recomendamos cambiarla periódicamente.</div>
-                            </div>
-                        </div>
-                        <button onClick={() => setShowPassModal(true)}
-                            style={{ width: "100%", padding: "9px", borderRadius: 9, border: "1px solid #e2e8f0", background: "#fff", color: "#131E5C", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                            Cambiar contraseña
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Modal cambiar contraseña */}
-            {showPassModal && (
-                <div onClick={e => e.target === e.currentTarget && setShowPassModal(false)}
-                    style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: "1rem" }}>
-                    <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420, boxShadow: "0 25px 50px rgba(0,0,0,0.15)", overflow: "hidden" }}>
-
-                        {/* Header */}
-                        <div style={{ padding: "16px 20px", background: "#131E5C", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <Lock size={15} color="#fff" />
-                                </div>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Cambiar contraseña</span>
-                            </div>
-                            <button onClick={() => { setShowPassModal(false); setPassForm({ nueva: "", confirmar: "" }); setPassMsg(""); }}
-                                style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer", color: "#fff", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                ✕
-                            </button>
-                        </div>
-
-                        <div style={{ padding: "24px 20px" }}>
-
-                            {/* Campo nueva contraseña */}
-                            <div style={{ marginBottom: 8 }}>
-                                <FLabel>Nueva contraseña</FLabel>
-                                <div style={{ position: "relative", marginTop: 6 }}>
-                                    <input
-                                        type={showPass.nueva ? "text" : "password"}
-                                        value={passForm.nueva}
-                                        onChange={e => setPassForm(p => ({ ...p, nueva: e.target.value }))}
-                                        placeholder="Crea una contraseña segura"
-                                        style={{ ...inputBase(false), paddingRight: 36 }}
-                                        onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                                        onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-                                    />
-                                    <button type="button" onClick={() => setShowPass(p => ({ ...p, nueva: !p.nueva }))}
-                                        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
-                                        {showPass.nueva ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Requisitos en tiempo real */}
-                            {passForm.nueva.length > 0 && (() => {
-                                const requisitos = [
-                                    { label: "Mínimo 8 caracteres", ok: passForm.nueva.length >= 8 },
-                                    { label: "Al menos una letra mayúscula (A-Z)", ok: /[A-Z]/.test(passForm.nueva) },
-                                    { label: "Al menos un número (0-9)", ok: /[0-9]/.test(passForm.nueva) },
-                                    { label: "Al menos un símbolo (!@#$%...)", ok: /[^A-Za-z0-9]/.test(passForm.nueva) },
-                                ];
-                                const cumplidos = requisitos.filter(r => r.ok).length;
-                                const porcentaje = (cumplidos / requisitos.length) * 100;
-                                const fortaleza = cumplidos <= 1 ? { label: "Muy débil", color: "#ef4444" }
-                                    : cumplidos === 2 ? { label: "Débil", color: "#f97316" }
-                                        : cumplidos === 3 ? { label: "Buena", color: "#eab308" }
-                                            : { label: "Fuerte", color: "#22c55e" };
-
-                                return (
-                                    <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 10, background: "#f8fafc", border: "1px solid #f1f5f9" }}>
-                                        {/* Barra de fortaleza */}
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                                            <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>Fortaleza</span>
-                                            <span style={{ fontSize: 11, fontWeight: 700, color: fortaleza.color }}>{fortaleza.label}</span>
-                                        </div>
-                                        <div style={{ height: 4, borderRadius: 4, background: "#e2e8f0", marginBottom: 10, overflow: "hidden" }}>
-                                            <div style={{ height: "100%", borderRadius: 4, background: fortaleza.color, width: `${porcentaje}%`, transition: "width 0.3s, background 0.3s" }} />
-                                        </div>
-
-                                        {/* Lista de requisitos */}
-                                        {requisitos.map((req, i) => (
-                                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: i < requisitos.length - 1 ? 5 : 0 }}>
-                                                <div style={{
-                                                    width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
-                                                    background: req.ok ? "#22c55e" : "#e2e8f0",
-                                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                                    transition: "background 0.2s",
-                                                }}>
-                                                    {req.ok && <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>✓</span>}
-                                                </div>
-                                                <span style={{ fontSize: 12, color: req.ok ? "#15803d" : "#94a3b8", fontWeight: req.ok ? 600 : 400, transition: "color 0.2s" }}>
-                                                    {req.label}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
-
-                            {/* Campo confirmar */}
-                            <div style={{ marginBottom: 16 }}>
-                                <FLabel>Confirmar contraseña</FLabel>
-                                <div style={{ position: "relative", marginTop: 6 }}>
-                                    <input
-                                        type={showPass.confirmar ? "text" : "password"}
-                                        value={passForm.confirmar}
-                                        onChange={e => setPassForm(p => ({ ...p, confirmar: e.target.value }))}
-                                        placeholder="Repite la nueva contraseña"
-                                        style={{
-                                            ...inputBase(false),
-                                            paddingRight: 36,
-                                            borderColor: passForm.confirmar
-                                                ? passForm.confirmar === passForm.nueva ? "#86efac" : "#fca5a5"
-                                                : "#e2e8f0",
-                                        }}
-                                        onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                                        onBlur={e => {
-                                            e.target.style.borderColor = passForm.confirmar
-                                                ? passForm.confirmar === passForm.nueva ? "#86efac" : "#fca5a5"
-                                                : "#e2e8f0";
-                                            e.target.style.boxShadow = "none";
-                                        }}
-                                    />
-                                    <button type="button" onClick={() => setShowPass(p => ({ ...p, confirmar: !p.confirmar }))}
-                                        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
-                                        {showPass.confirmar ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                </div>
-                                {/* Mensaje coincidencia */}
-                                {passForm.confirmar.length > 0 && (
-                                    <div style={{ marginTop: 5, fontSize: 11, fontWeight: 600, color: passForm.confirmar === passForm.nueva ? "#15803d" : "#ef4444", display: "flex", alignItems: "center", gap: 4 }}>
-                                        <span>{passForm.confirmar === passForm.nueva ? "✓" : "✕"}</span>
-                                        {passForm.confirmar === passForm.nueva ? "Las contraseñas coinciden" : "Las contraseñas no coinciden"}
-                                    </div>
-                                )}
-                            </div>
-
-                            {passMsg && (
-                                <div style={{ padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, background: passMsg.startsWith("✓") ? "#dcfce7" : "#fee2e2", color: passMsg.startsWith("✓") ? "#15803d" : "#b91c1c", marginBottom: 14 }}>
-                                    {passMsg}
-                                </div>
-                            )}
-
-                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                                <button onClick={() => { setShowPassModal(false); setPassForm({ nueva: "", confirmar: "" }); setPassMsg(""); }}
-                                    style={{ padding: "9px 18px", borderRadius: 9, border: "1px solid #e2e8f0", background: "#fff", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                                    Cancelar
-                                </button>
-                                <button onClick={cambiarContrasena} disabled={passLoading || passForm.nueva !== passForm.confirmar || passForm.nueva.length < 8}
-                                    style={{ padding: "9px 20px", borderRadius: 9, border: "none", background: (passLoading || passForm.nueva !== passForm.confirmar || passForm.nueva.length < 8) ? "#94a3b8" : "#131E5C", color: "#fff", fontSize: 13, fontWeight: 700, cursor: (passLoading || passForm.nueva !== passForm.confirmar || passForm.nueva.length < 8) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                                    <Save size={14} />
-                                    {passLoading ? "Guardando..." : "Actualizar"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <Link to="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16, fontSize: 12, color: "#131E5C", textDecoration: "none" }}>
-                <ArrowLeft size={12} /> Volver al inicio
-            </Link>
-        </div>
-    );
-}
-
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
-// ── Input con ícono a la izquierda (externo) ──
-function InputWithSideIcon({ icon: Icon, label, value, onChange, type = "text", placeholder, disabled = false, error }) {
     return (
         <div>
-            <FLabel>{label}</FLabel>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: "#eff2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Icon size={15} color="#131E5C" />
-                </div>
+            <Label>{label}</Label>
+
+            <div className="crm-input-row">
+                {!sinIcono && (
+                    <div className={`crm-side-icon ${error ? "error" : ""}`}>
+                        <Icon size={15} />
+                    </div>
+                )}
+
                 <input
-                    type={type} value={value} onChange={onChange}
-                    placeholder={placeholder} disabled={disabled}
-                    style={{ ...inputBase(error), flex: 1 }}
-                    onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                    onBlur={e => { e.target.style.borderColor = error ? "#fca5a5" : "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+                    type={type}
+                    value={value}
+                    onChange={onChange}
+                    placeholder={placeholder}
+                    aria-invalid={!!error}
+                    style={{
+                        ...inputBase(!!error),
+                        borderColor: color,
+                    }}
+                    onFocus={e => {
+                        e.target.style.borderColor = error ? "#ef4444" : "#131E5C";
+                        e.target.style.boxShadow = `0 0 0 3px ${error
+                            ? "rgba(239,68,68,.08)"
+                            : "rgba(19,30,92,.08)"
+                            }`;
+                    }}
+                    onBlur={e => {
+                        e.target.style.borderColor = color;
+                        e.target.style.boxShadow = "none";
+                    }}
                 />
             </div>
-            {error && <span style={{ fontSize: 11, color: "#ef4444", marginTop: 3, display: "block" }}>{error}</span>}
+
+            {(error || correcto || contador) && (
+                <div className={`crm-help ${sinIcono ? "compact" : ""}`}>
+                    <span className={error ? "bad" : correcto ? "good" : ""}>
+                        {error || correcto}
+                    </span>
+
+                    {contador && (
+                        <span className={error ? "bad" : ""}>
+                            {contador}
+                        </span>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
 
-// ── Teléfono internacional con bandera (externo) ──
-function PhoneInputSideField({ label, value, onChange, placeholder = "55 1234 5678" }) {
+function PasswordCampo({
+    label,
+    value,
+    onChange,
+    placeholder,
+    error = "",
+    sinIcono = false,
+}) {
+    const [ver, setVer] = useState(false);
+
     return (
         <div>
-            <FLabel>{label}</FLabel>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: "#eff2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Phone size={15} color="#131E5C" />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <PhoneInput
-                        international
-                        defaultCountry="MX"
-                        flags={flags}
-                        value={value || undefined}
+            <Label>{label}</Label>
+
+            <div className="crm-input-row">
+                {!sinIcono && (
+                    <div className={`crm-side-icon ${error ? "error" : ""}`}>
+                        <Lock size={15} />
+                    </div>
+                )}
+
+                <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+                    <input
+                        type={ver ? "text" : "password"}
+                        value={value}
                         onChange={onChange}
                         placeholder={placeholder}
-                        className="crm-phone"
+                        style={{
+                            ...inputBase(!!error),
+                            paddingRight: 38,
+                        }}
                     />
-                </div>
-            </div>
-        </div>
-    );
-}
 
-// ── Teléfono internacional con bandera (para modales/grid) ──
-function PhoneField({ label, value, onChange, placeholder = "55 1234 5678", error }) {
-    return (
-        <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <FLabel>{label}</FLabel>
-            <PhoneInput
-                international
-                defaultCountry="MX"
-                flags={flags}
-                value={value || undefined}
-                onChange={onChange}
-                placeholder={placeholder}
-                className="crm-phone"
-            />
-            {error && <span style={{ fontSize: 11, color: "#ef4444" }}>{error}</span>}
-        </label>
-    );
-}
-
-// ── Password con ícono externo + toggle ojo ──
-function PasswordSideField({ label, value, onChange, placeholder }) {
-    const [show, setShow] = useState(false);
-    return (
-        <div>
-            <FLabel>{label}</FLabel>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: "#eff2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Lock size={15} color="#131E5C" />
-                </div>
-                <div style={{ position: "relative", flex: 1 }}>
-                    <input
-                        type={show ? "text" : "password"} value={value} onChange={onChange}
-                        placeholder={placeholder}
-                        style={{ ...inputBase(false), width: "100%", paddingRight: 36, boxSizing: "border-box" }}
-                        onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                        onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-                    />
-                    <button type="button" onClick={() => setShow(v => !v)}
-                        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center" }}>
-                        {show ? <EyeOff size={14} /> : <Eye size={14} />}
+                    <button
+                        type="button"
+                        className="crm-eye"
+                        onClick={() => setVer(v => !v)}
+                    >
+                        {ver ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                 </div>
             </div>
-        </div>
-    );
-}
 
-// ── Rol con ícono externo ──
-function RolSideField({ label, value, onChange, roles }) {
-    return (
-        <div>
-            <FLabel>{label}</FLabel>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: "#eff2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Briefcase size={15} color="#131E5C" />
+            {error && (
+                <div className={`crm-help ${sinIcono ? "compact" : ""}`}>
+                    <span className="bad">{error}</span>
                 </div>
-                <select value={value} onChange={onChange}
-                    style={{ ...inputBase(false), flex: 1, cursor: "pointer", appearance: "auto" }}
-                    onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                    onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}>
-                    <option value="">Selecciona rol...</option>
-                    {roles.map(r => <option key={r.id_rol} value={String(r.id_rol)}>{r.nombre}</option>)}
-                </select>
-            </div>
+            )}
         </div>
     );
 }
 
-function RolToggle({ value, onChange, roles, onNuevoRol }) {
+function RequisitosPassword({ value }) {
+    if (!value) return null;
+
+    const requisitos = passwordRequisitos(value);
+
+    return (
+        <div className="crm-password-rules">
+            {[
+                ["8+ caracteres", requisitos.longitud],
+                ["Mayúscula", requisitos.mayuscula],
+                ["Número", requisitos.numero],
+                ["Símbolo", requisitos.simbolo],
+            ].map(([texto, ok]) => (
+                <span key={texto} className={ok ? "ok" : ""}>
+                    {ok ? "✓" : "○"} {texto}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+function AgencyCheck({ label, checked, onChange }) {
+    return (
+        <label className={`crm-agency ${checked ? "selected" : ""}`}>
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={onChange}
+            />
+            <span>{label}</span>
+        </label>
+    );
+}
+
+function TelefonosMultiples({
+    telefonos,
+    onChange,
+    error = "",
+}) {
+    const actualizar = (indice, valor) => {
+        onChange(
+            telefonos.map((telefono, i) =>
+                i === indice
+                    ? (valor || "")
+                    : telefono
+            )
+        );
+    };
+
+    const agregar = () => {
+        if (telefonos.length >= MAX_TELEFONOS) return;
+        onChange([...telefonos, ""]);
+    };
+
+    const quitar = indice => {
+        onChange(
+            telefonos.length === 1
+                ? [""]
+                : telefonos.filter((_, i) => i !== indice)
+        );
+    };
+
+    const repetidos = hayTelefonosDuplicados(telefonos);
+    const invalido = telefonoInvalido(telefonos);
+
+    const errorFinal =
+        error ||
+        (
+            repetidos
+                ? "No repitas el mismo teléfono dentro de este usuario."
+                : invalido
+                    ? `El teléfono ${invalido} está incompleto.`
+                    : ""
+        );
+
     return (
         <div>
-            <FLabel>Rol</FLabel>
-            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
-                {roles.map(r => {
-                    const active = String(value) === String(r.id_rol);
-                    return (
-                        <button key={r.id_rol} type="button"
-                            onClick={() => onChange(String(r.id_rol))}
-                            style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                padding: "9px 16px", borderRadius: 10, cursor: "pointer",
-                                border: active ? "none" : "1px solid #e2e8f0",
-                                background: active ? "#131E5C" : "#f8fafc",
-                                color: active ? "#fff" : "#374151",
-                                fontSize: 13, fontWeight: 600,
-                                transition: "all 0.15s",
-                                boxShadow: active ? "0 2px 8px rgba(19,30,92,0.25)" : "none",
-                            }}>
-                            <Users size={13} />
-                            {r.nombre}
-                        </button>
-                    );
-                })}
+            <div className="crm-phone-header">
+                <div>
+                    <Label>Teléfono(s)</Label>
 
-                {/* Botón Nuevo Rol */}
-                <button type="button" onClick={onNuevoRol}
-                    style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "9px 16px", borderRadius: 10, cursor: "pointer",
-                        border: "1px dashed #c7d2fe",
-                        background: "#f5f7ff",
-                        color: "#4f46e5",
-                        fontSize: 13, fontWeight: 600,
-                        transition: "all 0.15s",
-                    }}>
-                    <Plus size={13} /> Nuevo Rol
+                    <small>
+                        Hasta {MAX_TELEFONOS}. El mismo número sí puede pertenecer a usuarios distintos.
+                    </small>
+                </div>
+
+                <button
+                    type="button"
+                    className="crm-secondary-small"
+                    disabled={telefonos.length >= MAX_TELEFONOS}
+                    onClick={agregar}
+                >
+                    <Plus size={12} />
+                    Agregar teléfono
+                </button>
+            </div>
+
+            <div className="crm-phone-grid">
+                {telefonos.map((telefono, indice) => (
+                    <div className="crm-phone-item" key={indice}>
+                        <div className="crm-side-icon">
+                            <Phone size={15} />
+                        </div>
+
+                        <div className="crm-phone-wrap">
+                            <PhoneInput
+                                international
+                                defaultCountry="MX"
+                                flags={flags}
+                                value={telefono || undefined}
+                                onChange={valor => actualizar(indice, valor)}
+                                placeholder="55 1234 5678"
+                                className="crm-phone"
+                            />
+                        </div>
+
+                        {telefonos.length > 1 && (
+                            <button
+                                type="button"
+                                className="crm-remove-phone"
+                                title="Eliminar teléfono"
+                                onClick={() => quitar(indice)}
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {errorFinal && (
+                <div className="crm-inline-error">
+                    {errorFinal}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function RolToggle({
+    value,
+    onChange,
+    roles,
+    onNuevoRol,
+}) {
+    return (
+        <div>
+            <Label>Rol</Label>
+
+            <div className="crm-role-list">
+                {roles.map(rol => (
+                    <button
+                        key={rol.id_rol}
+                        type="button"
+                        className={
+                            String(value) === String(rol.id_rol)
+                                ? "active"
+                                : ""
+                        }
+                        onClick={() => onChange(String(rol.id_rol))}
+                    >
+                        <Users size={13} />
+                        {rol.nombre}
+                    </button>
+                ))}
+
+                <button
+                    type="button"
+                    className="new-role"
+                    onClick={onNuevoRol}
+                >
+                    <Plus size={13} />
+                    Nuevo Rol
                 </button>
             </div>
         </div>
     );
 }
 
-function EstadoToggle({ value, onChange }) {
-    const opciones = [
-        { value: "Activo", icon: "✓", color: "#16a34a", bg: "#dcfce7", border: "#86efac" },
-        { value: "Inactivo", icon: "○", color: "#94a3b8", bg: "#f8fafc", border: "#e2e8f0" },
-    ];
+function EstadoToggle({
+    value,
+    onChange,
+}) {
     return (
         <div>
-            <FLabel>Estado</FLabel>
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                {opciones.map(op => {
-                    const active = value === op.value;
-                    return (
-                        <button key={op.value} type="button"
-                            onClick={() => onChange(op.value)}
-                            style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                padding: "9px 20px", borderRadius: 10, cursor: "pointer",
-                                border: `1px solid ${active ? op.border : "#e2e8f0"}`,
-                                background: active ? op.bg : "#f8fafc",
-                                color: active ? op.color : "#94a3b8",
-                                fontSize: 13, fontWeight: 600,
-                                transition: "all 0.15s",
-                            }}>
-                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: active ? op.color : "#cbd5e1" }} />
-                            {op.value}
-                        </button>
-                    );
-                })}
+            <Label>Estado</Label>
+
+            <div className="crm-status-toggle">
+                {["Activo", "Inactivo"].map(estado => (
+                    <button
+                        key={estado}
+                        type="button"
+                        className={
+                            value === estado
+                                ? estado === "Activo"
+                                    ? "active"
+                                    : "inactive"
+                                : ""
+                        }
+                        onClick={() => onChange(estado)}
+                    >
+                        <span />
+                        {estado}
+                    </button>
+                ))}
             </div>
         </div>
     );
 }
 
-function NuevoRolModal({ token, onClose, onCreado }) {
+function NuevoRolModal({
+    token,
+    onClose,
+    onCreado,
+}) {
     const [nombre, setNombre] = useState("");
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState("");
 
-    async function handleCrear() {
+    const crear = async () => {
         const nombreLimpio = nombre.trim();
-        if (!nombreLimpio) return setMsg("Escribe un nombre para el rol.");
-        setLoading(true); setMsg("");
+
+        if (!nombreLimpio) {
+            return setMsg("Escribe un nombre para el rol.");
+        }
+
+        setLoading(true);
+        setMsg("");
+
         try {
             const access = await obtenerTokenVigente(token);
-            const res = await fetch(`${API}/conformidad/api/admin/roles/`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
-                body: JSON.stringify({
-                    nombre: nombreLimpio,
-                    descripcion: " ",
-                }),
-            });
+
+            const res = await fetch(
+                `${API}/conformidad/api/admin/roles/`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${access}`,
+                    },
+                    body: JSON.stringify({
+                        nombre: nombreLimpio,
+                        descripcion: " ",
+                    }),
+                }
+            );
+
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.detail || data?.nombre?.[0] || "No se pudo crear el rol.");
+
+            if (!res.ok) {
+                throw new Error(
+                    mensajeApi(
+                        data,
+                        "No se pudo crear el rol."
+                    )
+                );
+            }
+
             setMsg("✓ Rol creado");
-            setTimeout(() => { onCreado(data); onClose(); }, 700);
-        } catch (err) {
-            setMsg(`Error: ${err.message}`);
+
+            setTimeout(() => {
+                onCreado(data);
+                onClose();
+            }, 500);
+        } catch (error) {
+            setMsg(`Error: ${error.message}`);
         } finally {
             setLoading(false);
         }
-    }
+    };
 
     return (
-        <div onClick={e => e.target === e.currentTarget && onClose()}
-            style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: "1rem" }}>
-            <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 400, boxShadow: "0 25px 50px rgba(0,0,0,0.15)", border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                {/* Header */}
-                <div style={{ padding: "16px 20px", background: "#131E5C", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Briefcase size={15} color="#fff" />
-                        </div>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Nuevo rol</span>
-                    </div>
-                    <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer", color: "#fff", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        <div
+            className="crm-overlay"
+            onMouseDown={e =>
+                e.target === e.currentTarget && onClose()
+            }
+        >
+            <div className="crm-modal-small">
+                <div className="crm-modal-head">
+                    <span>
+                        <Users size={16} />
+                        Nuevo rol
+                    </span>
+
+                    <button onClick={onClose}>×</button>
                 </div>
 
-                {/* Body */}
-                <div style={{ padding: "24px 20px" }}>
-                    <div style={{ marginBottom: 16 }}>
-                        <FLabel>Nombre del rol</FLabel>
-                        <input
-                            autoFocus
-                            value={nombre}
-                            onChange={e => setNombre(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && handleCrear()}
-                            placeholder="Ej. Gerente de ventas"
-                            style={{ ...inputBase(false), marginTop: 6 }}
-                            onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                            onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-                        />
-                        <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0" }}>El rol estará disponible inmediatamente para asignarlo a usuarios.</p>
+                <div className="crm-modal-body">
+                    <Label>Nombre del rol</Label>
+
+                    <input
+                        autoFocus
+                        value={nombre}
+                        onChange={e => setNombre(e.target.value)}
+                        onKeyDown={e =>
+                            e.key === "Enter" && crear()
+                        }
+                        placeholder="Ej. Gerente de ventas"
+                        style={{
+                            ...inputBase(),
+                            marginTop: 6,
+                        }}
+                    />
+
+                    <div style={{ marginTop: 14 }}>
+                        <Alerta mensaje={msg} />
                     </div>
 
-                    {msg && (
-                        <div style={{ padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, background: msg.startsWith("✓") ? "#dcfce7" : "#fee2e2", color: msg.startsWith("✓") ? "#15803d" : "#b91c1c", marginBottom: 14 }}>
-                            {msg}
-                        </div>
-                    )}
-
-                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                        <button type="button" onClick={onClose}
-                            style={{ padding: "9px 18px", borderRadius: 9, border: "1px solid #e2e8f0", background: "#fff", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    <div className="crm-modal-actions">
+                        <button
+                            type="button"
+                            className="crm-btn secondary"
+                            onClick={onClose}
+                        >
                             Cancelar
                         </button>
-                        <button type="button" onClick={handleCrear} disabled={loading}
-                            style={{ padding: "9px 20px", borderRadius: 9, border: "none", background: loading ? "#94a3b8" : "#131E5C", color: "#fff", fontSize: 13, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+
+                        <button
+                            type="button"
+                            className="crm-btn primary"
+                            disabled={loading}
+                            onClick={crear}
+                        >
                             <Plus size={14} />
-                            {loading ? "Creando..." : "Crear rol"}
+                            {loading
+                                ? "Creando..."
+                                : "Crear rol"
+                            }
                         </button>
                     </div>
                 </div>
@@ -1314,164 +611,2368 @@ function NuevoRolModal({ token, onClose, onCreado }) {
     );
 }
 
+function UserModal({
+    user,
+    usuarios,
+    roles,
+    token,
+    onClose,
+    onSaved,
+}) {
+    const idActual =
+        user?.id ??
+        user?.id_usuario;
+
+    const [visible, setVisible] = useState(false);
+
+    const [form, setForm] = useState({
+        nombre: user?.nombre || "",
+        apellidos: user?.apellidos || "",
+        usuario: user?.usuario || "",
+        correo: user?.correo || "",
+        id_rol: user?.id_rol || "",
+        estado: user?.estado || "Activo",
+        agencies: Array.isArray(user?.agencies)
+            ? user.agencies
+            : String(user?.agencia || "")
+                .split("|")
+                .map(x => x.trim())
+                .filter(Boolean),
+    });
+
+    const [telefonos, setTelefonos] = useState(
+        separarTelefonos(user?.telefono)
+    );
+
+    const [password, setPassword] = useState("");
+    const [password2, setPassword2] = useState("");
+    const [foto, setFoto] = useState(null);
+    const [msg, setMsg] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        requestAnimationFrame(() => setVisible(true));
+    }, []);
+
+    const cerrar = () => {
+        setVisible(false);
+        setTimeout(onClose, 220);
+    };
+
+    const set = (campo, valor) => {
+        setForm(prev => ({
+            ...prev,
+            [campo]: valor,
+        }));
+    };
+
+    const usuario = form.usuario.trim();
+    const correo = form.correo.trim().toLowerCase();
+
+    const usuarioDuplicado = usuarios.some(item =>
+        String(item.id ?? item.id_usuario) !== String(idActual) &&
+        String(item.usuario || "")
+            .trim()
+            .toLowerCase() === usuario.toLowerCase()
+    );
+
+    const correoDuplicado = usuarios.some(item =>
+        String(item.id ?? item.id_usuario) !== String(idActual) &&
+        String(item.correo || "")
+            .trim()
+            .toLowerCase() === correo
+    );
+
+    const errorUsuario =
+        !usuario
+            ? ""
+            : usuario.length > 10
+                ? "Máximo 10 caracteres."
+                : !REGEX_USUARIO.test(usuario)
+                    ? "Solo letras, números, punto, guion y _."
+                    : usuarioDuplicado
+                        ? "Ese usuario ya existe."
+                        : "";
+
+    const errorCorreo =
+        !correo
+            ? ""
+            : !REGEX_CORREO.test(correo)
+                ? "Correo inválido."
+                : correoDuplicado
+                    ? "Ese correo ya existe."
+                    : "";
+
+    const errorTelefono =
+        hayTelefonosDuplicados(telefonos)
+            ? "No repitas el mismo teléfono dentro de este usuario."
+            : telefonoInvalido(telefonos)
+                ? `El teléfono ${telefonoInvalido(telefonos)} está incompleto.`
+                : "";
+
+    const guardar = async () => {
+        if (!form.nombre.trim()) {
+            return setMsg("Captura el nombre.");
+        }
+
+        if (!usuario) {
+            return setMsg("Captura el usuario.");
+        }
+
+        if (errorUsuario) {
+            return setMsg(errorUsuario);
+        }
+
+        if (!correo) {
+            return setMsg("Captura el correo.");
+        }
+
+        if (errorCorreo) {
+            return setMsg(errorCorreo);
+        }
+
+        if (!form.id_rol) {
+            return setMsg("Selecciona un rol.");
+        }
+
+        if (!form.agencies.length) {
+            return setMsg("Selecciona al menos una agencia.");
+        }
+
+        if (errorTelefono) {
+            return setMsg(errorTelefono);
+        }
+
+        if (
+            password &&
+            !passwordValido(password)
+        ) {
+            return setMsg(
+                "La nueva contraseña debe tener 8+ caracteres, mayúscula, número y símbolo."
+            );
+        }
+
+        if (
+            password &&
+            password !== password2
+        ) {
+            return setMsg(
+                "Las contraseñas no coinciden."
+            );
+        }
+
+        setLoading(true);
+        setMsg("");
+
+        const fd = new FormData();
+
+        fd.append("nombre", form.nombre.trim());
+        fd.append("apellidos", form.apellidos.trim());
+        fd.append("usuario", usuario);
+        fd.append("correo", correo);
+        fd.append(
+            "telefono",
+            limpiarTelefonos(telefonos).join("|")
+        );
+        fd.append("id_rol", form.id_rol);
+        fd.append(
+            "agencia",
+            form.agencies.join("|")
+        );
+        fd.append("estado", form.estado);
+
+        if (password) {
+            fd.append("contrasena", password);
+        }
+
+        if (foto) {
+            fd.append("foto", foto);
+        }
+
+        try {
+            const access =
+                await obtenerTokenVigente(token);
+
+            const res = await fetch(
+                `${API}/conformidad/api/admin/usuarios/${idActual}/`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        Authorization: `Bearer ${access}`,
+                    },
+                    body: fd,
+                }
+            );
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(
+                    mensajeApi(
+                        data,
+                        "No se pudo actualizar el usuario."
+                    )
+                );
+            }
+
+            setMsg("✓ Cambios guardados");
+
+            setTimeout(() => {
+                onSaved();
+                cerrar();
+            }, 650);
+        } catch (error) {
+            setMsg(`Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <>
+            <div
+                className="crm-drawer-overlay"
+                onClick={cerrar}
+                style={{
+                    opacity: visible ? 1 : 0,
+                }}
+            />
+
+            <aside
+                className="crm-drawer"
+                style={{
+                    transform: visible
+                        ? "translateX(0)"
+                        : "translateX(100%)",
+                }}
+            >
+                <div className="crm-drawer-head">
+                    <button onClick={cerrar}>
+                        ×
+                    </button>
+
+                    <div className="crm-drawer-user">
+                        <Avatar
+                            usuario={{
+                                ...user,
+                                ...form,
+                            }}
+                            size={58}
+                        />
+
+                        <div>
+                            <strong>
+                                {form.nombre || "Nombre"}{" "}
+                                {form.apellidos}
+                            </strong>
+
+                            <span>
+                                @{form.usuario || "usuario"}
+                            </span>
+
+                            <small>
+                                {
+                                    roles.find(
+                                        rol =>
+                                            String(rol.id_rol) ===
+                                            String(form.id_rol)
+                                    )?.nombre || "Sin rol"
+                                }
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="crm-drawer-content">
+                    <div className="crm-section-title">
+                        Datos personales
+                    </div>
+
+                    <div className="crm-grid-2">
+                        <InputCampo
+                            icon={User}
+                            sinIcono
+                            label="Nombre(s)"
+                            value={form.nombre}
+                            onChange={e =>
+                                set(
+                                    "nombre",
+                                    e.target.value
+                                )
+                            }
+                        />
+
+                        <InputCampo
+                            icon={User}
+                            sinIcono
+                            label="Apellidos"
+                            value={form.apellidos}
+                            onChange={e =>
+                                set(
+                                    "apellidos",
+                                    e.target.value
+                                )
+                            }
+                        />
+
+                        <InputCampo
+                            icon={AtSign}
+                            sinIcono
+                            label="Usuario"
+                            value={form.usuario}
+                            onChange={e =>
+                                set(
+                                    "usuario",
+                                    e.target.value
+                                )
+                            }
+                            error={errorUsuario}
+                            correcto={
+                                usuario &&
+                                    !errorUsuario
+                                    ? "✓ Disponible"
+                                    : ""
+                            }
+                            contador={`${form.usuario.length}/10`}
+                        />
+
+                        <InputCampo
+                            icon={Mail}
+                            sinIcono
+                            type="email"
+                            label="Correo"
+                            value={form.correo}
+                            onChange={e =>
+                                set(
+                                    "correo",
+                                    e.target.value
+                                )
+                            }
+                            error={errorCorreo}
+                            correcto={
+                                correo &&
+                                    !errorCorreo
+                                    ? "✓ Disponible"
+                                    : ""
+                            }
+                        />
+                    </div>
+
+                    <div className="crm-block">
+                        <TelefonosMultiples
+                            telefonos={telefonos}
+                            onChange={setTelefonos}
+                        />
+                    </div>
+
+                    <div className="crm-section-title">
+                        Rol y agencias
+                    </div>
+
+                    <div className="crm-grid-2">
+                        <label>
+                            <Label>Rol</Label>
+
+                            <select
+                                value={form.id_rol}
+                                onChange={e =>
+                                    set(
+                                        "id_rol",
+                                        e.target.value
+                                    )
+                                }
+                                style={{
+                                    ...inputBase(),
+                                    marginTop: 6,
+                                }}
+                            >
+                                <option value="">
+                                    Selecciona...
+                                </option>
+
+                                {roles.map(rol => (
+                                    <option
+                                        key={rol.id_rol}
+                                        value={rol.id_rol}
+                                    >
+                                        {rol.nombre}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <EstadoToggle
+                            value={form.estado}
+                            onChange={valor =>
+                                set("estado", valor)
+                            }
+                        />
+                    </div>
+
+                    <div className="crm-agencies-grid edit">
+                        {AGENCIAS.map(agencia => (
+                            <AgencyCheck
+                                key={agencia}
+                                label={agencia}
+                                checked={
+                                    form.agencies.includes(
+                                        agencia
+                                    )
+                                }
+                                onChange={() =>
+                                    set(
+                                        "agencies",
+                                        form.agencies.includes(agencia)
+                                            ? form.agencies.filter(
+                                                item =>
+                                                    item !== agencia
+                                            )
+                                            : [
+                                                ...form.agencies,
+                                                agencia,
+                                            ]
+                                    )
+                                }
+                            />
+                        ))}
+                    </div>
+
+                    <div className="crm-section-title">
+                        Cambiar contraseña{" "}
+                        <small>(opcional)</small>
+                    </div>
+
+                    <div className="crm-grid-2">
+                        <PasswordCampo
+                            sinIcono
+                            label="Nueva contraseña"
+                            value={password}
+                            onChange={e =>
+                                setPassword(e.target.value)
+                            }
+                            placeholder="Dejar vacío"
+                        />
+
+                        <PasswordCampo
+                            sinIcono
+                            label="Confirmar"
+                            value={password2}
+                            onChange={e =>
+                                setPassword2(e.target.value)
+                            }
+                            error={
+                                password2 &&
+                                    password !== password2
+                                    ? "No coincide"
+                                    : ""
+                            }
+                        />
+                    </div>
+
+                    <RequisitosPassword
+                        value={password}
+                    />
+
+                    <div className="crm-section-title">
+                        Foto{" "}
+                        <small>(opcional)</small>
+                    </div>
+
+                    <label className="crm-upload">
+                        <Upload size={16} />
+
+                        <span>
+                            {foto
+                                ? foto.name
+                                : "Seleccionar nueva foto"
+                            }
+                        </span>
+
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e =>
+                                setFoto(
+                                    e.target.files?.[0] ||
+                                    null
+                                )
+                            }
+                        />
+                    </label>
+                </div>
+
+                <div className="crm-drawer-footer">
+                    <Alerta mensaje={msg} />
+
+                    <div>
+                        <button
+                            className="crm-btn secondary"
+                            onClick={cerrar}
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            className="crm-btn primary"
+                            disabled={loading}
+                            onClick={guardar}
+                        >
+                            {loading
+                                ? "Guardando..."
+                                : "Guardar cambios"
+                            }
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </>
+    );
+}
+
+function TablaUsuarios({
+    users,
+    onEdit,
+}) {
+    return (
+        <div className="crm-table-wrap">
+            <table className="crm-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Nombre</th>
+                        <th>Usuario</th>
+                        <th>Agencia</th>
+                        <th>Teléfono(s)</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Correo</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {!users.length ? (
+                        <tr>
+                            <td
+                                colSpan="8"
+                                className="empty"
+                            >
+                                Sin usuarios que coincidan con los filtros
+                            </td>
+                        </tr>
+                    ) : (
+                        users.map(usuario => {
+                            const telefonos =
+                                limpiarTelefonos(
+                                    separarTelefonos(
+                                        usuario.telefono
+                                    )
+                                );
+
+                            return (
+                                <tr
+                                    key={
+                                        usuario.id ??
+                                        usuario.id_usuario
+                                    }
+                                    onDoubleClick={() =>
+                                        onEdit(usuario)
+                                    }
+                                >
+                                    <td>
+                                        <Avatar
+                                            usuario={usuario}
+                                        />
+                                    </td>
+
+                                    <td>
+                                        <strong>
+                                            {usuario.nombre}{" "}
+                                            {usuario.apellidos}
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        @{usuario.usuario}
+                                    </td>
+
+                                    <td>
+                                        {(usuario.agencies || [])
+                                            .join(", ")}
+                                    </td>
+
+                                    <td>
+                                        {telefonos.length ? (
+                                            <span>
+                                                {telefonos[0]}{" "}
+
+                                                {telefonos.length > 1 && (
+                                                    <b
+                                                        className="crm-count"
+                                                        title={telefonos.join("\n")}
+                                                    >
+                                                        +{telefonos.length - 1}
+                                                    </b>
+                                                )}
+                                            </span>
+                                        ) : (
+                                            "—"
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        <span className="crm-role-badge">
+                                            {usuario.rol ||
+                                                usuario.nombre_rol ||
+                                                "—"}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span
+                                            className={`crm-status ${usuario.estado === "Inactivo"
+                                                ? "inactive"
+                                                : ""
+                                                }`}
+                                        >
+                                            {usuario.estado || "Activo"}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        {usuario.correo}
+                                    </td>
+                                </tr>
+                            );
+                        })
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function PerfilUsuario({
+    token,
+    user,
+}) {
+    const userId =
+        user?.id_usuario ||
+        user?.id;
+
+    const [form, setForm] = useState({
+        nombre: user?.nombre || "",
+        apellidos: user?.apellidos || "",
+        usuario: user?.usuario || "",
+        correo: user?.correo || "",
+    });
+
+    const [telefonos, setTelefonos] = useState(
+        separarTelefonos(user?.telefono)
+    );
+
+    const [foto, setFoto] = useState(null);
+    const [msg, setMsg] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const [showPass, setShowPass] = useState(false);
+    const [pass, setPass] = useState("");
+    const [pass2, setPass2] = useState("");
+    const [passMsg, setPassMsg] = useState("");
+    const [passLoading, setPassLoading] = useState(false);
+
+    const guardar = async () => {
+        if (!userId) {
+            return setMsg(
+                "No se encontró el ID del usuario."
+            );
+        }
+
+        if (
+            hayTelefonosDuplicados(
+                telefonos
+            )
+        ) {
+            return setMsg(
+                "No repitas el mismo teléfono dentro de tu perfil."
+            );
+        }
+
+        const invalido =
+            telefonoInvalido(telefonos);
+
+        if (invalido) {
+            return setMsg(
+                `El teléfono ${invalido} está incompleto.`
+            );
+        }
+
+        setLoading(true);
+        setMsg("");
+
+        const fd = new FormData();
+
+        Object.entries(form).forEach(
+            ([campo, valor]) =>
+                fd.append(campo, valor)
+        );
+
+        fd.append(
+            "telefono",
+            limpiarTelefonos(
+                telefonos
+            ).join("|")
+        );
+
+        if (foto) {
+            fd.append("foto", foto);
+        }
+
+        try {
+            const access =
+                await obtenerTokenVigente(token);
+
+            const res = await fetch(
+                `${API}/conformidad/api/perfil/`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        Authorization: `Bearer ${access}`,
+                    },
+                    body: fd,
+                }
+            );
+
+            const data =
+                await res.json().catch(
+                    () => ({})
+                );
+
+            if (!res.ok) {
+                throw new Error(
+                    mensajeApi(
+                        data,
+                        "No se pudo actualizar el perfil."
+                    )
+                );
+            }
+
+            setMsg(
+                "✓ Datos actualizados correctamente"
+            );
+        } catch (error) {
+            setMsg(
+                `Error: ${error.message}`
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const cambiarPass = async () => {
+        if (!passwordValido(pass)) {
+            return setPassMsg(
+                "La contraseña debe tener 8+ caracteres, mayúscula, número y símbolo."
+            );
+        }
+
+        if (pass !== pass2) {
+            return setPassMsg(
+                "Las contraseñas no coinciden."
+            );
+        }
+
+        if (!userId) {
+            return setPassMsg(
+                "No se encontró el ID del usuario."
+            );
+        }
+
+        setPassLoading(true);
+        setPassMsg("");
+
+        const fd = new FormData();
+        fd.append("contrasena", pass);
+
+        try {
+            const access =
+                await obtenerTokenVigente(token);
+
+            const res = await fetch(
+                `${API}/conformidad/api/admin/usuarios/${userId}/`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        Authorization: `Bearer ${access}`,
+                    },
+                    body: fd,
+                }
+            );
+
+            const data =
+                await res.json().catch(
+                    () => ({})
+                );
+
+            if (!res.ok) {
+                throw new Error(
+                    mensajeApi(
+                        data,
+                        "No se pudo cambiar la contraseña."
+                    )
+                );
+            }
+
+            setPassMsg(
+                "✓ Contraseña actualizada"
+            );
+
+            setTimeout(() => {
+                setShowPass(false);
+                setPass("");
+                setPass2("");
+                setPassMsg("");
+            }, 800);
+        } catch (error) {
+            setPassMsg(
+                `Error: ${error.message}`
+            );
+        } finally {
+            setPassLoading(false);
+        }
+    };
+
+    return (
+        <div className="crm-page perfil">
+            <GlobalStyles />
+
+            <div className="crm-card">
+                <div className="crm-profile-banner">
+                    <div>
+                        <Avatar
+                            usuario={user}
+                            size={72}
+                        />
+                    </div>
+
+                    <div>
+                        <h2>
+                            {form.nombre}{" "}
+                            {form.apellidos}
+                        </h2>
+
+                        <p>
+                            @{form.usuario} ·{" "}
+                            {user?.rol ||
+                                user?.nombre_rol ||
+                                "Usuario"}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="crm-form">
+                    <div className="crm-grid-2">
+                        <InputCampo
+                            icon={User}
+                            label="Nombre(s)"
+                            value={form.nombre}
+                            onChange={e =>
+                                setForm(prev => ({
+                                    ...prev,
+                                    nombre:
+                                        e.target.value,
+                                }))
+                            }
+                        />
+
+                        <InputCampo
+                            icon={User}
+                            label="Apellidos"
+                            value={form.apellidos}
+                            onChange={e =>
+                                setForm(prev => ({
+                                    ...prev,
+                                    apellidos:
+                                        e.target.value,
+                                }))
+                            }
+                        />
+
+                        <InputCampo
+                            icon={AtSign}
+                            label="Usuario"
+                            value={form.usuario}
+                            onChange={e =>
+                                setForm(prev => ({
+                                    ...prev,
+                                    usuario:
+                                        e.target.value,
+                                }))
+                            }
+                        />
+
+                        <InputCampo
+                            icon={Mail}
+                            label="Correo"
+                            type="email"
+                            value={form.correo}
+                            onChange={e =>
+                                setForm(prev => ({
+                                    ...prev,
+                                    correo:
+                                        e.target.value,
+                                }))
+                            }
+                        />
+                    </div>
+
+                    <div className="crm-block">
+                        <TelefonosMultiples
+                            telefonos={telefonos}
+                            onChange={setTelefonos}
+                        />
+                    </div>
+
+                    <label className="crm-upload">
+                        <Upload size={16} />
+
+                        <span>
+                            {foto
+                                ? foto.name
+                                : "Seleccionar foto de perfil"
+                            }
+                        </span>
+
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e =>
+                                setFoto(
+                                    e.target.files?.[0] ||
+                                    null
+                                )
+                            }
+                        />
+                    </label>
+
+                    <button
+                        type="button"
+                        className="crm-btn secondary"
+                        style={{
+                            marginTop: 12,
+                        }}
+                        onClick={() =>
+                            setShowPass(true)
+                        }
+                    >
+                        <Lock size={14} />
+                        Cambiar contraseña
+                    </button>
+
+                    <div style={{ marginTop: 14 }}>
+                        <Alerta mensaje={msg} />
+                    </div>
+
+                    <div className="crm-actions">
+                        <Link
+                            className="crm-btn secondary"
+                            to="/"
+                        >
+                            <ArrowLeft size={14} />
+                            Volver
+                        </Link>
+
+                        <button
+                            className="crm-btn primary"
+                            disabled={loading}
+                            onClick={guardar}
+                        >
+                            <Save size={14} />
+
+                            {loading
+                                ? "Guardando..."
+                                : "Guardar cambios"
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {showPass && (
+                <div
+                    className="crm-overlay"
+                    onMouseDown={e =>
+                        e.target === e.currentTarget &&
+                        setShowPass(false)
+                    }
+                >
+                    <div className="crm-modal-small">
+                        <div className="crm-modal-head">
+                            <span>
+                                <Lock size={16} />
+                                Cambiar contraseña
+                            </span>
+
+                            <button
+                                onClick={() =>
+                                    setShowPass(false)
+                                }
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="crm-modal-body">
+                            <div className="crm-grid-2">
+                                <PasswordCampo
+                                    sinIcono
+                                    label="Nueva contraseña"
+                                    value={pass}
+                                    onChange={e =>
+                                        setPass(e.target.value)
+                                    }
+                                />
+
+                                <PasswordCampo
+                                    sinIcono
+                                    label="Confirmar"
+                                    value={pass2}
+                                    onChange={e =>
+                                        setPass2(e.target.value)
+                                    }
+                                    error={
+                                        pass2 &&
+                                            pass !== pass2
+                                            ? "No coincide"
+                                            : ""
+                                    }
+                                />
+                            </div>
+
+                            <RequisitosPassword
+                                value={pass}
+                            />
+
+                            <Alerta
+                                mensaje={passMsg}
+                            />
+
+                            <div className="crm-modal-actions">
+                                <button
+                                    className="crm-btn secondary"
+                                    onClick={() =>
+                                        setShowPass(false)
+                                    }
+                                >
+                                    Cancelar
+                                </button>
+
+                                <button
+                                    className="crm-btn primary"
+                                    disabled={passLoading}
+                                    onClick={cambiarPass}
+                                >
+                                    {passLoading
+                                        ? "Guardando..."
+                                        : "Actualizar"
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function GlobalStyles() {
+    return (
+        <style>{`
+      .crm-page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 20px;
+        font-family: system-ui, sans-serif;
+        color: #0f172a;
+      }
+
+      .crm-page.perfil {
+        max-width: 980px;
+      }
+
+      .crm-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 24px;
+      }
+
+      .crm-header {
+        padding: 28px 32px;
+        background: linear-gradient(135deg, #131E5C, #1a2d8a);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .crm-header-icon {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: rgba(255,255,255,.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .crm-header h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .crm-header a {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 6px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        background: rgba(255,255,255,.14);
+        border: 1px solid rgba(255,255,255,.2);
+        color: #fff;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .crm-form {
+        padding: 28px 32px;
+      }
+
+      .crm-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .crm-grid-3,
+      .crm-grid-2 {
+        display: grid;
+        gap: 18px 24px;
+      }
+
+      .crm-grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .crm-grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .crm-input-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+
+      .crm-side-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+        background: #eff2ff;
+        color: #131E5C;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+      }
+
+      .crm-side-icon.error {
+        background: #fef2f2;
+        color: #ef4444;
+      }
+
+      .crm-help {
+        margin: 4px 0 0 46px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 14px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+
+      .crm-help.compact {
+        margin-left: 0;
+      }
+
+      .crm-help .bad,
+      .crm-inline-error {
+        color: #ef4444;
+      }
+
+      .crm-help .good {
+        color: #16a34a;
+      }
+
+      .crm-eye {
+        position: absolute;
+        right: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 0;
+        background: none;
+        color: #94a3b8;
+        cursor: pointer;
+        display: flex;
+      }
+
+      .crm-block {
+        margin: 20px 0;
+        padding: 14px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fafcff;
+      }
+
+      .crm-phone-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+
+      .crm-phone-header small {
+        display: block;
+        font-size: 10px;
+        color: #94a3b8;
+        margin-top: 2px;
+      }
+
+      .crm-phone-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .crm-phone-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .crm-phone-wrap {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .crm-phone {
+        width: 100%;
+      }
+
+      .crm-phone .PhoneInputInput {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        font-size: 13px;
+        outline: none;
+        min-width: 0;
+      }
+
+      .crm-phone .PhoneInputInput:focus {
+        border-color: #131E5C;
+        box-shadow: 0 0 0 3px rgba(19,30,92,.08);
+      }
+
+      .crm-remove-phone {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid #fecaca;
+        background: #fff;
+        color: #dc2626;
+        cursor: pointer;
+        font-size: 16px;
+      }
+
+      .crm-secondary-small {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 10px;
+        border: 1px solid #c7d2fe;
+        border-radius: 8px;
+        background: #f5f7ff;
+        color: #4f46e5;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .crm-secondary-small:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+      }
+
+      .crm-inline-error {
+        font-size: 11px;
+        font-weight: 600;
+        margin-top: 7px;
+      }
+
+      .crm-password-rules {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 8px 0 18px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+
+      .crm-password-rules .ok {
+        color: #16a34a;
+      }
+
+      .crm-role-list {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+
+      .crm-role-list button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 15px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        color: #374151;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .crm-role-list button.active {
+        border-color: #131E5C;
+        background: #131E5C;
+        color: #fff;
+      }
+
+      .crm-role-list button.new-role {
+        border: 1px dashed #c7d2fe;
+        background: #f5f7ff;
+        color: #4f46e5;
+      }
+
+      .crm-status-toggle {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .crm-status-toggle button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 18px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .crm-status-toggle button span {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #cbd5e1;
+      }
+
+      .crm-status-toggle button.active {
+        background: #dcfce7;
+        border-color: #86efac;
+        color: #16a34a;
+      }
+
+      .crm-status-toggle button.active span {
+        background: #16a34a;
+      }
+
+      .crm-status-toggle button.inactive {
+        background: #fee2e2;
+        border-color: #fecaca;
+        color: #b91c1c;
+      }
+
+      .crm-status-toggle button.inactive span {
+        background: #dc2626;
+      }
+
+      .crm-agencies-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0,1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .crm-agencies-grid.edit {
+        grid-template-columns: repeat(2, minmax(0,1fr));
+        margin: 14px 0 22px;
+      }
+
+      .crm-agency {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 13px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .crm-agency.selected {
+        background: #f0f4ff;
+        border-color: #c7d2fe;
+      }
+
+      .crm-agency input {
+        accent-color: #131E5C;
+      }
+
+      .crm-upload {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border: 1px dashed #c7d2fe;
+        border-radius: 12px;
+        background: #f8faff;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .crm-upload input {
+        display: none;
+      }
+
+      .crm-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding-top: 20px;
+        margin-top: 20px;
+        border-top: 1px solid #f1f5f9;
+      }
+
+      .crm-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 10px 20px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .crm-btn.primary {
+        border: 0;
+        background: #131E5C;
+        color: #fff;
+      }
+
+      .crm-btn.secondary {
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #374151;
+      }
+
+      .crm-btn:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+      }
+
+      .crm-alert {
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .crm-alert.ok {
+        background: #f0fdf4;
+        border: 1px solid #86efac;
+        color: #15803d;
+      }
+
+      .crm-alert.error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #b91c1c;
+      }
+
+      .crm-filter-row {
+        display: flex;
+        gap: 14px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+        padding: 14px 16px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+      }
+
+      .crm-search {
+        flex: 1;
+        min-width: 240px;
+      }
+
+      .crm-filter {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .crm-filter select {
+        min-width: 150px;
+      }
+
+      .crm-table-wrap {
+        overflow-x: auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .crm-table {
+        width: 100%;
+        min-width: 980px;
+        border-collapse: collapse;
+      }
+
+      .crm-table th {
+        padding: 8px 14px;
+        text-align: left;
+        font-size: 11px;
+        color: #94a3b8;
+        background: #fafafa;
+        border-bottom: 1px solid #f1f5f9;
+      }
+
+      .crm-table td {
+        padding: 10px 14px;
+        font-size: 12px;
+        color: #64748b;
+        border-bottom: 1px solid #f8fafc;
+      }
+
+      .crm-table tbody tr {
+        cursor: pointer;
+      }
+
+      .crm-table tbody tr:hover {
+        background: #f8fafc;
+      }
+
+      .crm-table .empty {
+        text-align: center;
+        padding: 28px;
+      }
+
+      .crm-count {
+        background: #eef2ff;
+        color: #4338ca;
+        border-radius: 20px;
+        padding: 1px 7px;
+        font-size: 10px;
+      }
+
+      .crm-role-badge {
+        background: #eef2ff;
+        color: #4338ca;
+        border-radius: 20px;
+        padding: 2px 9px;
+        font-weight: 600;
+      }
+
+      .crm-status {
+        background: #dcfce7;
+        color: #15803d;
+        border-radius: 20px;
+        padding: 2px 9px;
+        font-weight: 600;
+      }
+
+      .crm-status.inactive {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
+      .crm-avatar,
+      .crm-avatar-img {
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        object-fit: cover;
+        font-weight: 800;
+        flex: 0 0 auto;
+      }
+
+      .crm-overlay,
+      .crm-drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15,23,42,.38);
+        backdrop-filter: blur(2px);
+        z-index: 300;
+      }
+
+      .crm-modal-small {
+        width: min(400px, calc(100vw - 24px));
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 25px 50px rgba(0,0,0,.15);
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%,-50%);
+      }
+
+      .crm-modal-head {
+        padding: 15px 18px;
+        background: #131E5C;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 700;
+      }
+
+      .crm-modal-head span {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .crm-modal-head button,
+      .crm-drawer-head > button {
+        border: 0;
+        background: rgba(255,255,255,.12);
+        color: #fff;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 20px;
+      }
+
+      .crm-modal-body {
+        padding: 20px;
+      }
+
+      .crm-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .crm-drawer-overlay {
+        z-index: 350;
+        transition: opacity .22s;
+      }
+
+      .crm-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 470px;
+        max-width: 100vw;
+        background: #fff;
+        z-index: 351;
+        display: flex;
+        flex-direction: column;
+        box-shadow: -8px 0 40px rgba(0,0,0,.12);
+        transition: transform .22s ease;
+      }
+
+      .crm-drawer-head {
+        padding: 20px;
+        background: linear-gradient(135deg,#131E5C,#1a2d8a);
+        color: #fff;
+        position: relative;
+      }
+
+      .crm-drawer-head > button {
+        position: absolute;
+        right: 14px;
+        top: 14px;
+      }
+
+      .crm-drawer-user {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding-right: 35px;
+      }
+
+      .crm-drawer-user div {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .crm-drawer-user strong {
+        font-size: 16px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .crm-drawer-user span {
+        font-size: 12px;
+        color: #c7d2fe;
+      }
+
+      .crm-drawer-user small {
+        margin-top: 5px;
+        width: max-content;
+        padding: 2px 8px;
+        border-radius: 20px;
+        background: rgba(255,255,255,.14);
+      }
+
+      .crm-drawer-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+      }
+
+      .crm-drawer-footer {
+        padding: 14px 20px;
+        border-top: 1px solid #f1f5f9;
+      }
+
+      .crm-drawer-footer > div:last-child {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .crm-drawer-footer .crm-btn {
+        flex: 1;
+      }
+
+      .crm-section-title {
+        font-size: 11px;
+        font-weight: 800;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        margin: 4px 0 12px;
+      }
+
+      .crm-section-title small {
+        font-weight: 400;
+        text-transform: none;
+      }
+
+      .crm-profile-banner {
+        padding: 26px;
+        background: linear-gradient(135deg,#131E5C,#1a2d8a);
+        color: #fff;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .crm-profile-banner .crm-avatar {
+        border: 3px solid #fff;
+      }
+
+      .crm-profile-banner h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .crm-profile-banner p {
+        margin: 4px 0 0;
+        color: #c7d2fe;
+      }
+
+      .crm-summary {
+        display: grid;
+        grid-template-columns: repeat(2,180px);
+        gap: 10px;
+      }
+
+      .crm-summary div {
+        padding: 12px 14px;
+        border: 1px solid #f1f5f9;
+        border-radius: 10px;
+      }
+
+      .crm-summary span {
+        display: block;
+        font-size: 11px;
+        color: #94a3b8;
+      }
+
+      .crm-summary strong {
+        font-size: 20px;
+        color: #131E5C;
+      }
+
+      .crm-top-table {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .crm-top-table h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .crm-top-table p {
+        margin: 2px 0 0;
+        font-size: 12px;
+        color: #94a3b8;
+      }
+
+      @media(max-width: 980px) {
+        .crm-grid-3 {
+          grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .crm-agencies-grid {
+          grid-template-columns: repeat(3,minmax(0,1fr));
+        }
+      }
+
+      @media(max-width: 700px) {
+        .crm-page {
+          padding: 18px 12px;
+        }
+
+        .crm-header,
+        .crm-form {
+          padding: 20px 16px;
+        }
+
+        .crm-grid-3,
+        .crm-grid-2,
+        .crm-phone-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .crm-agencies-grid,
+        .crm-agencies-grid.edit {
+          grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .crm-filter-row {
+          align-items: stretch;
+        }
+
+        .crm-search {
+          min-width: 100%;
+        }
+
+        .crm-filter {
+          flex: 1;
+          min-width: calc(50% - 8px);
+        }
+
+        .crm-filter select {
+          min-width: 0;
+          width: 100%;
+        }
+
+        .crm-actions {
+          flex-direction: column-reverse;
+        }
+
+        .crm-actions .crm-btn {
+          width: 100%;
+        }
+
+        .crm-drawer {
+          width: 100%;
+        }
+
+        .crm-summary {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .crm-top-table {
+          align-items: flex-start;
+        }
+      }
+
+      @media(max-width: 430px) {
+        .crm-agencies-grid,
+        .crm-agencies-grid.edit {
+          grid-template-columns: 1fr;
+        }
+
+        .crm-filter {
+          min-width: 100%;
+        }
+
+        .crm-summary {
+          grid-template-columns: 1fr;
+        }
+
+        .crm-header {
+          align-items: flex-start;
+        }
+
+        .crm-header-icon {
+          width: 44px;
+          height: 44px;
+        }
+
+        .crm-role-list button {
+          flex: 1;
+          justify-content: center;
+        }
+
+        .crm-status-toggle {
+          flex-wrap: wrap;
+        }
+
+        .crm-status-toggle button {
+          flex: 1;
+          justify-content: center;
+        }
+      }
+    `}</style>
+    );
+}
+
 export default function Settings() {
-
-
-
-    const [estadoNuevo, setEstadoNuevo] = useState("Activo");
     const { token, user } = useAuth();
 
     const isAdminUI = useMemo(() => {
-        const permisos = user?.permisos || [];
-        return permisos.includes("ALL") || permisos.includes("USUARIOS_ADMIN");
+        const permisos =
+            user?.permisos || [];
+
+        return (
+            permisos.includes("ALL") ||
+            permisos.includes("USUARIOS_ADMIN")
+        );
     }, [user]);
 
     const [roles, setRoles] = useState([]);
-    const [selectedRolId, setSelectedRolId] = useState("");
-    const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: "", apellidos: "", usuario: "", correo: "", telefono: "", contrasena: "", agencia: "", id_rol: "", foto: null });
-    const [agenciasSeleccionadas, setAgenciasSeleccionadas] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState("");
     const [usuarios, setUsuarios] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [loadingTable, setLoadingTable] = useState(false);
+    const [msg, setMsg] = useState("");
+
+    const [nuevo, setNuevo] = useState({
+        nombre: "",
+        apellidos: "",
+        usuario: "",
+        correo: "",
+        contrasena: "",
+        confirmar: "",
+        id_rol: "",
+        foto: null,
+    });
+
+    const [telefonos, setTelefonos] = useState([""]);
+    const [agencias, setAgencias] = useState([]);
+    const [estado, setEstado] = useState("Activo");
+
     const [modalUser, setModalUser] = useState(null);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [modalRolOpen, setModalRolOpen] = useState(false);
-    const [filtroAgencia, setFiltroAgencia] = useState("Todas");
-    const [filtroRol, setFiltroRol] = useState("Todos");
-    const [filtroEstado, setFiltroEstado] = useState("Todos");
-    const [filtroBusqueda, setFiltroBusqueda] = useState("");
+    const [modalRol, setModalRol] = useState(false);
 
-    const rolesUnicos = useMemo(() => {
-        const set = new Set(usuarios.map(u => u.rol || u.nombre_rol).filter(Boolean));
-        return ["Todos", ...set];
-    }, [usuarios]);
+    const [fAgencia, setFAgencia] = useState("Todas");
+    const [fRol, setFRol] = useState("Todos");
+    const [fEstado, setFEstado] = useState("Todos");
+    const [busqueda, setBusqueda] = useState("");
 
-    const usuariosFiltrados = useMemo(() => {
-        const q = filtroBusqueda.trim().toLowerCase();
-        return usuarios.filter(u => {
-            const agencias = Array.isArray(u.agencies) ? u.agencies : [];
-            const matchAgencia = filtroAgencia === "Todas" || agencias.includes(filtroAgencia);
-            const rolUsuario = u.rol || u.nombre_rol || "";
-            const matchRol = filtroRol === "Todos" || rolUsuario === filtroRol;
-            const matchEstado = filtroEstado === "Todos" || (u.estado || "Activo") === filtroEstado;
-            const matchBusqueda = !q
-                || (u.usuario || "").toLowerCase().includes(q)
-                || `${u.nombre || ""} ${u.apellidos || ""}`.trim().toLowerCase().includes(q)
-                || (u.correo || "").toLowerCase().includes(q);
-            return matchAgencia && matchRol && matchEstado && matchBusqueda;
-        });
-    }, [usuarios, filtroAgencia, filtroRol, filtroEstado, filtroBusqueda]);
+    const showMsg = text => {
+        setMsg(text);
 
-    const onRolCreado = (nuevoRol) => {
-        setRoles(prev => [...prev, nuevoRol]);
-        const id = String(nuevoRol.id_rol);
-        setSelectedRolId(id);
-        setNuevoUsuario(p => ({ ...p, id_rol: id }));
+        window.setTimeout(
+            () =>
+                setMsg(actual =>
+                    actual === text
+                        ? ""
+                        : actual
+                ),
+            4500
+        );
     };
 
-    const showMsg = (text) => { setMsg(text); setTimeout(() => setMsg(""), 3500); };
+    const cargarUsuarios = useCallback(
+        async () => {
+            if (!token) return;
 
-    const cargarUsuarios = useCallback(async () => {
-        if (!token) return;
-        setLoadingTable(true);
-        try {
-            const access = await obtenerTokenVigente(token);
-            const res = await fetch(`${API}/conformidad/api/admin/usuarios/`, { headers: { Authorization: `Bearer ${access}` } });
-            if (!res.ok) throw new Error("No se pudieron cargar los usuarios.");
-            const data = await res.json();
-            const lista = (Array.isArray(data) ? data : data.results ?? []).map(u => ({
-                ...u,
-                agencies: Array.isArray(u.agencies) ? u.agencies : String(u.agencia || "").split("|").map(a => a.trim()).filter(Boolean),
-            }));
-            setUsuarios(lista);
-        } catch (err) { console.error(err); }
-        finally { setLoadingTable(false); }
-    }, [token]);
+            setLoadingTable(true);
+
+            try {
+                const access =
+                    await obtenerTokenVigente(token);
+
+                const res = await fetch(
+                    `${API}/conformidad/api/admin/usuarios/`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${access}`,
+                        },
+                    }
+                );
+
+                if (!res.ok) {
+                    throw new Error(
+                        "No se pudieron cargar los usuarios."
+                    );
+                }
+
+                const data = await res.json();
+
+                const lista = (
+                    Array.isArray(data)
+                        ? data
+                        : data.results || []
+                ).map(usuario => ({
+                    ...usuario,
+
+                    agencies: Array.isArray(
+                        usuario.agencies
+                    )
+                        ? usuario.agencies
+                        : String(
+                            usuario.agencia || ""
+                        )
+                            .split("|")
+                            .map(x => x.trim())
+                            .filter(Boolean),
+                }));
+
+                setUsuarios(lista);
+            } catch (error) {
+                showMsg(error.message);
+            } finally {
+                setLoadingTable(false);
+            }
+        },
+        [token]
+    );
 
     useEffect(() => {
-        if (!token || !isAdminUI) return;
-        const cargarDatos = async () => {
-            setLoading(true);
+        if (
+            !token ||
+            !isAdminUI
+        ) {
+            return;
+        }
+
+        const cargarRoles = async () => {
             try {
-                const access = await obtenerTokenVigente(token);
-                const res = await fetch(`${API}/conformidad/api/admin/roles/`, { headers: { Authorization: `Bearer ${access}` } });
-                if (!res.ok) throw new Error("No se pudieron cargar los roles.");
-                const dataRoles = await res.json();
-                const rolesList = Array.isArray(dataRoles) ? dataRoles : [];
-                setRoles(rolesList);
-                if (rolesList.length > 0) {
-                    const firstId = String(rolesList[0].id_rol);
-                    setSelectedRolId(firstId);
-                    setNuevoUsuario(prev => ({ ...prev, id_rol: firstId }));
+                const access =
+                    await obtenerTokenVigente(token);
+
+                const res = await fetch(
+                    `${API}/conformidad/api/admin/roles/`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${access}`,
+                        },
+                    }
+                );
+
+                if (!res.ok) {
+                    throw new Error(
+                        "No se pudieron cargar los roles."
+                    );
                 }
-            } catch (error) { showMsg(error.message || "Error cargando datos."); }
-            finally { setLoading(false); }
+
+                const data =
+                    await res.json();
+
+                const lista =
+                    Array.isArray(data)
+                        ? data
+                        : [];
+
+                setRoles(lista);
+
+                if (lista.length) {
+                    setNuevo(prev => ({
+                        ...prev,
+                        id_rol: String(
+                            lista[0].id_rol
+                        ),
+                    }));
+                }
+            } catch (error) {
+                showMsg(error.message);
+            }
         };
-        cargarDatos();
+
+        cargarRoles();
         cargarUsuarios();
-    }, [token, isAdminUI, cargarUsuarios]);
+    }, [
+        token,
+        isAdminUI,
+        cargarUsuarios,
+    ]);
 
-    const toggleAgencia = (agencia) => {
-        setAgenciasSeleccionadas(prev => prev.includes(agencia) ? prev.filter(i => i !== agencia) : [...prev, agencia]);
+    const usuarioLimpio =
+        nuevo.usuario.trim();
+
+    const correoLimpio =
+        nuevo.correo
+            .trim()
+            .toLowerCase();
+
+    const usuarioDuplicado =
+        !!usuarioLimpio &&
+        usuarios.some(usuario =>
+            String(usuario.usuario || "")
+                .trim()
+                .toLowerCase() ===
+            usuarioLimpio.toLowerCase()
+        );
+
+    const correoDuplicado =
+        !!correoLimpio &&
+        usuarios.some(usuario =>
+            String(usuario.correo || "")
+                .trim()
+                .toLowerCase() ===
+            correoLimpio
+        );
+
+    const errorUsuario =
+        !usuarioLimpio
+            ? ""
+            : usuarioLimpio.length > 10
+                ? "Máximo 10 caracteres."
+                : !REGEX_USUARIO.test(usuarioLimpio)
+                    ? "Solo letras, números, punto, guion y _."
+                    : usuarioDuplicado
+                        ? "Este usuario ya existe."
+                        : "";
+
+    const errorCorreo =
+        !correoLimpio
+            ? ""
+            : !REGEX_CORREO.test(correoLimpio)
+                ? "Correo electrónico inválido."
+                : correoDuplicado
+                    ? "Este correo ya está registrado."
+                    : "";
+
+    const errorTelefono =
+        hayTelefonosDuplicados(telefonos)
+            ? "No repitas el mismo teléfono dentro de este usuario."
+            : telefonoInvalido(telefonos)
+                ? `El teléfono ${telefonoInvalido(telefonos)} está incompleto.`
+                : "";
+
+    const passwordCoincide =
+        !!nuevo.confirmar &&
+        nuevo.contrasena ===
+        nuevo.confirmar;
+
+    const formularioValido = !!(
+        nuevo.nombre.trim() &&
+        usuarioLimpio &&
+        !errorUsuario &&
+        correoLimpio &&
+        !errorCorreo &&
+        passwordValido(
+            nuevo.contrasena
+        ) &&
+        passwordCoincide &&
+        nuevo.id_rol &&
+        agencias.length &&
+        !errorTelefono
+    );
+
+    const limpiar = () => {
+        setNuevo({
+            nombre: "",
+            apellidos: "",
+            usuario: "",
+            correo: "",
+            contrasena: "",
+            confirmar: "",
+            id_rol: roles[0]
+                ? String(roles[0].id_rol)
+                : "",
+            foto: null,
+        });
+
+        setTelefonos([""]);
+        setAgencias([]);
+        setEstado("Activo");
     };
 
-    const limpiarFormulario = () => {
-        setNuevoUsuario({ nombre: "", apellidos: "", usuario: "", correo: "", telefono: "", contrasena: "", agencia: "", id_rol: selectedRolId || "", foto: null });
-        setAgenciasSeleccionadas([]);
-        setEstadoNuevo("Activo");
-    };
-    const crearUsuario = async (e) => {
-        e.preventDefault();
+    const crear = async event => {
+        event.preventDefault();
 
-        const nombre = String(nuevoUsuario.nombre || "").trim();
-        const apellidos = String(nuevoUsuario.apellidos || "").trim();
-        const usuario = String(nuevoUsuario.usuario || "").trim();
-        const correo = String(nuevoUsuario.correo || "").trim();
-        const telefono = String(nuevoUsuario.telefono || "").trim();
-        const contrasena = String(nuevoUsuario.contrasena || "");
-        const agencia = agenciasSeleccionadas.join("|");
-
-        if (!nombre) return showMsg("Captura el nombre.");
-        if (!usuario) return showMsg("Captura el usuario.");
-        if (usuario.length > 10) {
-            return showMsg("El usuario no puede tener más de 10 caracteres.");
+        if (!nuevo.nombre.trim()) {
+            return showMsg(
+                "Captura el nombre."
+            );
         }
 
-        if (!correo) return showMsg("Captura el correo electrónico.");
-        if (!contrasena) return showMsg("Captura una contraseña.");
-        if (contrasena.length < 8) {
-            return showMsg("La contraseña debe tener al menos 8 caracteres.");
+        if (!usuarioLimpio) {
+            return showMsg(
+                "Captura el usuario."
+            );
         }
 
-        if (!nuevoUsuario.id_rol) {
-            return showMsg("Selecciona un rol.");
+        if (errorUsuario) {
+            return showMsg(errorUsuario);
         }
 
-        if (agenciasSeleccionadas.length === 0) {
-            return showMsg("Selecciona al menos una agencia.");
+        if (!correoLimpio) {
+            return showMsg(
+                "Captura el correo electrónico."
+            );
+        }
+
+        if (errorCorreo) {
+            return showMsg(errorCorreo);
+        }
+
+        if (
+            !passwordValido(
+                nuevo.contrasena
+            )
+        ) {
+            return showMsg(
+                "La contraseña debe tener mínimo 8 caracteres, una mayúscula, un número y un símbolo."
+            );
+        }
+
+        if (!passwordCoincide) {
+            return showMsg(
+                "Las contraseñas no coinciden."
+            );
+        }
+
+        if (!nuevo.id_rol) {
+            return showMsg(
+                "Selecciona un rol."
+            );
+        }
+
+        if (!agencias.length) {
+            return showMsg(
+                "Selecciona al menos una agencia."
+            );
+        }
+
+        if (errorTelefono) {
+            return showMsg(
+                errorTelefono
+            );
         }
 
         setLoading(true);
 
-        const fd = new FormData();
-        fd.append("nombre", nombre);
-        fd.append("apellidos", apellidos);
-        fd.append("usuario", usuario);
-        fd.append("correo", correo);
-        fd.append("contrasena", contrasena);
-        fd.append("agencia", agencia);
-        fd.append("id_rol", nuevoUsuario.id_rol);
+        const fd =
+            new FormData();
+
+        fd.append(
+            "nombre",
+            nuevo.nombre.trim()
+        );
+
+        fd.append(
+            "apellidos",
+            nuevo.apellidos.trim()
+        );
+
+        fd.append(
+            "usuario",
+            usuarioLimpio
+        );
+
+        fd.append(
+            "correo",
+            correoLimpio
+        );
+
+        fd.append(
+            "contrasena",
+            nuevo.contrasena
+        );
+
+        fd.append(
+            "id_rol",
+            nuevo.id_rol
+        );
+
+        fd.append(
+            "agencia",
+            agencias.join("|")
+        );
+
+        fd.append(
+            "estado",
+            estado
+        );
+
+        const telefono =
+            limpiarTelefonos(
+                telefonos
+            ).join("|");
 
         if (telefono) {
-            fd.append("telefono", telefono);
+            fd.append(
+                "telefono",
+                telefono
+            );
         }
-        if (nuevoUsuario.foto) {
-            fd.append("foto", nuevoUsuario.foto);
+
+        if (nuevo.foto) {
+            fd.append(
+                "foto",
+                nuevo.foto
+            );
         }
 
         try {
-            const access = await obtenerTokenVigente(token);
+            const access =
+                await obtenerTokenVigente(token);
+
             const res = await fetch(
                 `${API}/conformidad/api/admin/usuarios/`,
                 {
@@ -1483,339 +2984,686 @@ export default function Settings() {
                 }
             );
 
-            const data = await res.json().catch(() => ({}));
+            const data =
+                await res.json().catch(
+                    () => ({})
+                );
 
             if (!res.ok) {
-                const errores = data?.errors || data;
-                let mensaje = data?.detail || "No se pudo crear el usuario.";
-
-                if (errores && typeof errores === "object") {
-                    const partes = Object.entries(errores).map(
-                        ([campo, valor]) =>
-                            `${campo}: ${Array.isArray(valor)
-                                ? valor.join(", ")
-                                : String(valor)
-                            }`
-                    );
-
-                    if (partes.length) {
-                        mensaje = partes.join(" | ");
-                    }
-                }
-
-                throw new Error(mensaje);
+                throw new Error(
+                    mensajeApi(
+                        data,
+                        "No se pudo crear el usuario."
+                    )
+                );
             }
 
-            showMsg("✓ Usuario creado exitosamente");
-            limpiarFormulario();
+            showMsg(
+                `✓ Usuario "${usuarioLimpio}" creado correctamente`
+            );
+
+            limpiar();
             await cargarUsuarios();
         } catch (error) {
-            showMsg(error.message || "Error creando usuario.");
+            showMsg(
+                error.message ||
+                "Error creando usuario."
+            );
         } finally {
             setLoading(false);
         }
     };
 
-    function openEdit(u) { setModalUser(u); setModalOpen(true); }
-    function closeModal() { setModalOpen(false); setModalUser(null); }
+    const rolesFiltro = useMemo(
+        () => [
+            "Todos",
+            ...new Set(
+                usuarios
+                    .map(
+                        usuario =>
+                            usuario.rol ||
+                            usuario.nombre_rol
+                    )
+                    .filter(Boolean)
+            ),
+        ],
+        [usuarios]
+    );
 
-    if (!isAdminUI) return <PerfilUsuario token={token} user={user} />;
+    const filtrados = useMemo(() => {
+        const query =
+            busqueda
+                .trim()
+                .toLowerCase();
+
+        return usuarios.filter(usuario => {
+            const agenciasUsuario =
+                Array.isArray(
+                    usuario.agencies
+                )
+                    ? usuario.agencies
+                    : [];
+
+            const rol =
+                usuario.rol ||
+                usuario.nombre_rol ||
+                "";
+
+            const estadoUsuario =
+                usuario.estado ||
+                "Activo";
+
+            const matchAgencia =
+                fAgencia === "Todas" ||
+                agenciasUsuario.includes(
+                    fAgencia
+                );
+
+            const matchRol =
+                fRol === "Todos" ||
+                rol === fRol;
+
+            const matchEstado =
+                fEstado === "Todos" ||
+                estadoUsuario === fEstado;
+
+            const matchBusqueda =
+                !query ||
+                [
+                    usuario.usuario,
+                    `${usuario.nombre || ""} ${usuario.apellidos || ""}`,
+                    usuario.correo,
+                    usuario.telefono,
+                ].some(valor =>
+                    String(valor || "")
+                        .toLowerCase()
+                        .includes(query)
+                );
+
+            return (
+                matchAgencia &&
+                matchRol &&
+                matchEstado &&
+                matchBusqueda
+            );
+        });
+    }, [
+        usuarios,
+        fAgencia,
+        fRol,
+        fEstado,
+        busqueda,
+    ]);
+
+    if (!isAdminUI) {
+        return (
+            <PerfilUsuario
+                token={token}
+                user={user}
+            />
+        );
+    }
 
     return (
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 20px", fontFamily: "system-ui, sans-serif" }}>
+        <div className="crm-page">
+            <GlobalStyles />
 
-            <style>{`
-                .crm-phone { width: 100%; }
-                .crm-phone .PhoneInputInput {
-                    width: 100%;
-                    padding: 9px 12px;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 10px;
-                    font-size: 13px;
-                    color: #0f172a;
-                    background: #fff;
-                    outline: none;
-                    box-sizing: border-box;
-                    font-family: inherit;
-                    min-width: 0;
-                    flex: 1;
-                    transition: border-color 0.15s, box-shadow 0.15s;
-                }
-                .crm-phone .PhoneInputInput:focus {
-                    border-color: #131E5C;
-                    box-shadow: 0 0 0 3px rgba(19,30,92,0.08);
-                }
-                .crm-phone .PhoneInputCountry { margin-right: 8px; }
-            `}</style>
-
-
-            {/* ── Card formulario (ancho completo) ── */}
-            <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden", marginBottom: 24 }}>
-
-                {/* Header banner */}
-
-                <div style={{
-                    padding: "28px 32px",
-                    background: "linear-gradient(135deg, #131E5C 0%, #1a2d8a 100%)",
-                    display: "flex", alignItems: "center", gap: 18,
-                    position: "relative", overflow: "hidden",
-                }}>
-                    <div style={{ position: "absolute", right: 160, top: -20, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
-                    <div style={{ position: "absolute", right: 100, top: 10, width: 50, height: 50, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
-                    <div style={{ width: 54, height: 54, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Users size={26} color="#fff" />
+            <div className="crm-card">
+                <div className="crm-header">
+                    <div className="crm-header-icon">
+                        <Users size={26} />
                     </div>
+
                     <div>
-                        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0 }}>Gestión de usuarios</h2>
-                        {/* Botón Volver en lugar del subtítulo */}
-                        <Link to="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, padding: "5px 12px", borderRadius: 8, background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none", border: "1px solid rgba(255,255,255,0.2)" }}>
-                            <ArrowLeft size={12} /> Volver
+                        <h2>
+                            Gestión de usuarios
+                        </h2>
+
+                        <Link to="/">
+                            <ArrowLeft size={12} />
+                            Volver
                         </Link>
-                    </div>
-                    <div style={{ marginLeft: "auto", position: "relative", width: 100, height: 60 }}>
-                        <div style={{ position: "absolute", right: 0, top: -10, width: 60, height: 60, borderRadius: "50%", background: "rgba(99,102,241,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Users size={24} color="rgba(255,255,255,0.8)" />
-                        </div>
-                        <div style={{ position: "absolute", right: 45, top: 5, width: 40, height: 40, borderRadius: "50%", background: "rgba(99,102,241,0.4)" }} />
-                        <div style={{ position: "absolute", right: 20, top: -5, fontSize: 16, color: "rgba(255,255,255,0.5)" }}>✦</div>
-                        <div style={{ position: "absolute", right: 75, top: 0, fontSize: 10, color: "rgba(255,255,255,0.3)" }}>✦</div>
                     </div>
                 </div>
 
-                {/* Formulario */}
-                <form onSubmit={crearUsuario} style={{ padding: "28px 32px" }}>
+                <form
+                    className="crm-form"
+                    onSubmit={crear}
+                >
+                    <div className="crm-grid-3">
+                        <InputCampo
+                            icon={User}
+                            label="Nombre(s)"
+                            value={nuevo.nombre}
+                            onChange={e =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    nombre:
+                                        e.target.value,
+                                }))
+                            }
+                            placeholder="Ej. Juan Carlos"
+                        />
 
-                    {/* Fila 1: Nombre, Apellidos, Usuario */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "18px 24px", marginBottom: 20 }}>
-                        <InputWithSideIcon icon={User} label="Nombre(s)" value={nuevoUsuario.nombre}
-                            onChange={e => setNuevoUsuario(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. Juan Carlos" />
-                        <InputWithSideIcon icon={User} label="Apellidos" value={nuevoUsuario.apellidos}
-                            onChange={e => setNuevoUsuario(p => ({ ...p, apellidos: e.target.value }))} placeholder="Ej. Pérez García" />
-                        <InputWithSideIcon icon={AtSign} label="Usuario" value={nuevoUsuario.usuario}
-                            onChange={e => setNuevoUsuario(p => ({ ...p, usuario: e.target.value }))} placeholder="Ej. juancarlos" />
+                        <InputCampo
+                            icon={User}
+                            label="Apellidos"
+                            value={nuevo.apellidos}
+                            onChange={e =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    apellidos:
+                                        e.target.value,
+                                }))
+                            }
+                            placeholder="Ej. Pérez García"
+                        />
+
+                        <InputCampo
+                            icon={AtSign}
+                            label="Usuario"
+                            value={nuevo.usuario}
+                            onChange={e =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    usuario:
+                                        e.target.value,
+                                }))
+                            }
+                            placeholder="Máximo 10 caracteres"
+                            error={errorUsuario}
+                            correcto={
+                                usuarioLimpio &&
+                                    !errorUsuario
+                                    ? "✓ Usuario disponible"
+                                    : ""
+                            }
+                            contador={`${nuevo.usuario.length}/10`}
+                        />
+
+                        <InputCampo
+                            icon={Mail}
+                            label="Correo electrónico"
+                            type="email"
+                            value={nuevo.correo}
+                            onChange={e =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    correo:
+                                        e.target.value,
+                                }))
+                            }
+                            placeholder="correo@ejemplo.com"
+                            error={errorCorreo}
+                            correcto={
+                                correoLimpio &&
+                                    !errorCorreo
+                                    ? "✓ Correo disponible"
+                                    : ""
+                            }
+                        />
+
+                        <PasswordCampo
+                            label="Contraseña"
+                            value={nuevo.contrasena}
+                            onChange={e =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    contrasena:
+                                        e.target.value,
+                                }))
+                            }
+                            placeholder="Mínimo 8 caracteres"
+                        />
+
+                        <PasswordCampo
+                            label="Confirmar contraseña"
+                            value={nuevo.confirmar}
+                            onChange={e =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    confirmar:
+                                        e.target.value,
+                                }))
+                            }
+                            placeholder="Repite la contraseña"
+                            error={
+                                nuevo.confirmar &&
+                                    !passwordCoincide
+                                    ? "Las contraseñas no coinciden."
+                                    : ""
+                            }
+                        />
                     </div>
 
-                    {/* Fila 2: Correo + Teléfono + Contraseña */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "18px 24px", marginBottom: 20 }}>
-                        <InputWithSideIcon icon={Mail} label="Correo electrónico" type="email" value={nuevoUsuario.correo}
-                            onChange={e => setNuevoUsuario(p => ({ ...p, correo: e.target.value }))} placeholder="Ej. juancarlos@correo.com" />
-                        <PhoneInputSideField label="Teléfono" value={nuevoUsuario.telefono}
-                            onChange={v => setNuevoUsuario(p => ({ ...p, telefono: v || "" }))} placeholder="55 1234 5678" />
-                        <PasswordSideField label="Contraseña" value={nuevoUsuario.contrasena}
-                            onChange={e => setNuevoUsuario(p => ({ ...p, contrasena: e.target.value }))} placeholder="Mín. 8 caracteres" />
+                    <RequisitosPassword
+                        value={nuevo.contrasena}
+                    />
+
+                    <div className="crm-block">
+                        <TelefonosMultiples
+                            telefonos={telefonos}
+                            onChange={setTelefonos}
+                        />
                     </div>
 
-                    {/* Fila 3: Rol como botones toggle */}
-                    <div style={{ marginBottom: 20 }}>
+                    <div
+                        style={{
+                            marginBottom: 20,
+                        }}
+                    >
                         <RolToggle
-                            value={nuevoUsuario.id_rol}
-                            onChange={v => { setSelectedRolId(v); setNuevoUsuario(p => ({ ...p, id_rol: v })); }}
+                            value={nuevo.id_rol}
+                            onChange={valor =>
+                                setNuevo(prev => ({
+                                    ...prev,
+                                    id_rol: valor,
+                                }))
+                            }
                             roles={roles}
-                            onNuevoRol={() => setModalRolOpen(true)} />
-
+                            onNuevoRol={() =>
+                                setModalRol(true)
+                            }
+                        />
                     </div>
 
-                    {/* Fila 4: Estado + Foto lado a lado */}
-                    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 24, marginBottom: 20, alignItems: "start" }}>
-                        <EstadoToggle value={estadoNuevo} onChange={setEstadoNuevo} />
-                        <div>
-                            <FLabel>Foto de perfil <span style={{ color: "#94a3b8", fontWeight: 400 }}>(opcional)</span></FLabel>
-                            <label style={{
-                                display: "flex", alignItems: "center", gap: 14,
-                                marginTop: 6, padding: "12px 18px",
-                                borderRadius: 12, border: "1px dashed #c7d2fe",
-                                background: "#f8faff", cursor: "pointer",
-                            }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 9, background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <Upload size={16} color="#131E5C" />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <p style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", margin: 0 }}>
-                                        {nuevoUsuario.foto ? nuevoUsuario.foto.name : "Arrastra una imagen o haz clic para seleccionar"}
-                                    </p>
-                                    <p style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0 0" }}>JPG, PNG o WEBP. Máx. 2MB</p>
-                                </div>
-                                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <User size={20} color="#94a3b8" />
-                                </div>
-                                <input type="file" accept="image/*" style={{ display: "none" }}
-                                    onChange={e => setNuevoUsuario(p => ({ ...p, foto: e.target.files[0] }))} />
-                            </label>
-                        </div>
-                    </div>
+                    <div
+                        className="crm-grid-2"
+                        style={{
+                            alignItems: "start",
+                            marginBottom: 20,
+                        }}
+                    >
+                        <EstadoToggle
+                            value={estado}
+                            onChange={setEstado}
+                        />
 
-                    {/* Agencias con Seleccionar todas */}
-                    <div style={{ marginBottom: 28 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                                <Building2 size={14} color="#131E5C" />
-                                <FLabel>Agencia(s)</FLabel>
-                            </div>
-                            <button type="button"
-                                onClick={() => setAgenciasSeleccionadas(
-                                    agenciasSeleccionadas.length === DEALERS.length ? [] : [...DEALERS]
-                                )}
+                        <label>
+                            <Label>
+                                Foto de perfil{" "}
+                                <small
+                                    style={{
+                                        color: "#94a3b8",
+                                        fontWeight: 400,
+                                    }}
+                                >
+                                    (opcional)
+                                </small>
+                            </Label>
+
+                            <div
+                                className="crm-upload"
                                 style={{
-                                    display: "inline-flex", alignItems: "center", gap: 5,
-                                    padding: "5px 12px", borderRadius: 8,
-                                    border: "1px solid #e2e8f0", background: "#fff",
-                                    fontSize: 12, fontWeight: 600, color: "#131E5C", cursor: "pointer",
-                                }}>
-                                {agenciasSeleccionadas.length === DEALERS.length ? "Deseleccionar todas" : "Seleccionar todas"}
-                                <ChevronDown size={13} />
+                                    marginTop: 6,
+                                }}
+                            >
+                                <Upload size={16} />
+
+                                <span>
+                                    {nuevo.foto
+                                        ? nuevo.foto.name
+                                        : "Seleccionar imagen"
+                                    }
+                                </span>
+
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={e =>
+                                        setNuevo(prev => ({
+                                            ...prev,
+                                            foto:
+                                                e.target
+                                                    .files?.[0] ||
+                                                null,
+                                        }))
+                                    }
+                                />
+                            </div>
+                        </label>
+                    </div>
+
+                    <div>
+                        <div className="crm-phone-header">
+                            <div>
+                                <Building2
+                                    size={14}
+                                    style={{
+                                        verticalAlign: -2,
+                                        marginRight: 5,
+                                    }}
+                                />
+
+                                <Label>
+                                    Agencia(s)
+                                </Label>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="crm-secondary-small"
+                                onClick={() =>
+                                    setAgencias(
+                                        agencias.length ===
+                                            AGENCIAS.length
+                                            ? []
+                                            : [...AGENCIAS]
+                                    )
+                                }
+                            >
+                                {agencias.length ===
+                                    AGENCIAS.length
+                                    ? "Deseleccionar todas"
+                                    : "Seleccionar todas"
+                                }
+
+                                <ChevronDown size={12} />
                             </button>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-                            {DEALERS.map(dealer => (
-                                <AgencyCheck key={dealer} label={dealer}
-                                    checked={agenciasSeleccionadas.includes(dealer)}
-                                    onChange={() => toggleAgencia(dealer)} />
+
+                        <div className="crm-agencies-grid">
+                            {AGENCIAS.map(agencia => (
+                                <AgencyCheck
+                                    key={agencia}
+                                    label={agencia}
+                                    checked={
+                                        agencias.includes(
+                                            agencia
+                                        )
+                                    }
+                                    onChange={() =>
+                                        setAgencias(prev =>
+                                            prev.includes(
+                                                agencia
+                                            )
+                                                ? prev.filter(
+                                                    item =>
+                                                        item !==
+                                                        agencia
+                                                )
+                                                : [
+                                                    ...prev,
+                                                    agencia,
+                                                ]
+                                        )
+                                    }
+                                />
                             ))}
                         </div>
                     </div>
 
-                    {/* Botones */}
                     <div
                         style={{
-                            display: "flex",
-                            justifyContent: "center",
-                            gap: 12,
-                            paddingTop: 20,
-                            borderTop: "1px solid #f1f5f9",
+                            marginTop: 18,
                         }}
                     >
+                        <Alerta mensaje={msg} />
+                    </div>
+
+                    <div className="crm-actions">
                         <button
                             type="button"
-                            onClick={limpiarFormulario}
+                            className="crm-btn secondary"
                             disabled={loading}
-                            style={{
-                                padding: "11px 32px",
-                                borderRadius: 10,
-                                border: "1px solid #e2e8f0",
-                                background: "#fff",
-                                color: "#374151",
-                                fontSize: 14,
-                                fontWeight: 600,
-                                cursor: loading ? "not-allowed" : "pointer",
-                            }}
+                            onClick={limpiar}
                         >
                             Limpiar
                         </button>
 
                         <button
                             type="submit"
+                            className="crm-btn primary"
                             disabled={loading}
-                            style={{
-                                padding: "11px 32px",
-                                borderRadius: 10,
-                                border: "none",
-                                background: loading
-                                    ? "#94a3b8"
-                                    : "linear-gradient(135deg, #4f46e5, #6366f1)",
-                                color: "#fff",
-                                fontSize: 14,
-                                fontWeight: 700,
-                                cursor: loading ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                boxShadow: "0 4px 14px rgba(99,102,241,0.35)",
-                            }}
+                            title={
+                                formularioValido
+                                    ? "Datos validados"
+                                    : "Pulsa para ver qué dato falta"
+                            }
                         >
-                            <Plus size={15} />
-                            {loading ? "Creando..." : "Crear usuario"}
+                            <Plus size={14} />
+
+                            {loading
+                                ? "Creando..."
+                                : "Crear usuario"
+                            }
                         </button>
                     </div>
                 </form>
             </div>
 
-            {/* ── Tabla usuarios ── */}
-            <div style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <section
+                style={{
+                    marginBottom: 24,
+                }}
+            >
+                <div className="crm-top-table">
                     <div>
-                        <h2 style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", margin: "0 0 2px" }}>Usuarios por agencia</h2>
-                        <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>Haz doble clic en un usuario para modificarlo</p>
+                        <h3>Usuarios</h3>
+
+                        <p>
+                            Doble clic para editar. La búsqueda también revisa teléfonos.
+                        </p>
                     </div>
-                    <button onClick={cargarUsuarios} disabled={loadingTable}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 9, border: "1px solid #e2e8f0", background: "#fff", fontSize: 12, color: "#374151", cursor: loadingTable ? "not-allowed" : "pointer", fontWeight: 500 }}>
-                        <RefreshCw size={11} style={{ animation: loadingTable ? "spin 1s linear infinite" : "none" }} />
-                        Actualizar
+
+                    <button
+                        className="crm-btn secondary"
+                        onClick={cargarUsuarios}
+                        disabled={loadingTable}
+                    >
+                        <RefreshCw size={13} />
+
+                        {loadingTable
+                            ? "Actualizando..."
+                            : "Actualizar"
+                        }
                     </button>
                 </div>
 
-                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                <div className="crm-filter-row">
+                    <label className="crm-search">
+                        <Label>Buscar</Label>
 
-                {/* Filtros */}
-                <div style={{ display: "flex", gap: 14, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 220 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                            Buscar
-                        </span>
-                        <div style={{ position: "relative" }}>
-                            <Search size={13} color="#94a3b8" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+                        <div
+                            style={{
+                                position: "relative",
+                                marginTop: 5,
+                            }}
+                        >
+                            <Search
+                                size={13}
+                                style={{
+                                    position: "absolute",
+                                    left: 10,
+                                    top: 12,
+                                    color: "#94a3b8",
+                                }}
+                            />
+
                             <input
-                                type="text"
-                                value={filtroBusqueda}
-                                onChange={e => setFiltroBusqueda(e.target.value)}
-                                placeholder="Buscar por usuario, nombre o correo..."
-                                style={{ ...inputBase(), width: "100%", paddingLeft: 32, boxSizing: "border-box" }}
-                                onFocus={e => { e.target.style.borderColor = "#131E5C"; e.target.style.boxShadow = "0 0 0 3px rgba(19,30,92,0.08)"; }}
-                                onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+                                value={busqueda}
+                                onChange={e =>
+                                    setBusqueda(
+                                        e.target.value
+                                    )
+                                }
+                                placeholder="Usuario, nombre, correo o teléfono..."
+                                style={{
+                                    ...inputBase(),
+                                    paddingLeft: 32,
+                                }}
                             />
                         </div>
                     </label>
-                    <FilterSelect label="Agencia" value={filtroAgencia} onChange={setFiltroAgencia} options={["Todas", ...DEALERS]} />
-                    <FilterSelect label="Rol" value={filtroRol} onChange={setFiltroRol} options={rolesUnicos} />
-                    <FilterSelect label="Estado" value={filtroEstado} onChange={setFiltroEstado} options={["Todos", "Activo", "Inactivo"]} />
-                    {(filtroBusqueda || filtroAgencia !== "Todas" || filtroRol !== "Todos" || filtroEstado !== "Todos") && (
-                        <button
-                            onClick={() => { setFiltroBusqueda(""); setFiltroAgencia("Todas"); setFiltroRol("Todos"); setFiltroEstado("Todos"); }}
-                            style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid #e2e8f0", background: "#f8fafc", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                        >
-                            Limpiar filtros
-                        </button>
+
+                    {[
+                        [
+                            "Agencia",
+                            fAgencia,
+                            setFAgencia,
+                            ["Todas", ...AGENCIAS],
+                        ],
+                        [
+                            "Rol",
+                            fRol,
+                            setFRol,
+                            rolesFiltro,
+                        ],
+                        [
+                            "Estado",
+                            fEstado,
+                            setFEstado,
+                            [
+                                "Todos",
+                                "Activo",
+                                "Inactivo",
+                            ],
+                        ],
+                    ].map(
+                        ([
+                            label,
+                            value,
+                            setter,
+                            options,
+                        ]) => (
+                            <label
+                                className="crm-filter"
+                                key={label}
+                            >
+                                <Label>
+                                    {label}
+                                </Label>
+
+                                <select
+                                    value={value}
+                                    onChange={e =>
+                                        setter(
+                                            e.target.value
+                                        )
+                                    }
+                                    style={inputBase()}
+                                >
+                                    {options.map(option => (
+                                        <option
+                                            key={option}
+                                        >
+                                            {option}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        )
                     )}
-                    <span style={{ marginLeft: "auto", fontSize: 12, color: "#94a3b8", alignSelf: "center" }}>
-                        {usuariosFiltrados.length} de {usuarios.length} usuarios
+
+                    {(busqueda ||
+                        fAgencia !== "Todas" ||
+                        fRol !== "Todos" ||
+                        fEstado !== "Todos") && (
+                            <button
+                                className="crm-btn secondary"
+                                onClick={() => {
+                                    setBusqueda("");
+                                    setFAgencia("Todas");
+                                    setFRol("Todos");
+                                    setFEstado("Todos");
+                                }}
+                            >
+                                Limpiar filtros
+                            </button>
+                        )}
+
+                    <span
+                        style={{
+                            marginLeft: "auto",
+                            fontSize: 12,
+                            color: "#94a3b8",
+                        }}
+                    >
+                        {filtrados.length} de{" "}
+                        {usuarios.length}
                     </span>
                 </div>
+
                 {loadingTable ? (
-                    <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", padding: "36px 0", textAlign: "center", fontSize: 13, color: "#94a3b8" }}>
+                    <div
+                        className="crm-card"
+                        style={{
+                            padding: 34,
+                            textAlign: "center",
+                            color: "#94a3b8",
+                        }}
+                    >
                         Cargando usuarios...
                     </div>
                 ) : (
-                    <UsersTableUnificada users={usuariosFiltrados} onEdit={openEdit} />
+                    <TablaUsuarios
+                        users={filtrados}
+                        onEdit={setModalUser}
+                    />
                 )}
-            </div>
+            </section>
 
-            {/* ── Resumen (debajo de la tabla) ── */}
-            <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "20px 24px", marginBottom: 24 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ fontSize: 13 }}>🌐</span>
+            <div
+                className="crm-card"
+                style={{
+                    padding: 20,
+                }}
+            >
+                <div className="crm-summary">
+                    <div>
+                        <span>
+                            Total usuarios
+                        </span>
+
+                        <strong>
+                            {usuarios.length}
+                        </strong>
                     </div>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Resumen</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 200px)", gap: 0 }}>
-                    {[["Total usuarios", usuarios.length], ["Agencias", DEALERS.length]].map(([label, val]) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9" }}>
-                            <span style={{ fontSize: 13, color: "#64748b" }}>{label}</span>
-                            <span style={{ fontSize: 18, fontWeight: 800, color: "#131E5C", marginLeft: 16 }}>{val}</span>
-                        </div>
-                    ))}
+
+                    <div>
+                        <span>
+                            Agencias
+                        </span>
+
+                        <strong>
+                            {AGENCIAS.length}
+                        </strong>
+                    </div>
                 </div>
             </div>
 
-            {/* Modal */}
-            {modalOpen && (
-                <UserModal user={modalUser} roles={roles} token={token} onClose={closeModal} onSaved={cargarUsuarios} />
+            {modalUser && (
+                <UserModal
+                    user={modalUser}
+                    usuarios={usuarios}
+                    roles={roles}
+                    token={token}
+                    onClose={() =>
+                        setModalUser(null)
+                    }
+                    onSaved={cargarUsuarios}
+                />
             )}
-            {/* Modal Nuevo Rol */}
-            {modalRolOpen && (
+
+            {modalRol && (
                 <NuevoRolModal
                     token={token}
-                    onClose={() => setModalRolOpen(false)}
-                    onCreado={onRolCreado}
+                    onClose={() =>
+                        setModalRol(false)
+                    }
+                    onCreado={rol => {
+                        setRoles(prev => [
+                            ...prev,
+                            rol,
+                        ]);
+
+                        setNuevo(prev => ({
+                            ...prev,
+                            id_rol: String(
+                                rol.id_rol
+                            ),
+                        }));
+                    }}
                 />
             )}
         </div>

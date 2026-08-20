@@ -89,7 +89,7 @@ const ASESORES = [
     "ADRIAN GALVEZ ROLDAN",
     "AURA MARLIZETH FERNANDEZ LOPEZ",
     "Bianca Isabel Chavez Alarcon",
-    "Blanca Patricia Hernández Hernández",
+    "Blanca Patricia Hernandez Hernandez",
     "CANDY DENISSE MARQUEZ CORTES",
     "Carlos Arturo Garces Vengas",
     "Cesar Ivan Salazar Reyes",
@@ -1495,8 +1495,7 @@ function getProspectoCitaBDC(cita, prospectosPorTelefono) {
     return getProspectoRelacionadoBDC(prospectosPorTelefono, getTelefonoApiBDC(cita), cita?.fecha_hora_cita);
 }
 function getAsesorCitaBDC(cita) {
-    // Importante: usa el mismo criterio del módulo RegistroCitas.jsx: trim, sin canonicalizar.
-    return String(cita?.asesor_digital || "").trim();
+    return canonicalAsesorDigitalBDC(cita?.asesor_digital || "");
 }
 function getTipoUnidadCitaBDC(cita, prospecto) {
     const desdeProspecto = getTipoUnidadBDC(prospecto || {});
@@ -1556,7 +1555,34 @@ function getEstadoAsesorBDC(efectividad) {
         return { label: "Requiere atención", cls: "border-amber-200 bg-amber-50 text-amber-700" };
     return { label: "Crítico", cls: "border-red-200 bg-red-50 text-red-700" };
 }
-function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
+function DashboardEjecutivoBDC({
+    rows: rowsOriginales,
+    versionOperativa = 0,
+    asesoresPermitidos = null,
+    accesoTotal = false,
+}) {
+    const asesoresPermitidosSet = useMemo(() => {
+        if (accesoTotal) return null;
+
+        return new Set(
+            (asesoresPermitidos || [])
+                .map(canonicalAsesorDigitalBDC)
+                .filter(Boolean)
+        );
+    }, [accesoTotal, asesoresPermitidos]);
+
+    const asesorPuedeMonitorearseBDC = useCallback((value) => {
+        if (accesoTotal) return true;
+
+        const nombre = canonicalAsesorDigitalBDC(value);
+        return Boolean(nombre && asesoresPermitidosSet?.has(nombre));
+    }, [accesoTotal, asesoresPermitidosSet]);
+
+    const rows = useMemo(() => {
+        const lista = Array.isArray(rowsOriginales) ? rowsOriginales : [];
+        return accesoTotal ? lista : lista.filter((row) => asesorPuedeMonitorearseBDC(row?.asesor_digital));
+    }, [rowsOriginales, accesoTotal, asesorPuedeMonitorearseBDC]);
+
     const [mes, setMes] = useState(() => formatDateYMDLocal(new Date()).slice(0, 7));
     const [asesor, setAsesor] = useState("Todos");
     const [agencia, setAgencia] = useState("Todos");
@@ -1564,18 +1590,19 @@ function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
     const [origen, setOrigen] = useState("Todos");
     const [showDiscardDetails, setShowDiscardDetails] = useState(false);
     const [citasBDC, setCitasBDC] = useState([]);
+    const [entregasBDC, setEntregasBDC] = useState([]);
     const [loadingOperativoBDC, setLoadingOperativoBDC] = useState(true);
     const [errorOperativoBDC, setErrorOperativoBDC] = useState("");
 
     useEffect(() => {
         let cancelado = false;
+
         async function cargarCitas() {
             setLoadingOperativoBDC(true);
             setErrorOperativoBDC("");
+
             try {
-                // Sólo pedimos el mes. La identificación BDC se hace por asesor_digital,
-                // igual que RegistroCitas.jsx; ya no dependemos de Entregas.
-                const data = await apiCitas.list({ mes });
+                const data = await apiCitas.list({ mes, solo_digital: 1 });
                 if (!cancelado) setCitasBDC(dedupeCitasBDC(getListItems(data)));
             } catch (error) {
                 console.error("Error cargando citas BDC:", error);
@@ -1587,35 +1614,24 @@ function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
                 if (!cancelado) setLoadingOperativoBDC(false);
             }
         }
+
         cargarCitas();
         return () => { cancelado = true; };
     }, [mes, versionOperativa]);
 
     const prospectosPorTelefono = useMemo(() => buildProspectosPorTelefonoBDC(rows), [rows]);
     const dealersPermitidos = useMemo(() => new Set(rows.map(getDealerBDC).filter(Boolean)), [rows]);
-    const asesoresExactosPermitidos = useMemo(() => new Set(rows.map((row) => String(row?.asesor_digital || "").trim()).filter(Boolean)), [rows]);
 
-    /*
-     * Citas BDC: replica el criterio real del módulo RegistroCitas.jsx.
-     * - usa fecha_hora_cita;
-     * - requiere asesor_digital;
-     * - compara el nombre con trim, SIN canonicalizar;
-     * - no infiere el asesor desde el prospecto;
-     * - no exige tipo_cita="Digital", porque "citas registradas" significa total de
-     *   registros del asesor digital, exactamente como el filtro del módulo Citas.
-     * Esto evita que variantes históricas como "LIZBETH CANO CLARA" se fusionen
-     * artificialmente con "Lizbeth Cano Clara" y eleven el conteo del dashboard.
-     */
-    const citasDigitalesBase = useMemo(() => dedupeCitasBDC((citasBDC || []).filter((cita) => {
-        if (!getMesFechaBDC(cita?.fecha_hora_cita)) return false;
-        const asesorCita = getAsesorCitaBDC(cita);
-        if (!asesorCita) return false;
-        if (asesoresExactosPermitidos.size && !asesoresExactosPermitidos.has(asesorCita)) return false;
-        const dealer = normalizeDealerGrupo(cita?.agencia || "");
-        if (dealer && dealersPermitidos.size && !dealersPermitidos.has(dealer)) return false;
-        return true;
-    })), [citasBDC, asesoresExactosPermitidos, dealersPermitidos]);
+    const citasDigitalesBase = useMemo(() => dedupeCitasBDC(
+        (citasBDC || []).filter((cita) => {
+            if (!getMesFechaBDC(cita?.fecha_hora_cita)) return false;
 
+            const asesorCita = getAsesorCitaBDC(cita);
+            if (!asesorCita) return false;
+
+            return asesorPuedeMonitorearseBDC(asesorCita);
+        })
+    ), [citasBDC, asesorPuedeMonitorearseBDC]);
     const meses = useMemo(() => {
         const values = Array.from(new Set([
             ...rows.map(getMesBDC),
@@ -1627,12 +1643,20 @@ function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
     }, [rows, citasDigitalesBase, mes]);
 
     const asesores = useMemo(() => {
-        const values = Array.from(new Set(rows
-            .map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital))
-            .filter(esAsesorDigitalValidoBDC)))
-            .sort((a, b) => a.localeCompare(b, "es"));
+        const values = Array.from(new Set([
+            ...rows.map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital)),
+            ...citasDigitalesBase.map((cita) => getAsesorCitaBDC(cita)),
+        ]
+            .filter(esAsesorDigitalValidoBDC)
+            .filter(asesorPuedeMonitorearseBDC)
+        )).sort((a, b) => a.localeCompare(b, "es"));
+
         return ["Todos", ...values];
-    }, [rows]);
+    }, [
+        rows,
+        citasDigitalesBase,
+        asesorPuedeMonitorearseBDC,
+    ]);
 
     const agencias = useMemo(() => {
         const orden = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
@@ -1653,30 +1677,36 @@ function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
         return true;
     }), [rows, mes, asesor, agencia, linea, origen]);
 
-    const citasFiltradas = useMemo(() => dedupeCitasBDC(citasDigitalesBase.filter((cita) => {
-        if (getMesFechaBDC(cita?.fecha_hora_cita) !== mes) return false;
+    const citasFiltradas = useMemo(() => dedupeCitasBDC(
+        citasDigitalesBase.filter((cita) => {
+            if (getMesFechaBDC(cita?.fecha_hora_cita) !== mes) return false;
 
-        // MISMA comparación que RegistroCitas.jsx: String(...).trim() === String(...).trim()
-        const asesorCita = getAsesorCitaBDC(cita);
-        if (asesor !== "Todos" && asesorCita !== String(asesor || "").trim()) return false;
+            const asesorCita = getAsesorCitaBDC(cita);
+            if (!asesorCita) return false;
 
-        const prospecto = getProspectoCitaBDC(cita, prospectosPorTelefono);
-        const dealerCita = normalizeDealerGrupo(cita?.agencia || prospecto?.agencia || "");
-        if (dealerCita && dealersPermitidos.size && !dealersPermitidos.has(dealerCita)) return false;
-        if (agencia !== "Todos" && dealerCita !== agencia) return false;
+            if (
+                asesor !== "Todos" &&
+                asesorCita !== canonicalAsesorDigitalBDC(asesor)
+            ) return false;
 
-        // Cita no contiene business; sólo relacionamos con el expediente si el usuario
-        // activa ese filtro. La relación nunca decide si la cita existe o no.
-        if (linea !== "Todos") {
-            const tipoUnidad = getTipoUnidadCitaBDC(cita, prospecto);
-            if (!tipoUnidadMatchesBDC(tipoUnidad, linea)) return false;
-        }
-        if (origen !== "Todos") {
-            const origenCita = String(cita?.fuente_prospeccion || prospecto?.origen || "").trim();
-            if (normalizeText(origenCita) !== normalizeText(origen)) return false;
-        }
-        return true;
-    })), [citasDigitalesBase, mes, asesor, agencia, linea, origen, prospectosPorTelefono, dealersPermitidos]);
+            const prospecto = getProspectoCitaBDC(cita, prospectosPorTelefono);
+            const dealerCita = normalizeDealerGrupo(cita?.agencia || prospecto?.agencia || "");
+
+            if (agencia !== "Todos" && dealerCita !== agencia) return false;
+
+            if (linea !== "Todos") {
+                const tipoUnidad = getTipoUnidadCitaBDC(cita, prospecto);
+                if (!tipoUnidadMatchesBDC(tipoUnidad, linea)) return false;
+            }
+
+            if (origen !== "Todos") {
+                const origenCita = String(cita?.fuente_prospeccion || prospecto?.origen || "").trim();
+                if (normalizeText(origenCita) !== normalizeText(origen)) return false;
+            }
+
+            return true;
+        })
+    ), [citasDigitalesBase, mes, asesor, agencia, linea, origen, prospectosPorTelefono]);
 
     // Fuente única de verdad para facturación: ExpedienteDigital.facturado_at.
     // No se consulta ni se cruza ninguna tabla de Entregas.
@@ -1744,23 +1774,54 @@ function DashboardEjecutivoBDC({ rows, versionOperativa = 0 }) {
     }, [metricas]);
 
     const resultadosAsesor = useMemo(() => {
-        const nombres = Array.from(new Set(filteredRows.map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital)).filter(Boolean)));
-        for (const cita of citasFiltradas) {
-            const nombre = getAsesorCitaBDC(cita);
-            if (nombre && !nombres.includes(nombre)) nombres.push(nombre);
-        }
+        const nombres = Array.from(new Set([
+            ...filteredRows.map((row) => canonicalAsesorDigitalBDC(row?.asesor_digital)),
+            ...citasFiltradas.map((cita) => getAsesorCitaBDC(cita)),
+        ].filter(Boolean)));
+
         return nombres.map((nombre) => {
-            const registros = filteredRows.filter((row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === canonicalAsesorDigitalBDC(nombre));
-            // De nuevo, cita por asesor con igualdad exacta para no fusionar variantes históricas.
-            const citasAsesor = citasFiltradas.filter((cita) => getAsesorCitaBDC(cita) === String(nombre).trim());
-            const facturadosAsesor = facturadosFiltrados.filter((row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === canonicalAsesorDigitalBDC(nombre));
+            const asesorCanonico = canonicalAsesorDigitalBDC(nombre);
+
+            const registros = filteredRows.filter(
+                (row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === asesorCanonico
+            );
+
+            const citasAsesor = citasFiltradas.filter(
+                (cita) => getAsesorCitaBDC(cita) === asesorCanonico
+            );
+
+            const facturadosAsesor = facturadosFiltrados.filter(
+                (row) => canonicalAsesorDigitalBDC(row?.asesor_digital) === asesorCanonico
+            );
+
             const gestionables = registros.filter(esGestionableBDC).length;
-            const contactados = registros.filter((row) => esGestionableBDC(row) && esContactadoBDC(row)).length;
+            const contactados = registros.filter(
+                (row) => esGestionableBDC(row) && esContactadoBDC(row)
+            ).length;
             const citados = citasAsesor.length;
-            const efectivas = citasAsesor.filter((cita) => asistenciaConfirmadaBDC(cita?.asistencia)).length;
+            const efectivas = citasAsesor.filter(
+                (cita) => asistenciaConfirmadaBDC(cita?.asistencia)
+            ).length;
             const solicitudes = registros.filter(tieneSolicitudBDC).length;
-            return { nombre, gestionables, contactados, citados, efectivas, noShow: Math.max(citados - efectivas, 0), solicitudes, facturados: facturadosAsesor.length, efectividad: citados ? (efectivas / citados) * 100 : 0 };
-        }).sort((a, b) => b.facturados - a.facturados || b.efectivas - a.efectivas || b.citados - a.citados || b.contactados - a.contactados);
+
+            return {
+                nombre: asesorCanonico,
+                gestionables,
+                contactados,
+                citados,
+                efectivas,
+                noShow: Math.max(citados - efectivas, 0),
+                solicitudes,
+                facturados: facturadosAsesor.length,
+                efectividad: citados ? (efectivas / citados) * 100 : 0,
+            };
+        }).sort(
+            (a, b) =>
+                b.facturados - a.facturados ||
+                b.efectivas - a.efectivas ||
+                b.citados - a.citados ||
+                b.contactados - a.contactados
+        );
     }, [filteredRows, citasFiltradas, facturadosFiltrados]);
 
     const origenStats = useMemo(() => {
@@ -1995,44 +2056,52 @@ export default function DigitalesProspectos() {
         { key: "resultados", label: "Resultados", Icon: BrainCircuit },
         { key: "graficos", label: "Gráficos", Icon: BarChart3 },
     ];
-    const rolUsuario = useMemo(() => normalizeText(user?.rol?.nombre ||
-        user?.rol?.name ||
-        user?.rol ||
-        ""), [user]);
+    const rolUsuario = useMemo(() => normalizeText(user?.rol?.nombre || user?.rol?.name || user?.rol || ""), [user]);
+
     const isAdmin = useMemo(() => {
-        const permisos = Array.isArray(user?.permisos)
-            ? user.permisos
-            : [];
-        return (rolUsuario === "administrador" ||
-            rolUsuario === "admin" ||
-            permisos.includes("ALL") ||
-            permisos.includes("USUARIOS_ADMIN"));
+        const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+        return rolUsuario === "administrador" || rolUsuario === "admin" || permisos.includes("ALL") || permisos.includes("USUARIOS_ADMIN");
     }, [rolUsuario, user?.permisos]);
+
     const isCoordinador = useMemo(() => {
         const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
-        return ["coordinador digital", "coordinador_digital"].includes(rolUsuario) || permisos.includes("CRM_COORDINADOR_DIGITAL") || permisos.includes("USUARIOS_ADMIN");
-    }, [rolUsuario, user?.permisos]);
-    const userAgencias = useMemo(() => String(user?.agencia || "")
-        .split("|")
-        .map((a) => a.trim())
-        .filter(Boolean), [user?.agencia]);
+        return !isAdmin && (["coordinador digital", "coordinador_digital"].includes(rolUsuario) || permisos.includes("CRM_COORDINADOR_DIGITAL"));
+    }, [isAdmin, rolUsuario, user?.permisos]);
+
+    const userAgencias = useMemo(() => String(user?.agencia || "").split("|").map((a) => a.trim()).filter(Boolean), [user?.agencia]);
+
     const userTieneAgencia = useCallback((agenciaRegistro) => {
         const agencia = normalizeDealerGrupo(agenciaRegistro);
-        if (!agencia)
-            return false;
-        return userAgencias.some((a) => normalizeDealerGrupo(a) === agencia);
+        return Boolean(agencia && userAgencias.some((a) => normalizeDealerGrupo(a) === agencia));
     }, [userAgencias]);
+
     const numerosUsuarioSesion = useMemo(() => getNumerosUsuarioSesion(user), [user]);
     const numeroUsuarioSesion = numerosUsuarioSesion[0] || "";
+
     const numerosPermitidosCoordinador = useMemo(() => {
         if (!isCoordinador) return [];
 
-        const agenciasPermitidas = new Set(userAgencias.map(normalizeDealerGrupo));
+        const lineasConfiguradas = new Set(Object.keys(ASESOR_DIGITAL_POR_NUMERO).map(normalizaTelefonoMx));
 
-        return Object.entries(ASESOR_DIGITAL_POR_NUMERO)
-            .filter(([, config]) => agenciasPermitidas.has(normalizeDealerGrupo(config.agencia)))
-            .map(([numero]) => numero);
-    }, [isCoordinador, userAgencias]);
+        return [...new Set(
+            numerosUsuarioSesion
+                .map(normalizaTelefonoMx)
+                .filter((numero) => lineasConfiguradas.has(numero))
+        )];
+    }, [isCoordinador, numerosUsuarioSesion]);
+
+    const asesoresPermitidosBDC = useMemo(() => {
+        if (isAdmin) return null;
+
+        const numeros = isCoordinador ? numerosPermitidosCoordinador : numerosUsuarioSesion;
+
+        return [...new Set(
+            numeros
+                .map((numero) => getAsesorDigitalPorNumero(numero, user))
+                .map(canonicalAsesorDigitalBDC)
+                .filter(Boolean)
+        )];
+    }, [isAdmin, isCoordinador, numerosPermitidosCoordinador, numerosUsuarioSesion, user]);
     const [ctxMenu, setCtxMenu] = useState({ open: false, row: null });
     const [pautasMeta, setPautasMeta] = useState([]);
     const [loadingPautas, setLoadingPautas] = useState(false);
@@ -2181,37 +2250,74 @@ export default function DigitalesProspectos() {
     const cargarProspectosPorLinea = useCallback(async () => {
         if (!ready) return;
 
-        if (!isAdmin && !isCoordinador && !numeroAsesorActivo) {
-            setCases([]);
-            return;
-        }
+        let numerosAConsultar = [];
 
-        if (isCoordinador && selectedNumeroAsesor !== "Todos" && !numerosPermitidosCoordinador.includes(numeroAsesorActivo)) {
-            setCases([]);
-            return;
-        }
+        if (isAdmin) {
+            if (selectedNumeroAsesor === "Todos") {
+                setLoadingCases(true);
 
-        if (!isAdmin && !isCoordinador && numeroAsesorActivo && !numerosUsuarioSesion.includes(numeroAsesorActivo)) {
-            setCases([]);
-            return;
+                try {
+                    const data = await listarProspectosDigitalesCompletos({ todos: 1, ligero: 1 });
+                    setCases(getListItems(data).map(normalizeProspecto));
+                    setPage(1);
+                } catch (error) {
+                    console.error("Error cargando todos los prospectos:", error);
+                    setCases([]);
+                } finally {
+                    setLoadingCases(false);
+                }
+
+                return;
+            }
+
+            const numero = normalizaTelefonoMx(selectedNumeroAsesor);
+            if (!numero || !ASESOR_DIGITAL_POR_NUMERO[numero]) {
+                setCases([]);
+                return;
+            }
+
+            numerosAConsultar = [numero];
+        } else if (isCoordinador) {
+            if (!numerosPermitidosCoordinador.length) {
+                setCases([]);
+                return;
+            }
+
+            if (selectedNumeroAsesor === "Todos") {
+                numerosAConsultar = numerosPermitidosCoordinador;
+            } else {
+                const numero = normalizaTelefonoMx(selectedNumeroAsesor);
+
+                if (!numerosPermitidosCoordinador.includes(numero)) {
+                    setCases([]);
+                    return;
+                }
+
+                numerosAConsultar = [numero];
+            }
+        } else {
+            const numero = numeroAsesorActivo || numeroUsuarioSesion;
+
+            if (!numero || !numerosUsuarioSesion.includes(numero)) {
+                setCases([]);
+                return;
+            }
+
+            numerosAConsultar = [numero];
         }
 
         setLoadingCases(true);
 
         try {
-            let consultas = [];
-            if (isAdmin && selectedNumeroAsesor === "Todos") {
-                // El backend ya permite `todos=1` exclusivamente a administrador.
-                // Una sola consulta evita repetir serialización y transferencia por cada línea.
-                consultas = [{ etiqueta: "todas", params: { todos: 1, ligero: 1 } }];
-            } else {
-                const numerosAConsultar = isCoordinador && selectedNumeroAsesor === "Todos"
-                    ? numerosPermitidosCoordinador
-                    : [numeroAsesorActivo || numeroUsuarioSesion].filter(Boolean);
-                consultas = numerosAConsultar.map((numero) => ({ etiqueta: numero, params: { numero_asesor: numero, ligero: 1 } }));
-            }
+            const consultas = numerosAConsultar.map((numero) => ({
+                etiqueta: numero,
+                params: { numero_asesor: numero, ligero: 1 },
+            }));
 
-            const respuestas = await Promise.allSettled(consultas.map(({ params }) => listarProspectosDigitalesCompletos(params)));
+            const respuestas = await Promise.allSettled(
+                consultas.map(({ params }) => listarProspectosDigitalesCompletos(params))
+            );
+
             const registrosPorId = new Map();
 
             respuestas.forEach((resultado, index) => {
@@ -2219,6 +2325,7 @@ export default function DigitalesProspectos() {
                     console.error("No se pudo cargar la línea:", consultas[index]?.etiqueta, resultado.reason);
                     return;
                 }
+
                 getListItems(resultado.value).map(normalizeProspecto).forEach((registro) => {
                     if (registro?.id_exp !== null && registro?.id_exp !== undefined) registrosPorId.set(registro.id_exp, registro);
                 });
@@ -2266,13 +2373,30 @@ export default function DigitalesProspectos() {
     useEffect(() => {
         if (!ready) return;
 
-        if (isAdmin || isCoordinador) {
-            setSelectedNumeroAsesor((actual) => actual || "Todos");
+        if (isAdmin) {
+            setSelectedNumeroAsesor((actual) => {
+                if (actual === "Todos") return actual;
+
+                const numero = normalizaTelefonoMx(actual);
+                return numero && ASESOR_DIGITAL_POR_NUMERO[numero] ? numero : "Todos";
+            });
+
+            return;
+        }
+
+        if (isCoordinador) {
+            setSelectedNumeroAsesor((actual) => {
+                if (actual === "Todos") return actual;
+
+                const numero = normalizaTelefonoMx(actual);
+                return numero && numerosPermitidosCoordinador.includes(numero) ? numero : "Todos";
+            });
+
             return;
         }
 
         setSelectedNumeroAsesor(numerosUsuarioSesion[0] || "");
-    }, [ready, isAdmin, isCoordinador, numerosUsuarioSesion]);
+    }, [ready, isAdmin, isCoordinador, numerosUsuarioSesion, numerosPermitidosCoordinador]);
     useEffect(() => {
         if (!ready ||
             !(numeroAsesorActivo ||
@@ -2352,10 +2476,12 @@ export default function DigitalesProspectos() {
     }, [cases]);
     const phoneOptions = useMemo(() => {
         if (isAdmin) return ["Todos", ...Object.keys(ASESOR_DIGITAL_POR_NUMERO)];
-
         if (isCoordinador) return ["Todos", ...numerosPermitidosCoordinador];
 
-        return numerosUsuarioSesion.slice(0, 1);
+        return numerosUsuarioSesion
+            .map(normalizaTelefonoMx)
+            .filter((numero) => Boolean(ASESOR_DIGITAL_POR_NUMERO[numero]))
+            .slice(0, 1);
     }, [isAdmin, isCoordinador, numerosUsuarioSesion, numerosPermitidosCoordinador]);
     function toggleSort(key) {
         setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
@@ -2371,7 +2497,7 @@ export default function DigitalesProspectos() {
     }
     const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
     const accessibleCases = useMemo(() => cases.filter((c) => {
-        if (!isAdmin && userAgencias.length && !userTieneAgencia(c.agencia)) return false;
+        if (!isAdmin && !isCoordinador && userAgencias.length && !userTieneAgencia(c.agencia)) return false;
 
         if (filtroNumeroActivo && normalizeDealerGrupo(c.agencia) !== normalizeDealerGrupo(filtroNumeroActivo.agencia)) return false;
 
@@ -3267,8 +3393,7 @@ export default function DigitalesProspectos() {
         {/* Header */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h2 className="text-xl font-extrabold text-[#131E5C] flex items-center gap-2">Gestión Comercial</h2>
-                <p className="text-sm text-slate-400 mt-0.5">Monitorea tus prospectos y su información clave para el seguimiento asistido por IA.</p>
+                <h2 className="text-xl font-extrabold text-[#131E5C] flex items-center gap-2">Gestión de Prospectos</h2>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="flex items-center rounded-xl border border-[#131E5C]/20 bg-white p-1 shadow-sm">
@@ -3463,7 +3588,7 @@ export default function DigitalesProspectos() {
         {/* Vista Resultados IA */}
         {viewMode === "resultados" && <ResultadosIA numeroAsesorInicial={selectedNumeroAsesor !== "Todos" ? selectedNumeroAsesor : ""} agenciaInicial={filters.agencia !== "Todos" ? filters.agencia : ""} businessInicial={filters.linea !== "Todos" ? filters.linea : ""} />}
         {/* Vista Ejecutivo BDC */}
-        {viewMode === "ejecutivo" && <DashboardEjecutivoBDC rows={accessibleCases} versionOperativa={versionOperativaBDC} />}
+        {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC rows={accessibleCases} versionOperativa={versionOperativaBDC} asesoresPermitidos={asesoresPermitidosBDC} accesoTotal={isAdmin} />)}
         {/* Vista Gráficos */}
         {viewMode === "graficos" && <VistaGraficos rows={sorted} />}
         {/* Vista Tabla */}

@@ -732,7 +732,7 @@ export default function RegistroPruebaManejo() {
         "ADRIAN GALVEZ ROLDAN",
         "AURA MARLIZETH FERNANDEZ LOPEZ",
         "Bianca Isabel Chavez Alarcon",
-        "Blanca Patricia Hernández Hernández",
+        "Blanca Patricia Hernandez Hernandez",
         "CANDY DENISSE MARQUEZ CORTES",
         "Carlos Arturo Garces Vengas",
         "Cesar Ivan Salazar Reyes",

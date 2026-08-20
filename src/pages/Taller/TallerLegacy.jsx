@@ -29,7 +29,6 @@ import {
     ScanSearch,
     Megaphone,
     ClipboardCheck,
-    SlidersHorizontal,
 } from "lucide-react";
 
 import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
@@ -113,7 +112,7 @@ const TIPOS_BLOQUE = [
 ];
 
 const HORA_INICIO_AGENDA = 8;
-const MINUTO_INICIO_AGENDA = 0;
+const MINUTO_INICIO_AGENDA = 30;
 const HORA_FIN_AGENDA = 20;
 const MINUTOS_INICIO_AGENDA =
     HORA_INICIO_AGENDA * 60 + MINUTO_INICIO_AGENDA;
@@ -123,11 +122,11 @@ const MINUTOS_TOTALES_AGENDA =
 const INTERVALO_MINUTOS = 15;
 const TOTAL_INTERVALOS =
     MINUTOS_TOTALES_AGENDA / INTERVALO_MINUTOS;
-const HORA_INICIO_TEXTO = "08:00";
+const HORA_INICIO_TEXTO = "08:30";
 
 const ANCHO_TECNICO = 250;
 const ANCHO_MINIMO_LINEA = 1850;
-const ALTURA_CARRIL = 52;
+const ALTURA_CARRIL = 82;
 
 const PANEL_STORAGE_KEY = "taller.paneles.contenedores.v3";
 
@@ -1055,7 +1054,6 @@ function WorkshopBoardLayout({
     technicians,
     selectedDate,
     highlightType,
-    onHighlightType,
     onEdit,
     onMoveOrder,
     onScheduleOrder,
@@ -1088,7 +1086,6 @@ function WorkshopBoardLayout({
                         technicians={technicians}
                         selectedDate={selectedDate}
                         highlightType={highlightType}
-                        onHighlightType={onHighlightType}
                         onEdit={onEdit}
                         onScheduleOrder={onScheduleOrder}
                         onUnassignOrder={onUnassignOrder}
@@ -1502,7 +1499,7 @@ function ActivityBar({
                 }
             }}
             className={[
-                "group absolute z-10 flex h-[44px] cursor-grab flex-col justify-center overflow-hidden rounded-lg border px-2.5 pr-7 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
+                "group absolute z-10 flex h-[58px] cursor-grab flex-col justify-center overflow-hidden rounded-lg border px-3 pr-8 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
                 highlightType
                     ? ""
                     : "hover:z-30 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
@@ -1526,32 +1523,32 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 left-0 z-40 flex w-3 cursor-ew-resize items-center justify-center"
+                className="absolute inset-y-0 left-0 z-40 flex w-4 cursor-ew-resize items-center justify-center"
                 title="Arrastrar para cambiar hora de inicio"
             >
                 <span
-                    className="h-5 w-[2px] rounded-full transition group-hover:brightness-75"
+                    className="h-7 w-[3px] rounded-full transition group-hover:brightness-75"
                     style={{ backgroundColor: `${visualStyle.borderColor}55` }}
                 />
             </button>
 
-            <div className="flex min-w-0 items-center justify-between gap-1.5">
-                <span className="truncate text-[10px] font-black">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+                <span className="truncate text-[11px] font-black">
                     {primary}
                 </span>
                 {!isLunch && !isTraining && workType ? (
-                    <span className="shrink-0 rounded-full bg-white/70 px-1 py-px text-[7px] font-black">
+                    <span className="shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-black">
                         {workType.label}
                     </span>
                 ) : null}
             </div>
 
-            <div className="mt-px truncate text-[8px] font-bold opacity-80">
+            <div className="mt-0.5 truncate text-[9px] font-bold opacity-80">
                 {secondary}
             </div>
 
             {detail ? (
-                <div className="mt-px truncate text-[8px] font-semibold opacity-65">
+                <div className="mt-0.5 truncate text-[9px] font-semibold opacity-65">
                     {detail}
                 </div>
             ) : null}
@@ -1566,7 +1563,7 @@ function ActivityBar({
                 className="absolute right-1.5 top-1 z-50 flex h-4 w-4 items-center justify-center rounded-md bg-white/60 opacity-0 shadow-sm transition hover:bg-red-600 hover:text-white group-hover:opacity-100"
                 title="Quitar de la agenda"
             >
-                <X className="h-2.5 w-2.5" />
+                <X className="h-3 w-3" />
             </button>
 
             <button
@@ -1577,11 +1574,11 @@ function ActivityBar({
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                className="absolute inset-y-0 right-0 z-40 flex w-3 cursor-ew-resize items-center justify-center"
+                className="absolute inset-y-0 right-0 z-40 flex w-4 cursor-ew-resize items-center justify-center"
                 title="Arrastrar para cambiar hora de fin"
             >
                 <span
-                    className="h-5 w-[2px] rounded-full transition group-hover:brightness-75"
+                    className="h-7 w-[3px] rounded-full transition group-hover:brightness-75"
                     style={{ backgroundColor: `${visualStyle.borderColor}55` }}
                 />
             </button>
@@ -1721,7 +1718,6 @@ function AgendaBoard({
     technicians,
     selectedDate,
     highlightType,
-    onHighlightType,
     onEdit,
     onScheduleOrder,
     onUnassignOrder,
@@ -1754,75 +1750,62 @@ function AgendaBoard({
     }
 
     return (
-        <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <div>
-                    <div className="text-xs font-black tracking-tight text-[#001E50]">
+                    <div className="text-sm font-black tracking-tight text-[#001E50]">
                         CRONOGRAMA DE TÉCNICOS
                     </div>
-                    <div className="mt-0.5 text-[9px] font-semibold capitalize text-slate-400">
+                    <div className="mt-0.5 text-[10px] font-semibold capitalize text-slate-400">
                         {formatLongDate(selectedDate)}
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 text-[9px] font-bold text-slate-400">
-                    <div className="hidden items-center gap-1 xl:flex">
-                        {Object.entries(LEGEND_CHIPS).map(([key, meta]) => {
-                            const Icon = meta.icon;
-                            const active = highlightType === key;
-                            return (
-                                <button key={key} type="button" onClick={() => onHighlightType(active ? null : key)} title={active ? "Quitar resaltado" : `Resaltar ${meta.label}`} className={["inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-black transition", active ? "ring-1 ring-[#001E50] ring-offset-1" : "hover:-translate-y-0.5 hover:shadow-sm"].join(" ")} style={{ backgroundColor: meta.backgroundColor, borderColor: active ? "#001E50" : meta.borderColor, color: meta.color }}>
-                                    <Icon className="h-2.5 w-2.5" />{meta.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="hidden items-center gap-1 md:flex">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#D5232A]" />
-                        Hora actual
-                        <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-black tabular-nums text-[#001E50]">
-                            {pad2(now.getHours())}:{pad2(now.getMinutes())}
-                        </span>
-                        <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5">
-                            Arrastra para reasignar
-                        </span>
-                    </div>
+                <div className="hidden items-center gap-2 text-[10px] font-bold text-slate-400 md:flex">
+                    <span className="h-2 w-2 rounded-full bg-[#D5232A]" />
+                    Hora actual
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-black tabular-nums text-[#001E50]">
+                        {pad2(now.getHours())}:{pad2(now.getMinutes())}
+                    </span>
+                    <span className="ml-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+                        Arrastra para reasignar
+                    </span>
                 </div>
             </div>
 
-            <div className="overflow-x-auto" onScroll={handleScroll}>
+            <div className="flex border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,.04)]">
+                <div
+                    className="z-40 flex h-[52px] items-center border-r border-slate-200 bg-slate-50 px-4"
+                    style={{
+                        flex: `0 0 ${ANCHO_TECNICO}px`,
+                        width: `${ANCHO_TECNICO}px`,
+                    }}
+                >
+                    <div>
+                        <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-400">
+                            Técnico
+                        </div>
+                        <div className="mt-0.5 text-xs font-extrabold text-[#001E50]">
+                            Equipo de taller
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    ref={headerScrollerRef}
+                    className="h-[52px] flex-1 overflow-hidden"
+                    style={{ minWidth: `${ANCHO_MINIMO_LINEA}px` }}
+                >
+                    <TimeHeader />
+                </div>
+            </div>
+
+            <div className="max-h-[72vh] overflow-auto" onScroll={handleScroll}>
                 <div
                     style={{
                         minWidth: `${ANCHO_TECNICO + ANCHO_MINIMO_LINEA}px`,
                     }}
                 >
-                    <div className="flex border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,.04)]">
-                        <div
-                            className="sticky left-0 z-40 flex h-[36px] items-center border-r border-slate-200 bg-slate-50 px-3"
-                            style={{
-                                flex: `0 0 ${ANCHO_TECNICO}px`,
-                                width: `${ANCHO_TECNICO}px`,
-                            }}
-                        >
-                            <div>
-                                <div className="text-[9px] font-black uppercase tracking-[.14em] text-slate-400">
-                                    Técnico
-                                </div>
-                                <div className="mt-0.5 text-[10px] font-extrabold text-[#001E50]">
-                                    Equipo de taller
-                                </div>
-                            </div>
-                        </div>
-
-                        <div
-                            ref={headerScrollerRef}
-                            className="h-[36px] flex-1 overflow-hidden"
-                            style={{ minWidth: `${ANCHO_MINIMO_LINEA}px` }}
-                        >
-                            <TimeHeader />
-                        </div>
-                    </div>
 
                     {technicians.map((technician, technicianIndex) => {
                         const technicianOrders =
@@ -1842,7 +1825,7 @@ function AgendaBoard({
                             >
                                 <div
                                     className={[
-                                        "sticky left-0 z-30 flex h-full items-center gap-2 border-b border-r border-slate-200 px-2",
+                                        "sticky left-0 z-30 flex h-full items-center gap-3 border-b border-r border-slate-200 px-3",
                                         technicianIndex % 2 === 1 ? "bg-[#F3F9FF]" : "bg-white",
                                     ].join(" ")}
                                     style={{
@@ -1850,15 +1833,15 @@ function AgendaBoard({
                                         width: `${ANCHO_TECNICO}px`,
                                     }}
                                 >
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EAF2FF] text-[10px] font-black text-[#001E50]">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EAF2FF] text-[10px] font-black text-[#001E50]">
                                         {getInitials(technician)}
                                     </div>
 
                                     <div className="min-w-0 flex-1">
-                                        <div className="truncate text-xs font-black text-[#001E50]">
+                                        <div className="truncate text-[11px] font-black text-[#001E50]">
                                             {technician}
                                         </div>
-                                        <div className="text-[9px] font-semibold text-slate-400">
+                                        <div className="mt-0.5 text-[9px] font-semibold text-slate-400">
                                             Técnico {pad2(technicianIndex + 1)}
                                         </div>
                                     </div>
@@ -1918,7 +1901,6 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
     const [loadingList, setLoadingList] = useState(false);
     const [vista, setVista] = useState("agenda");
     const [highlightType, setHighlightType] = useState(null);
-    const [showFilters, setShowFilters] = useState(true);
     const [openModal, setOpenModal] = useState(false);
     const [editingOrden, setEditingOrden] = useState(null);
     const [draft, setDraft] = useState(null);
@@ -2015,24 +1997,7 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                             horas: 0,
                             orden: index,
                         }));
-
-                /*
-                 * No inventamos fecha ni horario para ingresos que todavía
-                 * no se han arrastrado a la agenda. Esos registros deben vivir
-                 * solamente en sus contenedores operativos.
-                 */
-                const fechaProgramadaReal = toYMD(row.fecha_programada);
-                const fechaIngreso = toYMD(
-                    row.fecha_ingreso ||
-                    row.fecha_cita ||
-                    row.creado_en ||
-                    row.created_at,
-                );
-
-                const fechaOperativa =
-                    fechaProgramadaReal ||
-                    fechaIngreso;
-
+                const fechaProgramada = toYMD(row.fecha_programada);
                 const horaInicio = toHHMM(row.hora_inicio);
                 const horaFin = toHHMM(row.hora_fin);
                 const tecnico = canonicalTechnician(row.tecnico || "");
@@ -2054,7 +2019,7 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
 
                 const tieneAgenda = Boolean(
                     tecnico &&
-                    fechaProgramadaReal &&
+                    fechaProgramada &&
                     horaInicio &&
                     horaFin,
                 );
@@ -2072,40 +2037,27 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                     agencia: row.agencia || "",
                     no_orden: row.no_orden || "",
                     cliente:
+                        row.cliente ||
                         row.cliente_nombre ||
-                        row?.cliente?.nombre ||
                         row.nombre_cliente ||
-                        (typeof row.cliente === "string" ? row.cliente : "") ||
                         "Sin nombre",
                     telefono:
                         row.telefono ||
                         row.cliente_telefono ||
-                        row?.cliente?.telefono ||
                         "—",
                     correo:
                         row.correo ||
-                        row.correo_electronico ||
                         row.cliente_correo_electronico ||
-                        row?.cliente?.correo ||
-                        row?.cliente?.correo_electronico ||
                         "",
                     vin: row.vin || "",
                     modelo: row.modelo || "",
-                    fecha_ingreso:
-                        row.fecha_ingreso ||
-                        row.fecha_cita ||
-                        row.creado_en ||
-                        row.created_at ||
-                        null,
-                    etapa:
-                        normalizeStr(row.etapa) ||
-                        getDefaultEtapa(row),
+                    fecha_ingreso: row.fecha_ingreso || row.creado_en,
+                    etapa: row.etapa || "Ingreso con Cita",
                     tecnico,
                     comentarios_taller: row.comentarios_taller || "",
                     tipo_bloque: row.tipo_bloque || "trabajo",
                     tipo_servicio: serviciosBase,
-                    fecha_programada: fechaOperativa,
-                    fecha_programada_real: fechaProgramadaReal,
+                    fecha_programada: fechaProgramada,
                     estatus_agenda: row.estatus_agenda || "Programado",
                     hora_inicio: horaInicio,
                     hora_fin: horaFin,
@@ -2517,7 +2469,7 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
             endMinutes - startMinutes < INTERVALO_MINUTOS
         ) {
             alert(
-                "El horario debe permanecer entre las 08:00 y las 20:00 horas, con una duración mínima de 15 minutos.",
+                "El horario debe permanecer entre las 08:30 y las 20:00 horas, con una duración mínima de 15 minutos.",
             );
             return;
         }
@@ -2575,10 +2527,6 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
         orderId,
         targetStage,
     ) {
-        const order = ordenes.find(item => String(item.id) === String(orderId));
-        if (!order) { alert("No se encontró la actividad seleccionada."); return; }
-        if (order.etapa === targetStage) return;
-
         const previousRows = remoteRows;
 
         setRemoteRows((previous) =>
@@ -2723,7 +2671,7 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
         }
 
         if (start < MINUTOS_INICIO_AGENDA || end > MINUTOS_FIN_AGENDA) {
-            alert("El horario debe estar dentro de las 08:00 y las 20:00 horas.");
+            alert("El horario debe estar dentro de las 08:30 y las 20:00 horas.");
             return false;
         }
 
@@ -3023,7 +2971,7 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                 </div>
             </div>
 
-            <div className="mb-4 border-b border-slate-200 bg-white px-4 pb-4 pt-3">
+            <div className="mb-4">
                 <div className="mb-3 flex items-center gap-2.5">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#001E50]/5 text-[#001E50]">
                         <ListChecks className="h-4.5 w-4.5" />
@@ -3186,62 +3134,198 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                 </div>
             </div>
 
-            <div className="shrink-0 border-b border-slate-200 bg-white">
-                <div className="flex items-center gap-2 px-4 py-2">
-                    <button
-                        type="button"
-                        onClick={() => setShowFilters((v) => !v)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#001E50] bg-white px-3 py-1.5 text-[11px] font-black text-[#001E50] transition hover:bg-[#001E50]/10"
-                    >
-                        <SlidersHorizontal className="h-3 w-3" />
-                        Filtros
-                        {showFilters ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    </button>
-                </div>
-
-                {showFilters ? (
-                    <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 px-4 py-2.5">
-                        <div className="min-w-0 flex-1">
-                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">Búsqueda</label>
-                            <div className="flex items-center gap-1.5 rounded-lg border border-[#001E50] bg-white px-2.5 py-1.5">
-                                <Search className="h-3.5 w-3.5 shrink-0 text-[#001E50]" />
-                                <input value={filters.q} onChange={(event) => setFilters((previous) => ({ ...previous, q: event.target.value }))} placeholder="Cliente, VIN, orden..." className="min-w-0 flex-1 text-xs font-semibold text-[#001E50] outline-none placeholder:text-slate-400" />
-                                {filters.q ? <button type="button" onClick={() => setFilters((previous) => ({ ...previous, q: "" }))} className="rounded p-0.5 text-slate-400 hover:text-red-500"><X className="h-3 w-3" /></button> : null}
+            <div className="mb-4 rounded-xl border border-black/10 bg-white p-3 shadow-sm">
+                <div className="grid gap-3 xl:grid-cols-12">
+                    <div className="xl:col-span-5">
+                        <FilterBlock label="Búsqueda">
+                            <div className="flex items-center gap-2 rounded-lg border border-[#001E50] bg-white px-3 py-2">
+                                <Search className="h-4 w-4 text-[#001E50]" />
+                                <input
+                                    value={filters.q}
+                                    onChange={(event) =>
+                                        setFilters((previous) => ({
+                                            ...previous,
+                                            q: event.target.value,
+                                        }))
+                                    }
+                                    placeholder="Cliente, teléfono, VIN, orden o trabajo..."
+                                    className="w-full text-sm font-semibold text-[#001E50] outline-none placeholder:text-slate-400"
+                                />
+                                {filters.q ? (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setFilters((previous) => ({
+                                                ...previous,
+                                                q: "",
+                                            }))
+                                        }
+                                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                ) : null}
                             </div>
-                        </div>
-
-                        <div className="w-[200px] shrink-0">
-                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">Fecha</label>
-                            <div className="flex items-center overflow-hidden rounded-lg border border-[#001E50] bg-white">
-                                <button type="button" onClick={() => moveDate(-1)} className="inline-flex h-8 w-7 shrink-0 items-center justify-center text-[#001E50] hover:bg-[#001E50]/10"><ChevronLeft className="h-3.5 w-3.5" /></button>
-                                <input type="date" value={filters.fecha} onChange={(event) => setFilters((previous) => ({ ...previous, fecha: event.target.value }))} className="h-8 min-w-0 flex-1 border-x border-[#001E50]/30 px-2 text-center text-xs font-bold text-[#001E50] outline-none" />
-                                <button type="button" onClick={() => moveDate(1)} className="inline-flex h-8 w-7 shrink-0 items-center justify-center text-[#001E50] hover:bg-[#001E50]/10"><ChevronRight className="h-3.5 w-3.5" /></button>
-                            </div>
-                        </div>
-
-                        <div className="w-[170px] shrink-0">
-                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">Técnico</label>
-                            <select value={filters.tecnico} onChange={(event) => setFilters((previous) => ({ ...previous, tecnico: event.target.value }))} className="h-8 w-full rounded-lg border border-[#001E50] bg-white px-2 text-xs font-semibold text-[#001E50] outline-none">
-                                {techniciansFilter.map((technician) => <option key={technician} value={technician}>{technician}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="w-[170px] shrink-0">
-                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">Dealer</label>
-                            <select value={filters.agencia} onChange={(event) => setFilters((previous) => ({ ...previous, agencia: event.target.value, tecnico: "Todos" }))} className="h-8 w-full rounded-lg border border-[#001E50] bg-white px-2 text-xs font-semibold text-[#001E50] outline-none">
-                                {dealers.map((dealer) => <option key={dealer} value={dealer}>{dealer}</option>)}
-                            </select>
-                        </div>
-
-                        <button type="button" onClick={goToToday} className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-bold text-white hover:bg-emerald-700"><CalendarDays className="h-3 w-3" /> Hoy</button>
-                        <button type="button" onClick={resetFilters} className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100"><X className="h-3 w-3" /> Limpiar</button>
+                        </FilterBlock>
                     </div>
-                ) : null}
+
+                    <div className="xl:col-span-3">
+                        <FilterBlock label="Técnico">
+                            <select
+                                value={filters.tecnico}
+                                onChange={(event) =>
+                                    setFilters((previous) => ({
+                                        ...previous,
+                                        tecnico: event.target.value,
+                                    }))
+                                }
+                                className="w-full rounded-lg border border-[#001E50] bg-white px-3 py-2 text-sm font-semibold text-[#001E50] outline-none"
+                            >
+                                {techniciansFilter.map((technician) => (
+                                    <option key={technician} value={technician}>
+                                        {technician}
+                                    </option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="xl:col-span-4">
+                        <FilterBlock label="Fecha de la agenda">
+                            <div className="flex items-center overflow-hidden rounded-lg border border-[#001E50] bg-white">
+                                <button
+                                    type="button"
+                                    onClick={() => moveDate(-1)}
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#001E50] hover:bg-[#001E50]/10"
+                                    title="Día anterior"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+
+                                <input
+                                    type="date"
+                                    value={filters.fecha}
+                                    onChange={(event) =>
+                                        setFilters((previous) => ({
+                                            ...previous,
+                                            fecha: event.target.value,
+                                        }))
+                                    }
+                                    className="h-10 min-w-0 flex-1 border-x border-[#001E50]/30 px-3 text-center text-sm font-bold text-[#001E50] outline-none"
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => moveDate(1)}
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#001E50] hover:bg-[#001E50]/10"
+                                    title="Día siguiente"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="xl:col-span-12">
+                        <FilterBlock label="Dealer">
+                            <div className="flex flex-wrap gap-2">
+                                {dealers.map((dealer) => {
+                                    const active =
+                                        filters.agencia === dealer;
+
+                                    return (
+                                        <button
+                                            key={dealer}
+                                            type="button"
+                                            onClick={() =>
+                                                setFilters((previous) => ({
+                                                    ...previous,
+                                                    agencia: dealer,
+                                                    tecnico: "Todos",
+                                                }))
+                                            }
+                                            className={[
+                                                "rounded-lg border px-4 py-2 text-xs font-extrabold transition sm:text-sm",
+                                                active
+                                                    ? "border-[#001E50] bg-[#001E50] text-white shadow-sm"
+                                                    : "border-[#001E50] bg-white text-[#001E50] hover:bg-[#001E50]/10",
+                                            ].join(" ")}
+                                        >
+                                            {dealer}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="xl:col-span-12">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-3 text-xs font-bold text-slate-600">
+                            <button
+                                type="button"
+                                onClick={goToToday}
+                                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+                            >
+                                <CalendarDays className="h-4 w-4" /> Hoy
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="inline-flex items-center gap-2 rounded-lg border border-[#001E50] bg-white px-3 py-2 text-sm font-bold text-[#001E50] hover:bg-[#001E50] hover:text-white"
+                            >
+                                <X className="h-4 w-4" /> Limpiar
+                            </button>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                {Object.entries(LEGEND_CHIPS).map(([key, meta]) => {
+                                    const Icon = meta.icon;
+                                    const active = highlightType === key;
+
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() =>
+                                                setHighlightType(active ? null : key)
+                                            }
+                                            title={active ? "Quitar resaltado" : `Resaltar ${meta.label}`}
+                                            className={[
+                                                "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-black transition",
+                                                active
+                                                    ? "ring-2 ring-[#001E50] ring-offset-1"
+                                                    : "hover:-translate-y-0.5 hover:shadow-sm",
+                                            ].join(" ")}
+                                            style={{
+                                                backgroundColor: meta.backgroundColor,
+                                                borderColor: active ? "#001E50" : meta.borderColor,
+                                                color: meta.color,
+                                            }}
+                                        >
+                                            <Icon className="h-3 w-3" />
+                                            {meta.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="ml-auto hidden text-right lg:block">
+                                <div className="text-sm font-extrabold capitalize text-[#001E50]">
+                                    {formatLongDate(filters.fecha)}
+                                </div>
+                                <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                    El estatus se muestra dentro de cada tarjeta.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {loadingList ? (
-                <div className="flex flex-1 items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-[#001E50]" />
+                <div className="rounded-xl border border-black/10 bg-white p-10 text-center text-[#001E50]">
+                    <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" />
+                    Cargando taller...
                 </div>
             ) : vista === "agenda" ? (
                 <WorkshopBoardLayout
@@ -3250,7 +3334,6 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                     technicians={techniciansInAgenda}
                     selectedDate={filters.fecha}
                     highlightType={highlightType}
-                    onHighlightType={setHighlightType}
                     onEdit={openEdit}
                     onMoveOrder={moveOrderToStage}
                     onScheduleOrder={scheduleOrder}
@@ -3472,7 +3555,7 @@ export default function TallerLegacy({ onSwitchToNuevo }) {
                         <Field label="Hora de inicio" icon={Clock3}>
                             <input
                                 type="time"
-                                min="08:00"
+                                min="08:30"
                                 max="19:45"
                                 step="900"
                                 value={draft.hora_inicio || HORA_INICIO_TEXTO}

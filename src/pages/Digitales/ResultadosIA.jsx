@@ -22,10 +22,28 @@ const HORARIO_DEFAULT = {
     sabado: { activo: true, inicio: "09:00", fin: "14:00" },
     domingo: { activo: false, inicio: "09:00", fin: "14:00" },
 };
+const PAUSA_COMIDA_DEFAULT = { activo: true, inicio: "14:00", fin: "15:00", dias: ["lunes", "martes", "miercoles", "jueves", "viernes"] };
+const FASES_CARGA = [
+    "Cargando base de datos...",
+    "Aplicando filtros, exclusiones y horarios...",
+    "Preparando conversaciones para Gemini...",
+    "Enviando base de datos a Gemini...",
+    "Procesando análisis comercial...",
+    "Generando recomendaciones y resultados...",
+];
 const STORAGE_REGLAS = "digitales.resultadosIA.reglasTiempo.v1";
 
 function copiarHorario(origen = HORARIO_DEFAULT) {
-    return Object.fromEntries(DIAS_HORARIO.map(({ key }) => [key, { ...(origen?.[key] || HORARIO_DEFAULT[key]) }]));
+    const pausaOrigen = origen?.pausa_comida || PAUSA_COMIDA_DEFAULT;
+    return {
+        ...Object.fromEntries(DIAS_HORARIO.map(({ key }) => [key, { ...(origen?.[key] || HORARIO_DEFAULT[key]) }])),
+        pausa_comida: {
+            activo: pausaOrigen.activo ?? PAUSA_COMIDA_DEFAULT.activo,
+            inicio: pausaOrigen.inicio || PAUSA_COMIDA_DEFAULT.inicio,
+            fin: pausaOrigen.fin || PAUSA_COMIDA_DEFAULT.fin,
+            dias: Array.isArray(pausaOrigen.dias) ? [...pausaOrigen.dias] : [...PAUSA_COMIDA_DEFAULT.dias],
+        },
+    };
 }
 function leerReglasGuardadas() {
     try {
@@ -76,6 +94,28 @@ function Barra({ label, value, total, suffix = "" }) {
 function Vacio({ texto = "No hay información suficiente para este bloque." }) {
     return <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-semibold text-slate-400">{texto}</div>;
 }
+function PantallaCargaAnalisis() {
+    const [paso, setPaso] = useState(0);
+    useEffect(() => {
+        setPaso(0);
+        const timer = window.setInterval(() => setPaso((actual) => Math.min(actual + 1, FASES_CARGA.length - 1)), 3500);
+        return () => window.clearInterval(timer);
+    }, []);
+    return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-xl rounded-3xl border border-white/60 bg-white p-6 shadow-2xl sm:p-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#131E5C] text-white"><BrainCircuit className="h-7 w-7 animate-pulse" /></div>
+            <p className="mt-5 text-center text-[11px] font-black uppercase tracking-[.16em] text-slate-400">Análisis con inteligencia artificial</p>
+            <h4 className="mt-2 text-center text-lg font-black text-[#131E5C]">{FASES_CARGA[paso]}</h4>
+            <div className="mt-6 space-y-2">
+                {FASES_CARGA.map((fase, i) => <div key={fase} className={cls("flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold transition", i === paso ? "bg-[#131E5C]/[0.06] text-[#131E5C]" : i < paso ? "text-emerald-700" : "text-slate-300")}>
+                    {i < paso ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : i === paso ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <span className="h-4 w-4 shrink-0 rounded-full border-2 border-current" />}
+                    <span>{fase}</span>
+                </div>)}
+            </div>
+            <p className="mt-5 text-center text-[11px] font-semibold leading-5 text-slate-400">La etapa mostrada es una guía visual mientras el servidor completa la solicitud; el resultado se mostrará automáticamente al finalizar.</p>
+        </div>
+    </div>;
+}
 
 export default function ResultadosIA({ numeroAsesorInicial = "", agenciaInicial = "", businessInicial = "" }) {
     const guardadas = useMemo(() => leerReglasGuardadas(), []);
@@ -120,6 +160,10 @@ export default function ResultadosIA({ numeroAsesorInicial = "", agenciaInicial 
 
     const actualizarDia = (dia, cambios) => {
         setHorario((prev) => ({ ...prev, [dia]: { ...prev[dia], ...cambios } }));
+        setCambiosPendientes(true);
+    };
+    const actualizarPausaComida = (cambios) => {
+        setHorario((prev) => ({ ...prev, pausa_comida: { ...PAUSA_COMIDA_DEFAULT, ...(prev.pausa_comida || {}), ...cambios } }));
         setCambiosPendientes(true);
     };
 
@@ -172,12 +216,44 @@ export default function ResultadosIA({ numeroAsesorInicial = "", agenciaInicial 
             <div className="border-b border-slate-100 p-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="min-w-0"><div className="flex items-center gap-2"><span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#131E5C] text-white"><BrainCircuit className="h-5 w-5" /></span><div><h3 className="text-lg font-black text-[#131E5C]">Resultados · Inteligencia comercial</h3></div></div></div>
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">Mes<input type="month" value={mes} onChange={(e) => { setMes(e.target.value); setCambiosPendientes(true); }} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none focus:border-[#131E5C]/50" /></label>
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">Línea<select value={numeroAsesor} onChange={(e) => { setNumeroAsesor(e.target.value); setCambiosPendientes(true); }} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C]"><option value="">Todas permitidas</option>{lineasDisponibles.map((x) => <option key={x.numero} value={x.numero}>{x.asesor_digital || x.numero}</option>)}</select></label>
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">Dealer<select value={agencia} onChange={(e) => { setAgencia(e.target.value); setCambiosPendientes(true); }} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C]"><option value="">Todos</option>{agencias.map((x) => <option key={x}>{x}</option>)}</select></label>
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">Business<select value={business} onChange={(e) => { setBusiness(e.target.value); setCambiosPendientes(true); }} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C]"><option value="">Todos</option>{businesses.map((x) => <option key={x}>{x}</option>)}</select></label>
-                        <button type="button" onClick={() => cargar({ forzar: Boolean(data) })} disabled={loading || cargandoConfiguracion} className="mt-[18px] inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-3 text-sm font-black text-white disabled:opacity-60">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : data ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}{data ? " Reanalizar IA" : " Generar análisis"}</button>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
+                        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Mes<input type="month" value={mes} onChange={(e) => { setMes(e.target.value); setCambiosPendientes(true); }} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none focus:border-[#131E5C]/50" /></label>
+                        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Línea<select value={numeroAsesor} onChange={(e) => { setNumeroAsesor(e.target.value); setCambiosPendientes(true); }} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none focus:border-[#131E5C]/50"><option value="">Todas permitidas</option>{lineasDisponibles.map((x) => <option key={x.numero} value={x.numero}>{x.asesor_digital || x.numero}</option>)}</select></label>
+                        <div className="flex min-w-0 flex-col gap-1">
+                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Líneas excluidas</span>
+                            <details className="group relative">
+                                <summary className="flex h-10 w-full cursor-pointer list-none items-center justify-between rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 [&::-webkit-details-marker]:hidden">
+                                    <span className="min-w-0 truncate">{lineasExcluidasTiempo.length === 0 ? "Ninguna" : lineasExcluidasTiempo.length === 1 ? lineasDisponibles.find((x) => x.numero === lineasExcluidasTiempo[0])?.asesor_digital || "1 línea" : `${lineasExcluidasTiempo.length} líneas`}</span>
+                                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+                                </summary>
+
+                                <div className="absolute left-0 z-50 mt-1 w-[340px] max-w-[90vw] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                                    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2">
+                                        <p className="text-xs font-black text-[#131E5C]">Excluir del análisis</p>
+                                        {lineasExcluidasTiempo.length > 0 ? <button type="button" onClick={(e) => { e.preventDefault(); setLineasExcluidasTiempo([]); setCambiosPendientes(true); }} className="text-[10px] font-black text-[#131E5C] hover:underline">Limpiar</button> : null}
+                                    </div>
+
+                                    <div className="max-h-72 overflow-y-auto p-2">
+                                        {cargandoConfiguracion ? (
+                                            <div className="flex items-center gap-2 px-3 py-4 text-xs font-semibold text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />Cargando líneas...</div>
+                                        ) : lineasDisponibles.length ? (
+                                            lineasDisponibles.map((x) => {
+                                                const seleccionada = lineasExcluidasTiempo.includes(x.numero);
+                                                return (
+                                                    <label key={x.numero} className={cls("flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition", seleccionada ? "bg-[#131E5C]/[0.05]" : "hover:bg-slate-50")}>
+                                                        <input type="checkbox" checked={seleccionada} onChange={() => toggleLineaExcluida(x.numero)} className="h-4 w-4 shrink-0 accent-[#131E5C]" />
+                                                        <span className="min-w-0 flex-1"><span className="block truncate text-xs font-black normal-case tracking-normal text-slate-700">{x.asesor_digital || x.numero}</span><span className="block truncate text-[10px] font-semibold normal-case tracking-normal text-slate-400">{x.numero} · {x.agencia} · {x.business}</span></span>
+                                                    </label>
+                                                );
+                                            })
+                                        ) : <p className="px-3 py-4 text-xs font-semibold text-slate-400">No hay líneas disponibles.</p>}
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Dealer<select value={agencia} onChange={(e) => { setAgencia(e.target.value); setCambiosPendientes(true); }} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none focus:border-[#131E5C]/50"><option value="">Todos</option>{agencias.map((x) => <option key={x}>{x}</option>)}</select></label>
+                        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Business<select value={business} onChange={(e) => { setBusiness(e.target.value); setCambiosPendientes(true); }} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none focus:border-[#131E5C]/50"><option value="">Todos</option>{businesses.map((x) => <option key={x}>{x}</option>)}</select></label>
+                        <button type="button" onClick={() => cargar({ forzar: Boolean(data) })} disabled={loading || cargandoConfiguracion} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-3 text-sm font-black text-white transition hover:bg-[#131E5C]/95 disabled:opacity-60">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : data ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}{data ? "Reanalizar IA" : "Generar análisis"}</button>
                     </div>
                 </div>
             </div>
@@ -187,13 +263,19 @@ export default function ResultadosIA({ numeroAsesorInicial = "", agenciaInicial 
                     <span className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-[#131E5C]" /><span><span className="block text-xs font-black uppercase tracking-[.12em] text-[#131E5C]">Reglas de tiempo de respuesta</span></span></span>
                     {mostrarReglas ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 </button>
-                {mostrarReglas ? <div className="grid gap-4 border-t border-slate-200/70 bg-white p-5 xl:grid-cols-[.9fr_1.4fr]">
-                    <div className="rounded-xl border border-slate-200 p-4">
-                        <div className="flex items-start gap-2"><PhoneOff className="mt-0.5 h-4 w-4 text-[#131E5C]" /><div><p className="text-sm font-black text-[#131E5C]">Excluir líneas del comparativo de respuesta</p></div></div>
-                        <div className="mt-3 space-y-2">{cargandoConfiguracion ? <p className="text-xs font-semibold text-slate-400">Cargando líneas…</p> : lineasDisponibles.map((x) => <label key={x.numero} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"><input type="checkbox" checked={lineasExcluidasTiempo.includes(x.numero)} onChange={() => toggleLineaExcluida(x.numero)} className="h-4 w-4 accent-[#131E5C]" /><span className="min-w-0"><span className="block truncate text-xs font-black text-slate-700">{x.asesor_digital || x.numero}</span><span className="text-[10px] font-semibold text-slate-400">{x.numero} · {x.agencia} · {x.business}</span></span></label>)}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 p-4">
+                {mostrarReglas ? <div className="grid gap-4 border-t border-slate-200/70 bg-white p-5 ">
+                    <div>
                         <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-black text-[#131E5C]">Horario que sí cuenta para el reloj</p></div><button type="button" onClick={restaurarHorario} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50">Restaurar</button></div>
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <label className="flex items-center gap-2 text-xs font-black text-amber-800"><input type="checkbox" checked={Boolean(horario.pausa_comida?.activo)} onChange={(e) => actualizarPausaComida({ activo: e.target.checked })} className="h-4 w-4 accent-[#131E5C]" />Excluir horario de comida</label>
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">Lunes a viernes</span>
+                            </div>
+                            <div className="mt-2 grid max-w-sm grid-cols-2 gap-2">
+                                <input type="time" value={horario.pausa_comida?.inicio || PAUSA_COMIDA_DEFAULT.inicio} disabled={!horario.pausa_comida?.activo} onChange={(e) => actualizarPausaComida({ inicio: e.target.value })} className="h-9 rounded-md border border-amber-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" />
+                                <input type="time" value={horario.pausa_comida?.fin || PAUSA_COMIDA_DEFAULT.fin} disabled={!horario.pausa_comida?.activo} onChange={(e) => actualizarPausaComida({ fin: e.target.value })} className="h-9 rounded-md border border-amber-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" />
+                            </div>
+                        </div>
                         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{DIAS_HORARIO.map(({ key, label }) => { const cfg = horario[key] || HORARIO_DEFAULT[key]; return <div key={key} className={cls("rounded-lg border p-3", cfg.activo ? "border-[#131E5C]/15 bg-[#131E5C]/[0.02]" : "border-slate-200 bg-slate-50 opacity-70")}><label className="flex items-center gap-2 text-xs font-black text-slate-700"><input type="checkbox" checked={Boolean(cfg.activo)} onChange={(e) => actualizarDia(key, { activo: e.target.checked })} className="h-4 w-4 accent-[#131E5C]" />{label}</label><div className="mt-2 grid grid-cols-2 gap-2"><input type="time" value={cfg.inicio} disabled={!cfg.activo} onChange={(e) => actualizarDia(key, { inicio: e.target.value })} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" /><input type="time" value={cfg.fin} disabled={!cfg.activo} onChange={(e) => actualizarDia(key, { fin: e.target.value })} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" /></div></div>; })}</div>
                     </div>
                 </div> : null}
@@ -203,8 +285,8 @@ export default function ResultadosIA({ numeroAsesorInicial = "", agenciaInicial 
             {data && cambiosPendientes ? <div className="border-t border-amber-200 bg-amber-50 px-5 py-2 text-[11px] font-black text-amber-700">Cambiaste filtros u horario después del último análisis. Pulsa “Reanalizar IA” para aplicar las nuevas reglas.</div> : null}
         </section>
 
+        {loading ? <PantallaCargaAnalisis /> : null}
         {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700"><AlertTriangle className="mr-2 inline h-4 w-4" />{error}</div> : null}
-        {loading && !data ? <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-black/10 bg-white"><div className="text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-[#131E5C]" /><p className="mt-3 text-sm font-bold text-slate-500">Analizando resultados del mes…</p></div></div> : null}
         {!loading && !data && !error ? <div className="rounded-2xl border border-dashed border-[#131E5C]/20 bg-white px-6 py-12 text-center"><Clock3 className="mx-auto h-8 w-8 text-[#131E5C]" /><h4 className="mt-3 text-base font-black text-[#131E5C]">Configura el horario antes de medir</h4><p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500">El análisis no se ejecuta automáticamente. Revisa líneas excluidas y jornada laboral; después pulsa <b>Generar análisis</b>. Así los fines de semana y horas no laborables no distorsionan el desempeño.</p></div> : null}
 
         {data ? <>
