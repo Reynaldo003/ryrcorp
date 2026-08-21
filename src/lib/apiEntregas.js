@@ -8,9 +8,17 @@ async function listarTodo(params = {}) {
 
   while (next && !visitadas.has(next)) {
     visitadas.add(next);
+
     const data = await http(next, { auth: false });
-    if (Array.isArray(data)) return resultados.concat(data);
-    resultados.push(...(Array.isArray(data?.results) ? data.results : []));
+
+    if (Array.isArray(data)) {
+      return resultados.concat(data);
+    }
+
+    resultados.push(
+      ...(Array.isArray(data?.results) ? data.results : [])
+    );
+
     next = data?.next
       ? String(data.next).replace(/^https?:\/\/[^/]+/, "")
       : null;
@@ -20,17 +28,38 @@ async function listarTodo(params = {}) {
 }
 
 export const apiEntregas = {
-  list: (params = {}) => listarTodo(params),
-  get: (id) => http(`/citas/api/entregas/${id}/`, { auth: false }),
+  // Una sola página
+  list: (params = {}) =>
+    http(`/citas/api/entregas/${buildQuery(params)}`, { auth: false }),
+
+  // Todas las páginas
+  listAll: (params = {}) =>
+    listarTodo(params),
+
+  get: (id) =>
+    http(`/citas/api/entregas/${id}/`, { auth: false }),
+
   create: (payload) =>
     http("/citas/api/entregas/", {
       method: "POST",
       body: payload,
       auth: false,
     }),
+
   update: (id, payload) =>
-    http(`/citas/api/entregas/${id}/`, { method: "PUT", body: payload }),
+    http(`/citas/api/entregas/${id}/`, {
+      method: "PUT",
+      body: payload,
+    }),
+
   patch: (id, payload) =>
-    http(`/citas/api/entregas/${id}/`, { method: "PATCH", body: payload }),
-  remove: (id) => http(`/citas/api/entregas/${id}/`, { method: "DELETE" }),
+    http(`/citas/api/entregas/${id}/`, {
+      method: "PATCH",
+      body: payload,
+    }),
+
+  remove: (id) =>
+    http(`/citas/api/entregas/${id}/`, {
+      method: "DELETE",
+    }),
 };

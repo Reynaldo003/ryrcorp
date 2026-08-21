@@ -1498,23 +1498,137 @@ export default function RegistroCitas() {
         finally { setUpdatingInline((p) => { const n = { ...p }; delete n[id]; return n; }); }
     };
 
-    const resetFilters = () => setFilters({ q: "", agencia: "Todos", asesorDigital: "Todos", asesorPiso: "Todos", rangoDesde: "", rangoHasta: "" });
-    const setHoy = () => { const hoy = toYMDLocal(new Date()); setFilters((p) => ({ ...p, rangoDesde: hoy, rangoHasta: hoy })); };
+                const resetFilters = () => {
+                    setPage(1);
 
-    const ViewToggle = () => (
-        <div className="flex items-center rounded-lg border border-[#131E5C]/30 overflow-hidden">
-            {[
-                { key: "calendario", label: "Calendario", Icon: CalendarClock },
-                { key: "agenda", label: "Agenda", Icon: Calendar },
-                { key: "tabla", label: "Tabla", Icon: Table2 },
-                { key: "graficos", label: "Gráficos", Icon: BarChart3 },
-            ].map(({ key, label, Icon }) => (
-                <button key={key} onClick={() => setVista(key)} className={["inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition", vista === key ? "bg-[#131E5C] text-white" : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10"].join(" ")}>
-                    <Icon className="h-3.5 w-3.5" /> {label}
-                </button>
-            ))}
-        </div>
-    );
+                    setFilters({
+                        q: "",
+                        agencia: "Todos",
+                        asesorDigital: "Todos",
+                        asesorPiso: "Todos",
+                        rangoDesde: "",
+                        rangoHasta: "",
+                    });
+                };
+
+                const toggleRangoFechas = (desde, hasta) => {
+                    setPage(1);
+
+                    setFilters((prev) => {
+                        const mismoRango =
+                            prev.rangoDesde === desde &&
+                            prev.rangoHasta === hasta;
+
+                        return {
+                            ...prev,
+                            rangoDesde: mismoRango ? "" : desde,
+                            rangoHasta: mismoRango ? "" : hasta,
+                        };
+                    });
+                };
+
+                const setHoy = () => {
+                    const hoy = toYMDLocal(new Date());
+                    toggleRangoFechas(hoy, hoy);
+                };
+
+                const setAyer = () => {
+                    const ayer = new Date();
+                    ayer.setDate(ayer.getDate() - 1);
+
+                    const ymd = toYMDLocal(ayer);
+
+                    toggleRangoFechas(ymd, ymd);
+                };
+
+                const setSemana = () => {
+                    const hoy = new Date();
+
+                    const dia = hoy.getDay();
+                    const diferenciaLunes = dia === 0 ? -6 : 1 - dia;
+
+                    const lunes = new Date(hoy);
+                    lunes.setDate(hoy.getDate() + diferenciaLunes);
+
+                    const domingo = new Date(lunes);
+                    domingo.setDate(lunes.getDate() + 6);
+
+                    toggleRangoFechas(
+                        toYMDLocal(lunes),
+                        toYMDLocal(domingo)
+                    );
+                };
+
+                const setUltimos7Dias = () => {
+                    const hasta = new Date();
+
+                    const desde = new Date();
+                    desde.setDate(desde.getDate() - 6);
+
+                    toggleRangoFechas(
+                        toYMDLocal(desde),
+                        toYMDLocal(hasta)
+                    );
+                };
+
+                const setUltimos30Dias = () => {
+                    const hasta = new Date();
+
+                    const desde = new Date();
+                    desde.setDate(desde.getDate() - 29);
+
+                    toggleRangoFechas(
+                        toYMDLocal(desde),
+                        toYMDLocal(hasta)
+                    );
+                };
+
+                const setEsteMes = () => {
+                    const hoy = new Date();
+
+                    const primero = new Date(
+                        hoy.getFullYear(),
+                        hoy.getMonth(),
+                        1
+                    );
+
+                    const ultimo = new Date(
+                        hoy.getFullYear(),
+                        hoy.getMonth() + 1,
+                        0
+                    );
+
+                    toggleRangoFechas(
+                        toYMDLocal(primero),
+                        toYMDLocal(ultimo)
+                    );
+                };
+
+                const ViewToggle = () => (
+                    <div className="flex items-center rounded-lg border border-[#131E5C]/30 overflow-hidden">
+                        {[
+                            { key: "calendario", label: "Calendario", Icon: CalendarClock },
+                            { key: "agenda", label: "Agenda", Icon: Calendar },
+                            { key: "tabla", label: "Tabla", Icon: Table2 },
+                            { key: "graficos", label: "Gráficos", Icon: BarChart3 },
+                        ].map(({ key, label, Icon }) => (
+                            <button
+                                key={key}
+                                onClick={() => setVista(key)}
+                                className={[
+                                    "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition",
+                                    vista === key
+                                        ? "bg-[#131E5C] text-white"
+                                        : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
+                                ].join(" ")}
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                );
+
     const exportarExcel = async () => {
         const XLSX = await import("xlsx");
         const titulo = [["REPORTE DE CITAS — GRUPO AUTOMOTRIZ R&R"]];
@@ -1598,7 +1712,7 @@ export default function RegistroCitas() {
     return (
         <div className="w-full">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">git a
+                <div className="min-w-0">
                     <h2 className="font-vw-header truncate text-lg font-extrabold text-[#131E5C]">Citas</h2>
                     {!isAdmin && userAgencias.length > 0 ? (
                         <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -1625,75 +1739,205 @@ export default function RegistroCitas() {
 
             <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                 <div className="grid gap-3 md:grid-cols-12">
+
+                    {/* FILA 1 */}
                     <div className="md:col-span-3">
                         <FilterBlock label="Búsqueda">
                             <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
                                 <Search className="h-4 w-4 text-[#131E5C]" />
-                                <input value={filters.q} onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))} placeholder="Buscar por dealer, cliente, teléfono…" className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]" />
-                                {filters.q ? <button onClick={() => setFilters((p) => ({ ...p, q: "" }))} className="rounded-lg p-1 bg-white text-[#131E5C] hover:bg-white/80 hover:text-red-500"><X className="h-4 w-4" /></button> : null}
+
+                                <input
+                                    value={filters.q}
+                                    onChange={(e) => {
+                                        setPage(1);
+                                        setFilters((p) => ({
+                                            ...p,
+                                            q: e.target.value,
+                                        }));
+                                    }}
+                                    placeholder="Buscar por dealer, cliente, teléfono…"
+                                    className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]"
+                                />
+
+                                {filters.q ? (
+                                    <button
+                                        onClick={() => {
+                                            setPage(1);
+                                            setFilters((p) => ({
+                                                ...p,
+                                                q: "",
+                                            }));
+                                        }}
+                                        className="rounded-lg bg-white p-1 text-[#131E5C] hover:bg-white/80 hover:text-red-500"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                ) : null}
                             </div>
                         </FilterBlock>
                     </div>
+
                     <div className="md:col-span-3">
                         <FilterBlock label="Dealer">
-                            <select value={filters.agencia} onChange={(e) => setFilters((p) => ({ ...p, agencia: e.target.value }))} className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none">
-                                {dealers.map((d) => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                        </FilterBlock>
-                    </div>
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Asesor Digital">
-                            <select value={filters.asesorDigital} onChange={(e) => setFilters((p) => ({ ...p, asesorDigital: e.target.value }))} className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none">
-                                {asesoresDigitalesFiltro.map((a) => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                        </FilterBlock>
-                    </div>
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Acciones">
-                            <div className="grid grid-cols-2 gap-2">
-                                <button onClick={setHoy} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700"><CalendarDays className="h-4 w-4" /> Hoy</button>
-                                <button onClick={resetFilters} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C] px-3 py-2 text-sm font-semibold bg-white text-[#131E5C] hover:text-white hover:bg-[#131E5C]"><X className="h-4 w-4" /> Limpiar</button>
-                            </div>
-                        </FilterBlock>
-                    </div>
-                    <div className="md:col-span-4">
-                        <FilterBlock label="Asesor Piso">
                             <select
-                                value={filters.asesorPiso}
-                                onChange={(e) => setFilters((p) => ({ ...p, asesorPiso: e.target.value }))}
+                                value={filters.agencia}
+                                onChange={(e) => {
+                                    setPage(1);
+                                    setFilters((p) => ({
+                                        ...p,
+                                        agencia: e.target.value,
+                                    }));
+                                }}
                                 className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
                             >
-                                {asesoresPisoFiltro.map((a) => (
-                                    <option key={a} value={a}>{a}</option>
+                                {dealers.map((d) => (
+                                    <option key={d} value={d}>
+                                        {d}
+                                    </option>
                                 ))}
                             </select>
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Asesor Digital">
+                            <select
+                                value={filters.asesorDigital}
+                                onChange={(e) => {
+                                    setPage(1);
+                                    setFilters((p) => ({
+                                        ...p,
+                                        asesorDigital: e.target.value,
+                                    }));
+                                }}
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                {asesoresDigitalesFiltro.map((a) => (
+                                    <option key={a} value={a}>
+                                        {a}
+                                    </option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Asesor Piso">
+                            <select
+                                value={filters.asesorPiso}
+                                onChange={(e) => {
+                                    setPage(1);
+                                    setFilters((p) => ({
+                                        ...p,
+                                        asesorPiso: e.target.value,
+                                    }));
+                                }}
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                {asesoresPisoFiltro.map((a) => (
+                                    <option key={a} value={a}>
+                                        {a}
+                                    </option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    {/* FILA 2 */}
+                    <div className="md:col-span-3">
                         <FilterBlock label="Desde">
                             <input
                                 type="date"
                                 value={filters.rangoDesde}
-                                onChange={(e) => setFilters((p) => ({ ...p, rangoDesde: e.target.value }))}
+                                onChange={(e) => {
+                                    setPage(1);
+                                    setFilters((p) => ({
+                                        ...p,
+                                        rangoDesde: e.target.value,
+                                    }));
+                                }}
                                 className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
                             />
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
                         <FilterBlock label="Hasta">
                             <input
                                 type="date"
                                 value={filters.rangoHasta}
-                                onChange={(e) => setFilters((p) => ({ ...p, rangoHasta: e.target.value }))}
+                                onChange={(e) => {
+                                    setPage(1);
+                                    setFilters((p) => ({
+                                        ...p,
+                                        rangoHasta: e.target.value,
+                                    }));
+                                }}
                                 className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
                             />
                         </FilterBlock>
                     </div>
+
+                    <div className="md:col-span-6">
+                        <FilterBlock label="Acciones">
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={setHoy}
+                                    className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                                >
+                                    Hoy
+                                </button>
+
+                                <button
+                                    onClick={setAyer}
+                                    className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
+                                >
+                                    Ayer
+                                </button>
+
+                                <button
+                                    onClick={setSemana}
+                                    className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-sky-600"
+                                >
+                                    Semana
+                                </button>
+
+                                <button
+                                    onClick={setUltimos7Dias}
+                                    className="rounded-lg bg-violet-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-600"
+                                >
+                                    7 días
+                                </button>
+
+                                <button
+                                    onClick={setUltimos30Dias}
+                                    className="rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600"
+                                >
+                                    30 días
+                                </button>
+
+                                <button
+                                    onClick={setEsteMes}
+                                    className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-600"
+                                >
+                                    Este mes
+                                </button>
+
+                                <button
+                                    onClick={resetFilters}
+                                    className="rounded-lg border border-[#131E5C] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                >
+                                    <span className="inline-flex items-center gap-1">
+                                        <X className="h-3.5 w-3.5" />
+                                        Limpiar
+                                    </span>
+                                </button>
+                            </div>
+                        </FilterBlock>
+                    </div>
                 </div>
             </div>
-
+            
             {vista === "calendario" && (
                 <CalendarioView
                     rows={sorted}
@@ -1767,51 +2011,79 @@ export default function RegistroCitas() {
                                 </tbody>
                             </table>
                             <ContextMenu ctxMenu={ctxMenu} onDelete={async (row) => { await eliminarCita(row); setCtxMenu({ open: false, x: 0, y: 0, row: null }); }} onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })} />
+                        
                         </div>
-                        {totalCount > PAGE_SIZE && (
-                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 bg-white/50 px-4 py-3">
-                                <span className="text-xs font-bold text-[#131E5C]">
-                                    {totalCount.toLocaleString("es-MX")} registros · Página {page} de {totalPages}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                    <button onClick={() => goToPage(1)} disabled={page <= 1} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
-                                        ««
-                                    </button>
-                                    <button onClick={() => goToPage(page - 1)} disabled={page <= 1} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
-                                        « Anterior
-                                    </button>
-                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                        let pageNum;
-                                        if (totalPages <= 5) {
-                                            pageNum = i + 1;
-                                        } else if (page <= 3) {
-                                            pageNum = i + 1;
-                                        } else if (page >= totalPages - 2) {
-                                            pageNum = totalPages - 4 + i;
-                                        } else {
-                                            pageNum = page - 2 + i;
-                                        }
-                                        return (
-                                            <button key={pageNum} onClick={() => goToPage(pageNum)}
-                                                className={["rounded border px-2.5 py-1.5 text-xs font-bold transition",
-                                                    pageNum === page
-                                                        ? "border-[#131E5C] bg-[#131E5C] text-white"
-                                                        : "border-[#131E5C]/20 text-[#131E5C] hover:bg-[#131E5C]/10"
-                                                ].join(" ")}>
-                                                {pageNum}
-                                            </button>
-                                        );
-                                    })}
-                                    <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
-                                        Siguiente »
-                                    </button>
-                                    <button onClick={() => goToPage(totalPages)} disabled={page >= totalPages} className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
-                                        »»
-                                    </button>
-                                </div>
+                        
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 bg-white/50 px-4 py-3">
+                            <span className="text-xs font-bold text-[#131E5C]">
+                                {totalCount.toLocaleString("es-MX")} registros · Página {page} de {totalPages}
+                            </span>
+
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => goToPage(1)}
+                                    disabled={page <= 1}
+                                    className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    ««
+                                </button>
+
+                                <button
+                                    onClick={() => goToPage(page - 1)}
+                                    disabled={page <= 1}
+                                    className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    « Anterior
+                                </button>
+
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum;
+
+                                    if (totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (page <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (page >= totalPages - 2) {
+                                        pageNum = totalPages - 4 + i;
+                                    } else {
+                                        pageNum = page - 2 + i;
+                                    }
+
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => goToPage(pageNum)}
+                                            className={[
+                                                "rounded border px-2.5 py-1.5 text-xs font-bold transition",
+                                                pageNum === page
+                                                    ? "border-[#131E5C] bg-[#131E5C] text-white"
+                                                    : "border-[#131E5C]/20 text-[#131E5C] hover:bg-[#131E5C]/10",
+                                            ].join(" ")}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+
+                                <button
+                                    onClick={() => goToPage(page + 1)}
+                                    disabled={page >= totalPages}
+                                    className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    Siguiente »
+                                </button>
+
+                                <button
+                                    onClick={() => goToPage(totalPages)}
+                                    disabled={page >= totalPages}
+                                    className="rounded border border-[#131E5C]/20 px-2.5 py-1.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    »»
+                                </button>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                                                
+                        </div>
                 </>
             )}
 

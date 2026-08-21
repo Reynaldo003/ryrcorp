@@ -8,9 +8,17 @@ async function listarTodo(params = {}) {
 
   while (next && !visitadas.has(next)) {
     visitadas.add(next);
+
     const data = await http(next);
-    if (Array.isArray(data)) return resultados.concat(data);
-    resultados.push(...(Array.isArray(data?.results) ? data.results : []));
+
+    if (Array.isArray(data)) {
+      return resultados.concat(data);
+    }
+
+    resultados.push(
+      ...(Array.isArray(data?.results) ? data.results : [])
+    );
+
     next = data?.next
       ? String(data.next).replace(/^https?:\/\/[^/]+/, "")
       : null;
@@ -20,7 +28,14 @@ async function listarTodo(params = {}) {
 }
 
 export const apiPruebaManejo = {
-  list: (params = {}) => listarTodo(params),
+  // Una sola página
+  list: (params = {}) =>
+    http(`/citas/api/pruebas-manejo/${buildQuery(params)}`),
+
+  // Todas las páginas
+  listAll: (params = {}) =>
+    listarTodo(params),
+
   get: (id) => http(`/citas/api/pruebas-manejo/${id}/`),
 
   create: (payload) =>
@@ -42,7 +57,9 @@ export const apiPruebaManejo = {
     }),
 
   remove: (id) =>
-    http(`/citas/api/pruebas-manejo/${id}/`, { method: "DELETE" }),
+    http(`/citas/api/pruebas-manejo/${id}/`, {
+      method: "DELETE",
+    }),
 };
 
 // Evidencias (multipart)
@@ -63,3 +80,4 @@ export const apiEvidenciasPruebaManejo = {
     });
   },
 };
+

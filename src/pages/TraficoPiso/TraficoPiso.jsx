@@ -702,6 +702,12 @@ export default function TraficoPiso() {
     const [beBackMap, setBeBackMap] = useState({});
     const [updatingBeBack, setUpdatingBeBack] = useState({});
 
+    const [pagina, setPagina] = useState(1);
+    const [totalRegistros, setTotalRegistros] = useState(0);
+    const [haySiguiente, setHaySiguiente] = useState(false);
+    const [hayAnterior, setHayAnterior] = useState(false);
+    const PAGE_SIZE = 200;
+
     const { encuestaMap, setEncuesta } = useEncuestaMap();
     const { guardarRespuesta, obtenerRespuesta } = useRespuestasEncuesta();
     const [enviandoEncuesta, setEnviandoEncuesta] = useState({});
@@ -907,15 +913,25 @@ export default function TraficoPiso() {
             setLoadingList(true);
             setError("");
 
+            const paramsLista = {
+                ...params,
+                page: pagina,
+                page_size: PAGE_SIZE,
+            };
+
             const [lista, datosResumen] = await Promise.all([
-                apiTraficoPiso.list(params),
+                apiTraficoPiso.list(paramsLista),
                 apiTraficoPiso.resumen(params).catch(() => null)
             ]);
 
-            const listaFinal = Array.isArray(lista) ? lista : lista?.results || [];
+            const listaFinal = Array.isArray(lista)
+                ? lista
+                : lista?.results || [];
+
             const listaOrdenada = [...listaFinal].sort((a, b) => {
                 const agenciaA = (a.agencia || "").toLowerCase();
                 const agenciaB = (b.agencia || "").toLowerCase();
+
                 if (agenciaA < agenciaB) return -1;
                 if (agenciaA > agenciaB) return 1;
                 return 0;
@@ -924,29 +940,54 @@ export default function TraficoPiso() {
             setRegistros(listaOrdenada);
             setResumen(datosResumen || null);
 
+            // Datos de paginación
+            setTotalRegistros(
+                Array.isArray(lista)
+                    ? lista.length
+                    : lista?.count || 0
+            );
+
+            setHaySiguiente(!!lista?.next);
+            setHayAnterior(!!lista?.previous);
+
             const initialBeBack = {};
-            for (const item of listaOrdenada) { initialBeBack[item.id_trafico] = !!item.be_back; }
+
+            for (const item of listaOrdenada) {
+                initialBeBack[item.id_trafico] = !!item.be_back;
+            }
+
             setBeBackMap(initialBeBack);
         } catch (err) {
             console.error(err);
             setError(err.message || "No se pudo cargar el tráfico de piso.");
             setRegistros([]);
-        } finally { setLoadingList(false); }
+            setTotalRegistros(0);
+            setHaySiguiente(false);
+            setHayAnterior(false);
+        } finally {
+            setLoadingList(false);
+        }
     }
 
-    useEffect(() => {
-        if (!authLoading) {
-            cargarDatos();
-        }
-    }, [userAgencia, authLoading, isAdmin]);
-
-    useEffect(() => {
-        const onGlobal = () => setCtxMenu((p) => ({ ...p, open: false, row: null }));
-        window.addEventListener("click", onGlobal);
-        window.addEventListener("scroll", onGlobal, true);
-        window.addEventListener("resize", onGlobal);
-        return () => { window.removeEventListener("click", onGlobal); window.removeEventListener("scroll", onGlobal, true); window.removeEventListener("resize", onGlobal); };
-    }, []);
+        useEffect(() => {
+            if (!authLoading) {
+                cargarDatos({
+                    search: filters.q,
+                    agencia: filters.agencia === "Todos" ? "" : filters.agencia,
+                    desde: filters.rangoDesde,
+                    hasta: filters.rangoHasta,
+                });
+            }
+        }, [
+            userAgencia,
+            authLoading,
+            isAdmin,
+            pagina,
+            filters.q,
+            filters.agencia,
+            filters.rangoDesde,
+            filters.rangoHasta,
+        ]);
 
     async function toggleBeBack(item) {
         const id = item?.id_trafico;
@@ -1186,7 +1227,101 @@ export default function TraficoPiso() {
 
     function onRowContextMenu(e, row) { e.preventDefault(); e.stopPropagation(); setCtxMenu({ open: true, x: e.clientX, y: e.clientY, row }); }
     function resetFilters() { setFilters({ q: "", agencia: "Todos", tipoPersona: "Todos", tiempoCompra: "Todos", rangoDesde: "", rangoHasta: "" }); }
-    function setHoy() { const hoy = toYMDLocal(new Date()); setFilters((prev) => ({ ...prev, rangoDesde: hoy, rangoHasta: hoy })); }
+    
+    function toggleRangoFechas(desde, hasta) {
+        setPagina(1);
+
+        setFilters((prev) => {
+            const mismoRango =
+                prev.rangoDesde === desde &&
+                prev.rangoHasta === hasta;
+
+            return {
+                ...prev,
+                rangoDesde: mismoRango ? "" : desde,
+                rangoHasta: mismoRango ? "" : hasta,
+            };
+        });
+    }
+
+    function setHoy() {
+        const hoy = toYMDLocal(new Date());
+        toggleRangoFechas(hoy, hoy);
+    }
+
+    function setAyer() {
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
+
+        const ymd = toYMDLocal(ayer);
+        toggleRangoFechas(ymd, ymd);
+    }
+
+    function setSemana() {
+        const hoy = new Date();
+        const dia = hoy.getDay();
+
+        const diff =
+            hoy.getDate() - dia + (dia === 0 ? -6 : 1);
+
+        const lunes = new Date(hoy);
+        lunes.setDate(diff);
+
+        const domingo = new Date(lunes);
+        domingo.setDate(lunes.getDate() + 6);
+
+        toggleRangoFechas(
+            toYMDLocal(lunes),
+            toYMDLocal(domingo)
+        );
+    }
+
+    function setUltimos7Dias() {
+        const hasta = new Date();
+        const desde = new Date();
+
+        desde.setDate(desde.getDate() - 6);
+
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    }
+
+    function setUltimos30Dias() {
+        const hasta = new Date();
+        const desde = new Date();
+
+        desde.setDate(desde.getDate() - 29);
+
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    }
+
+    function setEsteMes() {
+        const hoy = new Date();
+
+        const primero = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth(),
+            1
+        );
+
+        const ultimo = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth() + 1,
+            0
+        );
+
+        toggleRangoFechas(
+            toYMDLocal(primero),
+            toYMDLocal(ultimo)
+        );
+    }
+
+
     function handleNewAtSlot(date, hour) { openCreate(); }
 
     const filtered = useMemo(() => {
@@ -1233,6 +1368,11 @@ export default function TraficoPiso() {
             return 0;
         });
     }, [filtered, sort]);
+
+        const totalPaginas = Math.max(
+            1,
+            Math.ceil(totalRegistros / PAGE_SIZE)
+        );
 
     const ViewToggle = () => (
         <div className="flex items-center rounded-lg border border-[#131E5C]/30 overflow-hidden">
@@ -1364,72 +1504,190 @@ export default function TraficoPiso() {
 
             {(vista === "tabla" || vista === "graficos") && (
                 <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="grid gap-3 md:grid-cols-12">
-                        <div className="md:col-span-4">
-                            <FilterBlock label="Búsqueda">
-                                <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
-                                    <Search className="h-4 w-4 text-[#131E5C]" />
-                                    <input value={filters.q} onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))} placeholder="Buscar por prospecto, teléfono, asesor, ingreso…" className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]/70" />
-                                    {filters.q && <button type="button" onClick={() => setFilters((p) => ({ ...p, q: "" }))} className="rounded-lg bg-white p-1 text-[#131E5C] hover:bg-white/80 hover:text-red-500"><X className="h-4 w-4" /></button>}
-                                </div>
-                            </FilterBlock>
-                        </div>
-                        <div className="md:col-span-2">
-                            <FilterBlock label="Dealer">
-                                <select
-                                    value={filters.agencia}
-                                    onChange={(e) => setFilters((p) => ({ ...p, agencia: e.target.value }))}
-                                    className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                                >
-                                    {dealers.map((d) => (
-                                        <option key={d} value={d} className="bg-neutral-100 text-[#131E5C]">{d}</option>
-                                    ))}
-                                </select>
-                            </FilterBlock>
-                        </div>
-                        <div className="md:col-span-2">
-                            <FilterBlock label="Tipo persona">
-                                <select value={filters.tipoPersona} onChange={(e) => setFilters((p) => ({ ...p, tipoPersona: e.target.value }))} className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none">
-                                    <option value="Todos">Todos</option>
-                                    {TIPOS_PERSONA.map((x) => <option key={x} value={x}>{x}</option>)}
-                                </select>
-                            </FilterBlock>
-                        </div>
-                        <div className="md:col-span-2">
-                            <FilterBlock label="Tiempo compra">
-                                <select value={filters.tiempoCompra} onChange={(e) => setFilters((p) => ({ ...p, tiempoCompra: e.target.value }))} className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none">
-                                    <option value="Todos">Todos</option>
-                                    {TIEMPOS_COMPRA.map((x) => <option key={x} value={x}>{x}</option>)}
-                                </select>
-                            </FilterBlock>
-                        </div>
-                        <div className="md:col-span-2">
-                            <FilterBlock label="Acciones">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button type="button" onClick={setHoy} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"><CalendarDays className="h-4 w-4" /> Hoy</button>
-                                    <button type="button" onClick={resetFilters} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"><X className="h-4 w-4" /> Limpiar</button>
-                                </div>
-                            </FilterBlock>
-                        </div>
-                        <div className="md:col-span-6">
-                            <FilterBlock label="Desde"><input type="date" value={filters.rangoDesde} onChange={(e) => setFilters((p) => ({ ...p, rangoDesde: e.target.value }))} className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none" /></FilterBlock>
-                        </div>
-                        <div className="md:col-span-6">
-                            <FilterBlock label="Hasta"><input type="date" value={filters.rangoHasta} onChange={(e) => setFilters((p) => ({ ...p, rangoHasta: e.target.value }))} className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none" /></FilterBlock>
-                        </div>
+                 <div className="grid gap-3 md:grid-cols-12">
+
+                    {/* FILA 1 */}
+                    <div className="md:col-span-4">
+                        <FilterBlock label="Búsqueda">
+                            <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
+                                <Search className="h-4 w-4 text-[#131E5C]" />
+                                <input
+                                    value={filters.q}
+                                    onChange={(e) =>
+                                        setFilters((p) => ({ ...p, q: e.target.value }))
+                                    }
+                                    placeholder="Buscar por prospecto, teléfono, asesor, ingreso..."
+                                    className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]/70"
+                                />
+                                {filters.q && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setFilters((p) => ({ ...p, q: "" }))
+                                        }
+                                        className="rounded-lg bg-white p-1 text-[#131E5C] hover:text-red-500"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </FilterBlock>
                     </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Dealer">
+                            <select
+                                value={filters.agencia}
+                                onChange={(e) =>
+                                    setFilters((p) => ({ ...p, agencia: e.target.value }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                {dealers.map((d) => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <FilterBlock label="Tipo persona">
+                            <select
+                                value={filters.tipoPersona}
+                                onChange={(e) =>
+                                    setFilters((p) => ({ ...p, tipoPersona: e.target.value }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                <option value="Todos">Todos</option>
+                                {TIPOS_PERSONA.map((x) => (
+                                    <option key={x} value={x}>{x}</option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Tiempo compra">
+                            <select
+                                value={filters.tiempoCompra}
+                                onChange={(e) =>
+                                    setFilters((p) => ({ ...p, tiempoCompra: e.target.value }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                <option value="Todos">Todos</option>
+                                {TIEMPOS_COMPRA.map((x) => (
+                                    <option key={x} value={x}>{x}</option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    {/* FILA 2 */}
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Desde">
+                            <input
+                                type="date"
+                                value={filters.rangoDesde}
+                                onChange={(e) =>
+                                    setFilters((p) => ({ ...p, rangoDesde: e.target.value }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            />
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Hasta">
+                            <input
+                                type="date"
+                                value={filters.rangoHasta}
+                                onChange={(e) =>
+                                    setFilters((p) => ({ ...p, rangoHasta: e.target.value }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            />
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-6">
+                        <FilterBlock label="Acciones">
+                            <div className="flex flex-wrap items-center gap-2">
+
+                                <button
+                                    type="button"
+                                    onClick={setHoy}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                                >
+                                    Hoy
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setAyer}
+                                    className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                                >
+                                    Ayer
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setSemana}
+                                    className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-white hover:bg-sky-600"
+                                >
+                                    Semana
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setUltimos7Dias}
+                                    className="rounded-lg bg-violet-500 px-3 py-2 text-xs font-bold text-white hover:bg-violet-600"
+                                >
+                                    7 días
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setUltimos30Dias}
+                                    className="rounded-lg bg-indigo-500 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-600"
+                                >
+                                    30 días
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setEsteMes}
+                                    className="rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                                >
+                                    Este mes
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={resetFilters}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                >
+                                    <X className="h-4 w-4" />
+                                    Limpiar
+                                </button>
+
+                            </div>
+                        </FilterBlock>
+                    </div>
+
+                </div>
                 </div>
             )}
 
             {vista === "agenda" && <AgendaTraficoPiso rows={sorted} loading={loadingList} onEdit={openEdit} onNewAtSlot={handleNewAtSlot} />}
 
             {vista === "tabla" && (
-                <>
-                    <div className="hidden overflow-hidden rounded-lg bg-white/[0.03] shadow-lg lg:block">
-                        <div className="overflow-auto">
-                            <table className="min-w-[1200px] w-full text-left text-sm">
-                                <thead className="font-vw-header border border-black bg-[#131E5C] text-xs text-white">
-                                    <tr>
+                                            <>
+                                <div className="hidden overflow-hidden rounded-lg bg-white/[0.03] shadow-lg lg:block">
+                                    <div className="max-h-[560px] overflow-auto">
+                                        <table className="min-w-[1200px] w-full text-left text-sm">
+                                            <thead className="font-vw-header sticky top-0 z-10 border border-black bg-[#131E5C] text-xs text-white">                                    <tr>
                                         <th className="px-4 py-3"><SortButton label="Fecha" sortKey="creado_en" sort={sort} onClick={toggleSort} /></th>
                                         <th className="px-4 py-3"><SortButton label="Dealer" sortKey="agencia" sort={sort} onClick={toggleSort} /></th>
                                         <th className="px-4 py-3"><SortButton label="Prospecto" sortKey="nombre_prospecto" sort={sort} onClick={toggleSort} /></th>
@@ -1561,6 +1819,50 @@ export default function TraficoPiso() {
                             </table>
                         </div>
                     </div>
+
+                <div className="hidden lg:flex items-center justify-between gap-4 border-t border-black/10 bg-white px-4 py-3">
+                    <div className="text-xs font-semibold text-slate-500">
+                        {totalRegistros} registros · Página {pagina} de {totalPaginas}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            disabled={!hayAnterior || loadingList}
+                            onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                            className="rounded-lg border border-[#131E5C] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            Anterior
+                        </button>
+
+                        {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((n) => (
+                            <button
+                                key={n}
+                                type="button"
+                                onClick={() => setPagina(n)}
+                                disabled={loadingList}
+                                className={[
+                                    "h-8 min-w-8 rounded-lg border px-2 text-xs font-bold transition",
+                                    pagina === n
+                                        ? "border-[#131E5C] bg-[#131E5C] text-white"
+                                        : "border-[#131E5C]/30 bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
+                                ].join(" ")}
+                            >
+                                {n}
+                            </button>
+                        ))}
+
+                        <button
+                            type="button"
+                            disabled={!haySiguiente || loadingList}
+                            onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                            className="rounded-lg border border-[#131E5C] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            Siguiente
+                        </button>
+                    </div>
+                </div>
+
                     <div className="grid gap-3 lg:hidden">
                         {loadingList ? <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm"><div className="flex items-center gap-2 font-bold text-[#131E5C]"><Loader2 className="h-5 w-5 animate-spin" /> Cargando...</div></div> : (
                             <>
