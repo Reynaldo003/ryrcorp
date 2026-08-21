@@ -842,95 +842,6 @@ async function listarProspectosDigitalesCompletos(params = {}) {
     }
     return registros;
 }
-function getTemplateComponentType(component = {}) {
-    return String(component.type || "").toLowerCase();
-}
-function replaceMetaVariables(text, componentType, values) {
-    return String(text || "").replace(/\{\{(\d+)\}\}/g, (_, index) => String(values?.[`${componentType}_${index}`] ?? "").trim());
-}
-function interpolateNumberedText(text, fields, values) {
-    const fieldValues = (fields || []).map((field) => String(values?.[field.key] || "").trim());
-    return String(text || "").replace(/\((\d+)\)/g, (_, index) => fieldValues[Number(index) - 1] || "");
-}
-function buildTemplatePreviewText(template, values) {
-    if (!template)
-        return "";
-    const components = Array.isArray(template.components_meta) ? template.components_meta : [];
-    const textFromComponents = components
-        .filter((component) => {
-            const type = getTemplateComponentType(component);
-            return ["header", "body", "footer"].includes(type) && String(component.text || "").trim();
-        })
-        .map((component) => replaceMetaVariables(component.text, getTemplateComponentType(component), values))
-        .filter(Boolean)
-        .join("\n");
-    if (textFromComponents) {
-        return textFromComponents;
-    }
-    return interpolateNumberedText(template.help || "", template.fields || [], values);
-}
-function getTemplateFieldOptions(field) {
-    if (Array.isArray(field?.options) && field.options.length) {
-        return field.options;
-    }
-    const label = normalizeText(field?.label);
-    const key = normalizeText(field?.key);
-    if (label.includes("dealer") || label.includes("agencia") || key.includes("dealer") || key.includes("agencia")) {
-        return DEALERS;
-    }
-    if (label.includes("canal") || key.includes("canal")) {
-        return Object.keys(origenMeta);
-    }
-    return [];
-}
-function getDefaultTemplateFieldValue(field, context) {
-    const label = normalizeText(field?.label);
-    const key = normalizeText(field?.key);
-    if (label.includes("asesor") || key.includes("asesor") || label.includes("quien eres")) {
-        return context.asesor || "";
-    }
-    if (label.includes("nombre") || label.includes("prospecto") || label.includes("cliente") || key.includes("nombre")) {
-        return context.nombre || "";
-    }
-    if (label.includes("dealer") || label.includes("agencia") || key.includes("dealer") || key.includes("agencia")) {
-        return context.agencia || "";
-    }
-    if (label.includes("modelo") || label.includes("auto") || label.includes("vehiculo") || key.includes("modelo") || key.includes("auto")) {
-        return context.modelo || "";
-    }
-    if (label.includes("canal") || key.includes("canal")) {
-        return context.canal || "";
-    }
-    if (label.includes("tema") || key.includes("tema")) {
-        return context.tema || "";
-    }
-    if (label.includes("dato") || key.includes("dato")) {
-        return context.dato || "";
-    }
-    return "";
-}
-function buildDynamicTemplateComponents(template, values) {
-    const fields = Array.isArray(template?.fields) ? template.fields : [];
-    const groupedFields = fields.reduce((accumulator, field) => {
-        const component = String(field.component || "body").toLowerCase();
-        if (!accumulator[component]) {
-            accumulator[component] = [];
-        }
-        accumulator[component].push(field);
-        return accumulator;
-    }, {});
-    return Object.entries(groupedFields)
-        .map(([type, componentFields]) => ({
-            type,
-            parameters: componentFields
-                .sort((a, b) => Number(a.index || 0) - Number(b.index || 0))
-                .map((field) => ({
-                    type: "text",
-                    text: String(values?.[field.key] || "").trim(),
-                })),
-        }))
-        .filter((component) => component.parameters.length > 0);
-}
 // ─── UI Utilities ─────────────────────────────────────────────────────────────
 function cls(...a) {
     return a.filter(Boolean).join(" ");
@@ -1336,58 +1247,6 @@ function Field({ label, icon: Icon, children }) {
         <div className="space-y-3">{children}</div>
     </div>);
 }
-function LineaPicker({ value, onChange }) {
-    return (<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {Object.entries(lineaMeta).map(([key, meta]) => {
-            const active = value === key;
-            const Icon = meta.Icon;
-            return (<button key={key} type="button" onClick={() => onChange(key)} className={cls("flex h-14 w-full items-center justify-center gap-2 rounded-xl border px-4 transition", active ? "border-[#131E5C]/50 bg-white ring-2 ring-[#131E5C]/20" : "border-black/10 bg-neutral-50 hover:bg-white")}>
-                <span className={cls("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border", active ? "border-[#131E5C]/40 bg-[#131E5C]/10" : "border-black/10 bg-white")}>
-                    <Icon className="h-4 w-4 text-[#131E5C]" />
-                </span>
-                <span className="truncate text-sm font-semibold text-[#131E5C]">{meta.label}</span>
-            </button>);
-        })}
-    </div>);
-}
-function OrigenPicker({ value, onChange }) {
-    return (<div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        {Object.entries(origenMeta).map(([key, meta]) => {
-            const active = value === key;
-            const Icon = meta.Icon;
-            return (<button type="button" key={key} onClick={() => onChange(key)} className={cls("flex h-14 w-full items-center gap-3 rounded-xl border px-4 text-left transition", active ? "border-[#131E5C]/50 bg-white ring-2 ring-[#131E5C]/20" : "border-black/10 bg-neutral-50 hover:bg-white")}>
-                <div className={cls("flex h-8 w-8 shrink-0 items-center justify-center rounded-full border", active ? "border-[#131E5C]/40 bg-[#131E5C]/10" : "border-black/10 bg-white")}>
-                    <Icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-[#131E5C]">{meta.label}</div>
-                </div>
-            </button>);
-        })}
-    </div>);
-}
-function EvidenceCard({ item, onRemove }) {
-    const isImage = item.type?.startsWith("image/") || !!item.previewUrl;
-    const isExistente = !!item.id;
-    const url = item.previewUrl || item.url || null;
-    const sizeKB = item.size ? Math.round(item.size / 1024) : null;
-    return (<div className="relative flex items-start gap-3 rounded-xl border border-black/10 bg-white p-3 shadow-sm">
-        <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-black/10 bg-slate-100 flex items-center justify-center">{isImage && url ? <img src={url} alt={item.name} className="h-full w-full object-cover" /> : <Paperclip className="h-6 w-6 text-slate-400" />}</div>
-        <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-bold text-[#131E5C]" title={item.name}>
-                {item.name || "Archivo"}
-            </div>
-            {sizeKB && <div className="mt-0.5 text-[11px] text-slate-400">{sizeKB < 1024 ? `${sizeKB} KB` : `${(sizeKB / 1024).toFixed(1)} MB`}</div>}
-            {isExistente && url && (<a href={url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 hover:underline">
-                Ver archivo
-            </a>)}
-            {!isExistente && <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">Nueva</span>}
-        </div>
-        <button type="button" onClick={onRemove} className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500 hover:bg-red-100" title="Quitar">
-            <X className="h-3.5 w-3.5" />
-        </button>
-    </div>);
-}
 function ContextMenu({ ctxMenu, onDelete, onClose }) {
     if (!ctxMenu.open || !ctxMenu.row)
         return null;
@@ -1406,16 +1265,6 @@ export default function DigitalesProspectos() {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState("tabla");
     const [highlightedRow, setHighlightedRow] = useState(null);
-    const fileInputRef = useRef(null);
-    const templatesDropdownRef = useRef(null);
-    const ultimoPayloadGuardadoRef = useRef("");
-    const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
-    const [tplSelected, setTplSelected] = useState(null);
-    const [tplDraft, setTplDraft] = useState({});
-    const [templatesDisponibles, setTemplatesDisponibles] = useState([]);
-    const [loadingTemplates, setLoadingTemplates] = useState(false);
-    const [templatesError, setTemplatesError] = useState("");
-    const [sendingTemplate, setSendingTemplate] = useState(false);
     const [telefonosConChat, setTelefonosConChat] = useState(() => new Set());
     const VIEW_MODES = [
         { key: "tabla", label: "Tabla", Icon: Table2 },
@@ -1470,8 +1319,6 @@ export default function DigitalesProspectos() {
         )];
     }, [isAdmin, isCoordinador, numerosPermitidosCoordinador, numerosUsuarioSesion, user]);
     const [ctxMenu, setCtxMenu] = useState({ open: false, row: null });
-    const [pautasMeta, setPautasMeta] = useState([]);
-    const [loadingPautas, setLoadingPautas] = useState(false);
     const [updatingEstado, setUpdatingEstado] = useState({});
     const [generatingSummary, setGeneratingSummary] = useState({});
     const [openSummaryModal, setOpenSummaryModal] = useState(false);
@@ -1486,31 +1333,16 @@ export default function DigitalesProspectos() {
         }
         return "";
     }, [selectedNumeroAsesor]);
-    const contextoDigitalSesion = useMemo(() => {
-        const numeroContexto = numeroAsesorActivo ||
-            numeroUsuarioSesion;
-        return getContextoDigitalPorNumero(numeroContexto, user);
-    }, [
-        numeroAsesorActivo,
-        numeroUsuarioSesion,
-        user,
-    ]);
     const deferredQ = useDeferredValue(filters.q);
     const [page, setPage] = useState(1);
-    const [openModal, setOpenModal] = useState(false);
-    const [openNuevoProspectoModal, setOpenNuevoProspectoModal] = useState(false);
-    const [draft, setDraft] = useState(null);
+    const [prospectoModal, setProspectoModal] = useState({ open: false, mode: "create", prospectoId: null, estadoInicial: "", tieneChatInicial: false });
     const [loadingCases, setLoadingCases] = useState(false);
-    const [loadingDetail, setLoadingDetail] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [touchedSave, setTouchedSave] = useState(false);
     const [openAgendaModal, setOpenAgendaModal] = useState(false);
     const [agendaInfo, setAgendaInfo] = useState(null);
     const [drafter, setDrafter] = useState({ agencia: "", fecha_cita: "", asesor_digital: "", asesor_solicita: "", tipo_cita: "Digital" });
     const [savingo, setSavingo] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const [versionOperativaBDC, setVersionOperativaBDC] = useState(0);
-    const totalEvidenciasDraft = (draft?.evidencias_existentes?.length || 0) + (draft?.evidencias_nuevas?.length || 0);
     useEffect(() => {
         const cerrar = () => setCtxMenu((prev) => (prev.open ? { open: false, row: null } : prev));
         window.addEventListener("click", cerrar);
@@ -1546,74 +1378,31 @@ export default function DigitalesProspectos() {
             alert("No se pudo eliminar (revisa consola / backend).");
         }
     };
-    const REQUIRED = useMemo(() => ({ telefono: "Teléfono" }), []);
-    const missing = useMemo(() => {
-        if (!draft)
-            return [];
-        return Object.keys(REQUIRED).filter((key) => {
-            const v = draft[key];
-            return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
-        });
-    }, [draft, REQUIRED]);
-    const isInvalid = (key) => touchedSave && missing.includes(key);
-    const telDigits = useMemo(() => String(draft?.telefono || "").replace(/\D/g, ""), [draft?.telefono]);
-    const telIsOk = useMemo(() => /^(?:\d{10}|52\d{10})$/.test(telDigits), [telDigits]);
-    const telIsNormalized = useMemo(() => /^52\d{10}$/.test(telDigits), [telDigits]);
-    const cargarTelefonosConChat = useCallback(async () => {
-        const numeroLinea = numeroAsesorActivo ||
-            numeroUsuarioSesion ||
-            "";
-        if (!numeroLinea) {
-            setTelefonosConChat(new Set());
-            return;
-        }
-        try {
-            const response = await api.digitalesChats({
-                numero_asesor: numeroLinea,
-            });
-            const chats = Array.isArray(response)
-                ? response
-                : Array.isArray(response?.results)
-                    ? response.results
-                    : [];
-            const telefonos = new Set(chats
-                .map((chat) => normalizaTelefonoMx(chat?.telefono))
-                .filter(Boolean));
-            setTelefonosConChat(telefonos);
-        }
-        catch (error) {
-            console.error("No se pudieron cargar los teléfonos con chat:", error);
-            setTelefonosConChat(new Set());
-        }
-    }, [
-        numeroAsesorActivo,
-        numeroUsuarioSesion,
-    ]);
-    const telError = useMemo(() => {
-        if (!openModal || !draft || !telDigits)
-            return "";
-        if (/^\d{10}$/.test(telDigits) || /^52\d{10}$/.test(telDigits))
-            return "";
-        if (telDigits.length < 10)
-            return "Número incompleto (mínimo 10 dígitos)";
-        if (telDigits.length === 11)
-            return "Número incorrecto (11 dígitos no válido)";
-        if (telDigits.length === 12 && !telDigits.startsWith("52"))
-            return "Número inválido: si tiene 12 dígitos debe iniciar con 52";
-        if (telDigits.length > 12)
-            return "Número incorrecto (máximo 12 dígitos)";
-        return "Número inválido";
-    }, [openModal, draft, telDigits]);
-    const telInvalid = !!telError;
-    const telefonoDraft = useMemo(() => normalizaTelefonoMx(draft?.telefono), [draft?.telefono]);
-    const templatePreview = useMemo(() => (tplSelected ? buildTemplatePreviewText(tplSelected, tplDraft) : ""), [tplSelected, tplDraft]);
-    const puedeAbrirPlantillas = Boolean(ready && numeroUsuarioSesion && draft && telIsOk && !telInvalid && !saving && !sendingTemplate);
-    const draftTieneChat = Boolean(telefonoDraft && telefonosConChat.has(telefonoDraft));
     const inputBase = "w-full rounded-lg border px-3 py-2.5 text-sm text-[#131E5C] font-semibold outline-none transition";
     const inputOk = "border-black/10 bg-neutral-100";
     const inputBad = "border-red-500 bg-red-50";
     const filterControlCls = "h-9 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-sm text-[#131E5C] shadow-sm outline-none transition focus:border-[#131E5C] focus:ring-2 focus:ring-[#131E5C]/15";
     const filterLabelCls = "mb-1.5 block text-xs font-bold text-[#131E5C]";
+
+    const cargarTelefonosConChat = useCallback(async () => {
+        const numeroLinea = numeroAsesorActivo || numeroUsuarioSesion || "";
+
+        if (!numeroLinea) {
+            setTelefonosConChat(new Set());
+            return;
+        }
+
+        try {
+            const response = await api.digitalesChats({ numero_asesor: numeroLinea });
+            const chats = Array.isArray(response) ? response : Array.isArray(response?.results) ? response.results : [];
+            const telefonos = new Set(chats.map((chat) => normalizaTelefonoMx(chat?.telefono)).filter(Boolean));
+
+            setTelefonosConChat(telefonos);
+        } catch (error) {
+            console.error("No se pudieron cargar los teléfonos con chat:", error);
+            setTelefonosConChat(new Set());
+        }
+    }, [numeroAsesorActivo, numeroUsuarioSesion]);
     const cargarProspectosPorLinea = useCallback(async () => {
         if (!ready) return;
 
@@ -1719,24 +1508,6 @@ export default function DigitalesProspectos() {
     useEffect(() => {
         cargarProspectosPorLinea();
     }, [cargarProspectosPorLinea]);
-    useEffect(() => {
-        if (!openModal || pautasMeta.length)
-            return;
-        (async () => {
-            setLoadingPautas(true);
-            try {
-                const res = await api.digitalesCampanasMeta(30);
-                setPautasMeta(Array.isArray(res?.items) ? res.items : []);
-            }
-            catch (e) {
-                console.error(e);
-                setPautasMeta([]);
-            }
-            finally {
-                setLoadingPautas(false);
-            }
-        })();
-    }, [openModal, pautasMeta.length]);
     useEffect(() => {
         if (!ready) return;
 
@@ -1853,15 +1624,6 @@ export default function DigitalesProspectos() {
     function toggleSort(key) {
         setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
     }
-    function resetPlantillasModal() {
-        setShowTemplatesDropdown(false);
-        setTplSelected(null);
-        setTplDraft({});
-        setTemplatesError("");
-    }
-    function resetCacheProspectoGuardado() {
-        ultimoPayloadGuardadoRef.current = "";
-    }
     const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
     const accessibleCases = useMemo(() => cases.filter((c) => {
         if (!isAdmin && !isCoordinador && userAgencias.length && !userTieneAgencia(c.agencia)) return false;
@@ -1925,118 +1687,6 @@ export default function DigitalesProspectos() {
         const avgResp = tiemposResp.length ? Math.round(tiemposResp.reduce((a, b) => a + b, 0) / tiemposResp.length) : null;
         return { total, pendIA, conPerfil, financiamiento, avgResp };
     }, [sorted]);
-    const pautasOptions = useMemo(() => {
-        const items = Array.isArray(pautasMeta) ? pautasMeta : [];
-        const vistos = new Set();
-        const opciones = [];
-        for (const item of items) {
-            const value = String(item?.value || "").trim();
-            const label = String(item?.label || value).trim();
-            if (!value)
-                continue;
-            const key = normalizeText(value);
-            if (vistos.has(key))
-                continue;
-            vistos.add(key);
-            opciones.push({ value, label });
-        }
-        return opciones.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
-    }, [pautasMeta]);
-    function handleAddFiles(fileList) {
-        if (!fileList?.length)
-            return;
-        const nuevas = Array.from(fileList).map((file) => ({
-            _tmpId: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
-            file,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-        }));
-        setDraft((prev) => ({
-            ...prev,
-            evidencias_nuevas: [...(prev.evidencias_nuevas || []), ...nuevas],
-        }));
-    }
-    function removeNuevaEvidencia(tmpId) {
-        setDraft((prev) => ({
-            ...prev,
-            evidencias_nuevas: (prev.evidencias_nuevas || []).filter((e) => e._tmpId !== tmpId),
-        }));
-    }
-    function removeEvidenciaExistente(id) {
-        setDraft((prev) => ({
-            ...prev,
-            evidencias_existentes: (prev.evidencias_existentes || []).filter((e) => e.id !== id),
-            delete_evidencia_ids: [...(prev.delete_evidencia_ids || []), id],
-        }));
-    }
-    async function cargarPlantillas() {
-        const numeroLinea = numeroAsesorActivo ||
-            numeroUsuarioSesion ||
-            "";
-        if (!numeroLinea) {
-            setTemplatesDisponibles([]);
-            setTemplatesError("Tu usuario no tiene un número de WhatsApp asignado.");
-            return;
-        }
-        try {
-            setLoadingTemplates(true);
-            setTemplatesError("");
-            const response = await api.digitalesPlantillas({
-                numero_asesor: numeroLinea,
-            });
-            const items = Array.isArray(response?.items) ? response.items : Array.isArray(response) ? response : [];
-            setTemplatesDisponibles(items);
-        }
-        catch (error) {
-            console.error("Error cargando plantillas:", error);
-            setTemplatesDisponibles([]);
-            setTemplatesError(error?.message || "No se pudieron cargar las plantillas.");
-        }
-        finally {
-            setLoadingTemplates(false);
-        }
-    }
-    async function abrirPlantillasDropdown() {
-        if (showTemplatesDropdown) {
-            resetPlantillasModal();
-            return;
-        }
-        if (!numeroUsuarioSesion) {
-            alert("Tu usuario no tiene un número de WhatsApp asignado.");
-            return;
-        }
-        if (!telIsOk || telInvalid) {
-            setTouchedSave(true);
-            alert("Captura un teléfono válido antes de cargar las plantillas.");
-            return;
-        }
-        const prospectoId = await asegurarProspectoGuardado();
-        if (!prospectoId)
-            return;
-        setTplSelected(null);
-        setTplDraft({});
-        setShowTemplatesDropdown(true);
-        await cargarPlantillas();
-    }
-    function pickTemplate(template) {
-        setTplSelected(template);
-        const context = {
-            nombre: getNombreCompletoDraft(draft) || "",
-            agencia: draft?.agencia || contextoDigitalSesion?.agencia || "",
-            modelo: draft?.cliente_interes || "",
-            canal: draft?.origen || "",
-            asesor: draft?.asesor_digital || contextoDigitalSesion?.asesor_digital || user?.nombre || user?.username || "",
-            tema: draft?.cliente_interes ? "vehículo de interés" : "solicitud de información",
-            dato: "horario",
-        };
-        const values = {};
-        for (const field of template.fields || []) {
-            values[field.key] = getDefaultTemplateFieldValue(field, context);
-        }
-        setTplDraft(values);
-    }
     function calcTiempoRespuesta(creado, primerContacto) {
         if (!creado || !primerContacto)
             return null;
@@ -2123,14 +1773,16 @@ export default function DigitalesProspectos() {
         XLSX.utils.book_append_sheet(wb, ws, "Prospectos");
         XLSX.writeFile(wb, `reporte_prospectos_${fecha}_${hora}.xlsx`, { compression: true });
     }
-    const openCreate = () => { setOpenNuevoProspectoModal(true); };
-    const handleNuevoProspectoCreado = (prospectoCreado, opciones = {}) => {
-        const normalizado = normalizeProspecto(prospectoCreado || {});
-        if (normalizado?.id_exp) setCases((actuales) => { const mapa = new Map(actuales.map((item) => [item.id_exp, item])); mapa.set(normalizado.id_exp, normalizado); return Array.from(mapa.values()); });
-        if (opciones?.cerrar !== false) setOpenNuevoProspectoModal(false);
-        cargarProspectosPorLinea().catch((error) => console.error("No se pudo refrescar la lista después de crear el prospecto:", error));
+    const closeProspectoModal = () => setProspectoModal((p) => ({ ...p, open: false }));
+    const openCreate = () => setProspectoModal({ open: true, mode: "create", prospectoId: null, estadoInicial: "", tieneChatInicial: false });
+    const handleProspectoGuardado = (prospectoGuardado, opciones = {}) => {
+        if (opciones?.modo === "create") {
+            const normalizado = normalizeProspecto(prospectoGuardado || {});
+            if (normalizado?.id_exp) setCases((actuales) => { const mapa = new Map(actuales.map((item) => [item.id_exp, item])); mapa.set(normalizado.id_exp, normalizado); return Array.from(mapa.values()); });
+        }
+        cargarProspectosPorLinea().catch((error) => console.error("No se pudo refrescar la lista después de guardar el prospecto:", error));
     };
-    const handlePlantillaNuevoProspectoEnviada = ({ telefono } = {}) => {
+    const handlePlantillaProspectoEnviada = ({ telefono } = {}) => {
         const tel = normalizaTelefonoMx(telefono);
         if (tel) setTelefonosConChat((actuales) => { const siguiente = new Set(actuales); siguiente.add(tel); return siguiente; });
         cargarTelefonosConChat().catch((error) => console.error("No se pudieron refrescar los chats después de enviar la plantilla:", error));
@@ -2156,317 +1808,12 @@ export default function DigitalesProspectos() {
         setAgendaInfo({ id_exp: row.id_exp, cliente_id: row.cliente_id, nombre, telefono: row.telefono || "", correo: row.correo || "", auto_interes: row.cliente_interes || "", agencia: row.agencia || "", fuente_prospeccion: row.origen || "", fecha_cita: "", asesor_digital: row.asesor_digital, asesor_solicita: row.asesor_solicita, tipo_cita: "Digital" });
         setOpenAgendaModal(true);
     };
-    const openEdit = async (row, estadoInicial = "") => {
-        resetPlantillasModal();
-        resetCacheProspectoGuardado();
-        const numeroLinea = numeroAsesorActivo ||
-            numeroUsuarioSesion ||
-            "";
-        try {
-            setTouchedSave(false);
-            setLoadingDetail(true);
-            setOpenModal(true);
-            const contextoPeticion = isAdmin &&
-                selectedNumeroAsesor === "Todos"
-                ? {
-                    todos: 1,
-                }
-                : numeroLinea
-                    ? {
-                        numero_asesor: numeroLinea,
-                    }
-                    : {};
-            const [p, evidenciasData,] = await Promise.all([
-                api.digitalesGetProspecto(row.id_exp, contextoPeticion),
-                api.digitalesListEvidencias(row.id_exp, contextoPeticion).catch((error) => {
-                    console.warn("No se pudieron cargar las evidencias:", error);
-                    return [];
-                }),
-            ]);
-            const nombreCompleto = String(p.nombre || "").trim();
-            const tieneNombre = tieneNombreReal(nombreCompleto);
-            setDraft({
-                id_exp: p.id,
-                agencia: p.agencia || "",
-                anio_auto: p.anio_auto || "",
-                tiene_nombre: tieneNombre,
-                nombre_cliente: tieneNombre
-                    ? nombreCompleto
-                    : "",
-                telefono: String(p.telefono || ""),
-                correo: p.correo || "",
-                linea: p.business || "",
-                origen: p.canal_contacto || "",
-                pauta: p.pauta || "",
-                estado: estadoInicial ||
-                    p.estado ||
-                    "",
-                motivo_descalificacion: normalizeText(estadoInicial ||
-                    p.estado) === "descalificado"
-                    ? p.motivo_descalificacion ||
-                    ""
-                    : "",
-                cliente_interes: p.auto_interes || "",
-                comentarios: p.comentarios || "",
-                resumen: p.resumen || "",
-                resumen_actualizado_at: toDTLocal(p.resumen_actualizado_at),
-                resumen_fuente: p.resumen_fuente || "",
-                asesor_digital: p.asesor_digital || "",
-                usuario_crm_asignado: p.usuario_crm_asignado ||
-                    "",
-                asignado_automaticamente_at: p.asignado_automaticamente_at ||
-                    null,
-                asesor_solicita: p.asesor_ventas || "",
-                creado: toDTLocalInput(p.creado),
-                primer_contacto_at: p.primer_mensaje_cliente ||
-                    null,
-                ultimo_contacto_at: p.ultimo_contacto_asesor ||
-                    null,
-                enganche_monto: p.enganche_monto || "",
-                presupuesto_mensual: p.presupuesto_mensual ||
-                    "",
-                buro_estado: p.buro_estado || "",
-                forma_pago: p.forma_pago || "",
-                tipo_cliente: p.tipo_cliente || "",
-                uso_vehiculo: p.uso_vehiculo || "",
-                plazo_compra: p.plazo_compra || "",
-                comprobacion_ingresos: p.comprobacion_ingresos ||
-                    "",
-                id_cotizacion: p.id_cotizacion || "",
-                folio_solicitud_credito: p.folio_solicitud_credito ||
-                    "",
-                solicitud_credito_estado: p.solicitud_credito_estado ||
-                    "",
-                vin_facturado: p.vin_facturado || "",
-                facturado_at: p.facturado_at || null,
-                vin_estatus_entrega: p.vin_estatus_entrega ||
-                    "",
-                evidencias_existentes: Array.isArray(evidenciasData)
-                    ? evidenciasData
-                    : Array.isArray(evidenciasData?.results)
-                        ? evidenciasData.results
-                        : [],
-                evidencias_nuevas: [],
-                delete_evidencia_ids: [],
-            });
-        }
-        catch (error) {
-            console.error("Error abriendo prospecto:", {
-                prospectoId: row?.id_exp,
-                numeroLinea,
-                error,
-            });
-            alert(`No se pudo abrir el prospecto para editar.${error?.message
-                ? `\n\n${error.message}`
-                : ""}`);
-            setOpenModal(false);
-        }
-        finally {
-            setLoadingDetail(false);
-        }
+    const openEdit = (row, estadoInicial = "") => {
+        if (!row?.id_exp) return;
+        const tel = normalizaTelefonoMx(row.telefono);
+        setProspectoModal({ open: true, mode: "edit", prospectoId: row.id_exp, estadoInicial, tieneChatInicial: Boolean(tel && telefonosConChat.has(tel)) });
     };
-    const closeModal = () => {
-        if (saving || sendingTemplate)
-            return;
-        resetPlantillasModal();
-        resetCacheProspectoGuardado();
-        setOpenModal(false);
-        setDraft(null);
-    };
-    const refreshList = async () => {
-        await cargarProspectosPorLinea();
-    };
-    function buildProspectoPayload() {
-        const agenciaFinal = !isAdmin && contextoDigitalSesion?.agencia ? contextoDigitalSesion.agencia : draft.agencia || "";
-        const asesorDigitalFinal = draft.asesor_digital || "";
-        const nombreCapturado = getNombreCompletoDraft(draft);
-        const nombreFinal = draft.tiene_nombre && nombreCapturado ? nombreCapturado : "SIN NOMBRE";
-        return {
-            numero_asesor: numeroAsesorActivo || numeroUsuarioSesion || "",
-            nombre: nombreFinal,
-            telefono: normalizaTelefonoMx(draft.telefono),
-            correo: draft.correo || "",
-            agencia: agenciaFinal,
-            anio_auto: draft.anio_auto ? Number(draft.anio_auto) : null,
-            business: draft.linea || "",
-            canal_contacto: draft.origen || "",
-            pauta: draft.pauta || "",
-            estado: draft.estado || "",
-            motivo_descalificacion: normalizeText(draft.estado) === "descalificado"
-                ? String(draft.motivo_descalificacion || "").trim()
-                : "",
-            asesor_digital: asesorDigitalFinal,
-            asesor_ventas: draft.asesor_solicita || "",
-            auto_interes: draft.cliente_interes || "",
-            comentarios: draft.comentarios || "",
-            enganche_monto: toNullableNumber(draft.enganche_monto),
-            presupuesto_mensual: toNullableNumber(draft.presupuesto_mensual),
-            buro_estado: draft.buro_estado || "",
-            forma_pago: draft.forma_pago || "",
-            tipo_cliente: draft.tipo_cliente || "",
-            uso_vehiculo: draft.uso_vehiculo || "",
-            plazo_compra: draft.plazo_compra || "",
-            comprobacion_ingresos: draft.comprobacion_ingresos || "",
-            id_cotizacion: draft.id_cotizacion || "",
-            folio_solicitud_credito: draft.folio_solicitud_credito || "",
-            solicitud_credito_estado: draft.solicitud_credito_estado || "",
-            vin_facturado: draft.vin_facturado || "",
-            vin_estatus_entrega: draft.vin_estatus_entrega || "",
-            primer_mensaje_cliente: draft.primer_contacto_at || null,
-            ultimo_contacto_asesor: draft.ultimo_contacto_at || null,
-        };
-    }
-    function getFirmaPayloadProspecto(payload) {
-        return JSON.stringify(payload);
-    }
-    async function asegurarProspectoGuardado() {
-        if (!draft || saving)
-            return null;
-        setTouchedSave(true);
-        if (normalizeText(draft.estado) === "descalificado" &&
-            !String(draft.motivo_descalificacion || "").trim()) {
-            alert("Selecciona un motivo de descalificación.");
-            return null;
-        }
-        if (missing.length || telInvalid || !telIsOk || !draft.id_exp) {
-            return null;
-        }
-        const payloadActual = buildProspectoPayload();
-        const firmaActual = getFirmaPayloadProspecto(payloadActual);
-        const idGuardado = draft.id_exp;
-        if (idGuardado && ultimoPayloadGuardadoRef.current === firmaActual) {
-            return idGuardado;
-        }
-        return guardarProspecto({ cerrar: false, procesarEvidencias: false });
-    }
-    async function guardarProspecto({ cerrar = true, procesarEvidencias = true } = {}) {
-        if (!draft || saving)
-            return null;
-        setTouchedSave(true);
-        if (normalizeText(draft.estado) === "descalificado" &&
-            !String(draft.motivo_descalificacion || "").trim()) {
-            alert("Selecciona un motivo de descalificación.");
-            return null;
-        }
-        if (missing.length || telInvalid || !telIsOk) {
-            return null;
-        }
-        setSaving(true);
-        try {
-            const payload = buildProspectoPayload();
-            const idFinal = draft.id_exp;
-            if (!idFinal) {
-                throw new Error("No se puede editar un prospecto sin ID. El alta debe realizarse desde NuevoProspectoModal.");
-            }
-            await api.digitalesUpdateProspecto(idFinal, payload);
-            ultimoPayloadGuardadoRef.current = getFirmaPayloadProspecto(payload);
-            if (procesarEvidencias) {
-                const nuevas = draft.evidencias_nuevas || [];
-                if (nuevas.length > 0) {
-                    const formData = new FormData();
-                    nuevas.forEach((evidencia) => {
-                        if (evidencia.file) {
-                            formData.append("archivos", evidencia.file);
-                        }
-                    });
-                    await api.digitalesUploadEvidencias(idFinal, formData, numeroAsesorActivo ||
-                        numeroUsuarioSesion ||
-                        "");
-                }
-                const idsEliminar = draft.delete_evidencia_ids || [];
-                if (idsEliminar.length > 0) {
-                    await Promise.allSettled(idsEliminar.map((idEvidencia) => api.digitalesDeleteEvidencia(idFinal, idEvidencia, {
-                        numero_asesor: numeroAsesorActivo ||
-                            numeroUsuarioSesion ||
-                            "",
-                    })));
-                }
-            }
-            await refreshList();
-            if (cerrar) {
-                resetPlantillasModal();
-                resetCacheProspectoGuardado();
-                setOpenModal(false);
-                setDraft(null);
-            }
-            else {
-                setDraft((currentDraft) => ({
-                    ...currentDraft,
-                    id_exp: idFinal,
-                    telefono: payload.telefono,
-                    ...(procesarEvidencias
-                        ? {
-                            evidencias_nuevas: [],
-                            delete_evidencia_ids: [],
-                        }
-                        : {}),
-                }));
-            }
-            return idFinal;
-        }
-        catch (error) {
-            console.error("Error guardando el prospecto:", error);
-            alert(error?.message || "Error guardando el prospecto.");
-            return null;
-        }
-        finally {
-            setSaving(false);
-        }
-    }
-    async function enviarPlantilla() {
-        if (!tplSelected || sendingTemplate) {
-            return;
-        }
-        const telefono = normalizaTelefonoMx(draft?.telefono);
-        if (!/^52\d{10}$/.test(telefono)) {
-            alert("El teléfono del prospecto no es válido.");
-            return;
-        }
-        // Solo guarda si la información cambió desde el último guardado.
-        const prospectoId = await asegurarProspectoGuardado();
-        if (!prospectoId)
-            return;
-        const fields = Array.isArray(tplSelected.fields) ? tplSelected.fields : [];
-        const incompleteField = fields.find((field) => !String(tplDraft[field.key] || "").trim());
-        if (incompleteField) {
-            alert(`Completa el campo: ${incompleteField.label || incompleteField.key}`);
-            return;
-        }
-        const idioma = tplSelected.idioma || tplSelected.language || "es_MX";
-        const components = buildDynamicTemplateComponents(tplSelected, tplDraft);
-        setSendingTemplate(true);
-        try {
-            await api.digitalesEnviarPlantilla({
-                to: telefono,
-                template_name: tplSelected.key,
-                idioma,
-                components: components.length > 0 ? components : undefined,
-                params: components.length > 0 ? undefined : [],
-            });
-            /*
-             * El teléfono ya tiene por lo menos
-             * un mensaje saliente.
-             */
-            setTelefonosConChat((currentSet) => {
-                const nextSet = new Set(currentSet);
-                nextSet.add(telefono);
-                return nextSet;
-            });
-            resetPlantillasModal();
-            alert("Plantilla enviada correctamente.");
-        }
-        catch (error) {
-            console.error("Error enviando plantilla:", error);
-            alert(error?.message || "No se pudo enviar la plantilla.");
-        }
-        finally {
-            setSendingTemplate(false);
-        }
-    }
-    const save = () => guardarProspecto({
-        cerrar: true,
-        procesarEvidencias: true,
-    });
+    const refreshList = async () => { await cargarProspectosPorLinea(); };
     useEffect(() => {
         if (openAgendaModal && agendaInfo) {
             setDrafter({ agencia: agendaInfo.agencia || "", fecha_cita: agendaInfo.fecha_cita || "", asesor_digital: agendaInfo.asesor_digital || "", asesor_solicita: agendaInfo.asesor_solicita || "", tipo_cita: agendaInfo.tipo_cita || "Digital" });
@@ -2616,14 +1963,6 @@ export default function DigitalesProspectos() {
                     resumen_fuente: resumenFuente,
                 }
                 : caso));
-            if (draft?.id_exp === id) {
-                setDraft((prev) => ({
-                    ...prev,
-                    resumen: resumenNuevo,
-                    resumen_actualizado_at: resumenActualizadoAt,
-                    resumen_fuente: resumenFuente,
-                }));
-            }
             setSummaryInfo({
                 id_exp: id,
                 nombre: `${row.cliente_nombre || ""} ${row.cliente_apellidos || ""}`.trim(),
@@ -3147,353 +2486,22 @@ export default function DigitalesProspectos() {
                 </div>
             </div>
         </div>)}
-        <NuevoProspectoModal open={openNuevoProspectoModal} onClose={() => setOpenNuevoProspectoModal(false)} onCreado={handleNuevoProspectoCreado} onPlantillaEnviada={handlePlantillaNuevoProspectoEnviada} numeroAsesor={numeroAsesorActivo || numeroUsuarioSesion || ""} user={user} isAdmin={isAdmin} />
+
+        <NuevoProspectoModal
+            open={prospectoModal.open}
+            mode={prospectoModal.mode}
+            prospectoId={prospectoModal.prospectoId}
+            estadoInicial={prospectoModal.estadoInicial}
+            tieneChatInicial={prospectoModal.tieneChatInicial}
+            onClose={closeProspectoModal}
+            onGuardado={handleProspectoGuardado}
+            onPlantillaEnviada={handlePlantillaProspectoEnviada}
+            numeroAsesor={numeroAsesorActivo || numeroUsuarioSesion || ""}
+            requestContext={isAdmin && selectedNumeroAsesor === "Todos" ? { todos: 1 } : numeroAsesorActivo ? { numero_asesor: numeroAsesorActivo } : {}}
+            user={user}
+            isAdmin={isAdmin}
+        />
         <ContextMenu ctxMenu={ctxMenu} onDelete={eliminarCaso} onClose={() => setCtxMenu({ open: false, row: null })} />
-        {/* Modal exclusivo de edición; el alta vive en NuevoProspectoModal.jsx */}
-        <Modal open={openModal} title={`Editar prospecto · ${draft?.id_exp || ""}`} onClose={closeModal} footer={<>
-            {draftTieneChat ? (<button type="button" onClick={(event) => {
-                event.stopPropagation();
-                navigate(`/comercial/prospectos/contacto?tel=${encodeURIComponent(telefonoDraft)}&direct=1`);
-            }} className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-bold text-[#131E5C] shadow-sm hover:bg-slate-50" title="Abrir chat">
-                <MessageSquareShare className="h-4 w-4" />
-                Abrir chat
-            </button>) : null}
-            {/* Plantillas — dropdown igual que mensajes rápidos */}
-            <div className="relative" ref={templatesDropdownRef}>
-                <button type="button" onClick={abrirPlantillasDropdown} disabled={!puedeAbrirPlantillas} className={cls("inline-flex h-9 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-bold transition", puedeAbrirPlantillas ? "text-[#131E5C] hover:bg-slate-50" : "cursor-not-allowed text-slate-300 opacity-60", showTemplatesDropdown ? "bg-slate-50 ring-2 ring-[#131E5C]/15" : "")} title={!numeroUsuarioSesion ? "Tu usuario no tiene línea de WhatsApp asignada" : !telIsOk ? "Captura un teléfono válido" : "Guardar y seleccionar plantilla"}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutTemplate className="h-4 w-4" />}
-                    <span>{saving ? "Guardando..." : "Plantillas"}</span>
-                </button>
-                {showTemplatesDropdown ? (<div className="absolute bottom-12 left-0 z-50 w-96 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
-                    <div className="flex items-center justify-between border-b border-black/5 px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                            {tplSelected ? (<button type="button" onClick={() => setTplSelected(null)} className="inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-neutral-100 transition">
-                                <ChevronLeft className="h-3.5 w-3.5" />
-                            </button>) : null}
-                            <span className="text-xs font-extrabold text-[#131E5C]">{tplSelected ? `Plantilla: ${tplSelected.title || tplSelected.key}` : "Plantillas"}</span>
-                        </div>
-                        <button type="button" onClick={() => {
-                            setShowTemplatesDropdown(false);
-                            setTplSelected(null);
-                        }} className="inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-neutral-100 transition">
-                            <X className="h-3.5 w-3.5" />
-                        </button>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                        {!tplSelected ? (
-                            // Lista de plantillas
-                            loadingTemplates ? (<div className="px-4 py-6 text-center text-xs font-semibold text-slate-400">Cargando plantillas...</div>) : templatesError ? (<div className="px-4 py-4 text-xs font-bold text-red-600">{templatesError}</div>) : templatesDisponibles.length === 0 ? (<div className="px-4 py-6 text-center text-xs font-semibold text-slate-400">No hay plantillas disponibles.</div>) : (templatesDisponibles.map((template) => (<button key={`${template.key}-${template.idioma || template.language || "x"}`} type="button" onClick={() => pickTemplate(template)} className="w-full border-b border-black/5 px-4 py-3 text-left last:border-0 hover:bg-neutral-50 transition">
-                                <div className="text-xs font-extrabold text-[#131E5C]">{template.title || template.key}</div>
-                                <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                                    {template.key} · {template.idioma || template.language || "es_MX"} · {template.category || "Sin categoría"}
-                                </div>
-                                {template.help ? <div className="mt-1 truncate text-[11px] text-slate-500">{template.help}</div> : null}
-                            </button>)))) : (
-                            // Detalle de plantilla seleccionada
-                            <div className="p-4 space-y-3">
-                                <div className="whitespace-pre-wrap rounded-xl border border-black/10 bg-neutral-50 p-3 text-xs font-semibold text-[#131E5C]">{templatePreview || tplSelected.help || "Sin texto visible."}</div>
-                                {(tplSelected.fields || []).map((field) => {
-                                    const options = getTemplateFieldOptions(field);
-                                    return (<div key={field.key}>
-                                        <div className="mb-1 text-[11px] font-extrabold text-[#131E5C]">{field.label || field.key}</div>
-                                        {options.length ? (<select value={tplDraft[field.key] || ""} onChange={(e) => setTplDraft((p) => ({ ...p, [field.key]: e.target.value }))} className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none">
-                                            <option value="" disabled>
-                                                Selecciona…
-                                            </option>
-                                            {options.map((o) => (<option key={o} value={o}>
-                                                {o}
-                                            </option>))}
-                                        </select>) : (<input value={tplDraft[field.key] || ""} onChange={(e) => setTplDraft((p) => ({ ...p, [field.key]: e.target.value }))} className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none" />)}
-                                    </div>);
-                                })}
-                                {!(tplSelected.fields || []).length ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Esta plantilla no requiere parámetros.</div> : null}
-                                <button type="button" onClick={enviarPlantilla} disabled={sendingTemplate || saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#131E5C] py-2.5 text-xs font-extrabold text-white transition hover:bg-[#131E5C]/90 disabled:cursor-not-allowed disabled:opacity-60">
-                                    {sendingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareShare className="h-4 w-4" />}
-                                    {sendingTemplate ? "Enviando..." : "Enviar plantilla"}
-                                </button>
-                            </div>)}
-                    </div>
-                </div>) : null}
-            </div>
-            <button onClick={closeModal} disabled={saving} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60">
-                <X className="h-4 w-4" /> Cancelar
-            </button>
-            <button onClick={save} disabled={saving || loadingDetail || telInvalid || (draft?.telefono ? !telIsOk : false)} className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C]/85 px-4 py-2 text-sm font-bold text-white hover:bg-[#131E5C] disabled:opacity-60">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {saving ? "Guardando..." : "Guardar cambios"}
-            </button>
-        </>}>
-            {loadingDetail ? (<ModalSkeleton />) : !draft ? null : (<div className="grid gap-3 md:grid-cols-4">
-                {touchedSave && missing.length > 0 && (<div className="md:col-span-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    <div className="font-extrabold">Faltan campos obligatorios</div>
-                    <div className="mt-1 text-xs font-semibold">{missing.map((k) => REQUIRED[k]).join(" · ")}</div>
-                </div>)}
-                <div className="md:col-span-4 grid gap-3 md:grid-cols-3">
-                    <Field label="Dealer" icon={Building2}>
-                        <select value={draft.agencia || ""} onChange={(e) => setDraft((p) => ({ ...p, agencia: e.target.value }))} disabled={!isAdmin && userAgencias.length <= 1} className={cls(inputBase, isInvalid("agencia") ? inputBad : inputOk, !isAdmin && contextoDigitalSesion ? "cursor-not-allowed opacity-70" : "")}>
-                            <option value="" disabled>
-                                Selecciona un dealer...
-                            </option>
-                            {(isAdmin ? DEALERS : userAgencias.length > 0 ? userAgencias : DEALERS).map((d) => (<option key={d} value={d}>
-                                {d}
-                            </option>))}
-                        </select>
-                    </Field>
-
-                    <Field label="Asesor Digital" icon={User}>
-                        <select value={draft.asesor_digital || ""} onChange={(e) => setDraft((previous) => ({
-                            ...previous,
-                            asesor_digital: e.target.value,
-                        }))} disabled={!isAdmin} className={cls(inputBase, inputOk, !isAdmin ? "cursor-not-allowed opacity-70" : "")}>
-                            <option value="">— Selecciona —</option>
-                            {ASESORES_DIGITALES.map((n) => (<option key={n} value={n}>
-                                {n}
-                            </option>))}
-                        </select>
-                    </Field>
-
-                    <Field label="Asignado a" icon={User}>
-                        <select value={draft.asesor_solicita || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_solicita: e.target.value }))} className={cls(inputBase, inputOk)}>
-                            <option value="">— Selecciona —</option>
-                            {ASESORES.map((n) => (<option key={n} value={n}>
-                                {n}
-                            </option>))}
-                        </select>
-                    </Field>
-                </div>
-
-                <div className="md:col-span-4 grid gap-3 md:grid-cols-2">
-                    <Field label="VW de sus sueños">
-                        <div>
-                            <select value={draft.cliente_interes || ""} onChange={(e) => setDraft((p) => ({ ...p, cliente_interes: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                <option value="" disabled>
-                                    Selecciona un modelo...
-                                </option>
-                                {VEHICULOS.map((d) => (<option key={d} value={d}>
-                                    {d}
-                                </option>))}
-                            </select>
-                        </div>
-                    </Field>
-
-                    <Field label="Año del vehículo" icon={CalendarDays}>
-                        <select value={draft.anio_auto || ""} onChange={(e) => setDraft((p) => ({ ...p, anio_auto: e.target.value }))} className={cls(inputBase, inputOk)}>
-                            <option value="">— Selecciona —</option>
-                            {ANIOS_VEHICULO.map((anio) => (<option key={anio} value={anio}>
-                                {anio}
-                            </option>))}
-                        </select>
-                    </Field>
-                </div>
-
-                <div className="md:col-span-4">
-                    <Field label="Cliente" icon={User}>
-                        <div className="grid gap-3 md:grid-cols-4">
-                            <div>
-                                <label className="inline-flex items-center gap-3 text-sm font-bold text-[#131E5C]">
-                                    <input type="checkbox" checked={!!draft.tiene_nombre} onChange={(e) => setDraft((p) => ({ ...p, tiene_nombre: e.target.checked, nombre_cliente: e.target.checked ? p.nombre_cliente : "" }))} className="h-4 w-4" />
-                                    Nombre del Prospecto
-                                </label>
-                                <input value={draft.nombre_cliente || ""} onChange={(e) => setDraft((p) => ({ ...p, nombre_cliente: e.target.value }))} disabled={!draft.tiene_nombre} className={cls(inputBase, inputOk, !draft.tiene_nombre ? "cursor-not-allowed opacity-70" : "")} placeholder={draft.tiene_nombre ? "Nombre" : "SIN NOMBRE"} />
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Teléfono</div>
-                                <input maxLength={12} disabled={telIsNormalized} value={draft.telefono || ""} onChange={(e) => setDraft((p) => ({ ...p, telefono: e.target.value.replace(/\D/g, "").slice(0, 12) }))} className={cls(inputBase, telIsNormalized ? "cursor-not-allowed opacity-70" : "", isInvalid("telefono") || telInvalid ? inputBad : inputOk)} />
-                                {isInvalid("telefono") && <div className="mt-1 text-xs font-bold text-red-600">Teléfono es requerido.</div>}
-                                {!isInvalid("telefono") && telError && <div className="mt-1 text-xs font-bold text-red-600">{telError}</div>}
-                            </div>
-                            <div className="">
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Estado</div>
-                                <select value={draft.estado || ""} onChange={(e) => setDraft((p) => ({ ...p, estado: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    {ESTADOS_PROSPECTO.map((s) => (<option key={s} value={s}>
-                                        {s}
-                                    </option>))}
-                                </select>
-                            </div>
-                            {normalizeText(draft.estado) === "descalificado" ? (<div>
-                                <div className="mb-1 text-sm font-bold text-red-700">
-                                    Motivo de descalificación *
-                                </div>
-
-                                <MotivoDescalificacionPicker value={draft.motivo_descalificacion || ""} onChange={(motivo) => setDraft((current) => ({
-                                    ...current,
-                                    motivo_descalificacion: motivo,
-                                }))} invalid={!draft.motivo_descalificacion} />
-
-                                {!draft.motivo_descalificacion ? (<div className="mt-1 text-xs font-bold text-red-600">
-                                    Debes seleccionar un motivo.
-                                </div>) : null}
-                            </div>) : null}
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Pauta de Origen</div>
-                                {loadingPautas ? (<div className="mt-2">
-                                    <Skeleton className="h-10 w-full rounded-lg" />
-                                    <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-[#131E5C]">
-                                        <Loader2 className="h-4 w-4 animate-spin" /> Cargando campañas recientes...
-                                    </div>
-                                </div>) : (<select value={draft.pauta || ""} onChange={(e) => setDraft((p) => ({ ...p, pauta: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    <option value="">— Selecciona una pauta —</option>
-                                    {draft.pauta && !pautasOptions.some((item) => normalizeText(item.value) === normalizeText(draft.pauta)) && <option value={draft.pauta}>{draft.pauta} (actual)</option>}
-                                    {pautasOptions.map((item) => (<option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>))}
-                                </select>)}
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Business</div>
-                                <LineaPicker value={draft.linea} onChange={(v) => setDraft((p) => ({ ...p, linea: v }))} />
-                            </div>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-1">
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Canal de Contacto</div>
-                                <OrigenPicker value={draft.origen} onChange={(v) => setDraft((p) => ({ ...p, origen: v }))} />
-                            </div>
-                        </div>
-                    </Field>
-                </div>
-                <div className="md:col-span-4">
-                    <Field label="Perfil comercial y financiero" icon={Activity}>
-                        <div className="grid gap-3 md:grid-cols-4">
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Enganche</div>
-                                <input type="number" min="0" inputMode="numeric" value={draft.enganche_monto || ""} onChange={(e) => setDraft((p) => ({ ...p, enganche_monto: e.target.value.replace(/\D/g, "") }))} className={cls(inputBase, inputOk)} placeholder="Ej. 80000" />
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Presupuesto mensual</div>
-                                <input type="number" min="0" inputMode="numeric" value={draft.presupuesto_mensual || ""} onChange={(e) => setDraft((p) => ({ ...p, presupuesto_mensual: e.target.value.replace(/\D/g, "") }))} className={cls(inputBase, inputOk)} placeholder="Ej. 9000" />
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Buró</div>
-                                <select value={draft.buro_estado || ""} onChange={(e) => setDraft((p) => ({ ...p, buro_estado: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    {BURO_OPTIONS.map((item) => (<option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>))}
-                                </select>
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Forma de pago</div>
-                                <select value={draft.forma_pago || ""} onChange={(e) => setDraft((p) => ({ ...p, forma_pago: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    {FORMA_PAGO_OPTIONS.map((item) => (<option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>))}
-                                </select>
-                            </div>
-                        </div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-4">
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Tipo cliente</div>
-                                <select value={draft.tipo_cliente || ""} onChange={(e) => setDraft((p) => ({ ...p, tipo_cliente: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    {TIPO_CLIENTE_OPTIONS.map((item) => (<option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>))}
-                                </select>
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Plazo de compra</div>
-                                <select value={draft.plazo_compra || ""} onChange={(e) => setDraft((p) => ({ ...p, plazo_compra: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    {PLAZO_COMPRA_OPTIONS.map((item) => (<option key={item || "empty"} value={item}>
-                                        {item || "— Selecciona —"}
-                                    </option>))}
-                                </select>
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Uso del vehículo</div>
-                                <input value={draft.uso_vehiculo || ""} onChange={(e) => setDraft((p) => ({ ...p, uso_vehiculo: e.target.value }))} className={cls(inputBase, inputOk)} placeholder="Personal, familiar, trabajo..." />
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Comprobación ingresos</div>
-                                <input value={draft.comprobacion_ingresos || ""} onChange={(e) => setDraft((p) => ({ ...p, comprobacion_ingresos: e.target.value }))} className={cls(inputBase, inputOk)} placeholder="Nómina, estados, negocio..." />
-                            </div>
-                        </div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-4">
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">ID Cotizacion</div>
-                                <input type="number" min="0" inputMode="numeric" value={draft.id_cotizacion || ""} onChange={(e) => setDraft((p) => ({ ...p, id_cotizacion: e.target.value }))} className={cls(inputBase, inputOk)} placeholder="Ej. 80000" />
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">Folio Solicitud Credito</div>
-                                <input type="number" min="0" inputMode="numeric"
-                                    // Folio Solicitud Crédito
-                                    value={draft.folio_solicitud_credito || ""} onChange={(e) => setDraft((p) => ({ ...p, folio_solicitud_credito: e.target.value }))} className={cls(inputBase, inputOk)} placeholder="Ej. 80000" />
-                                <select value={draft.solicitud_credito_estado || ""} onChange={(e) => setDraft((p) => ({ ...p, solicitud_credito_estado: e.target.value }))} className={cls(inputBase, inputOk)}>
-                                    {SOLICITUD_CREDITO.map((item) => (<option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>))}
-                                </select>
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">VIN Facturado</div>
-                                <input value={draft.vin_facturado || ""} onChange={(e) => setDraft((p) => ({ ...p, vin_facturado: e.target.value.toUpperCase() }))} className={cls(inputBase, inputOk)} placeholder="A8XAS8FSF8FG2EU" />
-                            </div>
-                            <div>
-                                <div className="mb-1 text-sm font-bold text-[#131E5C]">¿VIN Entregado?</div>
-                                <button type="button" onClick={() => setDraft((p) => ({
-                                    ...p,
-                                    vin_estatus_entrega: p.vin_estatus_entrega === "entregado" ? "cancelado" : "entregado",
-                                }))} className={`relative flex h-9 w-28 items-center rounded-full px-1 transition-all duration-300 ${draft.vin_estatus_entrega === "entregado" ? "bg-emerald-500" : "bg-red-500"}`}>
-                                    <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold shadow-md transition-all duration-300 ${draft.vin_estatus_entrega === "entregado" ? "translate-x-[76px] text-emerald-600" : "translate-x-0 text-red-600"}`}>{draft.vin_estatus_entrega === "entregado" ? "✓" : "×"}</span>
-                                </button>
-                                <div className="mt-1 text-xs font-semibold text-[#515778]">
-                                    Estado actual: <span className={draft.vin_estatus_entrega === "entregado" ? "text-emerald-600" : "text-red-600"}>{draft.vin_estatus_entrega === "entregado" ? "Entregado" : "Cancelado"}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </Field>
-                </div>
-                <div className="md:col-span-2 lg:col-span-4 sm:col-span-4">
-                    <Field label="Evidencias" icon={Paperclip}>
-                        <div className="space-y-4">
-                            <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar,.7z" className="hidden" onChange={(e) => {
-                                handleAddFiles(e.target.files);
-                                e.target.value = "";
-                            }} />
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#131E5C]/25 bg-[#131E5C]/5 px-4 py-6 text-center text-[#131E5C] transition hover:bg-[#131E5C]/10 sm:flex-row sm:text-left">
-                                <UploadCloud className="h-6 w-6" />
-                                <div className="min-w-0">
-                                    <div className="text-sm font-extrabold">Agregar fotos, videos o archivos</div>
-                                    <div className="text-xs font-semibold text-slate-500">Puedes seleccionar varios archivos al mismo tiempo. Límite sugerido: 50 MB por archivo.</div>
-                                </div>
-                            </button>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full bg-[#131E5C]/10 px-3 py-1 text-xs font-bold text-[#131E5C]">Total: {totalEvidenciasDraft}</span>
-                                {(draft.delete_evidencia_ids || []).length > 0 ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">Por eliminar: {draft.delete_evidencia_ids.length}</span> : null}
-                                {(draft.evidencias_nuevas || []).length > 0 ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">Nuevas: {draft.evidencias_nuevas.length}</span> : null}
-                            </div>
-                            {(draft.evidencias_existentes?.length || 0) > 0 ? (<div>
-                                <div className="mb-2 text-sm font-extrabold text-[#131E5C]">Evidencias guardadas</div>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                                    {draft.evidencias_existentes.map((item) => (<EvidenceCard key={`existente-${item.id}`} item={item} onRemove={() => removeEvidenciaExistente(item.id)} />))}
-                                </div>
-                            </div>) : null}
-                            {(draft.evidencias_nuevas?.length || 0) > 0 ? (<div>
-                                <div className="mb-2 text-sm font-extrabold text-[#131E5C]">Evidencias nuevas</div>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                                    {draft.evidencias_nuevas.map((item) => (<EvidenceCard key={item._tmpId} item={item} onRemove={() => removeNuevaEvidencia(item._tmpId)} />))}
-                                </div>
-                            </div>) : null}
-                            {totalEvidenciasDraft === 0 ? <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-500">Aún no has agregado evidencias a este avalúo.</div> : null}
-                        </div>
-                    </Field>
-                </div>
-                <div className="md:col-span-2">
-                    <Field label="Comentarios Adicionales" icon={FileText}>
-                        <textarea value={draft.comentarios || ""} onChange={(e) => setDraft((p) => ({ ...p, comentarios: e.target.value }))} rows={4} className={cls(inputBase, inputOk)} />
-                    </Field>
-                </div>
-                <div className="md:col-span-2">
-                    <Field label="Resumen de conversación" icon={ClipboardCheck}>
-                        <textarea value={draft.resumen || ""} disabled rows={5} className="w-full rounded-lg border border-black/10 bg-neutral-100 px-3 py-2 text-sm font-semibold text-[#131E5C] outline-none" />
-                        {draft.resumen_actualizado_at && (<div className="mt-2 text-xs font-semibold text-slate-500">
-                            Última actualización: {fmtDTIntl(draft.resumen_actualizado_at)}
-                            {draft.resumen_fuente ? ` · ${draft.resumen_fuente}` : ""}
-                        </div>)}
-                    </Field>
-                </div>
-            </div>)}
-        </Modal>
         {/* Modal Resumen */}
         <Modal open={openSummaryModal} title={summaryInfo ? `Resumen IA · ${summaryInfo.nombre || `Prospecto ${summaryInfo.id_exp}`}` : "Resumen IA"} onClose={closeSummaryModal} footer={<button onClick={closeSummaryModal} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
             <X className="h-4 w-4" /> Cerrar

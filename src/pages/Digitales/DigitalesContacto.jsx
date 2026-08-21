@@ -6458,6 +6458,7 @@ export default function DigitalesContacto() {
             {/* ── MODAL AGENDAR CITA ────────────────────────────────────────── */}
             <NuevoProspectoModal
                 open={showNuevoProspectoModal}
+                mode="create"
                 onClose={() => setShowNuevoProspectoModal(false)}
                 onCreado={handleNuevoProspectoCreado}
                 onPlantillaEnviada={handlePlantillaNuevoProspectoEnviada}
