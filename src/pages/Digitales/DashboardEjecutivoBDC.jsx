@@ -519,9 +519,27 @@ export default function DashboardEjecutivoBDC({
     const ProcessRow = ({ label, value, detail }) => <div className="flex min-h-[64px] items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0"><div className="min-w-0"><div className="text-xs font-bold text-sky-700">{label}</div><div className="mt-0.5 text-[9px] leading-tight text-slate-400">{detail}</div></div><div className="shrink-0 text-xl font-black text-slate-950">{value.toLocaleString("es-MX")}</div></div>;
     const MetaRow = ({ label, value, meta }) => {
         const estado = getEstadoMetaBDC(value, meta);
-        const barColor = value >= meta ? "bg-emerald-500" : value >= meta * 0.6 ? "bg-amber-500" : "bg-red-500";
-        const metaLeft = meta >= 100 ? "left-[calc(100%-2px)]" : meta >= 90 ? "left-[90%]" : meta >= 80 ? "left-[80%]" : "left-[70%]";
-        return <div className="grid grid-cols-[96px_52px_minmax(100px,1fr)_70px] items-center gap-3 rounded-xl border border-slate-100 px-3 py-3"><div className="text-xs font-black text-[#131E5C]">{label}</div><div className={cls("text-right text-lg font-black", estado.text)}>{value.toFixed(0)}%</div><div className="relative h-2"><div className="absolute inset-0 rounded-full bg-slate-100" /><div className={cls("absolute left-0 top-0 h-2 rounded-full transition-all", barColor, widthClass(value))} /><div className={cls("absolute -top-1 h-4 border-l-2 border-dotted border-[#131E5C]", metaLeft)} /></div><div className="text-[10px] font-bold text-slate-500">Meta {meta}%</div></div>;
+        const stroke = value >= meta ? "#10b981" : value >= meta * 0.6 ? "#f59e0b" : "#ef4444";
+        const barColor = value >= meta ? "from-emerald-400 to-emerald-500" : value >= meta * 0.6 ? "from-amber-400 to-amber-500" : "from-red-400 to-red-500";
+        const radio = 20;
+        const circunferencia = 2 * Math.PI * radio;
+        const progreso = Math.max(0, Math.min(value, 100)) / 100;
+        return <div className="group grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-slate-100 bg-gradient-to-r from-white to-slate-50/80 px-3 py-3 transition-all duration-300 hover:border-[#131E5C]/25 hover:bg-white hover:shadow-md hover:shadow-slate-200/70">
+            <div className="relative h-11 w-11 shrink-0">
+                <svg viewBox="0 0 48 48" className="h-11 w-11 -rotate-90">
+                    <circle cx="24" cy="24" r={radio} fill="none" stroke="#f1f5f9" strokeWidth="5" />
+                    <circle cx="24" cy="24" r={radio} fill="none" stroke={stroke} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${progreso * circunferencia} ${circunferencia}`} className="transition-all duration-700 ease-out" />
+                </svg>
+                <div className={cls("absolute inset-0 flex items-center justify-center text-[10px] font-black tracking-tight", estado.text)}>{value.toFixed(0)}%</div>
+            </div>
+            <div className="min-w-0">
+                <div className="flex items-baseline justify-between gap-2"><span className="truncate text-xs font-black text-[#131E5C]">{label}</span><span className="shrink-0 text-[9px] font-bold text-slate-400">Meta {meta}%</span></div>
+                <div className="relative mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className={cls("absolute inset-y-0 left-0 rounded-full bg-gradient-to-r transition-all duration-700 ease-out group-hover:brightness-110", barColor, widthClass(value))} />
+                </div>
+            </div>
+            <span className={cls("inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black transition-colors", estado.bg, estado.border, estado.text)}>• {estado.label}</span>
+        </div>;
     };
 
     const estadoRendimiento = getEstadoMetaBDC(metricas.efectividadCitas, 80);
@@ -574,7 +592,7 @@ export default function DashboardEjecutivoBDC({
                 </div>
             </div>
 
-            <div className="grid min-w-0 gap-4 lg:grid-cols-2 xl:grid-cols-2">
+            <div className="grid min-w-0 gap-4">
                 <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Cumplimiento de metas</h4><div className="space-y-2"><MetaRow label="Contacto" value={metricas.tasaContacto} meta={90} /><MetaRow label="Citas efectivas" value={metricas.efectividadCitas} meta={80} /><MetaRow label="Facturación" value={metricas.tasaFacturacion} meta={100} /></div></section>
                 <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Proceso comercial</h4><div className="overflow-hidden rounded-xl border border-slate-100 bg-white"><ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" /><ProcessRow label="ANF" value={metricas.anf} detail="Solicitud autorizada/condicionada aún sin VIN facturado" /><ProcessRow label="Facturados" value={metricas.facturados} detail="Expedientes con facturado_at dentro del mes seleccionado" /></div></section>
             </div>
