@@ -1262,7 +1262,6 @@ export default function DigitalesProspectos() {
     const navigate = useNavigate();
     const { user, ready } = useAuth();
     const [cases, setCases] = useState([]);
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [viewMode, setViewMode] = useState("tabla");
     const [highlightedRow, setHighlightedRow] = useState(null);
     const [telefonosConChat, setTelefonosConChat] = useState(() => new Set());
@@ -1381,8 +1380,6 @@ export default function DigitalesProspectos() {
     const inputBase = "w-full rounded-lg border px-3 py-2.5 text-sm text-[#131E5C] font-semibold outline-none transition";
     const inputOk = "border-black/10 bg-neutral-100";
     const inputBad = "border-red-500 bg-red-50";
-    const filterControlCls = "h-9 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-sm text-[#131E5C] shadow-sm outline-none transition focus:border-[#131E5C] focus:ring-2 focus:ring-[#131E5C]/15";
-    const filterLabelCls = "mb-1.5 block text-xs font-bold text-[#131E5C]";
 
     const cargarTelefonosConChat = useCallback(async () => {
         const numeroLinea = numeroAsesorActivo || numeroUsuarioSesion || "";
@@ -1672,8 +1669,6 @@ export default function DigitalesProspectos() {
         setPage((prev) => Math.min(prev, totalPages));
     }, [totalPages]);
     const paginatedRows = useMemo(() => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [sorted, page]);
-    const pageStart = sorted.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-    const pageEnd = sorted.length === 0 ? 0 : Math.min(page * PAGE_SIZE, sorted.length);
     // KPIs
     const kpis = useMemo(() => {
         const total = sorted.length;
@@ -2024,77 +2019,6 @@ export default function DigitalesProspectos() {
             })}
         </div>
     </div>);
-    const filtrosActivos = useMemo(() => {
-        const items = [];
-        if (filters.q) {
-            items.push({
-                key: "q",
-                label: `Búsqueda: ${filters.q}`,
-                clear: () => updateFilter("q", ""),
-            });
-        }
-        if (filters.agencia !== "Todos") {
-            items.push({
-                key: "agencia",
-                label: `Dealer: ${filters.agencia}`,
-                clear: () => updateFilter("agencia", "Todos"),
-            });
-        }
-        if (filters.linea !== "Todos") {
-            items.push({
-                key: "linea",
-                label: `Business: ${filters.linea}`,
-                clear: () => updateFilter("linea", "Todos"),
-            });
-        }
-        if (filters.estado !== "Todos") {
-            items.push({
-                key: "estado",
-                label: `Estado: ${filters.estado}`,
-                clear: () => updateFilter("estado", "Todos"),
-            });
-        }
-        if (filters.buro !== "Todos") {
-            items.push({
-                key: "buro",
-                label: `Buró: ${valueOrDash(filters.buro)}`,
-                clear: () => updateFilter("buro", "Todos"),
-            });
-        }
-        if (filters.formaPago !== "Todos") {
-            items.push({
-                key: "formaPago",
-                label: `Pago: ${valueOrDash(filters.formaPago)}`,
-                clear: () => updateFilter("formaPago", "Todos"),
-            });
-        }
-        if (filters.tipoCliente !== "Todos") {
-            items.push({
-                key: "tipoCliente",
-                label: `Cliente: ${valueOrDash(filters.tipoCliente)}`,
-                clear: () => updateFilter("tipoCliente", "Todos"),
-            });
-        }
-        if (filters.fechaRegistroDesde || filters.fechaRegistroHasta) {
-            items.push({
-                key: "fechaRegistro",
-                label: `Registro: ${filters.fechaRegistroDesde || "Inicio"} → ${filters.fechaRegistroHasta || "Hoy"}`,
-                clear: () => setFilters((prev) => ({
-                    ...prev,
-                    fechaRegistroDesde: "",
-                    fechaRegistroHasta: "",
-                })),
-            });
-        }
-        if (isAdmin && selectedNumeroAsesor !== "Todos") {
-            items.push({
-                key: "numeroAsesor",
-                label: `Línea: ${formatTelefonoMx(selectedNumeroAsesor)}`,
-                clear: () => setSelectedNumeroAsesor("Todos"),
-            });
-        }
-        return items;
-    }, [filters, isAdmin, selectedNumeroAsesor]);
     // ── Render ───────────────────────────────────────────────────────────────────
     return (<div className="w-full">
         {/* Header */}
@@ -2173,7 +2097,7 @@ export default function DigitalesProspectos() {
                         </div>
                     </div>
                     {/* Fila 2: Filtros rápidos de fecha */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-end gap-1.5 flex-nowrap">
                         {[
                             { label: "Hoy", desde: todayStr, hasta: todayStr, inactive: "border-emerald-200 bg-emerald-300 text-emerald-700 hover:bg-emerald-100", active: "bg-emerald-600 text-white ring-4 ring-emerald-100" },
                             { label: "Ayer", desde: yesterdayStr, hasta: yesterdayStr, inactive: "border-amber-200 bg-amber-300 text-amber-700 hover:bg-amber-100", active: "bg-amber-500 text-white ring-4 ring-amber-100" },
@@ -2186,63 +2110,37 @@ export default function DigitalesProspectos() {
                             return (<button key={label} type="button" onClick={() => setFilters((prev) => {
                                 const alreadyActive = prev.fechaRegistroDesde === desde && prev.fechaRegistroHasta === hasta;
                                 return { ...prev, fechaRegistroDesde: alreadyActive ? "" : desde, fechaRegistroHasta: alreadyActive ? "" : hasta };
-                            })} className={cls("h-8 rounded-full border px-3 text-[11px] font-bold shadow-sm transition active:scale-[0.97]", isActive ? active : inactive)}>
+                            })} className={cls("h-8 shrink-0 whitespace-nowrap rounded-full border px-3 text-[11px] font-bold shadow-sm transition active:scale-[0.97] mb-2", isActive ? active : inactive)}>
                                 {label}
                             </button>);
                         })}
-                        <div className="w-px h-5 bg-black/10 mx-1" />
-                        <button type="button" onClick={() => setShowAdvancedFilters((prev) => !prev)} className={cls("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-bold shadow-sm transition", showAdvancedFilters || filtrosActivos.length > 0 ? "bg-[#131E5C] text-white" : "border border-[#131E5C]/15 bg-white text-[#131E5C] hover:bg-[#131E5C]/5")}>
-                            Más filtros
-                            {filtrosActivos.length > 0 ? <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-black text-[#131E5C]">{filtrosActivos.length}</span> : null}
-                            {showAdvancedFilters ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        </button>
-                        <button type="button" onClick={resetFilters} title="Limpiar filtros" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500 shadow-sm transition hover:bg-red-100">
-                            <X className="h-3.5 w-3.5" />
-                        </button>
-                    </div>
-                </div>
-                {/* Panel avanzado colapsable */}
-                {showAdvancedFilters ? (<div className="border-t border-[#131E5C]/10 bg-slate-50/80 p-4">
-                    <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                        <div className="text-xs font-bold text-slate-400">
-                            {pageStart}–{pageEnd} de {sorted.length} prospectos
-                        </div>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
-                        <div className="xl:col-span-3">
-                            <label className={filterLabelCls}>Tipo cliente</label>
-                            <select value={filters.tipoCliente} onChange={(e) => updateFilter("tipoCliente", e.target.value)} className={filterControlCls}>
-                                {tipoClienteOptions.map((s) => (<option key={s} value={s}>
-                                    {s === "Todos" ? "Todos" : valueOrDash(s)}
-                                </option>))}
+                        <div className="w-px h-9 shrink-0 bg-black/10 mx-0.5 self-center" />
+                        <div className="min-w-0 flex-1">
+                            <label className="mb-1 block text-[11px] font-black uppercase tracking-wide text-[#131E5C]/50">Tipo cliente</label>
+                            <select value={filters.tipoCliente} onChange={(e) => updateFilter("tipoCliente", e.target.value)} className="h-10 w-full cursor-pointer truncate rounded-xl border border-[#131E5C]/15 bg-white px-3 text-xs font-bold text-[#131E5C] outline-none transition hover:bg-slate-50 focus:ring-4 focus:ring-[#131E5C]/10">
+                                {tipoClienteOptions.map((s) => (<option key={s} value={s}>{s === "Todos" ? "Todos" : valueOrDash(s)}</option>))}
                             </select>
                         </div>
-                        {isAdmin || isCoordinador ? (<div className="xl:col-span-3">
-                            <label className={filterLabelCls}>
-                                Línea de WhatsApp
-                            </label>
-
+                        {isAdmin || isCoordinador ? (<div className="min-w-0 flex-1">
+                            <label className="mb-1 block text-[11px] font-black uppercase tracking-wide text-[#131E5C]/50">Línea de WhatsApp</label>
                             <select value={selectedNumeroAsesor} onChange={(event) => {
                                 setSelectedNumeroAsesor(event.target.value);
                                 setPage(1);
-                            }} className={filterControlCls}>
-                                {phoneOptions.map((numero) => (<option key={numero} value={numero}>
-                                    {numero === "Todos"
-                                        ? "Todos los números"
-                                        : `${formatTelefonoMx(numero)} • ${getEtiquetaDigitalPorNumero(numero)}`}
-                                </option>))}
+                            }} className="h-10 w-full cursor-pointer rounded-xl border border-[#131E5C]/15 bg-white px-3 text-xs font-bold text-[#131E5C] outline-none transition hover:bg-slate-50 focus:ring-4 focus:ring-[#131E5C]/10 truncate">
+                                {phoneOptions.map((numero) => (<option key={numero} value={numero}>{numero === "Todos" ? "Todos los números" : `${formatTelefonoMx(numero)} • ${getEtiquetaDigitalPorNumero(numero)}`}</option>))}
                             </select>
                         </div>) : null}
-                        <div className={cls(isAdmin ? "xl:col-span-6" : "xl:col-span-6")}>
-                            <label className={filterLabelCls}>Fecha de registro</label>
-                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                                <input type="date" value={filters.fechaRegistroDesde} onChange={(e) => updateFilter("fechaRegistroDesde", e.target.value)} className={filterControlCls} />
+                        <div className="min-w-0 flex-[1.2]">
+                            <label className="mb-1 block text-[11px] font-black uppercase tracking-wide text-[#131E5C]/50">Fecha de registro</label>
+                            <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+                                <input type="date" title="Registro desde" value={filters.fechaRegistroDesde} onChange={(e) => updateFilter("fechaRegistroDesde", e.target.value)} className="h-10 w-full min-w-0 cursor-pointer rounded-xl border border-[#131E5C]/15 bg-white px-2 text-xs font-bold text-[#131E5C] outline-none transition hover:bg-slate-50 focus:ring-4 focus:ring-[#131E5C]/10" />
                                 <span className="text-xs font-black text-slate-400">→</span>
-                                <input type="date" value={filters.fechaRegistroHasta} onChange={(e) => updateFilter("fechaRegistroHasta", e.target.value)} className={filterControlCls} />
+                                <input type="date" title="Registro hasta" value={filters.fechaRegistroHasta} onChange={(e) => updateFilter("fechaRegistroHasta", e.target.value)} className="h-10 w-full min-w-0 cursor-pointer rounded-xl border border-[#131E5C]/15 bg-white px-2 text-xs font-bold text-[#131E5C] outline-none transition hover:bg-slate-50 focus:ring-4 focus:ring-[#131E5C]/10" />
                             </div>
                         </div>
+                        <button type="button" onClick={resetFilters} title="Borrar filtros" className="h-8 shrink-0 self-end whitespace-nowrap rounded-full border border-red-200 bg-white px-3 text-[11px] font-bold text-red-600 shadow-sm transition hover:bg-red-50 active:scale-[0.97] mb-2">Borrar filtros</button>
                     </div>
-                </div>) : null}
+                </div>
             </div>
         </>) : null}
         {/* Vista Resultados IA */}
