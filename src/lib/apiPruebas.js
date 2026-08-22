@@ -989,55 +989,55 @@ export const api = {
       body: JSON.stringify(withRequestContext(payload)),
     }),
 
-    digitalesContacto: (
-      tel,
-      {
-        limit = 8,
-        before_id = "",
-        usuario = "",
-        numero_asesor = "",
-        mark_read = 1,
-        incluir_contexto = 1,
-      } = {},
-    ) =>
-      http(
-        `/digitales/contacto/${buildQuery(
-          withRequestContext({
-            tel,
-            limit,
-            before_id,
-            mark_read,
-            incluir_contexto,
-            usuario,
-            numero_asesor,
-          }),
-        )}`,
-      ),
+  digitalesContacto: (
+    tel,
+    {
+      limit = 8,
+      before_id = "",
+      usuario = "",
+      numero_asesor = "",
+      mark_read = 1,
+      incluir_contexto = 1,
+    } = {},
+  ) =>
+    http(
+      `/digitales/contacto/${buildQuery(
+        withRequestContext({
+          tel,
+          limit,
+          before_id,
+          mark_read,
+          incluir_contexto,
+          usuario,
+          numero_asesor,
+        }),
+      )}`,
+    ),
 
-    digitalesContactoUpdates: (
-      tel,
-      after = "",
-      {
-        limit = 50,
-        usuario = "",
-        numero_asesor = "",
-        after_id = "",
-        tracked_ids = "",
-      } = {},
-    ) =>
-      http(
-        `/digitales/contacto/updates/${buildQuery(
-          withRequestContext({
-            tel,
-            after,
-            after_id,
-            limit,
-            usuario,
-            numero_asesor,
-            tracked_ids,
-          }),
-        )}`,
-      ),
+  digitalesContactoUpdates: (
+    tel,
+    after = "",
+    {
+      limit = 50,
+      usuario = "",
+      numero_asesor = "",
+      after_id = "",
+      tracked_ids = "",
+    } = {},
+  ) =>
+    http(
+      `/digitales/contacto/updates/${buildQuery(
+        withRequestContext({
+          tel,
+          after,
+          after_id,
+          limit,
+          usuario,
+          numero_asesor,
+          tracked_ids,
+        }),
+      )}`,
+    ),
 
   // Envío de mensajes
   digitalesEnviarMensaje: (payload = {}) =>
@@ -1057,6 +1057,29 @@ export const api = {
       },
       body: JSON.stringify(withRequestContext(payload)),
     }),
+
+  digitalesSubirMediaPlantilla: ({
+    file,
+    media_type,
+    numero_asesor = "",
+  } = {}) => {
+    if (!file) {
+      return Promise.reject(new Error("Falta el archivo."));
+    }
+
+    const formData = new FormData();
+
+    formData.set("file", file);
+
+    formData.set("media_type", String(media_type || ""));
+
+    appendContextToFormData(formData, numero_asesor);
+
+    return http("/digitales/mensajes/plantillas/subir-media/", {
+      method: "POST",
+      body: formData,
+    });
+  },
 
   digitalesEnviarMedia: ({
     to,
@@ -1120,6 +1143,27 @@ export const api = {
         }),
       )}`,
     );
+  },
+
+  digitalesPlantillaUploadMedia: (numeroAsesor, file, format) => {
+    if (!file) {
+      return Promise.reject(new Error("Selecciona un archivo."));
+    }
+
+    const numero = getWhatsAppNumberFromSources(numeroAsesor);
+
+    const formData = new FormData();
+
+    formData.set("file", file);
+
+    formData.set("format", String(format || "").toUpperCase());
+
+    appendContextToFormData(formData, numero);
+
+    return http("/digitales/mensajes/plantillas/admin/media/", {
+      method: "POST",
+      body: formData,
+    });
   },
 
   digitalesPlantillaCrear: (numeroAsesor, payload = {}) => {

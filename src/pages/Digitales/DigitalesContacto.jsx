@@ -71,6 +71,30 @@ const CHAT_LIST_REFRESH_INTERVAL = 2500;
 const CHAT_SEARCH_DELAY = 300;
 const MAX_RECORDING_SECONDS = 300;
 
+const TEMPLATE_MEDIA_RULES = {
+    image: {
+        accept: "image/jpeg,image/png",
+        mime: ["image/jpeg", "image/png"],
+        maxBytes: 5 * 1024 * 1024,
+        maxLabel: "5 MB",
+        label: "imagen",
+    },
+    video: {
+        accept: "video/mp4",
+        mime: ["video/mp4"],
+        maxBytes: 16 * 1024 * 1024,
+        maxLabel: "16 MB",
+        label: "video",
+    },
+    document: {
+        accept: "application/pdf",
+        mime: ["application/pdf"],
+        maxBytes: 100 * 1024 * 1024,
+        maxLabel: "100 MB",
+        label: "documento PDF",
+    },
+};
+
 const DEALERS = [
     "VW Cordoba",
     "VW Orizaba",
@@ -1024,21 +1048,81 @@ function getTemplateFieldNumber(field) {
 }
 
 function getFriendlyTemplateFieldLabel(field) {
+    if (String(field?.type || "").toLowerCase() === "media") {
+        const type = String(field?.media_type || "").toLowerCase();
+
+        if (type === "image") return "Imagen del encabezado";
+        if (type === "video") return "Video del encabezado";
+        if (type === "document") return "Documento del encabezado";
+
+        return "Archivo del encabezado";
+    }
+
     const component = String(field?.component || "body").toLowerCase();
     const index = getTemplateFieldNumber(field);
 
-    if (component === "header") {
-        return `Dato del encabezado ${index}`;
-    }
-
-    if (component === "button") {
-        return `Dato del botón ${index}`;
-    }
+    if (component === "header") return `Dato del encabezado ${index}`;
+    if (component === "button") return `Dato del botón ${index}`;
 
     return `Dato variable ${index}`;
 }
 
+function getTemplateComponents(template = {}) {
+    if (Array.isArray(template?.components_meta)) return template.components_meta;
+    if (Array.isArray(template?.components)) return template.components;
+
+    return [];
+}
+
+function getTemplateMediaHeaderField(template = {}) {
+    const header = getTemplateComponents(template).find(
+        (component) => String(component?.type || "").toUpperCase() === "HEADER"
+    );
+
+    const format = String(header?.format || "").toUpperCase();
+
+    if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) return null;
+
+    return {
+        key: "header_media",
+        type: "media",
+        component: "header",
+        index: 0,
+        media_type: format.toLowerCase(),
+        required: true,
+        friendlyLabel:
+            format === "IMAGE"
+                ? "Imagen del encabezado"
+                : format === "VIDEO"
+                    ? "Video del encabezado"
+                    : "Documento del encabezado",
+    };
+}
+
 function normalizeTemplateFromApi(template) {
+    const fields = Array.isArray(template?.fields)
+        ? template.fields.map((field) => ({
+            ...field,
+            required: true,
+            friendlyLabel:
+                field.friendlyLabel ||
+                getFriendlyTemplateFieldLabel(field),
+        }))
+        : [];
+
+    const mediaField = getTemplateMediaHeaderField(template);
+
+    if (
+        mediaField &&
+        !fields.some(
+            (field) =>
+                field.component === "header" &&
+                field.type === "media"
+        )
+    ) {
+        fields.unshift(mediaField);
+    }
+
     return {
         ...template,
         key: template?.key || template?.name || "",
@@ -1048,46 +1132,239 @@ function normalizeTemplateFromApi(template) {
             String(template?.name || template?.key || "")
                 .replaceAll("_", " ")
                 .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-        idioma:
-            template?.idioma ||
-            template?.language ||
-            "es_MX",
-        language:
-            template?.language ||
-            template?.idioma ||
-            "es_MX",
+        idioma: template?.idioma || template?.language || "es_MX",
+        language: template?.language || template?.idioma || "es_MX",
         status: String(template?.status || "APPROVED").toUpperCase(),
-        fields: Array.isArray(template?.fields)
-            ? template.fields.map((field) => ({
-                ...field,
-                required: true,
-                friendlyLabel: getFriendlyTemplateFieldLabel(field),
-            }))
-            : [],
+        fields,
     };
 }
 
-function getDefaultValueForTemplateField(field, context) {
-    const label = safeLower(field?.label), key = safeLower(field?.key);
-    if (label.includes("asesor") || key.includes("asesor") || label.includes("quién eres")) return context.asesor || "";
-    if (label.includes("nombre") || label.includes("prospecto") || label.includes("cliente") || key.includes("nombre")) return context.nombre || "";
-    if (label.includes("dealer") || label.includes("agencia") || key.includes("dealer") || key.includes("agencia")) return context.agencia || "";
-    if (label.includes("modelo") || label.includes("auto") || label.includes("vehículo") || key.includes("modelo") || key.includes("auto")) return context.modelo || "";
-    if (label.includes("canal") || key.includes("canal")) return context.canal || "";
-    if (label.includes("tema") || key.includes("tema")) return context.tema || "";
-    if (label.includes("dato") || label.includes("pides") || key.includes("dato")) return context.dato || "";
+function isProspectNameTemplateField(field, template) {
+    if (String(field?.type || "").toLowerCase() === "media") return false;
+
+    const label = safeLower(
+        `${field?.label || ""} ${field?.friendlyLabel || ""} ${field?.key || ""}`
+    );
+
+    if (
+        label.includes("nombre") ||
+        label.includes("cliente") ||
+        label.includes("prospecto")
+    ) {
+        return true;
+    }
+
+    const index = getTemplateFieldNumber(field);
+    const componentType = String(field?.component || "body").toUpperCase();
+
+    const component = getTemplateComponents(template).find(
+        (item) =>
+            String(item?.type || "").toUpperCase() === componentType
+    );
+
+    const text = String(component?.text || "");
+
+    if (!text) return false;
+
+    const token = `\\{\\{${index}\\}\\}`;
+
+    const greetingPattern = new RegExp(
+        `(hola|estimado|estimada|buen día|buenos días|buenas tardes|buenas noches)\\s*[,!:;-]?\\s*${token}`,
+        "i"
+    );
+
+    const explicitPattern = new RegExp(
+        `(nombre|cliente|prospecto)\\s*(es|:)?\\s*${token}`,
+        "i"
+    );
+
+    return greetingPattern.test(text) || explicitPattern.test(text);
+}
+
+function getDefaultValueForTemplateField(field, context = {}, template = null) {
+    const explicitDefault = String(
+        field?.default_value ||
+        field?.default ||
+        ""
+    ).trim();
+
+    if (explicitDefault) return explicitDefault;
+
+    if (String(field?.type || "").toLowerCase() === "media") return "";
+
+    const label = safeLower(field?.label);
+    const key = safeLower(field?.key);
+
+    if (isProspectNameTemplateField(field, template)) {
+        return context.nombre || "";
+    }
+
+    if (
+        label.includes("asesor") ||
+        key.includes("asesor") ||
+        label.includes("quién eres")
+    ) {
+        return context.asesor || "";
+    }
+
+    if (
+        label.includes("dealer") ||
+        label.includes("agencia") ||
+        key.includes("dealer") ||
+        key.includes("agencia")
+    ) {
+        return context.agencia || "";
+    }
+
+    if (
+        label.includes("modelo") ||
+        label.includes("auto") ||
+        label.includes("vehículo") ||
+        key.includes("modelo") ||
+        key.includes("auto")
+    ) {
+        return context.modelo || "";
+    }
+
+    if (
+        label.includes("canal") ||
+        key.includes("canal")
+    ) {
+        return context.canal || "";
+    }
+
+    if (
+        label.includes("tema") ||
+        key.includes("tema")
+    ) {
+        return context.tema || "";
+    }
+
+    if (
+        label.includes("dato") ||
+        label.includes("pides") ||
+        key.includes("dato")
+    ) {
+        return context.dato || "";
+    }
+
     return "";
 }
 
-function buildDynamicTemplateComponents(template, draft) {
-    const fields = Array.isArray(template?.fields) ? template.fields : [];
-    const grouped = fields.reduce((acc, f) => { const c = String(f.component || "body").toLowerCase(); if (!acc[c]) acc[c] = []; acc[c].push(f); return acc; }, {});
-    return Object.entries(grouped).map(([type, items]) => ({
-        type,
-        parameters: items.sort((a, b) => Number(a.index || 0) - Number(b.index || 0)).map(f => ({ type: "text", text: String(draft?.[f.key] || "").trim() })),
-    })).filter(c => c.parameters.length > 0);
+function hasTemplateFieldValue(field, value) {
+    if (String(field?.type || "").toLowerCase() === "media") {
+        if (!value || typeof value !== "object") return false;
+
+        return Boolean(
+            String(value.id || "").trim() ||
+            String(value.link || "").trim()
+        );
+    }
+
+    return Boolean(String(value || "").trim());
 }
 
+function buildDynamicTemplateComponents(template, draft) {
+    const fields = Array.isArray(template?.fields)
+        ? template.fields
+        : [];
+
+    const components = [];
+
+    const mediaField = fields.find(
+        (field) =>
+            String(field?.component || "").toLowerCase() === "header" &&
+            String(field?.type || "").toLowerCase() === "media"
+    );
+
+    if (mediaField) {
+        const value = draft?.[mediaField.key];
+        const mediaType = String(
+            mediaField.media_type || ""
+        ).toLowerCase();
+
+        let media = null;
+
+        if (value && typeof value === "object") {
+            const id = String(value.id || "").trim();
+            const link = String(value.link || "").trim();
+
+            if (id) media = { id };
+            else if (link) media = { link };
+
+            if (
+                media &&
+                mediaType === "document"
+            ) {
+                media.filename = String(
+                    value.filename ||
+                    value.name ||
+                    "documento.pdf"
+                ).trim();
+            }
+        }
+
+        if (media) {
+            components.push({
+                type: "header",
+                parameters: [
+                    {
+                        type: mediaType,
+                        [mediaType]: media,
+                    },
+                ],
+            });
+        }
+    }
+
+    const textFields = fields.filter(
+        (field) =>
+            String(field?.type || "text").toLowerCase() !== "media"
+    );
+
+    const grouped = textFields.reduce(
+        (accumulator, field) => {
+            const component = String(
+                field.component || "body"
+            ).toLowerCase();
+
+            if (!accumulator[component]) {
+                accumulator[component] = [];
+            }
+
+            accumulator[component].push(field);
+
+            return accumulator;
+        },
+        {}
+    );
+
+    Object.entries(grouped).forEach(
+        ([type, items]) => {
+            const parameters = items
+                .sort(
+                    (a, b) =>
+                        Number(a.index || 0) -
+                        Number(b.index || 0)
+                )
+                .map((field) => ({
+                    type: "text",
+                    text: String(
+                        draft?.[field.key] || ""
+                    ).trim(),
+                }));
+
+            if (parameters.length) {
+                components.push({
+                    type,
+                    parameters,
+                });
+            }
+        }
+    );
+
+    return components;
+}
 function WhatsAppWaveform({ progress = 0, mine = false, onSeek }) {
     const bars = [8, 14, 10, 18, 12, 22, 16, 26, 20, 16, 24, 14, 18, 10, 22, 12, 16, 8, 14, 20, 12, 18, 10, 15, 9, 13, 18, 11, 16, 10];
 
@@ -1310,33 +1587,34 @@ function WhatsAppAttachment({ mine, attachment }) {
 }
 
 // ─── Ticks de estado estilo WhatsApp (reloj / ✓ / ✓✓ gris / ✓✓ azul) ────────
-
-function MessageStatusTicks({ status, pending, raw }) {
+function MessageStatusTicks({ status, pending, errorMessage = "", raw }) {
     if (pending) {
         return <Clock className="h-3.5 w-3.5 opacity-60" title="Enviando…" />;
     }
     const v = String(status || "").toLowerCase();
     if (v === "failed") {
-        const errorReason = getMessageErrorReason(raw);
+        const errorReason = String(errorMessage || "").trim() || getMessageErrorReason(raw);
 
         return (
-            <AlertCircle
-                className="h-3.5 w-3.5 text-red-500"
-                title={`Falló el envío: ${errorReason}`}
-            />
+            <span className="inline-flex max-w-[380px] items-start gap-1 text-red-600" title={errorReason} >
+                <span className="text-[12px] font-bold leading-4">{errorReason}</span>
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            </span>
         );
     }
     if (v === "read") {
-        return <CheckCheck className="h-3.5 w-3.5" style={{ color: "#53BDEB" }} title="Leído" />;
+        return (<CheckCheck className="h-3.5 w-3.5" style={{ color: "#53BDEB" }} title="Leído" />);
     }
     if (v === "delivered") {
-        return <CheckCheck className="h-3.5 w-3.5 opacity-70" title="Entregado" />;
+        return (<CheckCheck className="h-3.5 w-3.5 opacity-70" title="Entregado" />);
     }
     if (v === "sent" || v === "accepted") {
-        return <Check className="h-3.5 w-3.5 opacity-70" title="Enviado" />;
+        return (<Check className="h-3.5 w-3.5 opacity-70" title="Enviado" />);
     }
     if (v === "received") return null;
-    return <Check className="h-3.5 w-3.5 opacity-50" title="Enviado" />;
+    return (
+        <Check className="h-3.5 w-3.5 opacity-50" title="Enviado" />
+    );
 }
 
 // ─── Formateador de fecha estilo WhatsApp: "Hoy", "Ayer", o fecha completa ──
@@ -2200,6 +2478,7 @@ export default function DigitalesContacto() {
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [templatesError, setTemplatesError] = useState("");
     const [sendingTemplate, setSendingTemplate] = useState(false);
+    const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
 
     const [openEmoji, setOpenEmoji] = useState(false);
     const [attachments, setAttachments] = useState([]);
@@ -2464,7 +2743,7 @@ export default function DigitalesContacto() {
 
     const incompleteTemplateFields = useMemo(() => {
         const fields = Array.isArray(tplSelected?.fields) ? tplSelected.fields : [];
-        return fields.filter((field) => !String(tplDraft?.[field.key] || "").trim());
+        return fields.filter((field) => !hasTemplateFieldValue(field, tplDraft?.[field.key]));
     }, [tplSelected, tplDraft]);
 
     // Índice rápido id de mensaje -> mensaje (para resolver citas tipo WhatsApp)
@@ -3471,6 +3750,12 @@ export default function DigitalesContacto() {
         setTplSelected(normalizedTemplate);
         setTemplatesError("");
 
+        const nombreProspecto = String(
+            prospecto?.nombre ||
+            activeChat?.nombre ||
+            ""
+        ).trim();
+
         const currentAgencia = String(
             prospecto?.agencia ||
             activeChat?.agencia ||
@@ -3483,10 +3768,11 @@ export default function DigitalesContacto() {
                     dealer.toLowerCase() ===
                     currentAgencia.toLowerCase()
             ) ||
-            DEALERS.find((dealer) =>
-                currentAgencia
-                    .toLowerCase()
-                    .includes(dealer.toLowerCase())
+            DEALERS.find(
+                (dealer) =>
+                    currentAgencia
+                        .toLowerCase()
+                        .includes(dealer.toLowerCase())
             ) ||
             "";
 
@@ -3501,42 +3787,145 @@ export default function DigitalesContacto() {
                     canalActual.toLowerCase()
             ) || "";
 
-        const asesorAuto = String(
-            prospecto?.asesor_digital ||
-            prospecto?.asesor_ventas ||
-            prospecto?.responsable ||
-            ""
-        ).trim();
-
-        const context = {
-            nombre: String(
-                prospecto?.nombre ||
-                activeChat?.nombre ||
-                ""
-            ).trim(),
-            agencia: bestDealer,
-            modelo: String(
-                prospecto?.auto_interes || ""
-            ).trim(),
-            canal: bestCanal,
-            asesor: asesorAuto,
-            tema: prospecto?.auto_interes
-                ? "auto de interés"
-                : "cita",
-            dato: "",
-        };
-
         const values = {};
 
-        for (const field of normalizedTemplate.fields) {
-            values[field.key] =
-                getDefaultValueForTemplateField(
-                    field,
-                    context
+        for (const field of normalizedTemplate.fields || []) {
+            const fieldType = String(
+                field?.type || "text"
+            ).toLowerCase();
+
+            /*
+             * Multimedia nunca se llena automáticamente.
+             * El usuario debe seleccionar el archivo.
+             */
+            if (fieldType === "media") {
+                values[field.key] = "";
+                continue;
+            }
+
+            /*
+             * Campos que tienen opciones:
+             * agencia / dealer / canal.
+             *
+             * No debemos poner el nombre porque el <select>
+             * necesita uno de sus valores válidos.
+             */
+            const options = getFieldOptions(field);
+
+            if (options.length) {
+                const label = safeLower(
+                    `${field?.label || ""} ${field?.key || ""}`
                 );
+
+                if (
+                    label.includes("dealer") ||
+                    label.includes("agencia")
+                ) {
+                    values[field.key] = bestDealer;
+                    continue;
+                }
+
+                if (label.includes("canal")) {
+                    values[field.key] = bestCanal;
+                    continue;
+                }
+
+                values[field.key] = "";
+                continue;
+            }
+            values[field.key] = nombreProspecto;
         }
 
         setTplDraft(values);
+    }
+
+    async function handleTemplateMediaFile(field, file) {
+        if (!file || uploadingTemplateMedia) return;
+
+        const mediaType = String(
+            field?.media_type || ""
+        ).toLowerCase();
+
+        const rule =
+            TEMPLATE_MEDIA_RULES[mediaType];
+
+        if (!rule) {
+            setTemplatesError(
+                "El tipo multimedia de esta plantilla no es compatible."
+            );
+
+            return;
+        }
+
+        const mime = String(
+            file.type || ""
+        ).toLowerCase();
+
+        if (!rule.mime.includes(mime)) {
+            setTemplatesError(
+                `El archivo no es válido. Para ${rule.label} se permite: ${rule.mime.join(", ")}.`
+            );
+
+            return;
+        }
+
+        if (file.size > rule.maxBytes) {
+            setTemplatesError(
+                `El archivo pesa ${(file.size / 1024 / 1024).toFixed(2)} MB y supera el límite de ${rule.maxLabel}.`
+            );
+
+            return;
+        }
+
+        setUploadingTemplateMedia(true);
+        setTemplatesError("");
+
+        try {
+            const response =
+                await api.digitalesSubirMediaPlantilla({
+                    file,
+                    media_type: mediaType,
+                    numero_asesor:
+                        numeroAsesorActivo,
+                });
+
+            const mediaId = String(
+                response?.media_id ||
+                response?.id ||
+                ""
+            ).trim();
+
+            if (!mediaId) {
+                throw new Error(
+                    "Meta no regresó el identificador del archivo."
+                );
+            }
+
+            setTplDraft((current) => ({
+                ...current,
+
+                [field.key]: {
+                    id: mediaId,
+                    filename: file.name,
+                    name: file.name,
+                    mime,
+                    size: file.size,
+                },
+            }));
+
+        } catch (error) {
+            console.error(
+                "Error subiendo multimedia de plantilla:",
+                error
+            );
+
+            setTemplatesError(
+                error?.message ||
+                "No se pudo subir el archivo a Meta."
+            );
+        } finally {
+            setUploadingTemplateMedia(false);
+        }
     }
 
     function addQuickBubble() {
@@ -3851,11 +4240,14 @@ export default function DigitalesContacto() {
     }
 
     async function enviarPlantilla() {
-        const targetTel = activeTelRef.current;
+        const targetTel =
+            activeTelRef.current;
+
         if (
             !targetTel ||
             !tplSelected ||
-            sendingTemplate
+            sendingTemplate ||
+            uploadingTemplateMedia
         ) {
             return;
         }
@@ -3868,21 +4260,26 @@ export default function DigitalesContacto() {
             return;
         }
 
-        const fields = Array.isArray(tplSelected.fields)
-            ? tplSelected.fields
-            : [];
+        const fields =
+            Array.isArray(tplSelected.fields)
+                ? tplSelected.fields
+                : [];
 
-        const incompleteField = fields.find(
-            (field) =>
-                !String(
-                    tplDraft?.[field.key] || ""
-                ).trim()
-        );
+        const incompleteField =
+            fields.find(
+                (field) =>
+                    !hasTemplateFieldValue(
+                        field,
+                        tplDraft?.[field.key]
+                    )
+            );
 
         if (incompleteField) {
             setTemplatesError(
                 `Completa el campo obligatorio: ${incompleteField.friendlyLabel ||
-                getFriendlyTemplateFieldLabel(incompleteField)
+                getFriendlyTemplateFieldLabel(
+                    incompleteField
+                )
                 }.`
             );
 
@@ -3906,28 +4303,34 @@ export default function DigitalesContacto() {
             return;
         }
 
-        const textoPreview = buildTemplatePreviewText(
-            tplSelected,
-            tplDraft
-        );
+        const textoPreview =
+            buildTemplatePreviewText(
+                tplSelected,
+                tplDraft
+            );
 
-        const components = buildDynamicTemplateComponents(
-            tplSelected,
-            tplDraft
-        );
+        const components =
+            buildDynamicTemplateComponents(
+                tplSelected,
+                tplDraft
+            );
 
-        const optimisticId = crypto.randomUUID();
+        const optimisticId =
+            crypto.randomUUID();
 
         setTemplatesError("");
         setSendingTemplate(true);
-        shouldStickToBottomRef.current = true;
+
+        shouldStickToBottomRef.current =
+            true;
 
         setMensajes((previous) => [
             ...previous,
             {
                 id: optimisticId,
                 local_pending: true,
-                local_created_at: new Date().toISOString(),
+                local_created_at:
+                    new Date().toISOString(),
                 mine: true,
                 text:
                     textoPreview ||
@@ -3943,15 +4346,19 @@ export default function DigitalesContacto() {
                 to: targetTel,
                 template_name: templateName,
                 idioma,
+
                 components:
                     components.length > 0
                         ? components
                         : undefined,
+
                 params:
                     components.length > 0
                         ? undefined
                         : [],
-                numero_asesor: numeroAsesorActivo,
+
+                numero_asesor:
+                    numeroAsesorActivo,
             });
 
             setShowTemplatesDropdown(false);
@@ -3959,8 +4366,20 @@ export default function DigitalesContacto() {
             setTplDraft({});
             setTemplatesError("");
 
-            await refreshActiveChat(targetTel, { forceBottom: true });
-            await refreshChats({ numeroAsesor: numeroAsesorActivoRef.current, reset: true, query: qRef.current }).catch(() => { });
+            await refreshActiveChat(
+                targetTel,
+                {
+                    forceBottom: true,
+                }
+            );
+
+            await refreshChats({
+                numeroAsesor:
+                    numeroAsesorActivoRef.current,
+                reset: true,
+                query: qRef.current,
+            }).catch(() => { });
+
         } catch (error) {
             console.error(
                 "Error enviando plantilla:",
@@ -3979,8 +4398,10 @@ export default function DigitalesContacto() {
                 )
             );
 
-            await refreshActiveChat(targetTel)
-                .catch(() => { });
+            await refreshActiveChat(
+                targetTel
+            ).catch(() => { });
+
         } finally {
             setSendingTemplate(false);
         }
@@ -4838,15 +5259,15 @@ export default function DigitalesContacto() {
                             tracked_ids: trackedIds,
                         });
                         if (!alive) return;
-                       if (activeTelRef.current === target) {
+                        if (activeTelRef.current === target) {
                             const incoming = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
                             const statusUpdates = (Array.isArray(data?.status_updates) ? data.status_updates : []).map(normalizeMessage);
                             const updates = mergeMessages(incoming, statusUpdates);
 
                             if (updates.length) {
                                 shouldStickToBottomRef.current = isNearBottom(messagesScrollRef.current);
-                         setMensajes((actualesMensajes) => mergeMessages(actualesMensajes, updates));
-                            const nuevoUltimo = incoming[incoming.length - 1];
+                                setMensajes((actualesMensajes) => mergeMessages(actualesMensajes, updates));
+                                const nuevoUltimo = incoming[incoming.length - 1];
                                 setChats((actualesChats) => actualesChats.map((chat) => chat.telefono === target ? {
                                     ...chat, unread: 0,
                                     last: {
@@ -5714,26 +6135,114 @@ export default function DigitalesContacto() {
                                                                 </div>
                                                                 {(tplSelected.fields || []).map((field) => {
                                                                     const options = getFieldOptions(field);
+
+                                                                    const isMedia =
+                                                                        String(field?.type || "").toLowerCase() === "media";
+
+                                                                    const mediaType = String(
+                                                                        field?.media_type || ""
+                                                                    ).toLowerCase();
+
+                                                                    const mediaRule =
+                                                                        TEMPLATE_MEDIA_RULES[mediaType];
+
+                                                                    const mediaValue =
+                                                                        tplDraft?.[field.key];
+
+                                                                    const completed =
+                                                                        hasTemplateFieldValue(
+                                                                            field,
+                                                                            mediaValue
+                                                                        );
+
                                                                     return (
                                                                         <div key={field.key}>
                                                                             <div className="mb-1 flex items-center justify-between gap-2">
                                                                                 <div className="text-[11px] font-extrabold text-[#131E5C]">
                                                                                     {field.friendlyLabel ||
                                                                                         getFriendlyTemplateFieldLabel(field)}
-                                                                                    <span className="ml-1 text-red-600">*</span>
+
+                                                                                    <span className="ml-1 text-red-600">
+                                                                                        *
+                                                                                    </span>
                                                                                 </div>
 
                                                                                 <span className="text-[10px] font-semibold text-slate-400">
                                                                                     Obligatorio
                                                                                 </span>
                                                                             </div>
-                                                                            {options.length ? (
+
+                                                                            {isMedia ? (
+                                                                                <div className="space-y-2">
+                                                                                    <label
+                                                                                        className={cls(
+                                                                                            "flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed px-3 py-3 transition",
+                                                                                            completed
+                                                                                                ? "border-emerald-200 bg-emerald-50"
+                                                                                                : "border-slate-200 bg-slate-50 hover:border-[#131E5C]/30",
+                                                                                            uploadingTemplateMedia
+                                                                                                ? "cursor-wait opacity-60"
+                                                                                                : ""
+                                                                                        )}
+                                                                                    >
+                                                                                        {uploadingTemplateMedia ? (
+                                                                                            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#131E5C]" />
+                                                                                        ) : (
+                                                                                            <Paperclip className="h-5 w-5 shrink-0 text-[#131E5C]" />
+                                                                                        )}
+
+                                                                                        <div className="min-w-0 flex-1">
+                                                                                            <div className="truncate text-xs font-extrabold text-[#131E5C]">
+                                                                                                {uploadingTemplateMedia
+                                                                                                    ? "Subiendo archivo a Meta..."
+                                                                                                    : mediaValue?.filename ||
+                                                                                                    mediaValue?.name ||
+                                                                                                    `Seleccionar ${mediaRule?.label || "archivo"}`}
+                                                                                            </div>
+
+                                                                                            <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                                                                                {mediaRule
+                                                                                                    ? `Máximo ${mediaRule.maxLabel}`
+                                                                                                    : "Archivo requerido por la plantilla"}
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        <input
+                                                                                            type="file"
+                                                                                            hidden
+                                                                                            disabled={uploadingTemplateMedia}
+                                                                                            accept={mediaRule?.accept || ""}
+                                                                                            onChange={(event) => {
+                                                                                                const file =
+                                                                                                    event.target.files?.[0];
+
+                                                                                                if (file) {
+                                                                                                    handleTemplateMediaFile(
+                                                                                                        field,
+                                                                                                        file
+                                                                                                    );
+                                                                                                }
+
+                                                                                                event.target.value = "";
+                                                                                            }}
+                                                                                        />
+                                                                                    </label>
+
+                                                                                    {completed ? (
+                                                                                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-bold text-emerald-700">
+                                                                                            Archivo preparado correctamente para enviar con la plantilla.
+                                                                                        </div>
+                                                                                    ) : null}
+                                                                                </div>
+
+                                                                            ) : options.length ? (
                                                                                 <select
                                                                                     value={tplDraft[field.key] || ""}
                                                                                     onChange={(event) => {
                                                                                         setTplDraft((current) => ({
                                                                                             ...current,
-                                                                                            [field.key]: event.target.value,
+                                                                                            [field.key]:
+                                                                                                event.target.value,
                                                                                         }));
 
                                                                                         setTemplatesError("");
@@ -5741,7 +6250,7 @@ export default function DigitalesContacto() {
                                                                                     aria-required="true"
                                                                                     className={cls(
                                                                                         "w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none transition",
-                                                                                        !String(tplDraft[field.key] || "").trim()
+                                                                                        !completed
                                                                                             ? "border-red-200 focus:border-red-400"
                                                                                             : "border-black/10 focus:border-[#131E5C]/40"
                                                                                     )}
@@ -5751,18 +6260,23 @@ export default function DigitalesContacto() {
                                                                                     </option>
 
                                                                                     {options.map((option) => (
-                                                                                        <option key={option} value={option}>
+                                                                                        <option
+                                                                                            key={option}
+                                                                                            value={option}
+                                                                                        >
                                                                                             {option}
                                                                                         </option>
                                                                                     ))}
                                                                                 </select>
+
                                                                             ) : (
                                                                                 <input
                                                                                     value={tplDraft[field.key] || ""}
                                                                                     onChange={(event) => {
                                                                                         setTplDraft((current) => ({
                                                                                             ...current,
-                                                                                            [field.key]: event.target.value,
+                                                                                            [field.key]:
+                                                                                                event.target.value,
                                                                                         }));
 
                                                                                         setTemplatesError("");
@@ -5771,7 +6285,7 @@ export default function DigitalesContacto() {
                                                                                     aria-required="true"
                                                                                     className={cls(
                                                                                         "w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none transition",
-                                                                                        !String(tplDraft[field.key] || "").trim()
+                                                                                        !completed
                                                                                             ? "border-red-200 focus:border-red-400 focus:ring-2 focus:ring-red-100"
                                                                                             : "border-black/10 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10"
                                                                                     )}
@@ -5788,19 +6302,19 @@ export default function DigitalesContacto() {
                                                                     onClick={enviarPlantilla}
                                                                     disabled={
                                                                         sendingTemplate ||
+                                                                        uploadingTemplateMedia ||
                                                                         incompleteTemplateFields.length > 0
                                                                     }
                                                                     className="w-full rounded-xl py-2.5 text-xs font-extrabold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                                                     style={{ backgroundColor: BRAND_BLUE }}
                                                                 >
-                                                                    {sendingTemplate
-                                                                        ? "Enviando plantilla..."
-                                                                        : incompleteTemplateFields.length > 0
-                                                                            ? `Completa ${incompleteTemplateFields.length} dato${incompleteTemplateFields.length === 1
-                                                                                ? ""
-                                                                                : "s"
-                                                                            }`
-                                                                            : "Enviar plantilla"}
+                                                                    {uploadingTemplateMedia
+                                                                        ? "Subiendo archivo..."
+                                                                        : sendingTemplate
+                                                                            ? "Enviando plantilla..."
+                                                                            : incompleteTemplateFields.length > 0
+                                                                                ? `Completa ${incompleteTemplateFields.length} dato${incompleteTemplateFields.length === 1 ? "" : "s"}`
+                                                                                : "Enviar plantilla"}
                                                                 </button>
                                                             </div>
                                                         )}
