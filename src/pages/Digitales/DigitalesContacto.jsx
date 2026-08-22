@@ -4736,7 +4736,8 @@ export default function DigitalesContacto() {
 
     useEffect(() => {
         if (didInitSelection.current) return;
-        if (tel) {
+
+        if (isDirectChatMode && tel) {
             didInitSelection.current = true;
             activeTelRef.current = tel;
             setActiveTel(tel);
@@ -4744,14 +4745,11 @@ export default function DigitalesContacto() {
             localStorage.setItem("last_active_chat", tel);
             return;
         }
-        if (!isDirectChatMode && chats.length) {
-            const last = normalizaTelefonoMx(localStorage.getItem("last_active_chat") || "");
-            const initialTel = last && chats.some((c) => c.telefono === last) ? last : chats[0].telefono;
-            didInitSelection.current = true;
-            activeTelRef.current = initialTel;
-            setActiveTel(initialTel);
-        }
-    }, [tel, chats, isDirectChatMode]);
+
+        didInitSelection.current = true;
+        activeTelRef.current = "";
+        setActiveTel("");
+    }, [tel, isDirectChatMode]);
 
     useEffect(() => {
         setShowProspectoPanel(false);
