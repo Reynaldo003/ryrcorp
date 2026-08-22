@@ -436,15 +436,26 @@ function formateaTelUi(tel52) {
     return `+${digits}`;
 }
 
-function prettyStatus(status) {
-    const v = String(status || "").toLowerCase();
-    if (v === "accepted") return "aceptado";
-    if (v === "sent") return "enviado";
-    if (v === "delivered") return "entregado";
-    if (v === "read") return "leído";
-    if (v === "failed") return "falló";
-    if (v === "received") return "";
-    return v || "—";
+function getMessageErrorReason(raw = {}) {
+    const data = raw && typeof raw === "object" ? raw : {};
+
+    const errors = Array.isArray(data.errors)
+        ? data.errors
+        : Array.isArray(data?.status_payload?.errors)
+            ? data.status_payload.errors
+            : [];
+
+    const firstError = errors[0] || {};
+
+    return (
+        firstError?.error_data?.details ||
+        firstError?.message ||
+        firstError?.title ||
+        data?.meta?.meta_message ||
+        data?.meta_media?.message ||
+        data?.error ||
+        "No se pudo entregar el mensaje."
+    );
 }
 
 function labelBloqueoIa(value) {
@@ -1300,13 +1311,20 @@ function WhatsAppAttachment({ mine, attachment }) {
 
 // ─── Ticks de estado estilo WhatsApp (reloj / ✓ / ✓✓ gris / ✓✓ azul) ────────
 
-function MessageStatusTicks({ status, pending }) {
+function MessageStatusTicks({ status, pending, raw }) {
     if (pending) {
         return <Clock className="h-3.5 w-3.5 opacity-60" title="Enviando…" />;
     }
     const v = String(status || "").toLowerCase();
     if (v === "failed") {
-        return <AlertCircle className="h-3.5 w-3.5 text-red-300" title="Falló el envío" />;
+        const errorReason = getMessageErrorReason(raw);
+
+        return (
+            <AlertCircle
+                className="h-3.5 w-3.5 text-red-500"
+                title={`Falló el envío: ${errorReason}`}
+            />
+        );
     }
     if (v === "read") {
         return <CheckCheck className="h-3.5 w-3.5" style={{ color: "#53BDEB" }} title="Leído" />;
@@ -1528,6 +1546,7 @@ function MessageBubble({
     text,
     time,
     status = "sent",
+    raw,
     attachments = [],
     reactions = [],
     isAi = false,
@@ -1657,6 +1676,7 @@ function MessageBubble({
                                 <MessageStatusTicks
                                     status={status}
                                     pending={localPending}
+                                    raw={raw}
                                 />
                             ) : null}
                         </div>
@@ -1667,6 +1687,7 @@ function MessageBubble({
                                 <MessageStatusTicks
                                     status={status}
                                     pending={localPending}
+                                    raw={raw}
                                 />
                             ) : null}
                         </div>
@@ -4804,16 +4825,28 @@ export default function DigitalesContacto() {
                     const lastId = ultimoActual?.id || ultimoActual?.wa_message_id || "";
                     const lastCreatedAt = ultimoActual?.created_at || "";
                     if (lastId || lastCreatedAt) {
+                        const trackedIds = actuales
+                            .filter((m) => m?.mine && m?.id && !m?.local_pending)
+                            .map((m) => m.id)
+                            .slice(-100)
+                            .join(",");
+
                         const data = await api.digitalesContactoUpdates(target, lastCreatedAt, {
-                            limit: CHAT_UPDATES_LIMIT, after_id: lastId, numero_asesor: numeroLinea,
+                            limit: CHAT_UPDATES_LIMIT,
+                            after_id: lastId,
+                            numero_asesor: numeroLinea,
+                            tracked_ids: trackedIds,
                         });
                         if (!alive) return;
-                        if (activeTelRef.current === target) {
+                       if (activeTelRef.current === target) {
                             const incoming = (Array.isArray(data?.mensajes) ? data.mensajes : []).map(normalizeMessage);
-                            if (incoming.length) {
+                            const statusUpdates = (Array.isArray(data?.status_updates) ? data.status_updates : []).map(normalizeMessage);
+                            const updates = mergeMessages(incoming, statusUpdates);
+
+                            if (updates.length) {
                                 shouldStickToBottomRef.current = isNearBottom(messagesScrollRef.current);
-                                setMensajes((actualesMensajes) => mergeMessages(actualesMensajes, incoming));
-                                const nuevoUltimo = incoming[incoming.length - 1];
+                         setMensajes((actualesMensajes) => mergeMessages(actualesMensajes, updates));
+                            const nuevoUltimo = incoming[incoming.length - 1];
                                 setChats((actualesChats) => actualesChats.map((chat) => chat.telefono === target ? {
                                     ...chat, unread: 0,
                                     last: {
@@ -5319,6 +5352,7 @@ export default function DigitalesContacto() {
                                                         text={message.text}
                                                         time={timeDisplay}
                                                         status={message.status || "sent"}
+                                                        raw={message.raw}
                                                         localPending={Boolean(message.local_pending)}
                                                         attachments={message.attachments || []}
                                                         reactions={message.reactions || []}

@@ -989,48 +989,55 @@ export const api = {
       body: JSON.stringify(withRequestContext(payload)),
     }),
 
-  digitalesContacto: (
-    tel,
-    {
-      limit = 8,
-      before_id = "",
-      usuario = "",
-      numero_asesor = "",
-      mark_read = 1,
-      incluir_contexto = 1,
-    } = {},
-  ) =>
-    http(
-      `/digitales/contacto/${buildQuery(
-        withRequestContext({
-          tel,
-          limit,
-          before_id,
-          mark_read,
-          incluir_contexto,
-          usuario,
-          numero_asesor,
-        }),
-      )}`,
-    ),
+    digitalesContacto: (
+      tel,
+      {
+        limit = 8,
+        before_id = "",
+        usuario = "",
+        numero_asesor = "",
+        mark_read = 1,
+        incluir_contexto = 1,
+      } = {},
+    ) =>
+      http(
+        `/digitales/contacto/${buildQuery(
+          withRequestContext({
+            tel,
+            limit,
+            before_id,
+            mark_read,
+            incluir_contexto,
+            usuario,
+            numero_asesor,
+          }),
+        )}`,
+      ),
 
-  digitalesContactoUpdates: (
-    tel,
-    after = "",
-    { limit = 50, usuario = "", numero_asesor = "", after_id = "" } = {},
-  ) =>
-    http(
-      `/digitales/contacto/updates/${buildQuery(
-        withRequestContext({
-          tel,
-          after,
-          after_id,
-          limit,
-          usuario,
-          numero_asesor,
-        }),
-      )}`,
-    ),
+    digitalesContactoUpdates: (
+      tel,
+      after = "",
+      {
+        limit = 50,
+        usuario = "",
+        numero_asesor = "",
+        after_id = "",
+        tracked_ids = "",
+      } = {},
+    ) =>
+      http(
+        `/digitales/contacto/updates/${buildQuery(
+          withRequestContext({
+            tel,
+            after,
+            after_id,
+            limit,
+            usuario,
+            numero_asesor,
+            tracked_ids,
+          }),
+        )}`,
+      ),
 
   // Envío de mensajes
   digitalesEnviarMensaje: (payload = {}) =>
