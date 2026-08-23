@@ -13,6 +13,7 @@ import {
     Search,
     ShieldAlert,
     Trash2,
+    UploadCloud,
     X,
 } from "lucide-react";
 import { api } from "../../lib/apiPruebas";
@@ -21,6 +22,29 @@ import { useAuth } from "../../auth/AuthContext";
 const inputCls = "w-full rounded-xl border border-[#E4E7F0] bg-white px-3.5 py-2.5 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/30 focus:ring-2 focus:ring-[#131E5C]/10";
 const textareaCls = `${inputCls} resize-y`;
 
+const HEADER_MEDIA_RULES = {
+    IMAGE: {
+        accept: "image/jpeg,image/png",
+        mime: ["image/jpeg", "image/png"],
+        maxBytes: 5 * 1024 * 1024,
+        maxLabel: "5 MB",
+        label: "imagen",
+    },
+    VIDEO: {
+        accept: "video/mp4",
+        mime: ["video/mp4"],
+        maxBytes: 16 * 1024 * 1024,
+        maxLabel: "16 MB",
+        label: "video",
+    },
+    DOCUMENT: {
+        accept: "application/pdf",
+        mime: ["application/pdf"],
+        maxBytes: 100 * 1024 * 1024,
+        maxLabel: "100 MB",
+        label: "documento PDF",
+    },
+};
 const STATUS_CFG = {
     APPROVED: { label: "Aprobada", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
     PENDING: { label: "En revisión", cls: "border-amber-200 bg-amber-50 text-amber-700" },
@@ -154,14 +178,24 @@ function emptyDraft() {
         name: "",
         language: "es_MX",
         category: "UTILITY",
-        headerEnabled: false,
+
+        headerType: "NONE",
         headerText: "",
         headerExamples: {},
+        headerFile: null,
+        headerFileName: "",
+        headerPreview: "",
+        headerHandle: "",
+        headerUploading: false,
+
         preservedHeader: null,
+
         body: "",
         bodyExamples: {},
         footer: "",
+
         buttons: [],
+
         aceptarRiesgo: false,
         allowCategoryChange: true,
     };
@@ -239,7 +273,7 @@ function draftFromTemplate(template) {
     const body = components.find((item) => String(item?.type || "").toUpperCase() === "BODY");
     const footer = components.find((item) => String(item?.type || "").toUpperCase() === "FOOTER");
     const buttons = components.find((item) => String(item?.type || "").toUpperCase() === "BUTTONS");
-    const headerFormat = String(header?.format || "TEXT").toUpperCase();
+    const headerFormat = header ? String(header?.format || "TEXT").toUpperCase() : "NONE";
 
     return {
         ...emptyDraft(),
@@ -247,13 +281,17 @@ function draftFromTemplate(template) {
         name: String(template?.name || template?.key || ""),
         language: String(template?.language || template?.idioma || "es_MX"),
         category: String(template?.category || "UTILITY").toUpperCase(),
-        headerEnabled: Boolean(header),
+
+        headerType: headerFormat,
         headerText: headerFormat === "TEXT" ? String(header?.text || "") : "",
         headerExamples: extractExamples(header, "header"),
-        preservedHeader: header && headerFormat !== "TEXT" ? header : null,
+
+        preservedHeader: header && ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat) ? header : null,
+
         body: String(body?.text || ""),
         bodyExamples: extractExamples(body, "body"),
         footer: String(footer?.text || ""),
+
         buttons: Array.isArray(buttons?.buttons)
             ? buttons.buttons.map((button) => ({
                 type: String(button?.type || "QUICK_REPLY").toUpperCase(),
@@ -269,38 +307,98 @@ function draftFromTemplate(template) {
 function buildComponents(draft) {
     const components = [];
 
-    if (draft.preservedHeader) {
-        components.push(draft.preservedHeader);
-    } else if (draft.headerEnabled && draft.headerText.trim()) {
+    const preservedFormat = String(draft.preservedHeader?.format || "").toUpperCase();
+
+    if (draft.headerType === "TEXT" && draft.headerText.trim()) {
         const vars = variableIndexes(draft.headerText);
-        const header = { type: "HEADER", format: "TEXT", text: draft.headerText.trim() };
-        if (vars.length) header.example = { header_text: vars.map((index) => String(draft.headerExamples[index] || "")) };
+
+        const header = {
+            type: "HEADER",
+            format: "TEXT",
+            text: draft.headerText.trim(),
+        };
+
+        if (vars.length) {
+            header.example = {
+                header_text: vars.map((index) => String(draft.headerExamples[index] || "")),
+            };
+        }
+
         components.push(header);
+    } else if (
+        ["IMAGE", "VIDEO", "DOCUMENT"].includes(draft.headerType) &&
+        draft.headerHandle
+    ) {
+        components.push({
+            type: "HEADER",
+            format: draft.headerType,
+            example: {
+                header_handle: [draft.headerHandle],
+            },
+        });
+    } else if (
+        draft.preservedHeader &&
+        draft.headerType === preservedFormat
+    ) {
+        components.push(draft.preservedHeader);
     }
 
     const bodyVars = variableIndexes(draft.body);
-    const body = { type: "BODY", text: draft.body.trim() };
-    if (bodyVars.length) body.example = { body_text: [bodyVars.map((index) => String(draft.bodyExamples[index] || ""))] };
+
+    const body = {
+        type: "BODY",
+        text: draft.body.trim(),
+    };
+
+    if (bodyVars.length) {
+        body.example = {
+            body_text: [
+                bodyVars.map((index) => String(draft.bodyExamples[index] || "")),
+            ],
+        };
+    }
+
     components.push(body);
 
-    if (draft.footer.trim()) components.push({ type: "FOOTER", text: draft.footer.trim() });
+    if (draft.footer.trim()) {
+        components.push({
+            type: "FOOTER",
+            text: draft.footer.trim(),
+        });
+    }
 
     const buttons = draft.buttons
         .filter((button) => button.text.trim())
         .map((button) => {
-            const base = { type: button.type, text: button.text.trim() };
+            const base = {
+                type: button.type,
+                text: button.text.trim(),
+            };
+
             if (button.type === "URL") {
                 base.url = button.url.trim();
-                if (variableIndexes(button.url).length && button.example.trim()) base.example = [button.example.trim()];
+
+                if (variableIndexes(button.url).length && button.example.trim()) {
+                    base.example = [button.example.trim()];
+                }
             }
-            if (button.type === "PHONE_NUMBER") base.phone_number = button.phone_number.trim();
+
+            if (button.type === "PHONE_NUMBER") {
+                base.phone_number = button.phone_number.trim();
+            }
+
             return base;
         });
 
-    if (buttons.length) components.push({ type: "BUTTONS", buttons });
+    if (buttons.length) {
+        components.push({
+            type: "BUTTONS",
+            buttons,
+        });
+    }
+
     return components;
 }
-
 function analyzeRisk(draft) {
     const text = [draft.headerText, draft.body, draft.footer, ...draft.buttons.flatMap((b) => [b.text, b.url])]
         .join(" ")
@@ -348,30 +446,61 @@ function StatusBadge({ status }) {
 function Modal({ open, title, onClose, children, footer }) {
     useEffect(() => {
         if (!open) return undefined;
+
         document.body.style.overflow = "hidden";
-        return () => { document.body.style.overflow = ""; };
+
+        return () => {
+            document.body.style.overflow = "";
+        };
     }, [open]);
 
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center p-0 sm:items-center sm:p-4">
-            <button className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={onClose} aria-label="Cerrar" />
-            <div className="relative flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
-                <div className="flex items-center justify-between border-b border-[#E4E7F0] px-6 py-4">
-                    <div>
-                        <h2 className="text-base font-bold text-[#1A1F3C]">{title}</h2>
-                        <p className="mt-0.5 text-base text-[#8891AD]">Meta revisará el contenido y asignará el estado final.</p>
+        <div className="fixed inset-0 z-[120] bg-[#F4F6FA]">
+            <div className="flex h-full flex-col">
+                <header className="shrink-0 border-b border-[#E4E7F0] bg-white">
+                    <div className="flex items-center justify-center gap-2 border-t border-[#F0F1F5] px-5 py-3 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5 text-[16px] text-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Configurar plantilla
+                        </span>
+
+                        <span className="h-px w-8 bg-[#D0D5DD]" />
+
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 text-[16px] py-1.5 text-blue-700">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] text-white">
+                                2
+                            </span>
+                            Editar plantilla
+                        </span>
+
+                        <span className="h-px w-8 bg-[#D0D5DD]" />
+
+                        <span className="inline-flex items-center gap-1.5 text-[16px] text-[#98A2B3]">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-[#98A2B3] text-[9px]">
+                                3
+                            </span>
+                            Enviar a revisión
+                        </span>
                     </div>
-                    <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E4E7F0] text-[#8891AD] hover:bg-[#F7F8FC]"><X className="h-4 w-4" /></button>
-                </div>
-                <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-                <div className="border-t border-[#E4E7F0] bg-[#F7F8FC] px-6 py-4">{footer}</div>
+                </header>
+
+                <main className="flex-1 overflow-y-auto">
+                    <div className="mx-auto w-full max-w-[1500px] px-4 py-5 lg:px-8">
+                        {children}
+                    </div>
+                </main>
+
+                <footer className="shrink-0 border-t border-[#E4E7F0] bg-white px-5 py-3 lg:px-8">
+                    <div className="mx-auto w-full max-w-[1500px]">
+                        {footer}
+                    </div>
+                </footer>
             </div>
         </div>
     );
 }
-
 function RiskDialog({ data, saving, onClose, onConfirm }) {
     useEffect(() => {
         if (!data) return undefined;
@@ -530,19 +659,105 @@ function VariableExamples({ title, text, values, onChange, onRemove }) {
 }
 
 function TemplatePreview({ draft }) {
-    const replace = (text, examples) => String(text || "").replace(/\{\{(\d+)\}\}/g, (_, index) => examples[Number(index)] || `{{${index}}}`);
+    const replace = (text, examples) =>
+        String(text || "").replace(
+            /\{\{(\d+)\}\}/g,
+            (_, index) => examples[Number(index)] || `{{${index}}}`
+        );
+
+    const visibleButtons = draft.buttons.filter((button) => button.text.trim());
+    const preservedFormat = String(draft.preservedHeader?.format || "").toUpperCase();
+    const hasPreservedMedia = draft.preservedHeader && draft.headerType === preservedFormat && !draft.headerPreview;
 
     return (
-        <div className="rounded-2xl border border-[#D9E0DA] bg-[#E9E4DC] p-4">
-            <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[#6D756D]">Vista previa</p>
-            <div className="ml-auto max-w-md rounded-xl rounded-tr-sm bg-[#D9FDD3] p-3 shadow-sm">
-                {draft.preservedHeader && <p className="mb-2 text-xs font-bold text-[#1A1F3C]">Encabezado multimedia existente</p>}
-                {draft.headerEnabled && draft.headerText && <p className="mb-2 text-sm font-bold text-[#1A1F3C]">{replace(draft.headerText, draft.headerExamples)}</p>}
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1A1F3C]">{replace(draft.body, draft.bodyExamples) || "Escribe el cuerpo de la plantilla..."}</p>
-                {draft.footer && <p className="mt-2 text-[11px] text-[#667085]">{draft.footer}</p>}
-                {draft.buttons.filter((button) => button.text).map((button, index) => (
-                    <div key={`${button.type}-${index}`} className="mt-2 border-t border-[#BFD9BA] pt-2 text-center text-xs font-bold text-[#027EB5]">{button.text}</div>
-                ))}
+        <div className="rounded-2xl border border-[#D9E0DA] bg-[#EFEAE2] p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+                <p className="text-[12px] font-black uppercase tracking-widest text-[#667781]">
+                    Vista previa de la plantilla
+                </p>
+
+                <span className="rounded-full bg-white/70 px-2 py-1 text-[10px] font-bold text-[#667781]">
+                    WhatsApp
+                </span>
+            </div>
+
+            <div className="mx-auto max-w-[380px]">
+                <div className="rounded-xl rounded-tr-sm bg-white shadow-sm">
+                    {draft.headerType === "IMAGE" && draft.headerPreview && (
+                        <img
+                            src={draft.headerPreview}
+                            alt="Vista previa"
+                            className="max-h-56 w-full rounded-t-xl object-cover"
+                        />
+                    )}
+
+                    {draft.headerType === "VIDEO" && draft.headerPreview && (
+                        <video
+                            src={draft.headerPreview}
+                            controls
+                            className="max-h-56 w-full rounded-t-xl bg-black object-contain"
+                        />
+                    )}
+
+                    {draft.headerType === "DOCUMENT" && (
+                        <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-t-xl bg-[#F0F2F5] text-[#667781]">
+                            <FileText className="h-10 w-10" />
+                            <span className="max-w-[260px] truncate text-xs font-bold">
+                                {draft.headerFileName || "Documento PDF"}
+                            </span>
+                        </div>
+                    )}
+
+                    {hasPreservedMedia && (
+                        <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-t-xl bg-[#F0F2F5] text-[#667781]">
+                            <FileText className="h-9 w-9" />
+                            <span className="text-xs font-bold">
+                                Encabezado {preservedFormat.toLowerCase()} existente
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="px-3 py-2.5">
+                        {draft.headerType === "TEXT" && draft.headerText.trim() && (
+                            <p className="mb-1.5 text-sm font-black text-[#111B21]">
+                                {replace(draft.headerText, draft.headerExamples)}
+                            </p>
+                        )}
+
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#111B21]">
+                            {replace(draft.body, draft.bodyExamples) || "Escribe el cuerpo de la plantilla..."}
+                        </p>
+
+                        {draft.footer && (
+                            <p className="mt-2 text-[11px] text-[#667781]">
+                                {draft.footer}
+                            </p>
+                        )}
+
+                        <div className="mt-1 text-right text-[10px] text-[#8696A0]">
+                            10:30 a.m.
+                        </div>
+                    </div>
+
+                    {visibleButtons.length > 0 && (
+                        <div className="border-t border-[#E9EDEF]">
+                            {visibleButtons.slice(0, 3).map((button, index) => (
+                                <div
+                                    key={`${button.type}-${index}`}
+                                    className="border-b border-[#E9EDEF] px-3 py-2.5 text-center text-xs font-bold text-[#00A5F4] last:border-b-0"
+                                >
+                                    {button.text}
+                                </div>
+                            ))}
+
+                            {visibleButtons.length > 3 && (
+                                <div className="px-3 py-2.5 text-center text-xs font-bold text-[#00A5F4]">
+                                    Ver todas las opciones ({visibleButtons.length})
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -780,6 +995,16 @@ export default function Plantillas() {
         setServerAnalysis(null);
     }, [draft]);
 
+    useEffect(() => {
+        const preview = draft.headerPreview;
+
+        return () => {
+            if (preview?.startsWith("blob:")) {
+                URL.revokeObjectURL(preview);
+            }
+        };
+    }, [draft.headerPreview]);
+
     function openCreate() {
         setServerAnalysis(null);
         setDraft(emptyDraft());
@@ -799,6 +1024,102 @@ export default function Plantillas() {
 
     function patchDraft(field, value) {
         setDraft((current) => ({ ...current, [field]: value, ...(field === "category" ? { aceptarRiesgo: false } : {}) }));
+    }
+    function handleHeaderTypeChange(type) {
+        const nextType = String(type || "NONE").toUpperCase();
+
+        setDraft((current) => ({
+            ...current,
+            headerType: nextType,
+            headerFile: null,
+            headerFileName: "",
+            headerPreview: "",
+            headerHandle: "",
+            headerUploading: false,
+            ...(nextType !== "TEXT" ? { headerText: "", headerExamples: {} } : {}),
+        }));
+    }
+
+    async function handleHeaderFile(file) {
+        if (!file) return;
+
+        const type = String(draft.headerType || "").toUpperCase();
+        const rule = HEADER_MEDIA_RULES[type];
+
+        if (!rule) {
+            showToast("Selecciona primero Imagen, Video o Documento.", "error");
+            return;
+        }
+
+        if (!rule.mime.includes(String(file.type || "").toLowerCase())) {
+            showToast(`El archivo no es válido para ${rule.label}.`, "error");
+            return;
+        }
+
+        if (file.size > rule.maxBytes) {
+            showToast(`El archivo supera el límite de ${rule.maxLabel}.`, "error");
+            return;
+        }
+
+        let preview = "";
+
+        if (type === "IMAGE" || type === "VIDEO") {
+            preview = URL.createObjectURL(file);
+        }
+
+        setDraft((current) => ({
+            ...current,
+            headerFile: file,
+            headerFileName: file.name,
+            headerPreview: preview,
+            headerHandle: "",
+            headerUploading: true,
+        }));
+
+        try {
+            const response = await api.digitalesPlantillaUploadMedia(
+                numeroSeleccionado,
+                file,
+                type
+            );
+
+            const handle = String(response?.header_handle || "").trim();
+
+            if (!handle) {
+                throw new Error("Meta no devolvió el header_handle.");
+            }
+
+            setDraft((current) => ({
+                ...current,
+                headerHandle: handle,
+                headerUploading: false,
+            }));
+
+            showToast("Archivo cargado correctamente en Meta.");
+        } catch (error) {
+            setDraft((current) => ({
+                ...current,
+                headerHandle: "",
+                headerUploading: false,
+            }));
+
+            showToast(
+                error?.message || "No se pudo cargar la muestra multimedia.",
+                "error"
+            );
+        }
+    }
+
+    function handleHeaderDrop(event) {
+        event.preventDefault();
+
+        if (draft.headerUploading) return;
+
+        const file = event.dataTransfer?.files?.[0];
+
+        if (file) {
+            handleHeaderFile(file);
+        }
     }
 
     function patchExample(field, index, value) {
@@ -862,15 +1183,49 @@ export default function Plantillas() {
         });
     }
 
-    function addButton() {
-        if (draft.buttons.length >= 3) return;
-        setDraft((current) => ({ ...current, buttons: [...current.buttons, { type: "QUICK_REPLY", text: "", url: "", phone_number: "", example: "" }] }));
-    }
+    const MAX_BUTTONS = 10;
 
+    function addButton(type = "QUICK_REPLY") {
+        if (draft.buttons.length >= MAX_BUTTONS) {
+            showToast("La plantilla permite como máximo 10 botones.", "error");
+            return;
+        }
+
+        setDraft((current) => ({
+            ...current,
+            buttons: [
+                ...current.buttons,
+                {
+                    type,
+                    text: "",
+                    url: "",
+                    phone_number: "",
+                    example: "",
+                },
+            ],
+        }));
+    }
     function patchButton(index, field, value) {
         setDraft((current) => ({
             ...current,
-            buttons: current.buttons.map((button, buttonIndex) => buttonIndex === index ? { ...button, [field]: value } : button),
+            buttons: current.buttons.map((button, buttonIndex) => {
+                if (buttonIndex !== index) return button;
+
+                if (field === "type") {
+                    return {
+                        ...button,
+                        type: value,
+                        url: "",
+                        phone_number: "",
+                        example: "",
+                    };
+                }
+
+                return {
+                    ...button,
+                    [field]: value,
+                };
+            }),
         }));
     }
 
@@ -879,17 +1234,149 @@ export default function Plantillas() {
     }
 
     function validateDraft() {
-        if (!isEditing && !draft.name.trim()) return "Escribe el nombre de la plantilla.";
-        if (draft.headerEnabled && !draft.preservedHeader && !draft.headerText.trim()) return "Escribe el encabezado o desactiva esa opción.";
-        if (!draft.body.trim()) return "El cuerpo de la plantilla es obligatorio.";
-        if (variableIndexes(draft.headerText).some((index) => !String(draft.headerExamples[index] || "").trim())) return "Completa todos los datos variables del encabezado.";
-        if (variableIndexes(draft.body).some((index) => !String(draft.bodyExamples[index] || "").trim())) return "Completa todos los datos variables del cuerpo.";
+        if (!numeroSeleccionado) {
+            return "Selecciona una línea de WhatsApp.";
+        }
 
-        const dynamicUrlWithoutExample = draft.buttons.some(
-            (button) => button.type === "URL" && variableIndexes(button.url).length > 0 && !String(button.example || "").trim(),
-        );
+        if (!isEditing && !draft.name.trim()) {
+            return "Escribe el nombre de la plantilla.";
+        }
 
-        if (dynamicUrlWithoutExample) return "Completa el ejemplo de la URL dinámica.";
+        if (
+            !isEditing &&
+            !/^[a-z0-9_]{1,512}$/.test(
+                draft.name.trim()
+            )
+        ) {
+            return "El nombre solo puede contener minúsculas, números y guion bajo.";
+        }
+
+        if (!draft.language.trim()) {
+            return "Selecciona el idioma de la plantilla.";
+        }
+
+        if (
+            !["UTILITY", "MARKETING"].includes(
+                String(
+                    draft.category || ""
+                ).toUpperCase()
+            )
+        ) {
+            return "Selecciona una categoría válida.";
+        }
+
+        if (!draft.body.trim()) {
+            return "El cuerpo de la plantilla es obligatorio.";
+        }
+
+        if (draft.headerType === "TEXT" && !draft.headerText.trim()) {
+            return "Escribe el texto del encabezado o selecciona Ninguno.";
+        }
+
+        if (
+            variableIndexes(
+                draft.headerText
+            ).some(
+                (index) =>
+                    !String(
+                        draft.headerExamples[index] || ""
+                    ).trim()
+            )
+        ) {
+            return "Completa todos los datos variables del encabezado.";
+        }
+
+        if (
+            variableIndexes(
+                draft.body
+            ).some(
+                (index) =>
+                    !String(
+                        draft.bodyExamples[index] || ""
+                    ).trim()
+            )
+        ) {
+            return "Completa todos los datos variables del cuerpo.";
+        }
+
+        if (draft.headerUploading) {
+            return "Espera a que termine la carga del archivo multimedia.";
+        }
+
+        if (
+            ["IMAGE", "VIDEO", "DOCUMENT"].includes(
+                draft.headerType
+            )
+        ) {
+            const preservedFormat =
+                String(
+                    draft.preservedHeader?.format || ""
+                ).toUpperCase();
+
+            const conservaAnterior =
+                draft.preservedHeader &&
+                preservedFormat === draft.headerType;
+
+            if (
+                !draft.headerHandle &&
+                !conservaAnterior
+            ) {
+                return "Sube una muestra multimedia antes de enviar la plantilla.";
+            }
+        }
+
+        if (draft.buttons.length > MAX_BUTTONS) {
+            return "La plantilla permite como máximo 10 botones.";
+        }
+
+        for (
+            let index = 0;
+            index < draft.buttons.length;
+            index += 1
+        ) {
+            const button =
+                draft.buttons[index];
+
+            if (!button.text.trim()) {
+                return `Escribe el texto del botón ${index + 1}.`;
+            }
+
+            if (
+                button.type === "URL" &&
+                !button.url.trim()
+            ) {
+                return `Escribe la URL del botón ${index + 1}.`;
+            }
+
+            if (
+                button.type === "URL" &&
+                !/^https?:\/\//i.test(
+                    button.url.trim()
+                )
+            ) {
+                return `La URL del botón ${index + 1} debe comenzar con http:// o https://.`;
+            }
+
+            if (
+                button.type === "URL" &&
+                variableIndexes(
+                    button.url
+                ).length > 0 &&
+                !String(
+                    button.example || ""
+                ).trim()
+            ) {
+                return `Completa el ejemplo de URL dinámica del botón ${index + 1}.`;
+            }
+
+            if (
+                button.type === "PHONE_NUMBER" &&
+                !button.phone_number.trim()
+            ) {
+                return `Escribe el teléfono del botón ${index + 1}.`;
+            }
+        }
+
         return "";
     }
 
@@ -1077,8 +1564,8 @@ export default function Plantillas() {
                             </label>
                             <span
                                 className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${puedeVerTodasLasLineas
-                                        ? "bg-[#131E5C]/10 text-[#131E5C]"
-                                        : "bg-blue-50 text-blue-700"
+                                    ? "bg-[#131E5C]/10 text-[#131E5C]"
+                                    : "bg-blue-50 text-blue-700"
                                     }`}
                             >
                                 {admin
@@ -1199,60 +1686,398 @@ export default function Plantillas() {
             </div>
 
             <Modal open={modalOpen} title={isEditing ? `Editar ${draft.name}` : "Nueva plantilla de WhatsApp"} onClose={() => !saving && setModalOpen(false)} footer={
-                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setModalOpen(false)} disabled={saving} className="rounded-xl border border-[#E4E7F0] bg-white px-5 py-2.5 text-sm font-bold text-[#515778]">Cancelar</button><button onClick={saveTemplate} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{isEditing ? "Guardar cambios" : "Enviar a revisión"}</button></div>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs text-[#8891AD]">
+                        {!isEditing && (
+                            <>
+                                Nombre:{" "}
+                                <span className="font-bold text-[#515778]">
+                                    {draft.name || "Sin definir"}
+                                </span>
+
+                                {" · "}
+
+                                Idioma:{" "}
+                                <span className="font-bold text-[#515778]">
+                                    {draft.language || "—"}
+                                </span>
+
+                                {" · "}
+
+                                Categoría:{" "}
+                                <span className="font-bold text-[#515778]">
+                                    {draft.category || "—"}
+                                </span>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setModalOpen(false)
+                            }
+                            disabled={saving}
+                            className="rounded-xl border border-[#E4E7F0] bg-white px-5 py-2.5 text-sm font-bold text-[#515778] hover:bg-[#F7F8FC] disabled:opacity-50"
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={saveTemplate}
+                            disabled={
+                                saving ||
+                                analyzing ||
+                                draft.headerUploading
+                            }
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#0A1340] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {saving || analyzing ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                            )}
+
+                            {isEditing
+                                ? "Revisar cambios"
+                                : "Revisar plantilla"}
+                        </button>
+                    </div>
+                </div>
             }>
                 <div className="grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
                     <div className="space-y-5">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="text-sm font-bold text-[#515778]">Nombre interno<input disabled={isEditing} value={draft.name} onChange={(e) => patchDraft("name", normalizeName(e.target.value))} className={`${inputCls} mt-1.5 disabled:bg-[#F7F8FC]`} placeholder="confirmacion_cita_servicio" /><span className="mt-1 block text-[13px] font-normal text-[#8891AD]">Minúsculas, números y guion bajo. No puede cambiarse después.</span></label>
-                            <label className="text-sm font-bold text-[#515778]">Idioma<select disabled={isEditing} value={draft.language} onChange={(e) => patchDraft("language", e.target.value)} className={`${inputCls} mt-1.5 disabled:bg-[#F7F8FC]`}><option value="es_MX">Español México</option><option value="es">Español</option><option value="en_US">English US</option></select></label>
-                            <label className="text-sm font-bold text-[#515778]">Categoría<select value={draft.category} onChange={(e) => patchDraft("category", e.target.value)} className={`${inputCls} mt-1.5`}><option value="UTILITY">Utility</option><option value="MARKETING">Marketing</option></select></label>
-                            <label className="flex items-center gap-2 self-end rounded-xl border border-[#E4E7F0] px-3.5 py-3 text-sm font-semibold text-[#515778]"><input disabled type="checkbox" checked={draft.allowCategoryChange} onChange={(e) => patchDraft("allowCategoryChange", e.target.checked)} /> Permitir que Meta ajuste la categoría</label>
+
+                        {/* CONFIGURACIÓN GENERAL */}
+                        <div className="space-y-4 rounded-2xl border border-[#E4E7F0] bg-white p-5">
+                            <div>
+                                <h3 className="text-[18px] font-black text-[#1A1F3C]">
+                                    Nombre e idioma de la plantilla
+                                </h3>
+
+                                <p className="mt-1 text-[16px] leading-relaxed text-[#8891AD]">
+                                    Define los datos principales antes de configurar el contenido que será enviado a Meta.
+                                </p>
+                            </div>
+
+                            <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+                                <label className="text-[14px] font-bold text-[#515778]">
+                                    Nombre de la plantilla
+                                    {!isEditing && (
+                                        <span className="ml-1 text-red-500">*</span>
+                                    )}
+
+                                    <div className="relative mt-1.5">
+                                        <input
+                                            value={draft.name}
+                                            disabled={isEditing}
+                                            maxLength={512}
+                                            onChange={(event) =>
+                                                patchDraft(
+                                                    "name",
+                                                    normalizeName(event.target.value)
+                                                )
+                                            }
+                                            className={`${inputCls} pr-16 disabled:cursor-not-allowed disabled:bg-[#F7F8FC] disabled:text-[#8891AD]`}
+                                            placeholder="confirmacion_cita_servicio"
+                                        />
+
+                                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#98A2B3]">
+                                            {draft.name.length}/512
+                                        </span>
+                                    </div>
+
+                                    <span className="mt-1.5 block text-[14px] font-normal leading-relaxed text-[#8891AD]">
+                                        Solo minúsculas, números y guion bajo. Ejemplo: confirmacion_cita_servicio
+                                    </span>
+                                </label>
+
+                                <label className="text-[14px] font-bold text-[#515778]">
+                                    Idioma
+                                    <span className="ml-1 text-red-500">*</span>
+
+                                    <select
+                                        value={draft.language}
+                                        disabled={isEditing}
+                                        onChange={(event) =>
+                                            patchDraft(
+                                                "language",
+                                                event.target.value
+                                            )
+                                        }
+                                        className={`${inputCls} mt-1.5 disabled:cursor-not-allowed disabled:bg-[#F7F8FC] disabled:text-[#8891AD]`}
+                                    >
+                                        <option value="es_MX">
+                                            Español (México)
+                                        </option>
+                                    </select>
+
+                                    {isEditing && (
+                                        <span className="mt-1.5 block text-[11px] font-normal text-[#8891AD]">
+                                            Meta no permite cambiar el idioma después de crear la plantilla.
+                                        </span>
+                                    )}
+                                </label>
+                            </div>
                         </div>
 
-                        {draft.preservedHeader ? (
-                            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-800">Esta plantilla tiene encabezado multimedia. El CRM lo conservará y te permitirá editar el cuerpo, pie y botones.</div>
-                        ) : (
-                            <div className="space-y-3 rounded-2xl border border-[#E4E7F0] p-4">
-                                <label className="flex items-center gap-2 text-sm font-bold text-[#1A1F3C]"><input type="checkbox" checked={draft.headerEnabled} onChange={(e) => patchDraft("headerEnabled", e.target.checked)} /> Agregar encabezado de texto</label>
+                        {/* CATEGORÍA */}
+                        <div className="space-y-4 rounded-2xl border border-[#E4E7F0] bg-white p-5">
+                            <div>
+                                <h3 className="text-[18px] font-black text-[#1A1F3C]">
+                                    Categoría
+                                </h3>
 
-                                {draft.headerEnabled && (
-                                    <>
-                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <p className="mt-1 text-[16px] leading-relaxed text-[#8891AD]">
+                                    Selecciona el propósito principal del mensaje. Meta puede reclasificar la plantilla durante la revisión.
+                                </p>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        patchDraft(
+                                            "category",
+                                            "UTILITY"
+                                        )
+                                    }
+                                    className={`rounded-xl border p-4 text-left transition ${draft.category === "UTILITY"
+                                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/10"
+                                        : "border-[#E4E7F0] bg-white hover:bg-[#F8F9FC]"
+                                        }`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <span
+                                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${draft.category === "UTILITY"
+                                                ? "border-blue-600"
+                                                : "border-[#98A2B3]"
+                                                }`}
+                                        >
+                                            {draft.category === "UTILITY" && (
+                                                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                                            )}
+                                        </span>
+
+                                        <div>
+                                            <p className="text-[16px] font-black text-[#1A1F3C]">
+                                                Utilidad
+                                            </p>
+                                            <p className="mt-1 text-[14px] leading-relaxed text-[#667085]">
+                                                Confirmaciones, citas, actualizaciones, documentos, pagos o procesos solicitados por el cliente.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        patchDraft(
+                                            "category",
+                                            "MARKETING"
+                                        )
+                                    }
+                                    className={`rounded-xl border p-4 text-left transition ${draft.category === "MARKETING"
+                                        ? "border-purple-500 bg-purple-50 ring-2 ring-purple-500/10"
+                                        : "border-[#E4E7F0] bg-white hover:bg-[#F8F9FC]"
+                                        }`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <span
+                                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${draft.category === "MARKETING"
+                                                ? "border-purple-600"
+                                                : "border-[#98A2B3]"
+                                                }`}
+                                        >
+                                            {draft.category === "MARKETING" && (
+                                                <span className="h-2 w-2 rounded-full bg-purple-600" />
+                                            )}
+                                        </span>
+
+                                        <div>
+                                            <p className="text-[16px] font-black text-[#1A1F3C]">
+                                                Marketing
+                                            </p>
+
+                                            <p className="mt-1 text-[14px] leading-relaxed text-[#667085]">
+                                                Promociones, ofertas, campañas, recomendaciones y contenido comercial.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E4E7F0] bg-[#F8F9FC] p-3.5">
+                                <input
+                                    type="checkbox"
+                                    checked={draft.allowCategoryChange}
+                                    onChange={(event) =>
+                                        patchDraft(
+                                            "allowCategoryChange",
+                                            event.target.checked
+                                        )
+                                    }
+                                    className="mt-0.5 h-4 w-4"
+                                />
+
+                                <div>
+                                    <p className="text-[14px] font-bold text-[#344054]">
+                                        Permitir que Meta ajuste automáticamente la categoría
+                                    </p>
+
+                                    <p className="mt-1 text-[14px] leading-relaxed text-[#8891AD]">
+                                        Recomendado para evitar rechazos cuando Meta determina que el contenido pertenece a otra categoría.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+
+                        {/* ENCABEZADO */}
+                        <div className="space-y-4 rounded-2xl border border-[#E4E7F0] bg-white p-5">            <div>
+                            <h3 className="text-sm font-black text-[#1A1F3C]">
+                                Encabezado
+                                <span className="ml-1 font-normal text-[#8891AD]">· Opcional</span>
+                            </h3>
+                        </div>
+
+                            <label className="block text-xs font-bold text-[#515778]">
+                                Tipo de encabezado
+
+                                <select
+                                    value={draft.headerType}
+                                    onChange={(event) => handleHeaderTypeChange(event.target.value)}
+                                    disabled={draft.headerUploading}
+                                    className={`${inputCls} mt-1.5 max-w-xs`}
+                                >
+                                    <option value="NONE">Ninguno</option>
+                                    <option value="TEXT">Texto</option>
+                                    <option value="IMAGE">Imagen</option>
+                                    <option value="VIDEO">Video</option>
+                                    <option value="DOCUMENT">Documento PDF</option>
+                                </select>
+                            </label>
+
+                            {draft.headerType === "TEXT" && (
+                                <>
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                        <div className="relative flex-1">
                                             <input
                                                 ref={headerInputRef}
                                                 value={draft.headerText}
                                                 maxLength={60}
-                                                onChange={(event) => patchVariableText("headerText", "headerExamples", event.target.value)}
+                                                onChange={(event) =>
+                                                    patchVariableText(
+                                                        "headerText",
+                                                        "headerExamples",
+                                                        event.target.value
+                                                    )
+                                                }
                                                 className={inputCls}
                                                 placeholder="Confirmación de cita"
                                             />
-                                            <button
-                                                type="button"
-                                                onClick={() => addVariable("headerText", "headerExamples", headerInputRef)}
-                                                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#131E5C]/20 bg-[#131E5C]/5 px-3 py-2.5 text-xs font-bold text-[#131E5C] transition hover:bg-[#131E5C]/10"
-                                            >
-                                                <Braces className="h-4 w-4" />
-                                                Agregar variable
-                                            </button>
+
+                                            <span className="absolute bottom-2.5 right-3 text-[10px] text-[#8891AD]">
+                                                {draft.headerText.length}/60
+                                            </span>
                                         </div>
 
-                                        <p className="text-[12px] leading-relaxed text-[#8891AD]">
-                                            Coloca el cursor donde debe aparecer el dato y presiona “Agregar variable”.
-                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                addVariable(
+                                                    "headerText",
+                                                    "headerExamples",
+                                                    headerInputRef
+                                                )
+                                            }
+                                            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#131E5C]/20 bg-[#131E5C]/5 px-3 py-2.5 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C]/10"
+                                        >
+                                            <Braces className="h-4 w-4" />
+                                            Agregar variable
+                                        </button>
+                                    </div>
 
-                                        <VariableExamples
-                                            title="encabezado"
-                                            text={draft.headerText}
-                                            values={draft.headerExamples}
-                                            onChange={(index, value) => patchExample("headerExamples", index, value)}
-                                            onRemove={(index) => removeVariable("headerText", "headerExamples", index)}
+                                    <VariableExamples
+                                        title="encabezado"
+                                        text={draft.headerText}
+                                        values={draft.headerExamples}
+                                        onChange={(index, value) =>
+                                            patchExample(
+                                                "headerExamples",
+                                                index,
+                                                value
+                                            )
+                                        }
+                                        onRemove={(index) =>
+                                            removeVariable(
+                                                "headerText",
+                                                "headerExamples",
+                                                index
+                                            )
+                                        }
+                                    />
+                                </>
+                            )}
+
+                            {["IMAGE", "VIDEO", "DOCUMENT"].includes(draft.headerType) && (
+                                <>
+                                    <label
+                                        onDragOver={(event) => event.preventDefault()}
+                                        onDrop={handleHeaderDrop}
+                                        className={`flex min-h-[150px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-7 text-center transition ${draft.headerUploading
+                                            ? "cursor-wait border-blue-300 bg-blue-50"
+                                            : "border-[#D9DDE8] bg-[#FAFBFC] hover:border-[#131E5C]/30 hover:bg-[#131E5C]/[0.02]"
+                                            }`}
+                                    >
+                                        {draft.headerUploading ? (
+                                            <Loader2 className="mb-3 h-7 w-7 animate-spin text-[#131E5C]" />
+                                        ) : (
+                                            <UploadCloud className="mb-3 h-7 w-7 text-[#667085]" />
+                                        )}
+
+                                        <span className="text-sm font-black text-[#344054]">
+                                            {draft.headerUploading
+                                                ? "Subiendo muestra a Meta..."
+                                                : draft.headerFileName || "Arrastra y suelta para subir el archivo"}
+                                        </span>
+
+                                        <span className="mt-1 text-xs text-[#8891AD]">
+                                            {draft.headerUploading
+                                                ? "No cierres el editor hasta finalizar."
+                                                : `O elige un archivo de tu dispositivo · Máximo ${HEADER_MEDIA_RULES[draft.headerType]?.maxLabel}`}
+                                        </span>
+
+                                        <input
+                                            type="file"
+                                            hidden
+                                            disabled={draft.headerUploading}
+                                            accept={HEADER_MEDIA_RULES[draft.headerType]?.accept || ""}
+                                            onChange={(event) => {
+                                                const file = event.target.files?.[0];
+                                                if (file) handleHeaderFile(file);
+                                                event.target.value = "";
+                                            }}
                                         />
-                                    </>
-                                )}
-                            </div>
-                        )}
+                                    </label>
 
+                                    {draft.headerHandle && (
+                                        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-700">
+                                            <CheckCircle2 className="h-4 w-4" />
+                                            Muestra multimedia cargada correctamente en Meta.
+                                        </div>
+                                    )}
+
+                                    {!draft.headerHandle && draft.preservedHeader && (
+                                        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-semibold text-blue-800">
+                                            Se conservará el encabezado multimedia existente mientras no cargues uno nuevo.
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                         <div className="space-y-3 rounded-2xl border border-[#E4E7F0] p-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <label className="text-sm font-bold text-[#1A1F3C]">Cuerpo del mensaje *</label>
@@ -1295,18 +2120,22 @@ export default function Plantillas() {
                         <div className="space-y-2 rounded-2xl border border-[#E4E7F0] p-4"><div className="flex items-center justify-between"><label className="text-sm font-bold text-[#1A1F3C]">Pie opcional</label><span className="text-[11px] text-[#8891AD]">{draft.footer.length}/60</span></div><input value={draft.footer} maxLength={60} onChange={(e) => patchDraft("footer", e.target.value)} className={inputCls} placeholder="Grupo Automotriz R&R" /></div>
 
                         <div className="space-y-3 rounded-2xl border border-[#E4E7F0] p-4">
-                            <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-[#1A1F3C]">Botones</h3><p className="text-[11px] text-[#8891AD]">Hasta 3 botones.</p></div><button onClick={addButton} disabled={draft.buttons.length >= 3} className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7F0] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Agregar</button></div>
+                            <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-[#1A1F3C]">Botones</h3><p>{draft.buttons.length}/10 botones</p></div><button onClick={addButton} disabled={draft.buttons.length >= MAX_BUTTONS} className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4E7F0] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Agregar</button></div>
                             {draft.buttons.map((button, index) => (
                                 <div key={index} className="grid gap-2 rounded-xl bg-[#F7F8FC] p-3 sm:grid-cols-[150px_1fr_auto]">
-                                    <select value={button.type} onChange={(e) => patchButton(index, "type", e.target.value)} className={inputCls}><option value="QUICK_REPLY">Respuesta rápida</option><option value="URL">Abrir URL</option></select>
-                                    <div className="space-y-2"><input value={button.text} maxLength={25} onChange={(e) => patchButton(index, "text", e.target.value)} className={inputCls} placeholder="Texto del botón" />{button.type === "URL" && <><input value={button.url} onChange={(e) => patchButton(index, "url", e.target.value)} className={inputCls} placeholder="https://ejemplo.com/cita/{{1}}" />{variableIndexes(button.url).length > 0 && <input value={button.example} onChange={(e) => patchButton(index, "example", e.target.value)} className={inputCls} placeholder="Ejemplo para la variable de URL" />}</>}{button.type === "PHONE_NUMBER" && <input value={button.phone_number} onChange={(e) => patchButton(index, "phone_number", e.target.value)} className={inputCls} placeholder="+522711234567" />}</div>
+                                    <select value={button.type} onChange={(e) => patchButton(index, "type", e.target.value)} className={inputCls}>
+                                        <option value="QUICK_REPLY"> Respuesta rápida</option>
+                                        <option value="URL">Ir al sitio web</option>
+                                        <option value="PHONE_NUMBER">Llamar por teléfono</option>
+                                    </select>
+                                    <div className="space-y-2"><input value={button.text} maxLength={25} onChange={(e) => patchButton(index, "text", e.target.value)} className={inputCls} placeholder="Texto del botón" />{button.type === "URL" && <><input value={button.url} onChange={(e) => patchButton(index, "url", e.target.value)} className={inputCls} placeholder="https://ejemplo.com/cita/{{1}}" />{variableIndexes(button.url).length > 0 && <input value={button.example} onChange={(e) => patchButton(index, "example", e.target.value)} className={inputCls} placeholder="Ejemplo para la variable de URL" />}</>}{button.type === "PHONE_NUMBER" && (<input value={button.phone_number} onChange={(e) => patchButton(index, "phone_number", e.target.value)} className={inputCls} placeholder="+522711234567" />)}</div>
                                     <button onClick={() => removeButton(index)} className="flex h-10 w-10 items-center justify-center rounded-xl text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 xl:sticky xl:top-0 xl:self-start">
                         <TemplatePreview draft={draft} />
                         <div className={`rounded-2xl border p-4 ${risk.level === "alto" ? "border-red-200 bg-red-50" : risk.level === "medio" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
                             <div className="flex items-start justify-between gap-3">
