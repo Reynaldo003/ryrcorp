@@ -32,7 +32,7 @@ const origenMeta = {
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez",];
 const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Descalificado"];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
-const ANIOS_VEHICULO = Array.from({ length: 2060 - 2010 + 1 }, (_, i) => 2060 - i);
+const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [
     { value: "", label: "— Selecciona —" },
     { value: "bueno", label: "Bueno" },
@@ -841,6 +841,30 @@ async function listarProspectosDigitalesCompletos(params = {}) {
         next = pagina?.next ? String(pagina.next).replace(/^https?:\/\/[^/]+/, "") : "";
     }
     return registros;
+}
+
+async function propagarCambiosACitasProspecto({ telefono, cambios }) {
+    const payload = {};
+    for (const [k, v] of Object.entries(cambios || {})) {
+        const limpio = String(v ?? "").trim();
+        if (limpio) payload[k] = limpio;
+    }
+    if (!Object.keys(payload).length) return;
+    const telDigits = String(telefono || "").replace(/\D/g, "").slice(-10);
+    if (!telDigits) return;
+    try {
+        const citas = await apiCitas.list();
+        const pendientes = (Array.isArray(citas) ? citas : []).filter((c) => {
+            if (!c || c.asistencia) return false;
+            const telCita = String(c.cliente?.telefono || c.telefono || "").replace(/\D/g, "").slice(-10);
+            return Boolean(telCita) && telCita === telDigits;
+        });
+        for (const c of pendientes) {
+            await apiCitas.patch(c.id, payload);
+        }
+    } catch (e) {
+        console.error("No se pudo propagar cambios prospecto -> cita:", e);
+    }
 }
 // ─── UI Utilities ─────────────────────────────────────────────────────────────
 function cls(...a) {
@@ -1775,7 +1799,22 @@ export default function DigitalesProspectos() {
             const normalizado = normalizeProspecto(prospectoGuardado || {});
             if (normalizado?.id_exp) setCases((actuales) => { const mapa = new Map(actuales.map((item) => [item.id_exp, item])); mapa.set(normalizado.id_exp, normalizado); return Array.from(mapa.values()); });
         }
-        cargarProspectosPorLinea().catch((error) => console.error("No se pudo refrescar la lista después de guardar el prospecto:", error));
+        // Propaga cambios prospecto -> citas pendientes (modelo, asesores, agencia, fuente)
+        try {
+            const p = prospectoGuardado || {};
+            const tel = p.telefono || p.cliente_telefono || p.cliente?.telefono || "";
+            const cambios = {
+                ...(p.auto_interes || p.autoInteres ? { auto_interes: p.auto_interes || p.autoInteres } : {}),
+                ...(p.asesor_digital ? { asesor_digital: p.asesor_digital } : {}),
+                ...(p.asesor_ventas || p.asesor_piso ? { asesor_piso: p.asesor_ventas || p.asesor_piso } : {}),
+                ...(p.agencia ? { agencia: p.agencia } : {}),
+                ...(p.fuente_prospeccion || p.pauta || p.canal_contacto ? { fuente_prospeccion: p.fuente_prospeccion || p.pauta || p.canal_contacto } : {}),
+            };
+            if (tel && Object.keys(cambios).length) {
+                propagarCambiosACitasProspecto({ telefono: tel, cambios }).catch(() => {});
+            }
+        } catch {}
+        cargarProspectosPorLinea().catch((error) => console.error("No se pudo refrescar la lista despues de guardar el prospecto:", error));
     };
     const handlePlantillaProspectoEnviada = ({ telefono } = {}) => {
         const tel = normalizaTelefonoMx(telefono);
@@ -1843,19 +1882,39 @@ export default function DigitalesProspectos() {
 
             await apiCitas.create({
                 cliente_id: agendaInfo.cliente_id,
-                nombre: agendaInfo.nombre,
+                nombre: agendaInfo.nombre || "",
                 telefono: agendaInfo.telefono,
                 correo: agendaInfo.correo || "",
                 auto_interes: agendaInfo.auto_interes || "",
-                agencia: agendaInfo.agencia || "",
+                agencia: agendaInfo.agencia || drafter.agencia || "",
                 fecha_hora_cita: drafter.fecha_cita,
                 asistencia: false,
                 tipo_cita: "Digital",
+                motivo_cita: "Digital",
+                tipo_venta: "",
                 fuente_prospeccion: agendaInfo.fuente_prospeccion || "",
                 asesor_digital: asesorDigital,
                 asesor_piso: drafter.asesor_solicita || "",
                 comentarios: "",
             });
+            // Sincroniza prospecto -> cita: asegura agencia/modelo actualizados en prospecto tambien
+            try {
+                const prospectoId = agendaInfo.id_exp;
+                if (prospectoId) {
+                    await api.digitalesPatchProspecto(prospectoId, {
+                        ...(agendaInfo.agencia ? { agencia: agendaInfo.agencia } : {}),
+                        ...(agendaInfo.auto_interes ? { auto_interes: agendaInfo.auto_interes } : {}),
+                        ...(asesorDigital ? { asesor_digital: asesorDigital } : {}),
+                        ...(drafter.asesor_solicita ? { asesor_ventas: drafter.asesor_solicita } : {}),
+                    }).catch(() => {});
+                }
+            } catch {}
+            // Mover prospecto a Cita Programada para reflejar en bandeja
+            try {
+                if (agendaInfo.id_exp) {
+                    await api.digitalesPatchProspecto(agendaInfo.id_exp, { estado: "Cita Programada" }).catch(() => {});
+                }
+            } catch {}
             // DashboardEjecutivoBDC mantiene su propio estado; sólo notificamos
             // que debe refrescar las métricas operativas. Esto elimina el ReferenceError
             // de setCitasBDC fuera de alcance.

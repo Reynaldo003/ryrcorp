@@ -15,6 +15,7 @@ import {
 } from "lucide-react";import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
+import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
@@ -31,19 +32,7 @@ const DEALERS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-const ESTADOS_BANDEJA = [
-
-    { key: "contactado", label: "Contactado", match: ["contactado", "sin respuesta", "sin_respuesta", ""], color: "#F59E0B" },
-    { key: "cotizacion", label: "Cotización", match: ["cotización", "cotizacion"], color: "#8B5CF6" },
-    { key: "cita_programada", label: "Cita Programada", match: ["cita programada", "cita_programada"], color: "#0891B2" },
-    { key: "no_show", label: "No asistió", match: ["no show", "no_show", "noshow", "no asistio", "no asistió"], color: "#DC2626" },
-    { key: "asistencia_cita", label: "Asistencia a la Cita", match: ["asistencia a la cita", "asistencia_cita"], color: "#059669" },
-    { key: "documentos_enviados", label: "Documentos Enviados", match: ["documentos enviados", "documentos_enviados"], color: "#0D9488" },
-    { key: "solicitud_credito", label: "Solicitud de Crédito", match: ["solicitud de crédito", "solicitud de credito", "solicitud_credito"], color: "#7C3AED" },
-    { key: "autorizado_no_formalizado", label: "Autorizado No Formalizado", match: ["autorizado no formalizado", "autorizado_no_formalizado"], color: "#CA8A04" },
-    { key: "cierre_venta", label: "Cierre de la Venta", match: ["cierre de la venta", "cierre_venta", "cierre de venta"], color: "#16A34A" },
-    { key: "descalificado", label: "Descalificado", match: ["descalificado"], color: "#94A3B8" },
-];
+const ESTADOS_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
 
 
 function cls(...items) { return items.filter(Boolean).join(" "); }
@@ -87,8 +76,11 @@ function formateaTelUi(tel52) {
 }
 
 function getEstadoBandeja(estado) {
-    const v = normalizeText(estado);
-    return ESTADOS_BANDEJA.find((b) => b.match.some((m) => normalizeText(m) === v)) || ESTADOS_BANDEJA[0];
+    // Resuelve cualquier variante/estado histórico y lo acomoda en una
+    // bandeja visible; los estados retirados (p. ej. "Cierre de la Venta",
+    // "Requiere Asesor") caen a la primera bandeja en vez de desaparecer.
+    const resuelto = resolverEstado(estado);
+    return ESTADOS_BANDEJA.find((b) => b.key === resuelto.key) || ESTADOS_BANDEJA[0];
 }
 
 function esFechaDeHoy(iso) {
@@ -2853,7 +2845,9 @@ export default function DigitalesBandeja() {
             totalUnread += Number(chat.unread || 0);
         }
 
-        const cierres = conteoPorEstado.get("cierre_venta") || 0;
+        const cierres = chatsEnriquecidos.filter(
+            (chat) => resolverEstado(chat.estado).key === "cierre_venta"
+        ).length;
         const sinAtender = conteoPorEstado.get(ESTADOS_BANDEJA[0].key) || 0;
         const chatsConUnread = chatsEnriquecidos.filter(
             (chat) => Number(chat.unread || 0) > 0

@@ -93,7 +93,7 @@ function esGestionableBDC(row) {
 
 function esContactadoBDC(row) {
     const estado = normalizeText(row?.estado);
-    const estadosConContacto = ["contactado", "calificado", "pendiente de cotizacion", "pendiente de cotización", "requiere asesor", "financiamiento"];
+    const estadosConContacto = ["contactado", "sin respuesta", "calificado", "pendiente de cotizacion", "requiere atencion", "requiere asesor", "cita programada", "asistencia a la cita", "no show", "no asistio", "financiamiento"];
     return Boolean(row?.primer_contacto_at || row?.fecha_contacto || estadosConContacto.includes(estado) || row?.ultima_cita_agendada || row?.asistencia || row?.folio_solicitud_credito || row?.solicitud_credito_estado || row?.vin_facturado);
 }
 

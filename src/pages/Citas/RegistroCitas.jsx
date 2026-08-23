@@ -36,14 +36,30 @@ import {
 } from "lucide-react";
 import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
+import { ASESORES_PISO, AGENCIAS_DIGITALES } from "../Digitales/asesoresPiso";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { FileDown } from "lucide-react";
 
 const BRAND_BLUE = "#131E5C";
 
+const BASE_DEALERS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
+
+const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chávez Alarcón", "Candy Denisse Marquez Cortes", "JULIO RAMIREZ LOPEZ",];
+
 
 function normalizeStr(v) { return String(v ?? "").trim(); }
+function esAvaluo(motivo) {
+    const v = String(motivo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return v.includes("avaluo");
+}
+
+
+function opcionesConValorActual(opciones, valor) {
+    const v = normalizeStr(valor);
+    if (!v) return opciones;
+    return opciones.some((o) => normalizeStr(o) === v) ? opciones : [v, ...opciones];
+}
 
 function normalizaTelefonoMx(tel) {
     const digits = String(tel || "").replace(/\D/g, "");
@@ -52,6 +68,37 @@ function normalizaTelefonoMx(tel) {
     if (digits.length === 10) return `52${digits}`;
     if (digits.length === 12 && digits.startsWith("52")) return digits;
     return digits;
+}
+
+// Al guardar una cita desde el panel de Citas replica en el expediente digital
+// los mismos datos que establece Contacto al agendar: agencia, vehículo de interés,
+// asesor asignado y la etapa "Cita Programada" si la cita quedó en el futuro.
+// Solo sobrescribe con valores no vacíos para nunca borrar datos del expediente.
+async function sincronizarExpedienteConCita(cita = {}) {
+    const telefono = normalizaTelefonoMx(cita?.cliente?.telefono || cita?.telefono || "");
+    if (!telefono) return;
+
+    const agencia = normalizeStr(cita?.agencia || "");
+    const autoInteres = normalizeStr(cita?.auto_interes || "");
+    const asesorPiso = normalizeStr(cita?.asesor_piso || "");
+    const fecha = cita?.fecha_hora_cita;
+    const dt = fecha ? new Date(fecha) : null;
+    const esFutura = dt && !Number.isNaN(dt.getTime()) ? dt.getTime() > Date.now() : false;
+
+    try {
+        const lista = await api.digitalesListProspectos({});
+        const prospectos = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
+        const prospecto = prospectos.find((p) => normalizaTelefonoMx(p?.telefono) === telefono);
+        if (!prospecto?.id) return;
+        await api.digitalesPatchProspecto(prospecto.id, {
+            ...(agencia ? { agencia } : {}),
+            ...(autoInteres ? { auto_interes: autoInteres } : {}),
+            ...(asesorPiso ? { asesor_ventas: asesorPiso } : {}),
+            ...(esFutura ? { estado: "Cita Programada" } : {}),
+        });
+    } catch (error) {
+        console.error("No se pudo sincronizar el expediente digital con la cita:", error);
+    }
 }
 
 // Cuando una cita ya ocurrió, sincroniza la etapa del prospecto en la bandeja
@@ -814,6 +861,11 @@ function AgendaView({ rows, loading, onEdit, onNewAtSlot, onToggleAsistencia, up
                                                                         </div>
                                                                         <div className="text-sm font-extrabold text-[#131E5C] truncate">{nombreCliente}</div>
                                                                         <div className="text-xs font-semibold text-slate-600 truncate">🚗 {autoInteres}</div>
+                                                                        {esAvaluo(cita.motivo_cita) && cita.vin ? (
+                                                                            <div className="text-[10px] font-bold text-[#131E5C] truncate mt-1" title={`VIN: ${cita.vin}`}>
+                                                                                VIN: {cita.vin}
+                                                                            </div>
+                                                                        ) : null}
                                                                         <div className="text-[10px] text-slate-500 truncate mt-1"><span className="font-semibold">Digital:</span> {asesorDigital}</div>
                                                                         <div className="text-[10px] text-slate-500 truncate"><span className="font-semibold">Piso:</span> {asesorPiso}</div>
                                                                         {cita.comentarios && cita.comentarios !== "" && (
@@ -1125,84 +1177,8 @@ export default function RegistroCitas() {
     const [totalCount, setTotalCount] = useState(0);
     const PAGE_SIZE = 200;
 
-    const DEALERS = useMemo(() => ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"], []);
-    const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chávez Alarcón", "Candy Denisse Marquez Cortes", "JULIO RAMIREZ LOPEZ",];
-    const ASESORES = [
-        "ADRIAN GALVEZ ROLDAN",
-        "AURA MARLIZETH FERNANDEZ LOPEZ",
-        "Bianca Isabel Chavez Alarcon",
-        "Blanca Patricia Hernandez Hernandez",
-        "CANDY DENISSE MARQUEZ CORTES",
-        "Carlos Arturo Garces Venegas",
-        "Cesar Ivan Salazar Reyes",
-        "Cristian Fernando Rivera Godinez",
-        "David Uriel García Navarro",
-        "DELMAR JAVIER ILLESCAS DOMINGUEZ",
-        "DULCE ABIGAIL GARCIA OLIVARES",
-        "EDGAR JESUS GOMEZ PEREZ",
-        "Edgar Omar Noguera Solis",
-        "ELIA INES ARANO REYES",
-        "ERENDIRA SANTOS COYOTZI",
-        "Estefano Marlom De Azcue Aparicio",
-        "Felix Emmanuel Solis Angeles",
-        "GEOVANI NAVA DIAZ",
-        "GERMAN JARITH SALAZAR MIRANDA",
-        "Gustavo Chontal Romero",
-        "Hector Rodriguez",
-        "IDALMY JIMENEZ SANCHEZ",
-        "IRENE DEL CARMEN GUIZA LOPEZ",
-        "Iris Yazmín Gómez Velázquez",
-        "Israel Garcia Juarez",
-        "IVAN JUAREZ ORTEGA",
-        "Javier Perez Meraz",
-        "JESSICA OLIVARES CAMPOS",
-        "JESUS XITLAMA GOMEZ",
-        "JORGE ANTONIO RODRIGUEZ MARTINEZ",
-        "JORGE LUIS ALAMILLO RODRIGUEZ",
-        "JOSE ALBERTO SEDAS FLORES",
-        "JOSE ALFREDO BARRANCA REYES",
-        "JOSE DE JESUS GARCIA ROMAN",
-        "JUAN JESUS MARQUEZ AQUINO",
-        "JUAN MANUEL SOBREVILLA VICENCIO",
-        "JULIO RAMIREZ LOPEZ",
-        "LIZBETH CANO CLARA",
-        "Luis Alberto Ramirez Santamaria",
-        "LUIS ALFONSO CORIA MARROQUIN",
-        "Luis Armando Almora Perez",
-        "Luis Manuel Alvarez Martinez",
-        "Luis Manuel Hernandez Espejo",
-        "LUIS MANUEL PALOMARES OLAYO",
-        "Mara Erubey Soto Villegas",
-        "MARCOS RAUL DIAZ RAMOS",
-        "Marelly Tenorio Salinas",
-        "MARIA DE GUADALUPE VANVOLLENHOVEN DIAZ",
-        "MARIA DEL CARMEN ZAVALA VELAZQUEZ",
-        "Maria Monserrath Zarate Gamboa",
-        "MARIO ALBERTO LOPEZ RAMOS",
-        "MARISOL LAGUNES GONZALEZ",
-        "Miguel Capitanachi Paredes",
-        "NALLELY HERNANDEZ GARCIA",
-        "OCTAVIO BRUNO GONZALEZ",
-        "OLIMPIA VAZQUEZ MENDEZ",
-        "OMAR VILLIERS MONDRAGON",
-        "Paul Serrano Vera",
-        "Roberto Ramses Luna Fajardo",
-        "ROGELIO VAZQUEZ SANCHEZ",
-        "RUBEN ALBERTO TOSQUY ADRIANO",
-        "RUBEN ROMERO VALDES",
-        "Saja Azzam Mohammad Jamous",
-        "SANDRA LUZ PRIETO PEREZ",
-        "Sergio Ivan Quintana Martinez",
-        "Sergio Rene Delgado Sarmiento",
-        "Valeria Zilli Durante",
-        "VANESSA JIMENEZ MEDINA",
-        "VERONICA CASTILLO FUENTES",
-        "YAMIL MISAEL RODRIGUEZ AGUILAR",
-        "Yoseth Ruiz Castellanos",
-        "ZEILA NAVARRO CONTRERAS",
-    ];
-
-    const FUENTE = ["Facebook", "WhatsApp", "VW-Concesionarios", "Llamada Entrante", "Prospeccion", "Cartera", "Eternizacion de credito", "Remarketing", "Base de Datos", "Ubicacion"];
+    const DEALERS = [...new Set([...BASE_DEALERS, ...AGENCIAS_DIGITALES])];
+        const FUENTE = ["Facebook", "WhatsApp", "VW-Concesionarios", "Llamada Entrante", "Prospeccion", "Cartera", "Eternizacion de credito", "Remarketing", "Base de Datos", "Ubicacion"];
     const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter", "CRAFTER ELITE", "CRAFTER URBAN", "CRAFTER ELEMENTAL", "CRAFTER INSPIRE"];
     const TIPO_CITA = ["Tradicional", "Digital", "Evento", "Evento Taigun", "Remarketing"];
     const MOTIVOS_CITA = [
@@ -1235,6 +1211,13 @@ export default function RegistroCitas() {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
     const [updatingInline, setUpdatingInline] = useState({});
+    const [debouncedQ, setDebouncedQ] = useState("");
+    const requestSeq = useRef(0);
+
+    useEffect(() => {
+        const id = setTimeout(() => setDebouncedQ(filters.q.trim()), 400);
+        return () => clearTimeout(id);
+    }, [filters.q]);
 
     function toggleSort(key) {
         setSort((prev) => prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" });
@@ -1287,22 +1270,29 @@ export default function RegistroCitas() {
         if (filters.agencia && filters.agencia !== "Todos") params.agencia = filters.agencia;
         if (filters.asesorDigital && filters.asesorDigital !== "Todos") params.asesor_digital = filters.asesorDigital;
         if (filters.asesorPiso && filters.asesorPiso !== "Todos") params.asesor_piso = filters.asesorPiso;
-        if (filters.q.trim()) params.search = filters.q.trim();
+        if (debouncedQ) params.search = debouncedQ;
         if (filters.rangoDesde) params.fecha_desde = filters.rangoDesde;
         if (filters.rangoHasta) params.fecha_hasta = filters.rangoHasta;
         return params;
-    }, [filters]);
+    }, [filters.agencia, filters.asesorDigital, filters.asesorPiso, filters.rangoDesde, filters.rangoHasta, debouncedQ]);
 
     const refreshList = useCallback(async (pageNum = 1) => {
+        const seq = ++requestSeq.current;
         setLoadingList(true);
         try {
             const params = buildServerParams(pageNum);
             const result = await apiCitas.listPage(params);
+            if (seq !== requestSeq.current) return;
             setCitas(Array.isArray(result.results) ? result.results : []);
             setTotalCount(result.count || 0);
             setPage(pageNum);
-        } catch (e) { console.error(e); setCitas([]); setTotalCount(0); }
-        finally { setLoadingList(false); }
+        } catch (e) {
+            console.error(e);
+            if (seq !== requestSeq.current) return;
+            setCitas([]); setTotalCount(0);
+        } finally {
+            if (seq === requestSeq.current) setLoadingList(false);
+        }
     }, [buildServerParams]);
 
     useEffect(() => { refreshList(1); }, [refreshList]);
@@ -1329,7 +1319,7 @@ export default function RegistroCitas() {
 
     const asesoresPisoFiltro = useMemo(() => {
         const set = new Set([
-            ...ASESORES.map((a) => normalizeStr(a)),
+            ...ASESORES_PISO.map((a) => normalizeStr(a)),
             ...(citas || []).map((c) => normalizeStr(c.asesor_piso)),
         ].filter(Boolean));
         return ["Todos", ...Array.from(set)];
@@ -1386,6 +1376,9 @@ export default function RegistroCitas() {
             asistencia: false,
             tipo_cita: "",
             motivo_cita: "",
+            vin: "",
+            avaluo_cerrado: false,
+            prueba_manejo: false,
             fuente_prospeccion: "",
             asesor_digital: "",
             asesor_piso: "",
@@ -1413,6 +1406,9 @@ export default function RegistroCitas() {
                 asistencia: !!c.asistencia,
                 tipo_cita: c.tipo_cita || "",
                 motivo_cita: c.motivo_cita || "",
+                vin: c.vin || "",
+                avaluo_cerrado: !!c.avaluo_cerrado,
+                prueba_manejo: !!c.prueba_manejo,
                 fuente_prospeccion: c.fuente_prospeccion || "",
                 asesor_digital: c.asesor_digital || "",
                 asesor_piso: c.asesor_piso || "",
@@ -1460,6 +1456,9 @@ export default function RegistroCitas() {
                 asistencia: !!draft.asistencia,
                 tipo_cita: draft.tipo_cita || "",
                 motivo_cita: draft.motivo_cita || "",
+                vin: esAvaluo(draft.motivo_cita) ? String(draft.vin || "").trim().toUpperCase() : "",
+                avaluo_cerrado: esAvaluo(draft.motivo_cita) ? !!draft.avaluo_cerrado : false,
+                prueba_manejo: !!draft.prueba_manejo,
                 fuente_prospeccion: draft.fuente_prospeccion || "",
                 asesor_digital: draft.asesor_digital || "",
                 asesor_piso: draft.asesor_piso || "",
@@ -1470,6 +1469,7 @@ export default function RegistroCitas() {
             } else {
                 await apiCitas.patch(draft.id, payload);
             }
+            await sincronizarExpedienteConCita(payload);
             await sincronizarEtapaConAsistencia({
                 cliente: { telefono: payload.telefono },
                 telefono: payload.telefono,
@@ -1496,6 +1496,51 @@ export default function RegistroCitas() {
         }
         catch (e) { console.error(e); setCitas((p) => p.map((c) => (c.id === id ? { ...c, asistencia: prev } : c))); alert("No se pudo actualizar asistencia."); }
         finally { setUpdatingInline((p) => { const n = { ...p }; delete n[id]; return n; }); }
+    };
+
+    const toggleAvaluoCerrado = async (row) => {
+        const id = row?.id;
+        if (!id) return;
+        if (!esAvaluo(row.motivo_cita)) return;
+        const prev = !!row.avaluo_cerrado;
+        const siguiente = !prev;
+        setCitas((prevCitas) => prevCitas.map((c) => (c.id === id ? { ...c, avaluo_cerrado: siguiente } : c)));
+        setUpdatingInline((prev) => ({ ...prev, [id]: true }));
+        try {
+            await apiCitas.patch(id, { avaluo_cerrado: siguiente });
+        } catch (e) {
+            console.error(e);
+            setCitas((prevCitas) => prevCitas.map((c) => (c.id === id ? { ...c, avaluo_cerrado: prev } : c)));
+            alert("No se pudo actualizar estado de aval\u00fao.");
+        } finally {
+            setUpdatingInline((prev) => {
+                const n = { ...prev };
+                delete n[id];
+                return n;
+            });
+        }
+    };
+
+    const togglePruebaManejo = async (row) => {
+        const id = row?.id;
+        if (!id) return;
+        const prev = !!row.prueba_manejo;
+        const siguiente = !prev;
+        setCitas((prevCitas) => prevCitas.map((c) => (c.id === id ? { ...c, prueba_manejo: siguiente } : c)));
+        setUpdatingInline((prev) => ({ ...prev, [id]: true }));
+        try {
+            await apiCitas.patch(id, { prueba_manejo: siguiente });
+        } catch (e) {
+            console.error(e);
+            setCitas((prevCitas) => prevCitas.map((c) => (c.id === id ? { ...c, prueba_manejo: prev } : c)));
+            alert("No se pudo actualizar prueba de manejo.");
+        } finally {
+            setUpdatingInline((prev) => {
+                const n = { ...prev };
+                delete n[id];
+                return n;
+            });
+        }
     };
 
                 const resetFilters = () => {
@@ -1652,6 +1697,9 @@ export default function RegistroCitas() {
             "Auto Interés",
             "Tipo Cita",
             "Motivo de cita",
+            "VIN",
+            "¿Cerrada?",
+            "¿Prueba?",
             "Fuente Prospección",
             "Asesor Digital",
             "Asesor Piso",
@@ -1670,6 +1718,9 @@ export default function RegistroCitas() {
             row.auto_interes || "—",
             row.tipo_cita || "—",
             row.motivo_cita || "—",
+            row.vin || "—",
+            esAvaluo(row.motivo_cita) ? (row.avaluo_cerrado ? "Cerrada" : "Abierta") : "—",
+            row.prueba_manejo ? "Si" : "No",
             row.fuente_prospeccion || "—",
             row.asesor_digital || "—",
             row.asesor_piso || "—",
@@ -1698,6 +1749,9 @@ export default function RegistroCitas() {
             { wch: 16 },
             { wch: 14 },
             { wch: 28 },
+            { wch: 16 },
+            { wch: 12 },
+            { wch: 12 },
             { wch: 22 },
             { wch: 30 },
             { wch: 36 },
@@ -1976,7 +2030,7 @@ export default function RegistroCitas() {
                                                 </button>
                                             </th>
                                         ))}
-                                        {["Cliente", "Auto interés", "Asesor Digital", "Asesor Piso", "Tipo Cita", "Comentarios", "¿Asistió?"].map((h) => <th key={h} className="px-4 py-3 text-xs font-bold">{h}</th>)}
+                                        {["Cliente", "Auto interés", "Asesor Digital", "Asesor Piso", "Tipo Cita", "VIN", "¿Cerrada?", "¿Prueba?", "Comentarios", "¿Asistió?"].map((h) => <th key={h} className="px-4 py-3 text-xs font-bold">{h}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-black/30">
@@ -1993,6 +2047,9 @@ export default function RegistroCitas() {
                                                         <td className="px-4 py-3 text-[#131E5C]">{row.asesor_digital}</td>
                                                         <td className="px-4 py-3 text-[#131E5C]">{row.asesor_piso || "--"}</td>
                                                         <td className="px-4 py-3 text-[#131E5C]">{row.tipo_cita || "—"}</td>
+                                                        <td className="px-4 py-3 text-[#131E5C]">{esAvaluo(row.motivo_cita) ? (row.vin || "—") : "—"}</td>
+                                                        <td className="px-4 py-3 text-[#131E5C]">{esAvaluo(row.motivo_cita) ? (<button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); toggleAvaluoCerrado(row); }} className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold", row.avaluo_cerrado ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-amber-200 text-amber-800 border-amber-300", isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}>{row.avaluo_cerrado ? "Cerrada" : "Abierta"}</button>) : "—"}</td>
+                                                        <td className="px-4 py-3 text-[#131E5C]"><button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); togglePruebaManejo(row); }} className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold", row.prueba_manejo ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-slate-200 text-slate-700 border-slate-300", isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}>{row.prueba_manejo ? "Si" : "No"}</button></td>
                                                         <td className="px-4 py-3 text-[#131E5C]"><span className="line-clamp-2">{row.comentarios || "—"}</span></td>
                                                         <td className="px-4 py-3 text-[#131E5C]">
                                                             <button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); toggleAsistenciaInline(row); }} className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold", row.asistencia ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-red-200 text-red-800 border-red-300", isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}>
@@ -2004,7 +2061,7 @@ export default function RegistroCitas() {
                                                 );
                                             })}
                                             {sorted.length === 0 && !loadingList && (
-                                                <tr><td colSpan={9} className="px-4 py-10 text-center text-[#131E5C]">No hay resultados con esos filtros.</td></tr>
+                                                <tr><td colSpan={12} className="px-4 py-10 text-center text-[#131E5C]">No hay resultados con esos filtros.</td></tr>
                                             )}
                                         </>
                                     )}
@@ -2111,7 +2168,7 @@ export default function RegistroCitas() {
                         <Field label="Dealer" icon={Building2}>
                             <select value={draft.agencia || ""} onChange={(e) => setDraft((p) => ({ ...p, agencia: e.target.value }))} disabled={!isAdmin && userAgencias.length <= 1} className={[inputBase, inputOk, !isAdmin && userAgencias.length <= 1 ? "opacity-75 cursor-not-allowed" : ""].join(" ")}>
                                 <option value="" disabled>Selecciona un dealer...</option>
-                                {(isAdmin ? DEALERS : userAgencias).map((d) => <option key={d} value={d}>{d}</option>)}
+                                {opcionesConValorActual(isAdmin ? DEALERS : userAgencias, draft.agencia).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
                         <Field label="Nombre del cliente" icon={User}>
@@ -2125,7 +2182,7 @@ export default function RegistroCitas() {
                         <Field label="VW de sus sueños" icon={CarFront}>
                             <select value={draft.auto_interes || ""} onChange={(e) => setDraft((p) => ({ ...p, auto_interes: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un modelo...</option>
-                                {VEHICULOS.map((d) => <option key={d} value={d}>{d}</option>)}
+                                {opcionesConValorActual(VEHICULOS, draft.auto_interes).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
                         <Field label="Fecha y Hora de cita" icon={CalendarDays}>
@@ -2147,13 +2204,13 @@ export default function RegistroCitas() {
                         <Field label="Asesor Digital" icon={UserMinus}>
                             <select value={draft.asesor_digital || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_digital: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un asesor ...</option>
-                                {ASESORES_DIGITALES.map((d) => <option key={d} value={d}>{d}</option>)}
+                                {opcionesConValorActual(ASESORES_DIGITALES, draft.asesor_digital).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
                         <Field label="Asesor Piso" icon={UserStar}>
                             <select value={draft.asesor_piso || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_piso: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un asesor ...</option>
-                                {ASESORES.map((d) => <option key={d} value={d}>{d}</option>)}
+                                {opcionesConValorActual(ASESORES_PISO, draft.asesor_piso).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
                         <div className="md:col-span-1">
@@ -2189,6 +2246,45 @@ export default function RegistroCitas() {
                                 ) : null}
                             </Field>
                         </div>
+                        {esAvaluo(draft.motivo_cita) ? (
+                            <>
+                                <Field label="VIN" icon={CarFront}>
+                                    <input
+                                        value={draft.vin || ""}
+                                        onChange={(e) => setDraft((p) => ({ ...p, vin: e.target.value.toUpperCase().slice(0, 32) }))}
+                                        placeholder="17 caracteres VIN"
+                                        maxLength={32}
+                                        className={[inputBase, inputOk].join(" ")}
+                                    />
+                                </Field>
+                                <Field label="Avaluo cerrado?" icon={CheckCircle2}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setDraft((p) => ({ ...p, avaluo_cerrado: !p.avaluo_cerrado }))}
+                                        className={["relative inline-flex h-9 w-28 items-center rounded-full px-1 transition-all", draft.avaluo_cerrado ? "bg-emerald-500" : "bg-slate-400"].join(" ")}
+                                        title={draft.avaluo_cerrado ? "Cerrada" : "Abierta"}
+                                    >
+                                        <span className={["flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold shadow-md transition-all", draft.avaluo_cerrado ? "translate-x-[76px] text-emerald-600" : "translate-x-0 text-slate-500"].join(" ")}>
+                                            {draft.avaluo_cerrado ? "Si" : "No"}
+                                        </span>
+                                    </button>
+                                    <div className="mt-1 text-xs font-semibold text-[#515778]">Estado: <span className={draft.avaluo_cerrado ? "text-emerald-600" : "text-amber-600"}>{draft.avaluo_cerrado ? "Cerrada" : "Abierta"}</span></div>
+                                </Field>
+                            </>
+                        ) : null}
+                        <Field label="Prueba de manejo" icon={CarFront}>
+                            <button
+                                type="button"
+                                onClick={() => setDraft((p) => ({ ...p, prueba_manejo: !p.prueba_manejo }))}
+                                className={["relative inline-flex h-9 w-28 items-center rounded-full px-1 transition-all", draft.prueba_manejo ? "bg-emerald-500" : "bg-slate-400"].join(" ")}
+                                title={draft.prueba_manejo ? "Realizada" : "No realizada"}
+                            >
+                                <span className={["flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold shadow-md transition-all", draft.prueba_manejo ? "translate-x-[76px] text-emerald-600" : "translate-x-0 text-slate-500"].join(" ")}>
+                                    {draft.prueba_manejo ? "Si" : "No"}
+                                </span>
+                            </button>
+                            <div className="mt-1 text-xs font-semibold text-[#515778]">Estado: <span className={draft.prueba_manejo ? "text-emerald-600" : "text-slate-500"}>{draft.prueba_manejo ? "Realizada" : "No realizada"}</span></div>
+                        </Field>
                         <div className="md:col-span-2">
                             <Field label="Comentarios" icon={MessageSquareText}>
                                 <textarea value={draft.comentarios} onChange={(e) => setDraft((p) => ({ ...p, comentarios: e.target.value }))} className={[inputBase, inputOk, "min-h-[110px]"].join(" ")} placeholder="Notas internas..." />

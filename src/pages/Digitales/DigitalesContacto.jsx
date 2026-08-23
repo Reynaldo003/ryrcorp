@@ -87,7 +87,7 @@ const VEHICULOS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-const ESTADOS_PROSPECTO = ["Descalificado", "Contactado", "Sin Respuesta"];
+
 const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable", ""];
 
 const BURO_OPTIONS = [
@@ -4023,6 +4023,7 @@ export default function DigitalesContacto() {
         try {
             if (prospecto?.id) {
                 await api.digitalesPatchProspecto(prospecto.id, { nombre: nuevoNombre });
+                await propagarCambiosACitasPendientes({ nombre: nuevoNombre }).catch(() => {});
             }
             setProspecto(prev => prev ? { ...prev, nombre: nuevoNombre } : prev);
             setChats(prev => prev.map(c => c.telefono === activeTel ? { ...c, nombre: nuevoNombre } : c));
@@ -4038,6 +4039,30 @@ export default function DigitalesContacto() {
     function onNombreKeyDown(e) {
         if (e.key === "Enter") { e.preventDefault(); guardarNombre(); }
         if (e.key === "Escape") { e.preventDefault(); cancelarEdicionNombre(); }
+    }
+
+    async function propagarCambiosACitasPendientes(cambios) {
+        const payload = {};
+        for (const [clave, valor] of Object.entries(cambios || {})) {
+            const limpio = String(valor ?? "").trim();
+            if (limpio) payload[clave] = limpio;
+        }
+        if (!Object.keys(payload).length) return;
+        try {
+            const telDigits = String(activeTel || "").replace(/\D/g, "").slice(-10);
+            if (!telDigits) return;
+            const citas = await apiCitas.list();
+            const pendientes = (Array.isArray(citas) ? citas : []).filter((c) => {
+                if (!c || c.asistencia) return false;
+                const telCita = String(c.cliente?.telefono || c.telefono || "").replace(/\D/g, "").slice(-10);
+                return Boolean(telCita) && telCita === telDigits;
+            });
+            for (const c of pendientes) {
+                await apiCitas.patch(c.id, payload);
+            }
+        } catch (error) {
+            console.error("No se pudo sincronizar la cita programada con el prospecto:", error);
+        }
     }
 
     // ── Agendar cita desde el chat ────────────────────────────────────────────
@@ -4057,17 +4082,20 @@ export default function DigitalesContacto() {
             const asesorPiso = String(asesor || prospecto?.asesor_ventas || "").trim();
             await llamarCrearCita({
                 agencia: agencia || prospecto?.agencia || activeChat?.agencia || "",
-                nombre: activeChat?.nombre || prospecto?.nombre || "Prospecto",
+                nombre: (activeChat?.nombre || prospecto?.nombre || "Prospecto").trim(),
+                correo: prospecto?.correo || activeChat?.correo || "",
                 telefono: activeTel,
                 auto_interes: prospecto?.auto_interes || "",
                 fecha_hora_cita: fechaHoraIso,
                 asistencia: false,
                 tipo_cita: "Digital",
-                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || "",
+                motivo_cita: "Digital",
+                tipo_venta: "",
+                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || prospecto?.canal_contacto || "",
                 asesor_digital: prospecto?.asesor_digital || "",
                 asesor_piso: asesorPiso,
                 asesor_asignado: asesorPiso,
-                comentarios: nota || "",
+                comentarios: nota || prospecto?.comentarios || "",
             });
 
             // Mover el prospecto a la bandeja "Cita Programada" automáticamente
@@ -4124,6 +4152,11 @@ export default function DigitalesContacto() {
             await api.digitalesPatchProspecto(prospecto.id, {
                 agencia: agencia || "",
                 asesor_ventas: asesorFinal,
+            });
+
+            await propagarCambiosACitasPendientes({
+                asesor_piso: asesorFinal,
+                agencia,
             });
 
             setProspecto((prev) =>
@@ -4324,6 +4357,15 @@ export default function DigitalesContacto() {
                 prospecto.id,
                 payload
             );
+
+            // Sincroniza cambios del prospecto -> citas pendientes (modelo, asesor, fuente)
+            await propagarCambiosACitasPendientes({
+                auto_interes: payload.auto_interes || "",
+                asesor_digital: prospecto?.asesor_digital || "",
+                asesor_piso: prospecto?.asesor_ventas || prospecto?.asesor_piso || "",
+                agencia: prospecto?.agencia || "",
+                fuente_prospeccion: payload.pauta || payload.canal_contacto || "",
+            }).catch(() => {});
 
             await refreshActiveChat(activeTel);
         } catch (error) {

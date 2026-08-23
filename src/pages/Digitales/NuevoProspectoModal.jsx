@@ -14,7 +14,7 @@ const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Us
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
 const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Descalificado"];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
-const ANIOS_VEHICULO = Array.from({ length: 2060 - 2010 + 1 }, (_, i) => 2060 - i);
+const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [{ value: "", label: "— Selecciona —" }, { value: "bueno", label: "Bueno" }, { value: "regular", label: "Regular" }, { value: "iniciando", label: "Iniciando" }, { value: "desconocido", label: "Desconocido" }];
 const SOLICITUD_CREDITO = [{ value: "", label: "— Selecciona —" }, { value: "autorizado", label: "Autorizado" }, { value: "rechazado", label: "Rechazado" }, { value: "condicionado", label: "Condicionado" }];
 const FORMA_PAGO_OPTIONS = [{ value: "", label: "— Selecciona —" }, { value: "contado", label: "Contado" }, { value: "credito", label: "Crédito" }, { value: "arrendamiento", label: "Arrendamiento" }, { value: "desconocido", label: "Desconocido" }];
