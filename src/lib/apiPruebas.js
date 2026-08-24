@@ -1125,6 +1125,31 @@ export const api = {
       body: JSON.stringify(withRequestContext(payload)),
     }),
 
+  // Respuestas rápidas del asesor (persistidas en BD)
+  digitalesRespuestasRapidasList: () =>
+    http("/digitales/respuestas-rapidas/", { method: "GET" }),
+
+  digitalesRespuestasRapidasCreate: ({ titulo = "", texto = "" } = {}) =>
+    http("/digitales/respuestas-rapidas/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ titulo, texto }),
+    }),
+
+  digitalesRespuestasRapidasUpdate: (id, { titulo = "", texto = "" } = {}) =>
+    http(`/digitales/respuestas-rapidas/${id}/`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ titulo, texto }),
+    }),
+
+  digitalesRespuestasRapidasDelete: (id) =>
+    http(`/digitales/respuestas-rapidas/${id}/`, { method: "DELETE" }),
+
   digitalesPlantillas: (params = {}) =>
     http(
       `/digitales/mensajes/plantillas/${buildQuery(

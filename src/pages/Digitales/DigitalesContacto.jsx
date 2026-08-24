@@ -59,7 +59,6 @@ import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 
 const BRAND_BLUE = "#131E5C";
-const QUICK_BUBBLES_KEY = "digitales_quick_bubbles_global";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
 const CHAT_PAGE_SIZE = 8;
 const CHAT_LIST_PAGE_SIZE = 30;
@@ -2490,9 +2489,8 @@ export default function DigitalesContacto() {
 
     const [editingMsgId, setEditingMsgId] = useState(null);
 
-    const [quickBubbles, setQuickBubbles] = useState(() => {
-        try { const s = localStorage.getItem(QUICK_BUBBLES_KEY); if (!s) return []; const p = JSON.parse(s); return Array.isArray(p) ? p : []; } catch { return []; }
-    });
+    const [quickBubbles, setQuickBubbles] = useState([]);
+    const [quickBubblesLoading, setQuickBubblesLoading] = useState(true);
     const [showAddBubble, setShowAddBubble] = useState(false);
     const [newBubbleText, setNewBubbleText] = useState("");
     const [newBubbleTitle, setNewBubbleTitle] = useState("");
@@ -3928,11 +3926,20 @@ export default function DigitalesContacto() {
         }
     }
 
-    function addQuickBubble() {
+    async function addQuickBubble() {
         const text = newBubbleText.trim();
         if (!text) return;
-        setQuickBubbles(prev => [...prev, { id: crypto.randomUUID(), title: newBubbleTitle.trim() || text.slice(0, 25), text, createdAt: new Date().toISOString() }]);
-        setNewBubbleText(""); setNewBubbleTitle(""); setShowAddBubble(false);
+        try {
+            const data = await api.digitalesRespuestasRapidasCreate({ titulo: newBubbleTitle.trim(), texto: text });
+            const item = data?.item;
+            if (item) {
+                setQuickBubbles(prev => [{ id: item.id, title: item.titulo || String(item.texto || "").slice(0, 25), text: item.texto }, ...prev]);
+            }
+            setNewBubbleText(""); setNewBubbleTitle(""); setShowAddBubble(false);
+        } catch (error) {
+            console.error("No se pudo guardar el mensaje rápido:", error);
+            alert(`No se pudo guardar el mensaje rápido: ${error.message}`);
+        }
     }
 
     function startEditQuickBubble(bubble) {
@@ -3942,18 +3949,36 @@ export default function DigitalesContacto() {
         setShowAddBubble(true);
     }
 
-    function updateQuickBubble() {
+    async function updateQuickBubble() {
         const text = newBubbleText.trim();
         if (!text || !editingBubbleId) return;
-        setQuickBubbles(prev => prev.map(b =>
-            b.id === editingBubbleId
-                ? { ...b, title: newBubbleTitle.trim() || text.slice(0, 25), text }
-                : b
-        ));
-        setNewBubbleText(""); setNewBubbleTitle(""); setShowAddBubble(false); setEditingBubbleId(null);
+        try {
+            const data = await api.digitalesRespuestasRapidasUpdate(editingBubbleId, { titulo: newBubbleTitle.trim(), texto: text });
+            const item = data?.item;
+            if (item) {
+                setQuickBubbles(prev => prev.map(b =>
+                    b.id === editingBubbleId
+                        ? { ...b, title: item.titulo || String(item.texto || "").slice(0, 25), text: item.texto }
+                        : b
+                ));
+            }
+            setNewBubbleText(""); setNewBubbleTitle(""); setShowAddBubble(false); setEditingBubbleId(null);
+        } catch (error) {
+            console.error("No se pudo actualizar el mensaje rápido:", error);
+            alert(`No se pudo actualizar el mensaje rápido: ${error.message}`);
+        }
     }
 
-    function deleteQuickBubble(id) { setQuickBubbles(prev => prev.filter(b => b.id !== id)); }
+    async function deleteQuickBubble(id) {
+        try {
+            await api.digitalesRespuestasRapidasDelete(id);
+            setQuickBubbles(prev => prev.filter(b => b.id !== id));
+            if (editingBubbleId === id) { setShowAddBubble(false); setEditingBubbleId(null); setNewBubbleText(""); setNewBubbleTitle(""); }
+        } catch (error) {
+            console.error("No se pudo eliminar el mensaje rápido:", error);
+            alert(`No se pudo eliminar el mensaje rápido: ${error.message}`);
+        }
+    }
 
     async function sendQuickBubble(text) {
         const targetTel = activeTelRef.current;
@@ -4928,7 +4953,42 @@ export default function DigitalesContacto() {
         return () => { mounted = false; };
     }, []);
 
-    useEffect(() => { try { localStorage.setItem(QUICK_BUBBLES_KEY, JSON.stringify(quickBubbles)); } catch { } }, [quickBubbles]);
+    useEffect(() => {
+        let mounted = true;
+        const mapItem = (r) => ({ id: r.id, title: r.titulo || String(r.texto || "").slice(0, 25), text: r.texto });
+        (async () => {
+            try {
+                const data = await api.digitalesRespuestasRapidasList();
+                let items = Array.isArray(data?.items) ? data.items : [];
+                // Migración única: importa los mensajes rápidos que quedaron en localStorage del navegador.
+                if (!items.length) {
+                    let legacy = [];
+                    try {
+                        const s = localStorage.getItem("digitales_quick_bubbles_global");
+                        const p = s ? JSON.parse(s) : [];
+                        legacy = Array.isArray(p) ? p.filter((b) => b && String(b.text || "").trim()) : [];
+                    } catch { legacy = []; }
+                    if (legacy.length) {
+                        const creadas = [];
+                        for (const b of legacy) {
+                            try {
+                                const r = await api.digitalesRespuestasRapidasCreate({ titulo: String(b.title || ""), texto: String(b.text) });
+                                if (r?.item) creadas.push(mapItem(r.item));
+                            } catch { /* continúa con la siguiente */ }
+                        }
+                        try { localStorage.removeItem("digitales_quick_bubbles_global"); } catch { /* noop */ }
+                        items = creadas;
+                    }
+                }
+                if (mounted) setQuickBubbles(items.map(mapItem));
+            } catch (error) {
+                console.error("No se pudieron cargar los mensajes rápidos:", error);
+            } finally {
+                if (mounted) setQuickBubblesLoading(false);
+            }
+        })();
+        return () => { mounted = false; };
+    }, []);
     useEffect(() => {
         if (!numeroAsesorActivo) return;
         cargarPlantillas();
@@ -6418,7 +6478,7 @@ export default function DigitalesContacto() {
 
                                                     <div className="max-h-56 overflow-y-auto">
                                                         {quickBubbles.length === 0 ? (
-                                                            <div className="px-4 py-5 text-center text-xs font-semibold text-slate-400">Sin mensajes rápidos aún.<br />Agrega uno con el botón +</div>
+                                                            <div className="px-4 py-5 text-center text-xs font-semibold text-slate-400">{quickBubblesLoading ? "Cargando mensajes rápidos..." : <>Sin mensajes rápidos aún.<br />Agrega uno con el botón +</>}</div>
                                                         ) : (
                                                             quickBubbles.map((bubble) => (
                                                                 <div key={bubble.id} className="group flex items-center gap-2 border-b border-black/5 px-4 py-2.5 last:border-0 hover:bg-neutral-50">

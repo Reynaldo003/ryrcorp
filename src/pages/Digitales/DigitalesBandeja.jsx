@@ -19,7 +19,6 @@ import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
-const QUICK_BUBBLES_KEY = "digitales_quick_bubbles_global";
 const MAX_RECORDING_SECONDS = 300;
 
 const DEALERS = [
@@ -1086,9 +1085,8 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
 
 
     const [showQuickBubblesDropdown, setShowQuickBubblesDropdown] = useState(false);
-    const [quickBubbles, setQuickBubbles] = useState(() => {
-        try { const s = localStorage.getItem(QUICK_BUBBLES_KEY); if (!s) return []; const p = JSON.parse(s); return Array.isArray(p) ? p : []; } catch { return []; }
-    });
+    const [quickBubbles, setQuickBubbles] = useState([]);
+    const [quickBubblesLoading, setQuickBubblesLoading] = useState(false);
     const quickBubblesDropdownRef = useRef(null);
 
 
@@ -1585,14 +1583,21 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     }
 
 
-    function toggleQuickBubbles() {
-        if (!showQuickBubblesDropdown) {
-            try {
-                const s = localStorage.getItem(QUICK_BUBBLES_KEY);
-                const p = s ? JSON.parse(s) : [];
-                setQuickBubbles(Array.isArray(p) ? p : []);
-            } catch { /* noop */ }
+    async function cargarQuickBubbles() {
+        setQuickBubblesLoading(true);
+        try {
+            const data = await api.digitalesRespuestasRapidasList();
+            const items = Array.isArray(data?.items) ? data.items : [];
+            setQuickBubbles(items.map((r) => ({ id: r.id, title: r.titulo || String(r.texto || "").slice(0, 25), text: r.texto })));
+        } catch (error) {
+            console.error("No se pudieron cargar los mensajes rápidos:", error);
+        } finally {
+            setQuickBubblesLoading(false);
         }
+    }
+
+    function toggleQuickBubbles() {
+        if (!showQuickBubblesDropdown) cargarQuickBubbles();
         setShowQuickBubblesDropdown((prev) => !prev);
         setShowTemplatesDropdown(false);
         setEditingBubbleId(null);
@@ -1628,25 +1633,31 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
         setEditBubbleText("");
     }
 
-    function saveEditQuickBubble() {
+    async function saveEditQuickBubble() {
         const text = editBubbleText.trim();
         if (!text || !editingBubbleId) return;
-        setQuickBubbles((prev) => {
-            const next = prev.map((b) =>
+        try {
+            await api.digitalesRespuestasRapidasUpdate(editingBubbleId, { titulo: editBubbleTitle.trim(), texto: text });
+            setQuickBubbles((prev) => prev.map((b) =>
                 b.id === editingBubbleId ? { ...b, title: editBubbleTitle.trim() || text.slice(0, 25), text } : b
-            );
-            try { localStorage.setItem(QUICK_BUBBLES_KEY, JSON.stringify(next)); } catch { }
-            return next;
-        });
+            ));
+        } catch (error) {
+            console.error("No se pudo actualizar el mensaje rápido:", error);
+            alert(`No se pudo actualizar el mensaje rápido: ${error.message}`);
+            return;
+        }
         cancelEditQuickBubble();
     }
 
-    function deleteQuickBubble(id) {
-        setQuickBubbles((prev) => {
-            const next = prev.filter((b) => b.id !== id);
-            try { localStorage.setItem(QUICK_BUBBLES_KEY, JSON.stringify(next)); } catch { }
-            return next;
-        });
+    async function deleteQuickBubble(id) {
+        try {
+            await api.digitalesRespuestasRapidasDelete(id);
+            setQuickBubbles((prev) => prev.filter((b) => b.id !== id));
+        } catch (error) {
+            console.error("No se pudo eliminar el mensaje rápido:", error);
+            alert(`No se pudo eliminar el mensaje rápido: ${error.message}`);
+            return;
+        }
         if (editingBubbleId === id) cancelEditQuickBubble();
     }
 
@@ -2239,7 +2250,7 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
                                     <div className="max-h-64 overflow-y-auto">
                                         {quickBubbles.length === 0 ? (
                                             <div className="px-4 py-5 text-center text-xs font-semibold text-slate-400">
-                                                Sin mensajes rápidos aún.<br />Agrégalos desde la vista de Chats.
+                                                {quickBubblesLoading ? "Cargando mensajes rápidos..." : <>Sin mensajes rápidos aún.<br />Agrégalos desde la vista de Chats.</>}
                                             </div>
                                         ) : (
                                             quickBubbles.map((bubble) => (
