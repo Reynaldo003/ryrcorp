@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
+import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "../Digitales/asesoresPiso";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -224,14 +225,23 @@ function Modal({ open, title, onClose, children, footer }) {
     );
 }
 
-function Field({ label, icon: Icon, children }) {
+function Field({ label, icon: Icon, className = "", children }) {
     return (
-        <div className="rounded-lg border border-white/10 bg-neutral-200/50 p-4">
+        <div className={["rounded-lg border border-white/10 bg-neutral-200/50 p-4", className].join(" ").trim()}>
             <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[#131E5C]">
                 {Icon ? <Icon className="h-4 w-4" /> : null}
                 <span>{label}</span>
             </div>
             {children}
+        </div>
+    );
+}
+
+function SectionTitle({ children }) {
+    return (
+        <div className="md:col-span-6 mt-1 first:mt-0">
+            <span className="text-[11px] font-extrabold uppercase tracking-[.14em] text-[#131E5C]/60">{children}</span>
+            <div className="mt-1.5 h-px bg-gradient-to-r from-[#131E5C]/25 via-[#131E5C]/10 to-transparent" />
         </div>
     );
 }
@@ -1211,6 +1221,7 @@ export default function RegistroCitas() {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
     const [updatingInline, setUpdatingInline] = useState({});
+    const [pruebaClienteLookup, setPruebaClienteLookup] = useState({ loading: false, estado: "no" });
     const [debouncedQ, setDebouncedQ] = useState("");
     const requestSeq = useRef(0);
 
@@ -1218,6 +1229,25 @@ export default function RegistroCitas() {
         const id = setTimeout(() => setDebouncedQ(filters.q.trim()), 400);
         return () => clearTimeout(id);
     }, [filters.q]);
+
+    // Consulta el módulo de Pruebas de Manejo mientras se captura el teléfono (modo creación).
+    useEffect(() => {
+        if (!openModal || mode !== "create") return;
+        const tel = String(draft?.cliente_telefono || "").replace(/\D/g, "");
+        if (tel.length < 10) { setPruebaClienteLookup({ loading: false, estado: "no" }); return; }
+        let vigente = true;
+        setPruebaClienteLookup((p) => ({ ...p, loading: true }));
+        apiPruebaManejo.list({ telefono: tel, page_size: 1 })
+            .then((data) => {
+                if (!vigente) return;
+                const items = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+                const asistida = items.some((x) => !!x.asistencia);
+                const programada = items.some((x) => !x.asistencia);
+                setPruebaClienteLookup({ loading: false, estado: asistida ? "si" : programada ? "programada" : "no" });
+            })
+            .catch(() => { if (vigente) setPruebaClienteLookup({ loading: false, estado: "no" }); });
+        return () => { vigente = false; };
+    }, [openModal, mode, draft?.cliente_telefono]);
 
     function toggleSort(key) {
         setSort((prev) => prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" });
@@ -1379,6 +1409,8 @@ export default function RegistroCitas() {
             vin: "",
             avaluo_cerrado: false,
             prueba_manejo: false,
+            tiene_prueba_asistida: false,
+            tiene_prueba_programada: false,
             fuente_prospeccion: "",
             asesor_digital: "",
             asesor_piso: "",
@@ -1409,6 +1441,8 @@ export default function RegistroCitas() {
                 vin: c.vin || "",
                 avaluo_cerrado: !!c.avaluo_cerrado,
                 prueba_manejo: !!c.prueba_manejo,
+                tiene_prueba_asistida: !!c.tiene_prueba_asistida,
+                tiene_prueba_programada: !!c.tiene_prueba_programada,
                 fuente_prospeccion: c.fuente_prospeccion || "",
                 asesor_digital: c.asesor_digital || "",
                 asesor_piso: c.asesor_piso || "",
@@ -1521,29 +1555,7 @@ export default function RegistroCitas() {
         }
     };
 
-    const togglePruebaManejo = async (row) => {
-        const id = row?.id;
-        if (!id) return;
-        const prev = !!row.prueba_manejo;
-        const siguiente = !prev;
-        setCitas((prevCitas) => prevCitas.map((c) => (c.id === id ? { ...c, prueba_manejo: siguiente } : c)));
-        setUpdatingInline((prev) => ({ ...prev, [id]: true }));
-        try {
-            await apiCitas.patch(id, { prueba_manejo: siguiente });
-        } catch (e) {
-            console.error(e);
-            setCitas((prevCitas) => prevCitas.map((c) => (c.id === id ? { ...c, prueba_manejo: prev } : c)));
-            alert("No se pudo actualizar prueba de manejo.");
-        } finally {
-            setUpdatingInline((prev) => {
-                const n = { ...prev };
-                delete n[id];
-                return n;
-            });
-        }
-    };
-
-                const resetFilters = () => {
+    const resetFilters = () => {
                     setPage(1);
 
                     setFilters({
@@ -1720,7 +1732,7 @@ export default function RegistroCitas() {
             row.motivo_cita || "—",
             row.vin || "—",
             esAvaluo(row.motivo_cita) ? (row.avaluo_cerrado ? "Cerrada" : "Abierta") : "—",
-            row.prueba_manejo ? "Si" : "No",
+            row.tiene_prueba_asistida ? "Si" : row.tiene_prueba_programada ? "Programada" : "No",
             row.fuente_prospeccion || "—",
             row.asesor_digital || "—",
             row.asesor_piso || "—",
@@ -2049,7 +2061,7 @@ export default function RegistroCitas() {
                                                         <td className="px-4 py-3 text-[#131E5C]">{row.tipo_cita || "—"}</td>
                                                         <td className="px-4 py-3 text-[#131E5C]">{esAvaluo(row.motivo_cita) ? (row.vin || "—") : "—"}</td>
                                                         <td className="px-4 py-3 text-[#131E5C]">{esAvaluo(row.motivo_cita) ? (<button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); toggleAvaluoCerrado(row); }} className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold", row.avaluo_cerrado ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-amber-200 text-amber-800 border-amber-300", isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}>{row.avaluo_cerrado ? "Cerrada" : "Abierta"}</button>) : "—"}</td>
-                                                        <td className="px-4 py-3 text-[#131E5C]"><button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); togglePruebaManejo(row); }} className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold", row.prueba_manejo ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-slate-200 text-slate-700 border-slate-300", isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}>{row.prueba_manejo ? "Si" : "No"}</button></td>
+                                                        <td className="px-4 py-3"><span title="Estado según el módulo de Pruebas de Manejo" className={["inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold", row.tiene_prueba_asistida ? "border-emerald-300 bg-emerald-50 text-emerald-700" : row.tiene_prueba_programada ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-100 text-slate-600"].join(" ")}>{row.tiene_prueba_asistida ? "Sí" : row.tiene_prueba_programada ? "Programada" : "No"}</span></td>
                                                         <td className="px-4 py-3 text-[#131E5C]"><span className="line-clamp-2">{row.comentarios || "—"}</span></td>
                                                         <td className="px-4 py-3 text-[#131E5C]">
                                                             <button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); toggleAsistenciaInline(row); }} className={["inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold", row.asistencia ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-red-200 text-red-800 border-red-300", isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}>
@@ -2156,99 +2168,98 @@ export default function RegistroCitas() {
                 </>
             }>
                 {loadingDetail ? <ModalSkeleton /> : !draft ? null : (
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <div className="md:col-span-3">
-                            <Field label="Tipo de cita" icon={LayoutList}>
-                                <select value={draft.tipo_cita || ""} onChange={(e) => setDraft((p) => ({ ...p, tipo_cita: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
-                                    <option value="" disabled>Selecciona un tipo de cita...</option>
-                                    {TIPO_CITA.map((t) => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </Field>
-                        </div>
-                        <Field label="Dealer" icon={Building2}>
+                    <div className="grid gap-3 md:grid-cols-6">
+                        <Field label="Nombre del cliente" icon={User} className="md:col-span-4">
+                            <input value={draft.cliente_nombre} onChange={(e) => setDraft((p) => ({ ...p, cliente_nombre: e.target.value }))} className={[inputBase, inputOk].join(" ")} placeholder="Nombre completo" />
+                        </Field>
+                        <Field label="Teléfono" icon={Phone} className="md:col-span-2">
+                            <input maxLength={12} value={draft.cliente_telefono} onChange={(e) => setDraft((p) => ({ ...p, cliente_telefono: e.target.value.replace(/\D/g, "").slice(0, 12) }))} disabled={mode === "edit" || telIsNormalized} className={[inputBase, (isInvalid("cliente_telefono") || telInvalid) ? inputBad : inputOk, (mode === "edit" || telIsNormalized) ? "opacity-75 cursor-not-allowed" : ""].join(" ")} />
+                            {isInvalid("cliente_telefono") && <div className="mt-2 text-xs font-bold text-red-600">Teléfono es requerido.</div>}
+                            {!isInvalid("cliente_telefono") && telError && <div className="mt-2 text-xs font-bold text-red-600">{telError}</div>}
+                        </Field>
+
+                        <Field label="Fecha y hora de cita" icon={CalendarDays} className="md:col-span-2">
+                            <input type="datetime-local" value={draft.fecha_hora_cita} onChange={(e) => setDraft((p) => ({ ...p, fecha_hora_cita: e.target.value }))} className={[inputBase, isInvalid("fecha_hora_cita") ? inputBad : inputOk].join(" ")} />
+                            {isInvalid("fecha_hora_cita") && <div className="mt-2 text-xs font-bold text-red-600">Fecha y hora es requerido.</div>}
+                        </Field>
+                        <Field label="Tipo de cita" icon={LayoutList} className="md:col-span-2">
+                            <select value={draft.tipo_cita || ""} onChange={(e) => setDraft((p) => ({ ...p, tipo_cita: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
+                                <option value="" disabled>Selecciona un tipo de cita...</option>
+                                {TIPO_CITA.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="Motivo de cita" icon={CalendarCheck} className="md:col-span-2">
+                            <select value={draft.motivo_cita || ""} onChange={(e) => setDraft((p) => ({ ...p, motivo_cita: e.target.value }))} className={[inputBase, isInvalid("motivo_cita") ? inputBad : inputOk].join(" ")}>
+                                <option value="" disabled>Selecciona un motivo de cita...</option>
+                                {MOTIVOS_CITA.map((motivo) => <option key={motivo} value={motivo}>{motivo}</option>)}
+                            </select>
+                            {isInvalid("motivo_cita") && <div className="mt-2 text-xs font-bold text-red-600">Motivo de cita es requerido.</div>}
+                        </Field>
+                        <Field label="Dealer" icon={Building2} className="md:col-span-3">
                             <select value={draft.agencia || ""} onChange={(e) => setDraft((p) => ({ ...p, agencia: e.target.value }))} disabled={!isAdmin && userAgencias.length <= 1} className={[inputBase, inputOk, !isAdmin && userAgencias.length <= 1 ? "opacity-75 cursor-not-allowed" : ""].join(" ")}>
                                 <option value="" disabled>Selecciona un dealer...</option>
                                 {opcionesConValorActual(isAdmin ? DEALERS : userAgencias, draft.agencia).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
-                        <Field label="Nombre del cliente" icon={User}>
-                            <input value={draft.cliente_nombre} onChange={(e) => setDraft((p) => ({ ...p, cliente_nombre: e.target.value }))} className={[inputBase, inputOk].join(" ")} placeholder="Nombre completo" />
-                        </Field>
-                        <Field label="Teléfono" icon={Phone}>
-                            <input maxLength={12} value={draft.cliente_telefono} onChange={(e) => setDraft((p) => ({ ...p, cliente_telefono: e.target.value.replace(/\D/g, "").slice(0, 12) }))} disabled={mode === "edit" || telIsNormalized} className={[inputBase, (isInvalid("cliente_telefono") || telInvalid) ? inputBad : inputOk, (mode === "edit" || telIsNormalized) ? "opacity-75 cursor-not-allowed" : ""].join(" ")} />
-                            {isInvalid("cliente_telefono") && <div className="mt-2 text-xs font-bold text-red-600">Teléfono es requerido.</div>}
-                            {!isInvalid("cliente_telefono") && telError && <div className="mt-2 text-xs font-bold text-red-600">{telError}</div>}
-                        </Field>
-                        <Field label="VW de sus sueños" icon={CarFront}>
+                        <Field label="VW de sus sueños" icon={CarFront} className="md:col-span-3">
                             <select value={draft.auto_interes || ""} onChange={(e) => setDraft((p) => ({ ...p, auto_interes: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un modelo...</option>
                                 {opcionesConValorActual(VEHICULOS, draft.auto_interes).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
-                        <Field label="Fecha y Hora de cita" icon={CalendarDays}>
-                            <input type="datetime-local" value={draft.fecha_hora_cita} onChange={(e) => setDraft((p) => ({ ...p, fecha_hora_cita: e.target.value }))} className={[inputBase, isInvalid("fecha_hora_cita") ? inputBad : inputOk].join(" ")} />
-                            {isInvalid("fecha_hora_cita") && <div className="mt-2 text-xs font-bold text-red-600">Fecha y hora es requerido.</div>}
-                        </Field>
-                        <Field label="Fuente de Prospección" icon={UserSearch}>
-                            <select value={draft.fuente_prospeccion || ""} onChange={(e) => setDraft((p) => ({ ...p, fuente_prospeccion: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
-                                <option value="" disabled>Selecciona una fuente ...</option>
-                                {FUENTE.map((d) => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Asistencia de cita" icon={UserCheck}>
-                            <label className="flex items-center gap-3 text-sm font-semibold text-[#131E5C]">
-                                <input type="checkbox" checked={!!draft.asistencia} onChange={(e) => setDraft((p) => ({ ...p, asistencia: e.target.checked }))} className="h-4 w-4" />
-                                ¿Asistió?
-                            </label>
-                        </Field>
-                        <Field label="Asesor Digital" icon={UserMinus}>
+
+                        <Field label="Asesor Digital" icon={UserMinus} className="md:col-span-2">
                             <select value={draft.asesor_digital || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_digital: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un asesor ...</option>
                                 {opcionesConValorActual(ASESORES_DIGITALES, draft.asesor_digital).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
-                        <Field label="Asesor Piso" icon={UserStar}>
+                        <Field label="Asesor Piso" icon={UserStar} className="md:col-span-2">
                             <select value={draft.asesor_piso || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_piso: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un asesor ...</option>
                                 {opcionesConValorActual(ASESORES_PISO, draft.asesor_piso).map((d) => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </Field>
-                        <div className="md:col-span-1">
-                            <Field label="Motivo de cita" icon={CalendarCheck}>
-                                <select
-                                    value={draft.motivo_cita || ""}
-                                    onChange={(e) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            motivo_cita: e.target.value,
-                                        }))
-                                    }
-                                    className={[
-                                        inputBase,
-                                        isInvalid("motivo_cita") ? inputBad : inputOk,
-                                    ].join(" ")}
-                                >
-                                    <option value="" disabled>
-                                        Selecciona un motivo de cita...
-                                    </option>
+                        <Field label="Fuente de Prospección" icon={UserSearch} className="md:col-span-2">
+                            <select value={draft.fuente_prospeccion || ""} onChange={(e) => setDraft((p) => ({ ...p, fuente_prospeccion: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
+                                <option value="" disabled>Selecciona una fuente ...</option>
+                                {FUENTE.map((d) => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                        </Field>
 
-                                    {MOTIVOS_CITA.map((motivo) => (
-                                        <option key={motivo} value={motivo}>
-                                            {motivo}
-                                        </option>
-                                    ))}
-                                </select>
+                        <Field label="Asistencia de cita" icon={UserCheck} className="md:col-span-3">
+                            <label className={["flex h-9 w-fit cursor-pointer items-center gap-2 rounded-full border px-3.5 text-xs font-bold transition-colors", draft.asistencia ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"].join(" ")}>
+                                <input type="checkbox" checked={!!draft.asistencia} onChange={(e) => setDraft((p) => ({ ...p, asistencia: e.target.checked }))} className="h-3.5 w-3.5 accent-emerald-600" />
+                                {draft.asistencia ? "Sí, asistió a la cita" : "Sin registrar asistencia"}
+                            </label>
+                        </Field>
+                        <Field label="Prueba de manejo" icon={CarFront} className="md:col-span-3">
+                            {(() => {
+                                const estado = mode === "edit"
+                                    ? (draft.tiene_prueba_asistida ? "si" : draft.tiene_prueba_programada ? "programada" : "no")
+                                    : pruebaClienteLookup.estado;
+                                return (
+                                    <>
+                                        <div className="flex h-9 items-center gap-2">
+                                            <span className={["inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold",
+                                                estado === "si" ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                                                    : estado === "programada" ? "border-amber-300 bg-amber-50 text-amber-700"
+                                                        : "border-slate-200 bg-slate-100 text-slate-600"].join(" ")}>
+                                                {estado === "si" ? <CheckCircle2 className="h-3.5 w-3.5" /> : estado === "programada" ? <CalendarClock className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                                                {estado === "si" ? "Sí · realizó prueba de manejo" : estado === "programada" ? "Prueba programada" : "No"}
+                                            </span>
+                                            {mode === "create" && pruebaClienteLookup.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" /> : null}
+                                        </div>
+                                        <div className="mt-1.5 text-[11px] font-semibold text-[#515778]">Consultado automáticamente del módulo de Pruebas de Manejo.</div>
+                                    </>
+                                );
+                            })()}
+                        </Field>
 
-                                {isInvalid("motivo_cita") ? (
-                                    <div className="mt-2 text-xs font-bold text-red-600">
-                                        Motivo de cita es requerido.
-                                    </div>
-                                ) : null}
-                            </Field>
-                        </div>
                         {esAvaluo(draft.motivo_cita) ? (
                             <>
-                                <Field label="VIN" icon={CarFront}>
+                                <SectionTitle>Avalúo</SectionTitle>
+                                <Field label="VIN" icon={CarFront} className="md:col-span-4">
                                     <input
                                         value={draft.vin || ""}
                                         onChange={(e) => setDraft((p) => ({ ...p, vin: e.target.value.toUpperCase().slice(0, 32) }))}
@@ -2257,39 +2268,24 @@ export default function RegistroCitas() {
                                         className={[inputBase, inputOk].join(" ")}
                                     />
                                 </Field>
-                                <Field label="Avaluo cerrado?" icon={CheckCircle2}>
+                                <Field label="Avaluo cerrado?" icon={CheckCircle2} className="md:col-span-2">
                                     <button
                                         type="button"
                                         onClick={() => setDraft((p) => ({ ...p, avaluo_cerrado: !p.avaluo_cerrado }))}
-                                        className={["relative inline-flex h-9 w-28 items-center rounded-full px-1 transition-all", draft.avaluo_cerrado ? "bg-emerald-500" : "bg-slate-400"].join(" ")}
+                                        className="relative flex h-9 w-full items-center rounded-full bg-slate-300/70 px-1 transition-colors"
                                         title={draft.avaluo_cerrado ? "Cerrada" : "Abierta"}
                                     >
-                                        <span className={["flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold shadow-md transition-all", draft.avaluo_cerrado ? "translate-x-[76px] text-emerald-600" : "translate-x-0 text-slate-500"].join(" ")}>
-                                            {draft.avaluo_cerrado ? "Si" : "No"}
-                                        </span>
+                                        <span className={["absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-md transition-transform duration-200", draft.avaluo_cerrado ? "translate-x-full" : "translate-x-0"].join(" ")} />
+                                        <span className={["relative z-10 flex-1 text-center text-xs font-extrabold transition-colors", draft.avaluo_cerrado ? "text-slate-400" : "text-slate-700"].join(" ")}>Abierta</span>
+                                        <span className={["relative z-10 flex-1 text-center text-xs font-extrabold transition-colors", draft.avaluo_cerrado ? "text-emerald-600" : "text-slate-400"].join(" ")}>Cerrada</span>
                                     </button>
-                                    <div className="mt-1 text-xs font-semibold text-[#515778]">Estado: <span className={draft.avaluo_cerrado ? "text-emerald-600" : "text-amber-600"}>{draft.avaluo_cerrado ? "Cerrada" : "Abierta"}</span></div>
                                 </Field>
                             </>
                         ) : null}
-                        <Field label="Prueba de manejo" icon={CarFront}>
-                            <button
-                                type="button"
-                                onClick={() => setDraft((p) => ({ ...p, prueba_manejo: !p.prueba_manejo }))}
-                                className={["relative inline-flex h-9 w-28 items-center rounded-full px-1 transition-all", draft.prueba_manejo ? "bg-emerald-500" : "bg-slate-400"].join(" ")}
-                                title={draft.prueba_manejo ? "Realizada" : "No realizada"}
-                            >
-                                <span className={["flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold shadow-md transition-all", draft.prueba_manejo ? "translate-x-[76px] text-emerald-600" : "translate-x-0 text-slate-500"].join(" ")}>
-                                    {draft.prueba_manejo ? "Si" : "No"}
-                                </span>
-                            </button>
-                            <div className="mt-1 text-xs font-semibold text-[#515778]">Estado: <span className={draft.prueba_manejo ? "text-emerald-600" : "text-slate-500"}>{draft.prueba_manejo ? "Realizada" : "No realizada"}</span></div>
+
+                        <Field label="Comentarios" icon={MessageSquareText} className="md:col-span-6">
+                            <textarea value={draft.comentarios} onChange={(e) => setDraft((p) => ({ ...p, comentarios: e.target.value }))} className={[inputBase, inputOk, "min-h-[120px] resize-y"].join(" ")} placeholder="Notas internas..." />
                         </Field>
-                        <div className="md:col-span-2">
-                            <Field label="Comentarios" icon={MessageSquareText}>
-                                <textarea value={draft.comentarios} onChange={(e) => setDraft((p) => ({ ...p, comentarios: e.target.value }))} className={[inputBase, inputOk, "min-h-[110px]"].join(" ")} placeholder="Notas internas..." />
-                            </Field>
-                        </div>
                     </div>
                 )}
             </Modal>
