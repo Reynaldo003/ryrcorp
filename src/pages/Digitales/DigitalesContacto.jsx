@@ -110,7 +110,7 @@ const VEHICULOS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-
+const ESTADOS_PROSPECTO = ["Descalificado", "Contactado", "Sin Respuesta"];
 const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable", ""];
 
 const BURO_OPTIONS = [
@@ -531,42 +531,56 @@ function parseWhatsAppComposerFormat(texto) {
     return r;
 }
 
-function WhatsAppComposerInput({ value, onChange, onSend, disabled, placeholder, inputRef, onPaste }) {
+function WhatsAppComposerInput({
+    value,
+    onChange,
+    onSend,
+    disabled,
+    placeholder,
+    inputRef,
+    onPaste,
+}) {
     const internalRef = useRef(null);
-    const mirrorRef = useRef(null);
-    const setRefs = (node) => { internalRef.current = node; if (inputRef) inputRef.current = node; };
 
-    useEffect(() => {
-        const ta = internalRef.current;
-        if (!ta) return;
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 128)}px`;
-    }, [value]);
-
-    function syncScroll() {
-        if (!internalRef.current || !mirrorRef.current) return;
-        mirrorRef.current.scrollTop = internalRef.current.scrollTop;
+    function setRefs(node) {
+        internalRef.current = node;
+        if (inputRef) inputRef.current = node;
     }
 
+    useEffect(() => {
+        const textarea = internalRef.current;
+        if (!textarea) return;
+
+        textarea.style.height = "40px";
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`;
+    }, [value]);
+
     function handleKeyDown(e) {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); }
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            onSend();
+        }
     }
 
     return (
-        <div className="relative min-h-[40px] flex-1">
-            {!String(value || "").length ? (
-                <div className="pointer-events-none absolute left-2 top-2 z-0 text-sm font-medium text-slate-400">{placeholder}</div>
-            ) : null}
-            <div ref={mirrorRef} aria-hidden="true"
-                className={cls("pointer-events-none absolute inset-0 z-0 max-h-32 overflow-y-auto whitespace-pre-wrap break-words px-2 py-2 text-sm font-medium leading-relaxed text-[#131E5C]", "[&_strong]:font-black [&_em]:italic [&_del]:line-through", "[&_code]:rounded-md [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px]")}
-                dangerouslySetInnerHTML={{ __html: value ? parseWhatsAppComposerFormat(value) : "" }}
-            />
-            <textarea ref={setRefs} value={value} onChange={(e) => onChange(e.target.value)}
-                onKeyDown={handleKeyDown} onPaste={onPaste} onScroll={syncScroll}
-                disabled={disabled} rows={1} spellCheck
-                className={cls("relative z-10 block max-h-32 min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm font-medium leading-relaxed outline-none", "text-transparent caret-[#131E5C] placeholder:text-slate-400", "selection:bg-[#131E5C]/20 selection:text-transparent", disabled ? "cursor-not-allowed opacity-60" : "")}
-            />
-        </div>
+        <textarea
+            ref={setRefs}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={onPaste}
+            disabled={disabled}
+            rows={1}
+            spellCheck
+            placeholder={placeholder}
+            className={cls(
+                "block max-h-32 min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2",
+                "text-sm font-medium leading-relaxed text-[#131E5C] outline-none",
+                "placeholder:text-slate-400",
+                "selection:bg-[#1746D1]/20",
+                disabled ? "cursor-not-allowed opacity-60" : ""
+            )}
+        />
     );
 }
 
@@ -3616,16 +3630,9 @@ export default function DigitalesContacto() {
     }
 
     function resetComposer() {
-        if (isRecording) {
-            cancelarGrabacionAudio();
-        }
+        if (isRecording) cancelarGrabacionAudio();
 
         setDraftMsg("");
-
-        if (inputRef.current) {
-            inputRef.current.value = "";
-        }
-
         setEditingMsgId(null);
         setReplyToMsg(null);
         setDraftOwnerTel("");
@@ -4497,7 +4504,6 @@ export default function DigitalesContacto() {
         try {
             if (prospecto?.id) {
                 await api.digitalesPatchProspecto(prospecto.id, { nombre: nuevoNombre });
-                await propagarCambiosACitasPendientes({ nombre: nuevoNombre }).catch(() => {});
             }
             setProspecto(prev => prev ? { ...prev, nombre: nuevoNombre } : prev);
             setChats(prev => prev.map(c => c.telefono === activeTel ? { ...c, nombre: nuevoNombre } : c));
@@ -4513,30 +4519,6 @@ export default function DigitalesContacto() {
     function onNombreKeyDown(e) {
         if (e.key === "Enter") { e.preventDefault(); guardarNombre(); }
         if (e.key === "Escape") { e.preventDefault(); cancelarEdicionNombre(); }
-    }
-
-    async function propagarCambiosACitasPendientes(cambios) {
-        const payload = {};
-        for (const [clave, valor] of Object.entries(cambios || {})) {
-            const limpio = String(valor ?? "").trim();
-            if (limpio) payload[clave] = limpio;
-        }
-        if (!Object.keys(payload).length) return;
-        try {
-            const telDigits = String(activeTel || "").replace(/\D/g, "").slice(-10);
-            if (!telDigits) return;
-            const citas = await apiCitas.list();
-            const pendientes = (Array.isArray(citas) ? citas : []).filter((c) => {
-                if (!c || c.asistencia) return false;
-                const telCita = String(c.cliente?.telefono || c.telefono || "").replace(/\D/g, "").slice(-10);
-                return Boolean(telCita) && telCita === telDigits;
-            });
-            for (const c of pendientes) {
-                await apiCitas.patch(c.id, payload);
-            }
-        } catch (error) {
-            console.error("No se pudo sincronizar la cita programada con el prospecto:", error);
-        }
     }
 
     // ── Agendar cita desde el chat ────────────────────────────────────────────
@@ -4556,20 +4538,17 @@ export default function DigitalesContacto() {
             const asesorPiso = String(asesor || prospecto?.asesor_ventas || "").trim();
             await llamarCrearCita({
                 agencia: agencia || prospecto?.agencia || activeChat?.agencia || "",
-                nombre: (activeChat?.nombre || prospecto?.nombre || "Prospecto").trim(),
-                correo: prospecto?.correo || activeChat?.correo || "",
+                nombre: activeChat?.nombre || prospecto?.nombre || "Prospecto",
                 telefono: activeTel,
                 auto_interes: prospecto?.auto_interes || "",
                 fecha_hora_cita: fechaHoraIso,
                 asistencia: false,
                 tipo_cita: "Digital",
-                motivo_cita: "Digital",
-                tipo_venta: "",
-                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || prospecto?.canal_contacto || "",
+                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || "",
                 asesor_digital: prospecto?.asesor_digital || "",
                 asesor_piso: asesorPiso,
                 asesor_asignado: asesorPiso,
-                comentarios: nota || prospecto?.comentarios || "",
+                comentarios: nota || "",
             });
 
             // Mover el prospecto a la bandeja "Cita Programada" automáticamente
@@ -4626,11 +4605,6 @@ export default function DigitalesContacto() {
             await api.digitalesPatchProspecto(prospecto.id, {
                 agencia: agencia || "",
                 asesor_ventas: asesorFinal,
-            });
-
-            await propagarCambiosACitasPendientes({
-                asesor_piso: asesorFinal,
-                agencia,
             });
 
             setProspecto((prev) =>
@@ -4844,15 +4818,6 @@ export default function DigitalesContacto() {
                 prospecto.id,
                 payload
             );
-
-            // Sincroniza cambios del prospecto -> citas pendientes (modelo, asesor, fuente)
-            await propagarCambiosACitasPendientes({
-                auto_interes: payload.auto_interes || "",
-                asesor_digital: prospecto?.asesor_digital || "",
-                asesor_piso: prospecto?.asesor_ventas || prospecto?.asesor_piso || "",
-                agencia: prospecto?.agencia || "",
-                fuente_prospeccion: payload.pauta || payload.canal_contacto || "",
-            }).catch(() => {});
 
             await refreshActiveChat(activeTel);
         } catch (error) {

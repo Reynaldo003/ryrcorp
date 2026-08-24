@@ -128,6 +128,7 @@ export default function ComercialTopNav() {
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL",
+                    "CRM_DIGITAL",
                 ]),
             },
             {
@@ -140,6 +141,7 @@ export default function ComercialTopNav() {
                     "CRM_CALIDAD",
                     "CRM_CALL_CENTER",
                     "CRM_COORDINADOR_DIGITAL",
+                    "CRM_DIGITAL",
                 ]),
             },
             {

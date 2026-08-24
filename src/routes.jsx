@@ -524,6 +524,7 @@ export const router = createBrowserRouter(
                                                 "USUARIOS_ADMIN",
                                                 "CRM_CALIDAD",
                                                 "CRM_COORDINADOR_DIGITAL",
+                                                "CRM_DIGITAL",
                                             ]}
                                         >
                                             <PruebaManejoLayout />
@@ -546,6 +547,7 @@ export const router = createBrowserRouter(
                                                 "CRM_CALIDAD",
                                                 "CRM_CALL_CENTER",
                                                 "CRM_COORDINADOR_DIGITAL",
+                                                "CRM_DIGITAL",
                                             ]}
                                         >
                                             <EntregasLayout />
