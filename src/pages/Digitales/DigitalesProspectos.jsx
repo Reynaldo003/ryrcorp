@@ -1274,7 +1274,9 @@ function Field({ label, icon: Icon, children }) {
 function ContextMenu({ ctxMenu, onDelete, onClose }) {
     if (!ctxMenu.open || !ctxMenu.row)
         return null;
-    return createPortal(<div className="fixed right-4 top-20 z-[9999]" onClick={(e) => e.stopPropagation()}>
+    const x = ctxMenu.x ?? 0;
+    const y = ctxMenu.y ?? 0;
+    return createPortal(<div className="fixed z-[9999]" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
         <div className="w-48 overflow-hidden rounded-xl border border-black/10 bg-white shadow-2xl">
             <button className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => onDelete(ctxMenu.row)}><Trash2 className="h-4 w-4" /> Eliminar</button>
             <button className="w-full px-4 py-2 text-left text-xs text-slate-500 hover:bg-slate-50" onClick={onClose}>Cerrar</button>
@@ -1380,7 +1382,7 @@ export default function DigitalesProspectos() {
     const onRowContextMenu = (e, row) => {
         e.preventDefault();
         e.stopPropagation();
-        setCtxMenu({ open: true, row });
+        setCtxMenu({ open: true, row, x: e.clientX, y: e.clientY });
     };
     const eliminarCaso = async (row) => {
         if (!row?.id_exp)
