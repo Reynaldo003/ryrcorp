@@ -129,6 +129,13 @@ const FORMA_PAGO_OPTIONS = [
     { value: "desconocido", label: "Desconocido" },
 ];
 
+const SOLICITUD_CREDITO = [
+    { value: "", label: "— Selecciona —" },
+    { value: "autorizado", label: "Autorizado" },
+    { value: "rechazado", label: "Rechazado" },
+    { value: "condicionado", label: "Condicionado" },
+];
+
 const TIPO_CLIENTE_OPTIONS = [
     { value: "", label: "— Selecciona —" },
     { value: "persona_fisica", label: "Persona física" },
@@ -4810,6 +4817,19 @@ export default function DigitalesContacto() {
                 plazo_compra: quickEditDraft.plazo_compra || "",
                 comprobacion_ingresos:
                     quickEditDraft.comprobacion_ingresos || "",
+
+                id_cotizacion: quickEditDraft.id_cotizacion || "",
+                folio_solicitud_credito:
+                    quickEditDraft.folio_solicitud_credito || "",
+                solicitud_credito_estado:
+                    quickEditDraft.solicitud_credito_estado || "",
+                vin_facturado: String(
+                    quickEditDraft.vin_facturado || ""
+                )
+                    .trim()
+                    .toUpperCase(),
+                vin_estatus_entrega:
+                    quickEditDraft.vin_estatus_entrega || "",
             };
 
             const pautaLimpia = String(
@@ -5035,6 +5055,11 @@ export default function DigitalesContacto() {
             uso_vehiculo: prospecto.uso_vehiculo || "",
             plazo_compra: prospecto.plazo_compra || "",
             comprobacion_ingresos: prospecto.comprobacion_ingresos || "",
+            id_cotizacion: prospecto.id_cotizacion || "",
+            folio_solicitud_credito: prospecto.folio_solicitud_credito || "",
+            solicitud_credito_estado: prospecto.solicitud_credito_estado || "",
+            vin_facturado: prospecto.vin_facturado || "",
+            vin_estatus_entrega: prospecto.vin_estatus_entrega || "",
         });
     }, [prospecto]);
 
@@ -5411,6 +5436,11 @@ export default function DigitalesContacto() {
         quickEditDraft.uso_vehiculo,
         quickEditDraft.comprobacion_ingresos,
         quickEditDraft.comentarios,
+        quickEditDraft.id_cotizacion,
+        quickEditDraft.folio_solicitud_credito,
+        quickEditDraft.solicitud_credito_estado,
+        quickEditDraft.vin_facturado,
+        quickEditDraft.vin_estatus_entrega,
     ];
 
     const perfilProspectoCompletados = perfilProspectoCampos.filter(
@@ -5430,6 +5460,14 @@ export default function DigitalesContacto() {
         quickEditDraft.uso_vehiculo,
         quickEditDraft.comprobacion_ingresos,
         quickEditDraft.comentarios,
+    ].filter((value) => String(value ?? "").trim() === "").length;
+
+    const creditoFacturacionPendientes = [
+        quickEditDraft.id_cotizacion,
+        quickEditDraft.folio_solicitud_credito,
+        quickEditDraft.solicitud_credito_estado,
+        quickEditDraft.vin_facturado,
+        quickEditDraft.vin_estatus_entrega,
     ].filter((value) => String(value ?? "").trim() === "").length;
 
     const esBuroMalo =
@@ -6957,31 +6995,121 @@ export default function DigitalesContacto() {
                                                 </div>
                                             </div>
 
+                                            {/* Crédito y facturación: mismos campos que "Perfil comercial y financiero" en editar prospecto */}
+                                            <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
+                                                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
+                                                            <CreditCard className="h-4 w-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-black text-[#131E5C]">Crédito y facturación</div>
+                                                            <div className="text-[11px] font-semibold text-slate-400">Cotización, solicitud de crédito y VIN facturado.</div>
+                                                        </div>
+                                                    </div>
+                                                    {creditoFacturacionPendientes > 0 ? (
+                                                        <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
+                                                            {creditoFacturacionPendientes} pendiente{creditoFacturacionPendientes === 1 ? "" : "s"}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+                                                            <Check className="h-3 w-3" /> Completo
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="border-t border-slate-100 px-4 py-4">
+                                                    <div className="grid gap-3">
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">ID Cotización</span>
+                                                            <input
+                                                                value={quickEditDraft.id_cotizacion || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, id_cotizacion: e.target.value }))}
+                                                                placeholder="Ej. COT-10234"
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            />
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Folio solicitud de crédito</span>
+                                                            <input
+                                                                value={quickEditDraft.folio_solicitud_credito || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, folio_solicitud_credito: e.target.value }))}
+                                                                placeholder="Folio de la solicitud"
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            />
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado de la solicitud</span>
+                                                            <select
+                                                                value={quickEditDraft.solicitud_credito_estado || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, solicitud_credito_estado: e.target.value }))}
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            >
+                                                                {SOLICITUD_CREDITO.map((i) => (
+                                                                    <option key={i.value} value={i.value}>{i.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
+                                                            <input
+                                                                value={quickEditDraft.vin_facturado || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, vin_facturado: e.target.value.toUpperCase() }))}
+                                                                placeholder="17 caracteres VIN"
+                                                                maxLength={32}
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            />
+                                                        </label>
+
+                                                        <div className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN entregado</span>
+                                                            <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1">
+                                                                {[{ value: "entregado", label: "Entregado" }, { value: "cancelado", label: "Cancelado" }].map(opt => (
+                                                                    <button
+                                                                        key={opt.value}
+                                                                        type="button"
+                                                                        onClick={() => setQuickEditDraft(p => ({ ...p, vin_estatus_entrega: p.vin_estatus_entrega === opt.value ? "" : opt.value }))}
+                                                                        className={cls(
+                                                                            "h-9 rounded-lg text-xs font-extrabold transition",
+                                                                            quickEditDraft.vin_estatus_entrega === opt.value
+                                                                                ? (opt.value === "entregado" ? "bg-emerald-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm")
+                                                                                : "bg-transparent text-slate-500 hover:bg-[#131E5C]/[0.06] hover:text-[#131E5C]"
+                                                                        )}
+                                                                    >
+                                                                        {opt.label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             {/* Información complementaria: existe, pero no abruma */}
-                                            <details className="group overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
-                                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition hover:bg-slate-50/70 [&::-webkit-details-marker]:hidden">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-[#131E5C]">
+                                            <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
+                                                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[#131E5C]">
                                                             <FileText className="h-4 w-4" />
                                                         </div>
-                                                        <div>
+                                                        <div className="min-w-0">
                                                             <div className="text-sm font-black text-[#131E5C]">Completar perfil</div>
                                                             <div className="text-[11px] font-semibold text-slate-400">Forma de pago, tipo de cliente, uso, ingresos y comentarios.</div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {perfilComplementarioPendientes > 0 ? (
-                                                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
-                                                                {perfilComplementarioPendientes} pendiente{perfilComplementarioPendientes === 1 ? "" : "s"}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
-                                                                <Check className="h-3 w-3" /> Completo
-                                                            </span>
-                                                        )}
-                                                        <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
-                                                    </div>
-                                                </summary>
+                                                    {perfilComplementarioPendientes > 0 ? (
+                                                        <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
+                                                            {perfilComplementarioPendientes} pendiente{perfilComplementarioPendientes === 1 ? "" : "s"}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+                                                            <Check className="h-3 w-3" /> Completo
+                                                        </span>
+                                                    )}
+                                                </div>
 
                                                 <div className="border-t border-slate-100 px-4 py-4">
                                                     <div className="grid gap-3">
@@ -7046,7 +7174,7 @@ export default function DigitalesContacto() {
                                                         />
                                                     </label>
                                                 </div>
-                                            </details>
+                                            </div>
 
                                             {/* Guardado: misma función original */}
                                             <div className="sticky bottom-0 z-10 -mx-1 flex flex-col gap-2 rounded-2xl border border-[#131E5C]/10 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] backdrop-blur">
