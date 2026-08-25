@@ -29,7 +29,7 @@ const origenMeta = {
     Facebook: { Icon: ImgIcon(FB, "Facebook"), label: "Facebook" },
     "Llamada Entrante": { Icon: ImgIcon(PHONE, "Llamada Entrante"), label: "Llamada Entrante" },
 };
-const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez",];
+const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez",];
 const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Descalificado"];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
@@ -83,7 +83,7 @@ const ASESOR_DIGITAL_POR_NUMERO = {
     "522871232641": { asesor_digital: "", agencia: "VW Tuxtepec", etiqueta: "Equipo Digital Tuxtepec", },
     "527831263814": { asesor_digital: "Edgar Omar Noguera Solis", agencia: "VW Tuxpan", etiqueta: "Edgar Omar Noguera Solis", },
     "527821820706": { asesor_digital: "Dulce Abigail Garcia Olivares", agencia: "VW Poza Rica", etiqueta: "Dulce Abigail Garcia Olivares", },
-    "522712837999": { asesor_digital: "Bianca Chavez Alarcon", agencia: "VW Cordoba Usados", etiqueta: "Bianca Chavez Alarcon", },
+    "522712837999": { asesor_digital: "Bianca Isabel Chavez Alarcon", agencia: "VW Cordoba Usados", etiqueta: "Bianca Isabel Chavez Alarcon", },
     "522721986539": { asesor_digital: "Candy Denisse Marquez", agencia: "VW Orizaba Usados", etiqueta: "Candy Denisse Marquez", },
 };
 const ASESORES = [
@@ -1230,7 +1230,7 @@ const ASESOR_DIGITAL_CANONICO_BDC = new Map([
     ["edgar omar noguera solis", "Edgar Omar Noguera Solis"],
     ["dulce abigail garcia olivares", "Dulce Abigail Garcia Olivares"],
     ["bianca chavez alarcon", "Bianca Chavez Alarcon"],
-    ["bianca isabel chavez alarcon", "Bianca Chavez Alarcon"],
+    ["bianca isabel chavez alarcon", "Bianca Isabel Chavez Alarcon"],
     ["candy denisse marquez", "Candy Denisse Marquez"],
     ["candy denisse marquez cortes", "Candy Denisse Marquez"],
     ["julio ramirez lopez", "Julio Ramirez Lopez"],
@@ -1813,9 +1813,9 @@ export default function DigitalesProspectos() {
                 ...(p.fuente_prospeccion || p.pauta || p.canal_contacto ? { fuente_prospeccion: p.fuente_prospeccion || p.pauta || p.canal_contacto } : {}),
             };
             if (tel && Object.keys(cambios).length) {
-                propagarCambiosACitasProspecto({ telefono: tel, cambios }).catch(() => {});
+                propagarCambiosACitasProspecto({ telefono: tel, cambios }).catch(() => { });
             }
-        } catch {}
+        } catch { }
         cargarProspectosPorLinea().catch((error) => console.error("No se pudo refrescar la lista despues de guardar el prospecto:", error));
     };
     const handlePlantillaProspectoEnviada = ({ telefono } = {}) => {
@@ -1908,15 +1908,15 @@ export default function DigitalesProspectos() {
                         ...(agendaInfo.auto_interes ? { auto_interes: agendaInfo.auto_interes } : {}),
                         ...(asesorDigital ? { asesor_digital: asesorDigital } : {}),
                         ...(drafter.asesor_solicita ? { asesor_ventas: drafter.asesor_solicita } : {}),
-                    }).catch(() => {});
+                    }).catch(() => { });
                 }
-            } catch {}
+            } catch { }
             // Mover prospecto a Cita Programada para reflejar en bandeja
             try {
                 if (agendaInfo.id_exp) {
-                    await api.digitalesPatchProspecto(agendaInfo.id_exp, { estado: "Cita Programada" }).catch(() => {});
+                    await api.digitalesPatchProspecto(agendaInfo.id_exp, { estado: "Cita Programada" }).catch(() => { });
                 }
-            } catch {}
+            } catch { }
             // DashboardEjecutivoBDC mantiene su propio estado; sólo notificamos
             // que debe refrescar las métricas operativas. Esto elimina el ReferenceError
             // de setCitasBDC fuera de alcance.

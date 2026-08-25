@@ -11,7 +11,7 @@ import { ASESORES_PISO } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
-const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
+const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
 const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Descalificado"];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
@@ -27,7 +27,7 @@ const CONTEXTO_POR_NUMERO = {
     "522712638803": { asesor_digital: "IA Vagen", agencia: "VW Cordoba" }, "522721111244": { asesor_digital: "Lizbeth Cano Clara", agencia: "VW Orizaba" },
     "522713133332": { asesor_digital: "Erendira Santos Coyotzi", agencia: "VW Cordoba" }, "522871232641": { asesor_digital: "", agencia: "VW Tuxtepec" },
     "527831263814": { asesor_digital: "Edgar Omar Noguera Solis", agencia: "VW Tuxpan" }, "527821820706": { asesor_digital: "Dulce Abigail Garcia Olivares", agencia: "VW Poza Rica" },
-    "522712837999": { asesor_digital: "Bianca Chavez Alarcon", agencia: "VW Cordoba Usados" }, "522721986539": { asesor_digital: "Candy Denisse Marquez", agencia: "VW Orizaba Usados" },
+    "522712837999": { asesor_digital: "Bianca Isabel Chavez Alarcon", agencia: "VW Cordoba Usados" }, "522721986539": { asesor_digital: "Candy Denisse Marquez", agencia: "VW Orizaba Usados" },
 };
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = { Nuevos: { Icon: Car, label: "Nuevos" }, Usados: { Icon: CarFront, label: "Usados" }, Comerciales: { Icon: Van, label: "Comerciales" } };

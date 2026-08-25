@@ -46,7 +46,7 @@ const BRAND_BLUE = "#131E5C";
 
 const BASE_DEALERS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
 
-const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chávez Alarcón", "Candy Denisse Marquez Cortes", "JULIO RAMIREZ LOPEZ",];
+const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez Cortes", "JULIO RAMIREZ LOPEZ",];
 
 
 function normalizeStr(v) { return String(v ?? "").trim(); }
@@ -1188,7 +1188,7 @@ export default function RegistroCitas() {
     const PAGE_SIZE = 200;
 
     const DEALERS = [...new Set([...BASE_DEALERS, ...AGENCIAS_DIGITALES])];
-        const FUENTE = ["Facebook", "WhatsApp", "VW-Concesionarios", "Llamada Entrante", "Prospeccion", "Cartera", "Eternizacion de credito", "Remarketing", "Base de Datos", "Ubicacion"];
+    const FUENTE = ["Facebook", "WhatsApp", "VW-Concesionarios", "Llamada Entrante", "Prospeccion", "Cartera", "Eternizacion de credito", "Remarketing", "Base de Datos", "Ubicacion"];
     const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter", "CRAFTER ELITE", "CRAFTER URBAN", "CRAFTER ELEMENTAL", "CRAFTER INSPIRE"];
     const TIPO_CITA = ["Tradicional", "Digital", "Evento", "Evento Taigun", "Remarketing"];
     const MOTIVOS_CITA = [
@@ -1556,135 +1556,135 @@ export default function RegistroCitas() {
     };
 
     const resetFilters = () => {
-                    setPage(1);
+        setPage(1);
 
-                    setFilters({
-                        q: "",
-                        agencia: "Todos",
-                        asesorDigital: "Todos",
-                        asesorPiso: "Todos",
-                        rangoDesde: "",
-                        rangoHasta: "",
-                    });
-                };
+        setFilters({
+            q: "",
+            agencia: "Todos",
+            asesorDigital: "Todos",
+            asesorPiso: "Todos",
+            rangoDesde: "",
+            rangoHasta: "",
+        });
+    };
 
-                const toggleRangoFechas = (desde, hasta) => {
-                    setPage(1);
+    const toggleRangoFechas = (desde, hasta) => {
+        setPage(1);
 
-                    setFilters((prev) => {
-                        const mismoRango =
-                            prev.rangoDesde === desde &&
-                            prev.rangoHasta === hasta;
+        setFilters((prev) => {
+            const mismoRango =
+                prev.rangoDesde === desde &&
+                prev.rangoHasta === hasta;
 
-                        return {
-                            ...prev,
-                            rangoDesde: mismoRango ? "" : desde,
-                            rangoHasta: mismoRango ? "" : hasta,
-                        };
-                    });
-                };
+            return {
+                ...prev,
+                rangoDesde: mismoRango ? "" : desde,
+                rangoHasta: mismoRango ? "" : hasta,
+            };
+        });
+    };
 
-                const setHoy = () => {
-                    const hoy = toYMDLocal(new Date());
-                    toggleRangoFechas(hoy, hoy);
-                };
+    const setHoy = () => {
+        const hoy = toYMDLocal(new Date());
+        toggleRangoFechas(hoy, hoy);
+    };
 
-                const setAyer = () => {
-                    const ayer = new Date();
-                    ayer.setDate(ayer.getDate() - 1);
+    const setAyer = () => {
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
 
-                    const ymd = toYMDLocal(ayer);
+        const ymd = toYMDLocal(ayer);
 
-                    toggleRangoFechas(ymd, ymd);
-                };
+        toggleRangoFechas(ymd, ymd);
+    };
 
-                const setSemana = () => {
-                    const hoy = new Date();
+    const setSemana = () => {
+        const hoy = new Date();
 
-                    const dia = hoy.getDay();
-                    const diferenciaLunes = dia === 0 ? -6 : 1 - dia;
+        const dia = hoy.getDay();
+        const diferenciaLunes = dia === 0 ? -6 : 1 - dia;
 
-                    const lunes = new Date(hoy);
-                    lunes.setDate(hoy.getDate() + diferenciaLunes);
+        const lunes = new Date(hoy);
+        lunes.setDate(hoy.getDate() + diferenciaLunes);
 
-                    const domingo = new Date(lunes);
-                    domingo.setDate(lunes.getDate() + 6);
+        const domingo = new Date(lunes);
+        domingo.setDate(lunes.getDate() + 6);
 
-                    toggleRangoFechas(
-                        toYMDLocal(lunes),
-                        toYMDLocal(domingo)
-                    );
-                };
+        toggleRangoFechas(
+            toYMDLocal(lunes),
+            toYMDLocal(domingo)
+        );
+    };
 
-                const setUltimos7Dias = () => {
-                    const hasta = new Date();
+    const setUltimos7Dias = () => {
+        const hasta = new Date();
 
-                    const desde = new Date();
-                    desde.setDate(desde.getDate() - 6);
+        const desde = new Date();
+        desde.setDate(desde.getDate() - 6);
 
-                    toggleRangoFechas(
-                        toYMDLocal(desde),
-                        toYMDLocal(hasta)
-                    );
-                };
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    };
 
-                const setUltimos30Dias = () => {
-                    const hasta = new Date();
+    const setUltimos30Dias = () => {
+        const hasta = new Date();
 
-                    const desde = new Date();
-                    desde.setDate(desde.getDate() - 29);
+        const desde = new Date();
+        desde.setDate(desde.getDate() - 29);
 
-                    toggleRangoFechas(
-                        toYMDLocal(desde),
-                        toYMDLocal(hasta)
-                    );
-                };
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    };
 
-                const setEsteMes = () => {
-                    const hoy = new Date();
+    const setEsteMes = () => {
+        const hoy = new Date();
 
-                    const primero = new Date(
-                        hoy.getFullYear(),
-                        hoy.getMonth(),
-                        1
-                    );
+        const primero = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth(),
+            1
+        );
 
-                    const ultimo = new Date(
-                        hoy.getFullYear(),
-                        hoy.getMonth() + 1,
-                        0
-                    );
+        const ultimo = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth() + 1,
+            0
+        );
 
-                    toggleRangoFechas(
-                        toYMDLocal(primero),
-                        toYMDLocal(ultimo)
-                    );
-                };
+        toggleRangoFechas(
+            toYMDLocal(primero),
+            toYMDLocal(ultimo)
+        );
+    };
 
-                const ViewToggle = () => (
-                    <div className="flex items-center rounded-lg border border-[#131E5C]/30 overflow-hidden">
-                        {[
-                            { key: "calendario", label: "Calendario", Icon: CalendarClock },
-                            { key: "agenda", label: "Agenda", Icon: Calendar },
-                            { key: "tabla", label: "Tabla", Icon: Table2 },
-                            { key: "graficos", label: "Gráficos", Icon: BarChart3 },
-                        ].map(({ key, label, Icon }) => (
-                            <button
-                                key={key}
-                                onClick={() => setVista(key)}
-                                className={[
-                                    "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition",
-                                    vista === key
-                                        ? "bg-[#131E5C] text-white"
-                                        : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
-                                ].join(" ")}
-                            >
-                                <Icon className="h-3.5 w-3.5" />
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                );
+    const ViewToggle = () => (
+        <div className="flex items-center rounded-lg border border-[#131E5C]/30 overflow-hidden">
+            {[
+                { key: "calendario", label: "Calendario", Icon: CalendarClock },
+                { key: "agenda", label: "Agenda", Icon: Calendar },
+                { key: "tabla", label: "Tabla", Icon: Table2 },
+                { key: "graficos", label: "Gráficos", Icon: BarChart3 },
+            ].map(({ key, label, Icon }) => (
+                <button
+                    key={key}
+                    onClick={() => setVista(key)}
+                    className={[
+                        "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition",
+                        vista === key
+                            ? "bg-[#131E5C] text-white"
+                            : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
+                    ].join(" ")}
+                >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                </button>
+            ))}
+        </div>
+    );
 
     const exportarExcel = async () => {
         const XLSX = await import("xlsx");
@@ -2003,7 +2003,7 @@ export default function RegistroCitas() {
                     </div>
                 </div>
             </div>
-            
+
             {vista === "calendario" && (
                 <CalendarioView
                     rows={sorted}
@@ -2080,9 +2080,9 @@ export default function RegistroCitas() {
                                 </tbody>
                             </table>
                             <ContextMenu ctxMenu={ctxMenu} onDelete={async (row) => { await eliminarCita(row); setCtxMenu({ open: false, x: 0, y: 0, row: null }); }} onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })} />
-                        
+
                         </div>
-                        
+
                         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 bg-white/50 px-4 py-3">
                             <span className="text-xs font-bold text-[#131E5C]">
                                 {totalCount.toLocaleString("es-MX")} registros · Página {page} de {totalPages}
@@ -2151,8 +2151,8 @@ export default function RegistroCitas() {
                                 </button>
                             </div>
                         </div>
-                                                
-                        </div>
+
+                    </div>
                 </>
             )}
 
