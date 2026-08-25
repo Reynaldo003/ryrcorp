@@ -93,6 +93,7 @@ import AmbienteLaboral from "./pages/AmbienteLaboral/AmbienteLaboral";
 
 import CampanasMeta from "./pages/CampanasMeta/CampanasMeta";
 import Retencion from "./pages/Retencion/Retencion";
+import RetencionNoVentas from "./pages/Retencion/RetencionNoVentas";
 import JDPower from "./pages/JDPower/JDPower";
 import JDPowerServicio from "./pages/encuestaJDpowerservicio/JDPowerServicio";
 
@@ -524,7 +525,7 @@ export const router = createBrowserRouter(
                                                 "USUARIOS_ADMIN",
                                                 "CRM_CALIDAD",
                                                 "CRM_COORDINADOR_DIGITAL",
-                                                "CRM_DIGITAL",
+                                                "CRM_DIGITALES",
                                             ]}
                                         >
                                             <PruebaManejoLayout />
@@ -542,12 +543,12 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission
                                             anyOf={[
+                                                "CRM_DIGITALES",
                                                 "CRM_VENTAS",
                                                 "USUARIOS_ADMIN",
                                                 "CRM_CALIDAD",
                                                 "CRM_CALL_CENTER",
                                                 "CRM_COORDINADOR_DIGITAL",
-                                                "CRM_DIGITAL",
                                             ]}
                                         >
                                             <EntregasLayout />
@@ -814,6 +815,20 @@ export const router = createBrowserRouter(
                                             ]}
                                         >
                                             <Retencion />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "retencion_no_ventas",
+                                    element: (
+                                        <RequirePermission
+                                            anyOf={[
+                                                "USUARIOS_ADMIN",
+                                                "CRM_CALIDAD",
+                                                "CRM_POSTVENTA",
+                                            ]}
+                                        >
+                                            <RetencionNoVentas />
                                         </RequirePermission>
                                     ),
                                 },

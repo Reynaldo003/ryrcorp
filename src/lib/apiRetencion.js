@@ -26,6 +26,14 @@ function construirQuery(filtros = {}) {
     params.set("condicion", filtros.condicion);
   if (!esFiltroVacio(filtros.search)) params.set("search", filtros.search);
 
+  // NUEVO: vehículos que llegaron a servicio pero no tienen venta registrada
+  if (
+    filtros.sin_venta === true ||
+    filtros.sin_venta === 1 ||
+    filtros.sin_venta === "1"
+  )
+    params.set("sin_venta", "1");
+
   params.set("ordering", filtros.ordering || "-fecha_ultima_os");
   params.set("limit", String(filtros.limit || 50000));
 
@@ -34,6 +42,10 @@ function construirQuery(filtros = {}) {
 
 export function obtenerOpcionesRetencion(options = {}) {
   return http("/retencion/api/ordenes-ventas/opciones/", options);
+}
+
+export function obtenerOpcionesRetencionNoVentas(options = {}) {
+  return http("/retencion/api/ordenes-ventas/opciones/?sin_venta=1", options);
 }
 
 export function obtenerOrdenesRetencion(filtros = {}, options = {}) {
@@ -76,13 +88,16 @@ export const apiRetencion = {
     if (telefono) params.set("telefono", telefono);
     const query = params.toString();
     return http(`/retencion/api/tareas/${query ? `?${query}` : ""}`, options);
-},
+  },
 
   crearTarea: (payload, options = {}) =>
     http("/retencion/api/tareas/", {
       ...options,
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
       body: JSON.stringify(payload),
     }),
 
@@ -90,7 +105,10 @@ export const apiRetencion = {
     http(`/retencion/api/tareas/${id}/`, {
       ...options,
       method: "PATCH",
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
       body: JSON.stringify(cambios),
     }),
 

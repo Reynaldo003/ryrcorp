@@ -61,6 +61,12 @@ export default function Topbar({
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
             },
             {
+                label: "Retención No V.",
+                href: "/postventa/retencion_no_ventas",
+                icon: Repeat,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
+            },
+            {
                 label: "Safety Culture",
                 href: "/postventa/safety",
                 icon: ShieldCheck,

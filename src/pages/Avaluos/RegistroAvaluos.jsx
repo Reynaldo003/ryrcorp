@@ -615,471 +615,471 @@ function normalizarEvidenciasAvaluo(item) {
     }));
 }
 
-        function GraficasAvaluos({ rows }) {
-            const porDealer = useMemo(() => {
-                const conteo = {};
+function GraficasAvaluos({ rows }) {
+    const porDealer = useMemo(() => {
+        const conteo = {};
 
-                rows.forEach((row) => {
-                    const dealer = row.agencia || "Sin dealer";
-                    conteo[dealer] = (conteo[dealer] || 0) + 1;
-                });
+        rows.forEach((row) => {
+            const dealer = row.agencia || "Sin dealer";
+            conteo[dealer] = (conteo[dealer] || 0) + 1;
+        });
 
-                return Object.entries(conteo)
-                    .map(([name, value]) => ({ name, value }))
-                    .sort((a, b) => b.value - a.value);
-            }, [rows]);
+        return Object.entries(conteo)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [rows]);
 
-            const porAsesor = useMemo(() => {
-                const conteo = {};
+    const porAsesor = useMemo(() => {
+        const conteo = {};
 
-                rows.forEach((row) => {
-                    const asesor = row.asesor_ventas || "Sin asesor";
-                    conteo[asesor] = (conteo[asesor] || 0) + 1;
-                });
+        rows.forEach((row) => {
+            const asesor = row.asesor_ventas || "Sin asesor";
+            conteo[asesor] = (conteo[asesor] || 0) + 1;
+        });
 
-                return Object.entries(conteo)
-                    .map(([name, value]) => ({ name, value }))
-                    .sort((a, b) => b.value - a.value)
-                    .slice(0, 10);
-            }, [rows]);
+        return Object.entries(conteo)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10);
+    }, [rows]);
 
-            const porMarca = useMemo(() => {
-                const conteo = {};
+    const porMarca = useMemo(() => {
+        const conteo = {};
 
-                rows.forEach((row) => {
-                    const marca = row.marca_auto || "Sin marca";
-                    conteo[marca] = (conteo[marca] || 0) + 1;
-                });
+        rows.forEach((row) => {
+            const marca = row.marca_auto || "Sin marca";
+            conteo[marca] = (conteo[marca] || 0) + 1;
+        });
 
-                return Object.entries(conteo)
-                    .map(([name, value]) => ({ name, value }))
-                    .sort((a, b) => b.value - a.value)
-                    .slice(0, 10);
-            }, [rows]);
+        return Object.entries(conteo)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10);
+    }, [rows]);
 
-            const porEtapa = useMemo(() => {
-                const conteo = {};
+    const porEtapa = useMemo(() => {
+        const conteo = {};
 
-                rows.forEach((row) => {
-                    const etapa = row.etapa_proceso || "Sin etapa";
-                    conteo[etapa] = (conteo[etapa] || 0) + 1;
-                });
+        rows.forEach((row) => {
+            const etapa = row.etapa_proceso || "Sin etapa";
+            conteo[etapa] = (conteo[etapa] || 0) + 1;
+        });
 
-                return Object.entries(conteo).map(([name, value]) => ({
-                    name,
-                    value,
-                }));
-            }, [rows]);
+        return Object.entries(conteo).map(([name, value]) => ({
+            name,
+            value,
+        }));
+    }, [rows]);
 
-            const porTipoToma = useMemo(() => {
-                const conteo = {};
+    const porTipoToma = useMemo(() => {
+        const conteo = {};
 
-                rows.forEach((row) => {
-                    const tipo = row.tipo_toma || "Sin tipo";
-                    conteo[tipo] = (conteo[tipo] || 0) + 1;
-                });
+        rows.forEach((row) => {
+            const tipo = row.tipo_toma || "Sin tipo";
+            conteo[tipo] = (conteo[tipo] || 0) + 1;
+        });
 
-                return Object.entries(conteo).map(([name, value]) => ({
-                    name,
-                    value,
-                }));
-            }, [rows]);
+        return Object.entries(conteo).map(([name, value]) => ({
+            name,
+            value,
+        }));
+    }, [rows]);
 
-            const porFecha = useMemo(() => {
-                const conteo = {};
+    const porFecha = useMemo(() => {
+        const conteo = {};
 
-                rows.forEach((row) => {
-                    if (!row.fecha_avaluo) return;
+        rows.forEach((row) => {
+            if (!row.fecha_avaluo) return;
 
-                    const fecha = String(row.fecha_avaluo).slice(0, 10);
-                    conteo[fecha] = (conteo[fecha] || 0) + 1;
-                });
+            const fecha = String(row.fecha_avaluo).slice(0, 10);
+            conteo[fecha] = (conteo[fecha] || 0) + 1;
+        });
 
-                return Object.entries(conteo)
-                    .map(([fecha, value]) => ({ fecha, value }))
-                    .sort((a, b) => a.fecha.localeCompare(b.fecha))
-                    .slice(-15);
-            }, [rows]);
+        return Object.entries(conteo)
+            .map(([fecha, value]) => ({ fecha, value }))
+            .sort((a, b) => a.fecha.localeCompare(b.fecha))
+            .slice(-15);
+    }, [rows]);
 
-            const totalAvaluos = rows.length || 1;
+    const totalAvaluos = rows.length || 1;
 
-            const porcentaje = (valor) => {
-                return ((valor / totalAvaluos) * 100).toFixed(1);
-            };
+    const porcentaje = (valor) => {
+        return ((valor / totalAvaluos) * 100).toFixed(1);
+    };
 
-          const dealerPrincipal = porDealer[0] || { name: "Sin datos", value: 0 };
-            const marcaPrincipal = porMarca[0] || { name: "Sin datos", value: 0 };
+    const dealerPrincipal = porDealer[0] || { name: "Sin datos", value: 0 };
+    const marcaPrincipal = porMarca[0] || { name: "Sin datos", value: 0 };
 
-            const etapaPrincipal =
-                [...porEtapa].sort((a, b) => b.value - a.value)[0] || {
-                    name: "Sin datos",
-                    value: 0,
-                };  
-
-            const opcionDealer = {
-                tooltip: { trigger: "axis" },
-                grid: {
-                    left: 20,
-                    right: 50,
-                    top: 20,
-                    bottom: 20,
-                    containLabel: true,
-                },
-                xAxis: {
-                    type: "value",
-                    minInterval: 1,
-                },
-                yAxis: {
-                    type: "category",
-                    data: porDealer.map((item) => item.name),
-                },
-                
-              series: [
-                {
-                    type: "bar",
-                    data: porDealer.map((item) => item.value),
-                    barWidth: 20,
-                    itemStyle: {
-                        borderRadius: [0, 6, 6, 0],
-                        color: BRAND_BLUE,
-                    },
-                    label: {
-                        show: true,
-                        position: "right",
-                        formatter: (params) =>
-                            `${params.value} (${porcentaje(params.value)}%)`,
-                        fontSize: 11,
-                        fontWeight: "bold",
-                        color: "#131E5C",
-                    },
-                },
-            ],
+    const etapaPrincipal =
+        [...porEtapa].sort((a, b) => b.value - a.value)[0] || {
+            name: "Sin datos",
+            value: 0,
         };
 
-            const opcionAsesor = {
-                tooltip: { trigger: "axis" },
-                grid: {
-                    left: 20,
-                    right: 55,
-                    top: 20,
-                    bottom: 20,
-                    containLabel: true,
-                },
-                xAxis: {
-                    type: "value",
-                    minInterval: 1,
-                },
-                yAxis: {
-                    type: "category",
-                    inverse: true,
-                    data: porAsesor.map((item) => item.name),
-                    axisLabel: {
-                        width: 110,
-                        overflow: "truncate",
-                    },
-                },
-              series: [
-                    {
-                        type: "bar",
-                        data: porAsesor.map((item) => item.value),
-                        barWidth: 18,
-                        itemStyle: {
-                            borderRadius: [0, 6, 6, 0],
-                            color: BRAND_BLUE,
-                        },
-                        label: {
-                            show: true,
-                            position: "right",
-                            formatter: (params) =>
-                                `${params.value} (${porcentaje(params.value)}%)`,
-                            fontSize: 10,
-                            fontWeight: "bold",
-                            color: "#131E5C",
-                        },
-                    },
-                ],
-            };
+    const opcionDealer = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 50,
+            top: 20,
+            bottom: 20,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+        yAxis: {
+            type: "category",
+            data: porDealer.map((item) => item.name),
+        },
 
-            const opcionMarca = {
-                tooltip: { trigger: "axis" },
-                grid: {
-                    left: 20,
-                    right: 55,
-                    top: 20,
-                    bottom: 20,
-                    containLabel: true,
+        series: [
+            {
+                type: "bar",
+                data: porDealer.map((item) => item.value),
+                barWidth: 20,
+                itemStyle: {
+                    borderRadius: [0, 6, 6, 0],
+                    color: BRAND_BLUE,
                 },
-                xAxis: {
-                    type: "value",
-                    minInterval: 1,
+                label: {
+                    show: true,
+                    position: "right",
+                    formatter: (params) =>
+                        `${params.value} (${porcentaje(params.value)}%)`,
+                    fontSize: 11,
+                    fontWeight: "bold",
+                    color: "#131E5C",
                 },
-                yAxis: {
-                    type: "category",
-                    inverse: true,
-                    data: porMarca.map((item) => item.name),
-                },
-                
-                series: [
-                    {
-                        type: "bar",
-                        data: porMarca.map((item) => item.value),
-                        barWidth: 18,
-                        itemStyle: {
-                            borderRadius: [0, 6, 6, 0],
-                            color: BRAND_BLUE,
-                        },
-                        label: {
-                            show: true,
-                            position: "right",
-                            formatter: (params) =>
-                                `${params.value} (${porcentaje(params.value)}%)`,
-                            fontSize: 10,
-                            fontWeight: "bold",
-                            color: "#131E5C",
-                        },
-                    },
-                ],
+            },
+        ],
+    };
 
-            };
-
-            const opcionEtapa = {
-                tooltip: { trigger: "item" },
-                legend: {
-                    bottom: 0,
-                    textStyle: { fontSize: 11 },
+    const opcionAsesor = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 55,
+            top: 20,
+            bottom: 20,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+        yAxis: {
+            type: "category",
+            inverse: true,
+            data: porAsesor.map((item) => item.name),
+            axisLabel: {
+                width: 110,
+                overflow: "truncate",
+            },
+        },
+        series: [
+            {
+                type: "bar",
+                data: porAsesor.map((item) => item.value),
+                barWidth: 18,
+                itemStyle: {
+                    borderRadius: [0, 6, 6, 0],
+                    color: BRAND_BLUE,
                 },
-                
-              series: [
-                    {
-                        type: "pie",
-                        radius: ["44%", "64%"],
-                        center: ["50%", "45%"],
-                        data: porEtapa, 
-                        label: {
-                            show: true,
-                            formatter: (params) =>
-                                `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
-                            fontSize: 10,
-                            fontWeight: "bold",
-                            lineHeight: 12,
-                        },
-                        labelLine: {
-                            show: true,
-                            length: 8,
-                            length2: 8,
-                        },
-                    },
-                ],
-            };
-
-            const opcionTipoToma = {
-                tooltip: { trigger: "item" },
-                legend: {
-                    bottom: 0,
-                    textStyle: { fontSize: 11 },
+                label: {
+                    show: true,
+                    position: "right",
+                    formatter: (params) =>
+                        `${params.value} (${porcentaje(params.value)}%)`,
+                    fontSize: 10,
+                    fontWeight: "bold",
+                    color: "#131E5C",
                 },
-               
-             series: [
-                {
-                    type: "pie",
-                    radius: ["44%", "64%"],
-                    center: ["50%", "45%"],
-                    data: porTipoToma,
-                    label: {
-                        show: true,
-                        formatter: (params) =>
-                            `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
-                        fontSize: 10,
-                        fontWeight: "bold",
-                        lineHeight: 12,
-                    },
-                    labelLine: {
-                        show: true,
-                        length: 8,
-                        length2: 8,
-                    },
-                },
-            ],
-            };
+            },
+        ],
+    };
 
-            const opcionFecha = {
-                tooltip: { trigger: "axis" },
-                grid: {
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: 40,
-                    containLabel: true,
-                },
-                xAxis: {
-                    type: "category",
-                    data: porFecha.map((item) => item.fecha),
-                    axisLabel: {
-                        rotate: 35,
-                        fontSize: 10,
-                    },
-                },
-                yAxis: {
-                    type: "value",
-                    minInterval: 1,
-                },
+    const opcionMarca = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 55,
+            top: 20,
+            bottom: 20,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+        yAxis: {
+            type: "category",
+            inverse: true,
+            data: porMarca.map((item) => item.name),
+        },
 
-                series: [
-                    {
-                        type: "line",
-                        smooth: true,
-                        data: porFecha.map((item) => item.value),
-                        symbolSize: 7,
-                        lineStyle: {
-                            width: 3,
-                        },
-                        areaStyle: {},
-                        label: {
-                            show: true,
-                            position: "top",
-                            formatter: "{c}",
-                            fontSize: 10,
-                            fontWeight: "bold",
-                            color: "#131E5C",
-                        },
-                    },
-                ],
-            };
+        series: [
+            {
+                type: "bar",
+                data: porMarca.map((item) => item.value),
+                barWidth: 18,
+                itemStyle: {
+                    borderRadius: [0, 6, 6, 0],
+                    color: BRAND_BLUE,
+                },
+                label: {
+                    show: true,
+                    position: "right",
+                    formatter: (params) =>
+                        `${params.value} (${porcentaje(params.value)}%)`,
+                    fontSize: 10,
+                    fontWeight: "bold",
+                    color: "#131E5C",
+                },
+            },
+        ],
 
-            return (
-                <>
+    };
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400">
-                    Total avalúos
-                </p>
-                <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
-                    {rows.length}
-                </p>
+    const opcionEtapa = {
+        tooltip: { trigger: "item" },
+        legend: {
+            bottom: 0,
+            textStyle: { fontSize: 11 },
+        },
+
+        series: [
+            {
+                type: "pie",
+                radius: ["44%", "64%"],
+                center: ["50%", "45%"],
+                data: porEtapa,
+                label: {
+                    show: true,
+                    formatter: (params) =>
+                        `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                    fontSize: 10,
+                    fontWeight: "bold",
+                    lineHeight: 12,
+                },
+                labelLine: {
+                    show: true,
+                    length: 8,
+                    length2: 8,
+                },
+            },
+        ],
+    };
+
+    const opcionTipoToma = {
+        tooltip: { trigger: "item" },
+        legend: {
+            bottom: 0,
+            textStyle: { fontSize: 11 },
+        },
+
+        series: [
+            {
+                type: "pie",
+                radius: ["44%", "64%"],
+                center: ["50%", "45%"],
+                data: porTipoToma,
+                label: {
+                    show: true,
+                    formatter: (params) =>
+                        `${params.name}\n${params.value} (${params.percent.toFixed(1)}%)`,
+                    fontSize: 10,
+                    fontWeight: "bold",
+                    lineHeight: 12,
+                },
+                labelLine: {
+                    show: true,
+                    length: 8,
+                    length2: 8,
+                },
+            },
+        ],
+    };
+
+    const opcionFecha = {
+        tooltip: { trigger: "axis" },
+        grid: {
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: 40,
+            containLabel: true,
+        },
+        xAxis: {
+            type: "category",
+            data: porFecha.map((item) => item.fecha),
+            axisLabel: {
+                rotate: 35,
+                fontSize: 10,
+            },
+        },
+        yAxis: {
+            type: "value",
+            minInterval: 1,
+        },
+
+        series: [
+            {
+                type: "line",
+                smooth: true,
+                data: porFecha.map((item) => item.value),
+                symbolSize: 7,
+                lineStyle: {
+                    width: 3,
+                },
+                areaStyle: {},
+                label: {
+                    show: true,
+                    position: "top",
+                    formatter: "{c}",
+                    fontSize: 10,
+                    fontWeight: "bold",
+                    color: "#131E5C",
+                },
+            },
+        ],
+    };
+
+    return (
+        <>
+
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Total avalúos
+                    </p>
+                    <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
+                        {rows.length}
+                    </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Dealer principal
+                    </p>
+                    <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                        {dealerPrincipal.name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                        {dealerPrincipal.value} avalúos · {porcentaje(dealerPrincipal.value)}%
+                    </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Marca principal
+                    </p>
+                    <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                        {marcaPrincipal.name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                        {marcaPrincipal.value} avalúos · {porcentaje(marcaPrincipal.value)}%
+                    </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-400">
+                        Etapa principal
+                    </p>
+                    <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
+                        {etapaPrincipal.name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                        {etapaPrincipal.value} avalúos · {porcentaje(etapaPrincipal.value)}%
+                    </p>
+                </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400">
-                    Dealer principal
-                </p>
-                <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
-                    {dealerPrincipal.name}
-                </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                    {dealerPrincipal.value} avalúos · {porcentaje(dealerPrincipal.value)}%
-                </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400">
-                    Marca principal
-                </p>
-                <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
-                    {marcaPrincipal.name}
-                </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                    {marcaPrincipal.value} avalúos · {porcentaje(marcaPrincipal.value)}%
-                </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400">
-                    Etapa principal
-                </p>
-                <p className="mt-1 truncate text-sm font-extrabold text-[#131E5C]">
-                    {etapaPrincipal.name}
-                </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                    {etapaPrincipal.value} avalúos · {porcentaje(etapaPrincipal.value)}%
-                </p>
-            </div>
-        </div>
-
-                    <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-2">
-                                <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                    Avalúos por dealer
-                                </h3>
-                                <p className="text-xs text-slate-400">
-                                    Distribución de avalúos registrados
-                                </p>
-                            </div>
-
-                            <ReactECharts option={opcionDealer} style={{ height: 260 }} notMerge />
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-2">
-                                <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                    Avalúos por asesor
-                                </h3>
-                                <p className="text-xs text-slate-400">
-                                    Top 10 asesores con más avalúos
-                                </p>
-                            </div>
-
-                            <ReactECharts option={opcionAsesor} style={{ height: 260 }} notMerge />
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-2">
-                                <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                    Avalúos por marca
-                                </h3>
-                                <p className="text-xs text-slate-400">
-                                    Marcas con mayor número de avalúos
-                                </p>
-                            </div>
-
-                            <ReactECharts option={opcionMarca} style={{ height: 260 }} notMerge />
-                        </div>
+            <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Avalúos por dealer
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Distribución de avalúos registrados
+                        </p>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-2">
-                                <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                    Etapa del proceso
-                                </h3>
-                                <p className="text-xs text-slate-400">
-                                    Distribución actual de los avalúos
-                                </p>
-                            </div>
+                    <ReactECharts option={opcionDealer} style={{ height: 260 }} notMerge />
+                </div>
 
-                            <ReactECharts option={opcionEtapa} style={{ height: 280 }} notMerge />
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-2">
-                                <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                    Tipo de toma
-                                </h3>
-                                <p className="text-xs text-slate-400">
-                                    Distribución por origen de toma
-                                </p>
-                            </div>
-
-                            <ReactECharts option={opcionTipoToma} style={{ height: 280 }} notMerge />
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-2">
-                                <h3 className="text-sm font-extrabold text-[#131E5C]">
-                                    Avalúos por fecha
-                                </h3>
-                                <p className="text-xs text-slate-400">
-                                    Evolución de avalúos registrados
-                                </p>
-                            </div>
-
-                            <ReactECharts option={opcionFecha} style={{ height: 280 }} notMerge />
-                        </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Avalúos por asesor
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Top 10 asesores con más avalúos
+                        </p>
                     </div>
-                </>
-            );
-        }
+
+                    <ReactECharts option={opcionAsesor} style={{ height: 260 }} notMerge />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Avalúos por marca
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Marcas con mayor número de avalúos
+                        </p>
+                    </div>
+
+                    <ReactECharts option={opcionMarca} style={{ height: 260 }} notMerge />
+                </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Etapa del proceso
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Distribución actual de los avalúos
+                        </p>
+                    </div>
+
+                    <ReactECharts option={opcionEtapa} style={{ height: 280 }} notMerge />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Tipo de toma
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Distribución por origen de toma
+                        </p>
+                    </div>
+
+                    <ReactECharts option={opcionTipoToma} style={{ height: 280 }} notMerge />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">
+                            Avalúos por fecha
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Evolución de avalúos registrados
+                        </p>
+                    </div>
+
+                    <ReactECharts option={opcionFecha} style={{ height: 280 }} notMerge />
+                </div>
+            </div>
+        </>
+    );
+}
 
 export default function RegistroAvaluos() {
     const { user } = useAuth();
@@ -1161,71 +1161,78 @@ export default function RegistroAvaluos() {
     );
 
     const ASESORES = [
+        "ADRIAN GALVEZ ROLDAN",
         "AURA MARLIZETH FERNANDEZ LOPEZ",
         "Bianca Isabel Chavez Alarcon",
-        "ERENDIRA SANTOS COYOTZI",
-        "IRENE DEL CARMEN GUIZA LOPEZ",
-        "MARCOS RAUL DIAZ RAMOS",
-        "MARIO ALBERTO LOPEZ RAMOS",
-        "MARISOL LAGUNES GONZALEZ",
-        "NALLELY HERNANDEZ GARCIA",
-        "OCTAVIO BRUNO GONZALEZ",
-        "ROGELIO VAZQUEZ SANCHEZ",
-        "RUBEN ALBERTO TOSQUY ADRIANO",
-        "Saja Azzam Mohammad Jamous",
-        "SANDRA LUZ PRIETO PEREZ",
-        "YAMIL MISAEL RODRIGUEZ AGUILAR",
-        "LUIS ALFONSO CORIA MARROQUIN",
+        "Blanca Patricia Hernandez Hernandez",
         "CANDY DENISSE MARQUEZ CORTES",
-        "DELMAR JAVIER ILLESCAS DOMINGUEZ",
-        "EDGAR JESUS GOMEZ PEREZ",
-        "Valeria Zilli Durante",
-        "IDALMY JIMENEZ SANCHEZ",
-        "IVAN JUAREZ ORTEGA",
-        "JESSICA OLIVARES CAMPOS",
-        "JESUS XITLAMA GOMEZ",
-        "LIZBETH CANO CLARA",
-        "LUIS MANUEL PALOMARES OLAYO",
-        "MARIA DEL CARMEN ZAVALA VELAZQUEZ",
-        "OMAR VILLIERS MONDRAGON",
-        "RUBEN ROMERO VALDES",
-        "VERONICA CASTILLO FUENTES",
-        "Hector Rodriguez",
-        "GEOVANI NAVA DIAZ",
-        "ZEILA NAVARRO CONTRERAS",
-        "JOSE ALFREDO BARRANCA REYES",
-        "ADRIAN GALVEZ ROLDAN",
-        "MARIA DE GUADALUPE VANVOLLENHOVEN DIAZ",
-        "Marelly Tenorio Salinas",
-        "ELIA INES ARANO REYES",
-        "JORGE LUIS ALAMILLO RODRIGUEZ",
+        "Carlos Arturo Garces Venegas",
         "Cesar Ivan Salazar Reyes",
         "Cristian Fernando Rivera Godinez",
+        "David Uriel García Navarro",
+        "DELMAR JAVIER ILLESCAS DOMINGUEZ",
         "DULCE ABIGAIL GARCIA OLIVARES",
+        "EDGAR JESUS GOMEZ PEREZ",
+        "Edgar Omar Noguera Solis",
+        "ELIA INES ARANO REYES",
+        "ERENDIRA SANTOS COYOTZI",
+        "Estefano Marlom De Azcue Aparicio",
         "Felix Emmanuel Solis Angeles",
+        "GEOVANI NAVA DIAZ",
         "GERMAN JARITH SALAZAR MIRANDA",
+        "Gustavo Chontal Romero",
+        "Hector Rodriguez",
+        "IDALMY JIMENEZ SANCHEZ",
+        "IRENE DEL CARMEN GUIZA LOPEZ",
         "Iris Yazmín Gómez Velázquez",
         "Israel Garcia Juarez",
-        "JORGE ANTONIO RODRIGUEZ MARTINEZ",
-        "JOSE DE JESUS GARCIA ROMAN",
-        "JUAN MANUEL SOBREVILLA VICENCIO",
-        "Miguel Capitanachi Paredes",
-        "OLIMPIA VAZQUEZ MENDEZ",
-        "Roberto Ramses Luna Fajardo",
-        "Carlos Arturo Garces Vengas",
-        "Edgar Omar Noguera Solis",
+        "IVAN JUAREZ ORTEGA",
         "Javier Perez Meraz",
+        "JESSICA OLIVARES CAMPOS",
+        "JESUS XITLAMA GOMEZ",
+        "JORGE ANTONIO RODRIGUEZ MARTINEZ",
+        "JORGE LUIS ALAMILLO RODRIGUEZ",
+        "JOSE ALBERTO SEDAS FLORES",
+        "JOSE ALFREDO BARRANCA REYES",
+        "JOSE DE JESUS GARCIA ROMAN",
+        "JUAN JESUS MARQUEZ AQUINO",
+        "JUAN MANUEL SOBREVILLA VICENCIO",
+        "Julio Ramirez Lopez",
+        "LIZBETH CANO CLARA",
+        "Luis Alberto Ramirez Santamaria",
+        "LUIS ALFONSO CORIA MARROQUIN",
         "Luis Armando Almora Perez",
+        "Luis Manuel Alvarez Martinez",
+        "Luis Manuel Hernandez Espejo",
+        "LUIS MANUEL PALOMARES OLAYO",
         "Mara Erubey Soto Villegas",
+        "MARCOS RAUL DIAZ RAMOS",
+        "Marelly Tenorio Salinas",
+        "MARIA DE GUADALUPE VANVOLLENHOVEN DIAZ",
+        "MARIA DEL CARMEN ZAVALA VELAZQUEZ",
+        "Maria Monserrath Zarate Gamboa",
+        "MARIO ALBERTO LOPEZ RAMOS",
+        "MARISOL LAGUNES GONZALEZ",
+        "Miguel Capitanachi Paredes",
+        "NALLELY HERNANDEZ GARCIA",
+        "OCTAVIO BRUNO GONZALEZ",
+        "OLIMPIA VAZQUEZ MENDEZ",
+        "OMAR VILLIERS MONDRAGON",
+        "Paul Serrano Vera",
+        "Roberto Ramses Luna Fajardo",
+        "ROGELIO VAZQUEZ SANCHEZ",
+        "RUBEN ALBERTO TOSQUY ADRIANO",
+        "RUBEN ROMERO VALDES",
+        "Saja Azzam Mohammad Jamous",
+        "SANDRA LUZ PRIETO PEREZ",
         "Sergio Ivan Quintana Martinez",
         "Sergio Rene Delgado Sarmiento",
+        "Valeria Zilli Durante",
+        "VANESSA JIMENEZ MEDINA",
+        "VERONICA CASTILLO FUENTES",
+        "YAMIL MISAEL RODRIGUEZ AGUILAR",
         "Yoseth Ruiz Castellanos",
-        "Estefano Marlom De Azcue Aparicio",
-        "Paul Serrano",
-        "Nicolas Martinez",
-        "Luis Alberto Ramirez Santamaria",
-        "Paul Serrano Vera",
-        "Luis Manuel Alvarez Martinez"
+        "ZEILA NAVARRO CONTRERAS",
     ];
 
     const ETAPAS_PROCESO = [
@@ -1827,7 +1834,7 @@ export default function RegistroAvaluos() {
             rangoHasta: "",
         });
     };
-//----------
+    //----------
 
     const setHoy = () => {
         const hoy = toYMDLocal(new Date());
@@ -2014,7 +2021,7 @@ export default function RegistroAvaluos() {
                     </div>
 
                     <div className="md:col-span-6">
-                       <FilterBlock label="Acciones">
+                        <FilterBlock label="Acciones">
                             <div className="flex flex-nowrap items-center gap-2">
                                 <button
                                     onClick={setHoy}
@@ -2105,260 +2112,260 @@ export default function RegistroAvaluos() {
                 </div>
             </div>
 
-                {viewMode === "graficas" ? (
-                    <GraficasAvaluos rows={sorted} />
-                ) : null}
+            {viewMode === "graficas" ? (
+                <GraficasAvaluos rows={sorted} />
+            ) : null}
 
-                {viewMode === "tabla" ? (
-                    <>
+            {viewMode === "tabla" ? (
+                <>
 
 
-            <MobileCardList
-                rows={sorted}
-                loading={loadingList}
-                onEdit={openEdit}
-                onContext={onRowContextMenu}
-            />
-
-            <div className="hidden overflow-hidden rounded-lg bg-white/[0.03] shadow-lg lg:block">
-                <div className="overflow-auto">
-                    <table className="min-w-full text-left text-sm">
-                        <thead className="font-vw-header border border-black bg-[#131E5C] text-xs text-white">
-                            <tr>
-                                <th className="whitespace-nowrap px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("fecha_avaluo")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Fecha de Avalúo
-                                        <span className="opacity-60">
-                                            {sort.key === "fecha_avaluo" ? (
-                                                sort.dir === "asc" ? (
-                                                    <ChevronUp className="h-4" />
-                                                ) : (
-                                                    <ChevronDown className="h-4" />
-                                                )
-                                            ) : (
-                                                <ArrowUpDown className="h-4" />
-                                            )}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Dealer
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Asesor Ventas
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Cliente
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Marca de Auto
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Modelo
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("anio_modelo")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Año Modelo
-                                        <span className="opacity-60">
-                                            {sort.key === "anio_modelo" ? (
-                                                sort.dir === "asc" ? (
-                                                    <ChevronUp className="h-4" />
-                                                ) : (
-                                                    <ChevronDown className="h-4" />
-                                                )
-                                            ) : (
-                                                <ArrowUpDown className="h-4" />
-                                            )}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Serie
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSort("kilometraje")}
-                                        className="inline-flex items-center gap-1 text-xs font-bold"
-                                    >
-                                        Kilometraje
-                                        <span className="opacity-60">
-                                            {sort.key === "kilometraje" ? (
-                                                sort.dir === "asc" ? (
-                                                    <ChevronUp className="h-4" />
-                                                ) : (
-                                                    <ChevronDown className="h-4" />
-                                                )
-                                            ) : (
-                                                <ArrowUpDown className="h-4" />
-                                            )}
-                                        </span>
-                                    </button>
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Precio Guía
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Costo Reparación
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Costo Estimado
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Oferta Económica
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Color
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Ganador Subasta
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Etapa del Proceso
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Evidencias
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Descripción
-                                </th>
-
-                                <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
-                                    Comentarios
-                                </th>
-                            </tr>
-                        </thead>
-
-                        <tbody className="divide-y divide-black/30">
-                            {loadingList ? (
-                                <>
-                                    {Array.from({ length: 8 }).map((_, i) => (
-                                        <SkeletonRow key={i} />
-                                    ))}
-                                </>
-                            ) : (
-                                <>
-                                    {sorted.map((row) => (
-                                        <tr
-                                            key={row.id}
-                                            onDoubleClick={() => openEdit(row)}
-                                            onContextMenu={(e) => onRowContextMenu(e, row)}
-                                            className="cursor-pointer hover:bg-white/[0.04]"
-                                            title="Doble clic para editar"
-                                        >
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.fecha_avaluo
-                                                    ? toDTLocal(row.fecha_avaluo).replace("T", " ")
-                                                    : "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 font-semibold text-[#131E5C]">
-                                                {row.agencia || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.asesor_ventas || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row?.cliente?.nombre || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.marca_auto || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.modelo || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.anio_modelo || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.serie || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.kilometraje || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.precio_guia || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.costo_reparacion || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.costo_estimado || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.oferta_economica || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.color || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.ganador_subasta || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {row.etapa_proceso || "—"}
-                                            </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
-                                                {Array.isArray(row?.evidencias)
-                                                    ? row.evidencias.length
-                                                    : 0}
-                                            </td>
-                                            <td className="min-w-[240px] px-4 py-3 text-[#131E5C]">
-                                                <span className="line-clamp-2">
-                                                    {row.descripcion || "—"}
-                                                </span>
-                                            </td>
-                                            <td className="min-w-[240px] px-4 py-3 text-[#131E5C]">
-                                                <span className="line-clamp-2">
-                                                    {row.comentarios || "—"}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-
-                                    {sorted.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={18} className="px-4 py-10 text-center text-[#131E5C]">
-                                                No hay resultados con esos filtros.
-                                            </td>
-                                        </tr>
-                                    ) : null}
-                                </>
-                            )}
-                        </tbody>
-                    </table>
-
-                    <ContextMenu
-                        ctxMenu={ctxMenu}
-                        onDelete={async (row) => {
-                            await eliminarAvaluo(row);
-                            setCtxMenu({ open: false, x: 0, y: 0, row: null });
-                        }}
-                        onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })}
+                    <MobileCardList
+                        rows={sorted}
+                        loading={loadingList}
+                        onEdit={openEdit}
+                        onContext={onRowContextMenu}
                     />
-                </div>
-            </div>
 
-            </>
+                    <div className="hidden overflow-hidden rounded-lg bg-white/[0.03] shadow-lg lg:block">
+                        <div className="overflow-auto">
+                            <table className="min-w-full text-left text-sm">
+                                <thead className="font-vw-header border border-black bg-[#131E5C] text-xs text-white">
+                                    <tr>
+                                        <th className="whitespace-nowrap px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort("fecha_avaluo")}
+                                                className="inline-flex items-center gap-1 text-xs font-bold"
+                                            >
+                                                Fecha de Avalúo
+                                                <span className="opacity-60">
+                                                    {sort.key === "fecha_avaluo" ? (
+                                                        sort.dir === "asc" ? (
+                                                            <ChevronUp className="h-4" />
+                                                        ) : (
+                                                            <ChevronDown className="h-4" />
+                                                        )
+                                                    ) : (
+                                                        <ArrowUpDown className="h-4" />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Dealer
+                                        </th>
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Asesor Ventas
+                                        </th>
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Cliente
+                                        </th>
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Marca de Auto
+                                        </th>
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Modelo
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort("anio_modelo")}
+                                                className="inline-flex items-center gap-1 text-xs font-bold"
+                                            >
+                                                Año Modelo
+                                                <span className="opacity-60">
+                                                    {sort.key === "anio_modelo" ? (
+                                                        sort.dir === "asc" ? (
+                                                            <ChevronUp className="h-4" />
+                                                        ) : (
+                                                            <ChevronDown className="h-4" />
+                                                        )
+                                                    ) : (
+                                                        <ArrowUpDown className="h-4" />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Serie
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort("kilometraje")}
+                                                className="inline-flex items-center gap-1 text-xs font-bold"
+                                            >
+                                                Kilometraje
+                                                <span className="opacity-60">
+                                                    {sort.key === "kilometraje" ? (
+                                                        sort.dir === "asc" ? (
+                                                            <ChevronUp className="h-4" />
+                                                        ) : (
+                                                            <ChevronDown className="h-4" />
+                                                        )
+                                                    ) : (
+                                                        <ArrowUpDown className="h-4" />
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Precio Guía
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Costo Reparación
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Costo Estimado
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Oferta Económica
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Color
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Ganador Subasta
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Etapa del Proceso
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Evidencias
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Descripción
+                                        </th>
+
+                                        <th className="whitespace-nowrap px-4 py-3 text-xs font-bold">
+                                            Comentarios
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <tbody className="divide-y divide-black/30">
+                                    {loadingList ? (
+                                        <>
+                                            {Array.from({ length: 8 }).map((_, i) => (
+                                                <SkeletonRow key={i} />
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {sorted.map((row) => (
+                                                <tr
+                                                    key={row.id}
+                                                    onDoubleClick={() => openEdit(row)}
+                                                    onContextMenu={(e) => onRowContextMenu(e, row)}
+                                                    className="cursor-pointer hover:bg-white/[0.04]"
+                                                    title="Doble clic para editar"
+                                                >
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.fecha_avaluo
+                                                            ? toDTLocal(row.fecha_avaluo).replace("T", " ")
+                                                            : "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 font-semibold text-[#131E5C]">
+                                                        {row.agencia || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.asesor_ventas || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row?.cliente?.nombre || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.marca_auto || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.modelo || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.anio_modelo || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.serie || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.kilometraje || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.precio_guia || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.costo_reparacion || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.costo_estimado || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.oferta_economica || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.color || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.ganador_subasta || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {row.etapa_proceso || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#131E5C]">
+                                                        {Array.isArray(row?.evidencias)
+                                                            ? row.evidencias.length
+                                                            : 0}
+                                                    </td>
+                                                    <td className="min-w-[240px] px-4 py-3 text-[#131E5C]">
+                                                        <span className="line-clamp-2">
+                                                            {row.descripcion || "—"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="min-w-[240px] px-4 py-3 text-[#131E5C]">
+                                                        <span className="line-clamp-2">
+                                                            {row.comentarios || "—"}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+
+                                            {sorted.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={18} className="px-4 py-10 text-center text-[#131E5C]">
+                                                        No hay resultados con esos filtros.
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+                                        </>
+                                    )}
+                                </tbody>
+                            </table>
+
+                            <ContextMenu
+                                ctxMenu={ctxMenu}
+                                onDelete={async (row) => {
+                                    await eliminarAvaluo(row);
+                                    setCtxMenu({ open: false, x: 0, y: 0, row: null });
+                                }}
+                                onClose={() => setCtxMenu({ open: false, x: 0, y: 0, row: null })}
+                            />
+                        </div>
+                    </div>
+
+                </>
             ) : null}
 
             <Modal

@@ -7,7 +7,7 @@ export default function ComercialIndex() {
     const { hasAnyPermission } = useAuth();
 
     useEffect(() => {
-        if (hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL"])) {
+        if (hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITAL"])) {
             navigate("/comercial/prospectos", { replace: true });
             return;
         }
