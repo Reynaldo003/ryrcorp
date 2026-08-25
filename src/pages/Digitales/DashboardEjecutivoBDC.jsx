@@ -40,51 +40,76 @@ function onlyDate(value) {
     return "";
 }
 
+function dateToInt(value) {
+    const ymd = onlyDate(value);
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+    return Number(ymd.replaceAll("-", ""));
+}
+
+function isDateInRange(dateStr, desde, hasta) {
+    const int = dateToInt(dateStr);
+    if (int === null) return false;
+    if (desde) {
+        const desdeInt = dateToInt(desde);
+        if (desdeInt !== null && int < desdeInt) return false;
+    }
+    if (hasta) {
+        const hastaInt = dateToInt(hasta);
+        if (hastaInt !== null && int > hastaInt) return false;
+    }
+    return true;
+}
+
+function formatDateYMDLocal(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+
 function widthClass(value) {
     const clamped = Math.max(0, Math.min(100, value));
     if (clamped === 0) return "w-0";
     return `w-[${clamped.toFixed(1)}%]`;
 }
 
-const BDC_MES_INICIO = "2026-01";
-const BDC_FECHA_INICIO_MS = new Date("2026-01-01T00:00:00").getTime();
-
-function esMesValidoBDC(value) {
-    const match = String(value || "").match(/^(\d{4})-(\d{2})$/);
-    if (!match) return false;
-    const month = Number(match[2]);
-    if (month < 1 || month > 12) return false;
-    return String(value) >= BDC_MES_INICIO;
+function formatRangoFechas(desde, hasta) {
+    if (!desde && !hasta) return "Sin filtro de fechas";
+    const opciones = { day: "2-digit", month: "short", year: "numeric" };
+    const fmt = (v) => new Intl.DateTimeFormat("es-MX", opciones).format(new Date(`${v}T00:00:00`));
+    if (desde && hasta) return `${fmt(desde)} – ${fmt(hasta)}`;
+    if (desde) return `Desde ${fmt(desde)}`;
+    return `Hasta ${fmt(hasta)}`;
 }
 
-function getMesFechaBDC(value) {
-    if (!value) return "";
-    const raw = String(value).trim();
-    if (!raw) return "";
-    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!match) return "";
+function getRangoMes(yyyyMm) {
+    const match = String(yyyyMm || "").match(/^(\d{4})-(\d{2})$/);
+    if (!match) return null;
     const anio = Number(match[1]);
     const mes = Number(match[2]);
-    const dia = Number(match[3]);
-    if (!Number.isInteger(anio) || !Number.isInteger(mes) || !Number.isInteger(dia) || anio < 2026 || mes < 1 || mes > 12 || dia < 1 || dia > 31) return "";
-    return `${match[1]}-${match[2]}`;
+    if (mes < 1 || mes > 12) return null;
+    const inicio = `${match[1]}-${match[2]}-01`;
+    const ultimoDia = new Date(anio, mes, 0).getDate();
+    const fin = `${match[1]}-${match[2]}-${String(ultimoDia).padStart(2, "0")}`;
+    return { inicio, fin };
 }
 
-function getMesBDC(row) {
-    const candidatos = [row?.fecha_reclamacion, row?.creado, row?.primer_contacto_at, row?.fecha_contacto, row?.ultimo_contacto_at];
-    for (const value of candidatos) {
-        const mes = getMesFechaBDC(value);
-        if (mes) return mes;
-    }
-    return "";
-}
-
-function formatMesBDC(value) {
-    if (!esMesValidoBDC(value)) return "";
-    const match = String(value).match(/^(\d{4})-(\d{2})$/);
+function formatMesLargo(yyyyMm) {
+    const match = String(yyyyMm || "").match(/^(\d{4})-(\d{2})$/);
+    if (!match) return yyyyMm;
     const fecha = new Date(Number(match[1]), Number(match[2]) - 1, 1);
     const label = new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" }).format(fecha);
     return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getMesesDisponibles() {
+    const mesesBase = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"];
+    const ahora = new Date();
+    const mesActual = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`;
+    const mesSiguiente = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
+    const mesSiguienteStr = `${mesSiguiente.getFullYear()}-${String(mesSiguiente.getMonth() + 1).padStart(2, "0")}`;
+    const unicos = new Set([...mesesBase, mesActual, mesSiguienteStr]);
+    return Array.from(unicos).sort();
 }
 
 function esGestionableBDC(row) {
@@ -156,20 +181,17 @@ function getTelefonoApiBDC(item) {
     return normalizaTelefonoMx(item?.cliente?.telefono || item?.telefono || item?.cliente_telefono || "");
 }
 
-function getTimestampSeguroBDC(value) {
-    if (!value) return 0;
-    const fecha = new Date(value);
-    if (!Number.isNaN(fecha.getTime()) && fecha.getTime() >= BDC_FECHA_INICIO_MS) return fecha.getTime();
+function parseDateToTimestamp(value) {
     const ymd = onlyDate(value);
     if (!ymd) return 0;
-    const fallback = new Date(`${ymd}T00:00:00`).getTime();
-    return Number.isNaN(fallback) || fallback < BDC_FECHA_INICIO_MS ? 0 : fallback;
+    const ts = new Date(`${ymd}T00:00:00`).getTime();
+    return Number.isNaN(ts) ? 0 : ts;
 }
 
 function getProspectoTimestampBDC(row) {
     for (const value of [row?.creado, row?.fecha_reclamacion, row?.primer_contacto_at, row?.fecha_contacto, row?.ultimo_contacto_at]) {
-        const timestamp = getTimestampSeguroBDC(value);
-        if (timestamp) return timestamp;
+        const ts = parseDateToTimestamp(value);
+        if (ts) return ts;
     }
     return 0;
 }
@@ -191,11 +213,11 @@ function getProspectoRelacionadoBDC(index, telefono, fechaReferencia = "") {
     if (!/^52\d{10}$/.test(tel)) return null;
     const lista = index.get(tel) || [];
     if (!lista.length) return null;
-    const referencia = getTimestampSeguroBDC(fechaReferencia);
-    if (!referencia) return lista[lista.length - 1];
+    const referenciaTs = parseDateToTimestamp(fechaReferencia);
+    if (!referenciaTs) return lista[lista.length - 1];
     for (let i = lista.length - 1; i >= 0; i -= 1) {
         const ts = getProspectoTimestampBDC(lista[i]);
-        if (ts && ts <= referencia) return lista[i];
+        if (ts && ts <= referenciaTs) return lista[i];
     }
     return null;
 }
@@ -297,7 +319,16 @@ export default function DashboardEjecutivoBDC({
         return accesoTotal ? lista : lista.filter((row) => asesorPuedeMonitorearseBDC(row?.asesor_digital));
     }, [rowsOriginales, accesoTotal, asesorPuedeMonitorearseBDC]);
 
-    const [mes, setMes] = useState(() => formatDateYMDLocal(new Date()).slice(0, 7));
+    const mesActualYyyyMm = useMemo(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }, []);
+
+    const mesesDisponibles = useMemo(() => getMesesDisponibles(), []);
+
+    const [mes, setMes] = useState(mesActualYyyyMm);
+    const [fechaInicio, setFechaInicio] = useState("");
+    const [fechaFin, setFechaFin] = useState("");
     const [asesor, setAsesor] = useState("Todos");
     const [agencia, setAgencia] = useState("Todos");
     const [linea, setLinea] = useState("Todos");
@@ -307,13 +338,81 @@ export default function DashboardEjecutivoBDC({
     const [loadingOperativoBDC, setLoadingOperativoBDC] = useState(true);
     const [errorOperativoBDC, setErrorOperativoBDC] = useState("");
 
+    const rangoActivo = useMemo(() => {
+        if (fechaInicio || fechaFin) return { inicio: fechaInicio || null, fin: fechaFin || null };
+        const rango = getRangoMes(mes);
+        if (rango) return { inicio: rango.inicio, fin: rango.fin };
+        return { inicio: null, fin: null };
+    }, [mes, fechaInicio, fechaFin]);
+
+    const cambioMes = useCallback((nuevoMes) => {
+        setMes(nuevoMes);
+        setFechaInicio("");
+        setFechaFin("");
+    }, []);
+
+    const cambioFechaCustom = useCallback((campo, valor) => {
+        if (campo === "inicio") setFechaInicio(valor);
+        else setFechaFin(valor);
+        setMes("");
+    }, []);
+
+    const hoy = useMemo(() => formatDateYMDLocal(new Date()), []);
+
+    const setRango7Dias = useCallback(() => {
+        const now = new Date();
+        const desde = new Date(now);
+        desde.setDate(desde.getDate() - 6);
+        setFechaInicio(formatDateYMDLocal(desde));
+        setFechaFin(formatDateYMDLocal(now));
+        setMes("");
+    }, []);
+
+    const setRango30Dias = useCallback(() => {
+        const now = new Date();
+        const desde = new Date(now);
+        desde.setDate(desde.getDate() - 29);
+        setFechaInicio(formatDateYMDLocal(desde));
+        setFechaFin(formatDateYMDLocal(now));
+        setMes("");
+    }, []);
+
+    const is7DiasActivo = useMemo(() => {
+        if (!fechaInicio || !fechaFin || mes) return false;
+        const now = new Date();
+        const desde = new Date(now);
+        desde.setDate(desde.getDate() - 6);
+        return fechaInicio === formatDateYMDLocal(desde) && fechaFin === hoy;
+    }, [fechaInicio, fechaFin, mes, hoy]);
+
+    const is30DiasActivo = useMemo(() => {
+        if (!fechaInicio || !fechaFin || mes) return false;
+        const now = new Date();
+        const desde = new Date(now);
+        desde.setDate(desde.getDate() - 29);
+        return fechaInicio === formatDateYMDLocal(desde) && fechaFin === hoy;
+    }, [fechaInicio, fechaFin, mes, hoy]);
+
+    const limpiarFiltros = useCallback(() => {
+        setMes(mesActualYyyyMm);
+        setFechaInicio("");
+        setFechaFin("");
+        setAsesor("Todos");
+        setAgencia("Todos");
+        setLinea("Todos");
+        setOrigen("Todos");
+    }, [mesActualYyyyMm]);
+
     useEffect(() => {
         let cancelado = false;
         async function cargarCitas() {
             setLoadingOperativoBDC(true);
             setErrorOperativoBDC("");
             try {
-                const data = await apiCitas.list({ mes, solo_digital: 1 });
+                const params = { solo_digital: 1 };
+                if (rangoActivo.inicio) params.fecha_inicio = rangoActivo.inicio;
+                if (rangoActivo.fin) params.fecha_fin = rangoActivo.fin;
+                const data = await apiCitas.list(params);
                 if (!cancelado) setCitasBDC(dedupeCitasBDC(getListItems(data)));
             } catch (error) {
                 console.error("Error cargando citas BDC:", error);
@@ -327,29 +426,18 @@ export default function DashboardEjecutivoBDC({
         }
         cargarCitas();
         return () => { cancelado = true; };
-    }, [mes, versionOperativa]);
+    }, [rangoActivo, versionOperativa]);
 
     const prospectosPorTelefono = useMemo(() => buildProspectosPorTelefonoBDC(rows), [rows]);
-    const dealersPermitidos = useMemo(() => new Set(rows.map(getDealerBDC).filter(Boolean)), [rows]);
 
     const citasDigitalesBase = useMemo(() => dedupeCitasBDC(
         (citasBDC || []).filter((cita) => {
-            if (!getMesFechaBDC(cita?.fecha_hora_cita)) return false;
+            if (!onlyDate(cita?.creado_en)) return false;
             const asesorCita = getAsesorCitaBDC(cita);
             if (!asesorCita) return false;
             return asesorPuedeMonitorearseBDC(asesorCita);
         })
     ), [citasBDC, asesorPuedeMonitorearseBDC]);
-
-    const meses = useMemo(() => {
-        const values = Array.from(new Set([
-            ...rows.map(getMesBDC),
-            ...rows.map((row) => getMesFechaBDC(row?.facturado_at)),
-            ...citasDigitalesBase.map((cita) => getMesFechaBDC(cita?.fecha_hora_cita)),
-        ].filter(esMesValidoBDC))).sort((a, b) => b.localeCompare(a));
-        if (esMesValidoBDC(mes) && !values.includes(mes)) values.unshift(mes);
-        return values;
-    }, [rows, citasDigitalesBase, mes]);
 
     const asesores = useMemo(() => {
         const values = Array.from(new Set([
@@ -368,25 +456,26 @@ export default function DashboardEjecutivoBDC({
     const origenes = useMemo(() => ["Todos", ...Array.from(new Set(rows.map((row) => String(row?.origen || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es"))], [rows]);
 
     const filteredRows = useMemo(() => rows.filter((row) => {
-        const mesRegistro = getMesBDC(row);
-        if (!mesRegistro || mesRegistro !== mes) return false;
+        if (!isDateInRange(row?.creado, rangoActivo.inicio, rangoActivo.fin)) return false;
         if (!esAsesorDigitalValidoBDC(row?.asesor_digital)) return false;
         if (asesor !== "Todos" && canonicalAsesorDigitalBDC(row?.asesor_digital) !== canonicalAsesorDigitalBDC(asesor)) return false;
         if (agencia !== "Todos" && getDealerBDC(row) !== agencia) return false;
         if (!lineaMatchesBDC(row, linea)) return false;
         if (origen !== "Todos" && normalizeText(row?.origen) !== normalizeText(origen)) return false;
         return true;
-    }), [rows, mes, asesor, agencia, linea, origen]);
+    }), [rows, rangoActivo, asesor, agencia, linea, origen]);
+
+    const telefonosProspectosPeriodo = useMemo(() => setTelefonosBDC(filteredRows, (row) => row?.telefono), [filteredRows]);
 
     const citasFiltradas = useMemo(() => dedupeCitasBDC(
         citasDigitalesBase.filter((cita) => {
-            if (getMesFechaBDC(cita?.fecha_hora_cita) !== mes) return false;
             const asesorCita = getAsesorCitaBDC(cita);
             if (!asesorCita) return false;
             if (asesor !== "Todos" && asesorCita !== canonicalAsesorDigitalBDC(asesor)) return false;
             const prospecto = getProspectoCitaBDC(cita, prospectosPorTelefono);
             const dealerCita = normalizeDealerGrupo(cita?.agencia || prospecto?.agencia || "");
             if (agencia !== "Todos" && dealerCita !== agencia) return false;
+            if (!telefonosProspectosPeriodo.has(getTelefonoApiBDC(cita))) return false;
             if (linea !== "Todos") {
                 const tipoUnidad = getTipoUnidadCitaBDC(cita, prospecto);
                 if (!tipoUnidadMatchesBDC(tipoUnidad, linea)) return false;
@@ -397,22 +486,23 @@ export default function DashboardEjecutivoBDC({
             }
             return true;
         })
-    ), [citasDigitalesBase, mes, asesor, agencia, linea, origen, prospectosPorTelefono]);
+    ), [citasDigitalesBase, asesor, agencia, linea, origen, prospectosPorTelefono, telefonosProspectosPeriodo]);
 
     const facturadosFiltrados = useMemo(() => {
         const unicos = new Map();
         for (const row of rows || []) {
-            if (getMesFechaBDC(row?.facturado_at) !== mes) continue;
+            if (!isDateInRange(row?.facturado_at, rangoActivo.inicio, rangoActivo.fin)) continue;
             if (!esAsesorDigitalValidoBDC(row?.asesor_digital)) continue;
             if (asesor !== "Todos" && canonicalAsesorDigitalBDC(row?.asesor_digital) !== canonicalAsesorDigitalBDC(asesor)) continue;
             if (agencia !== "Todos" && getDealerBDC(row) !== agencia) continue;
             if (!lineaMatchesBDC(row, linea)) continue;
             if (origen !== "Todos" && normalizeText(row?.origen) !== normalizeText(origen)) continue;
+            if (!telefonosProspectosPeriodo.has(normalizaTelefonoMx(row?.telefono || ""))) continue;
             const key = row?.id_exp ?? `${normalizaTelefonoMx(row?.telefono)}|${row?.facturado_at}`;
             unicos.set(key, row);
         }
         return Array.from(unicos.values());
-    }, [rows, mes, asesor, agencia, linea, origen]);
+    }, [rows, rangoActivo, asesor, agencia, linea, origen, telefonosProspectosPeriodo]);
 
     const metricas = useMemo(() => {
         const oportunidades = filteredRows.length;
@@ -546,18 +636,73 @@ export default function DashboardEjecutivoBDC({
 
     return <div className="overflow-hidden">
         <div className="px-5 pt-5">
-            <div className="mt-3 grid gap-3 xl:grid-cols-[150px_minmax(0,1fr)] xl:items-end">
-                <div><div className="text-[22px] font-black leading-[0.9] text-slate-950">Ventas Digitales</div><div className="mt-1 text-[12px] font-bold text-blue-500">Resumen de resultados BDC</div></div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                    <Control value={mes} onChange={setMes} ariaLabel="Mes">{meses.length ? meses.map((item) => <option key={item} value={item}>{formatMesBDC(item)}</option>) : <option value={mes}>{formatMesBDC(mes)}</option>}</Control>
-                    <Control value={asesor} onChange={setAsesor} ariaLabel="Asesora digital">{asesores.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todas las asesoras" : item}</option>)}</Control>
-                    <Control value={agencia} onChange={setAgencia} ariaLabel="Agencia">{agencias.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todas las agencias" : item}</option>)}</Control>
-                    <Control value={linea} onChange={setLinea} ariaLabel="Business">{["Todos", "Nuevos + Seminuevos", "Nuevos", "Seminuevos", "Comerciales"].map((item) => <option key={item} value={item}>{item}</option>)}</Control>
-                    <Control value={origen} onChange={setOrigen} ariaLabel="Origen">{origenes.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todos los orígenes" : item}</option>)}</Control>
+            <div className="mt-3">
+                <div className="text-[22px] font-black leading-[0.9] text-slate-950">Ventas Digitales</div>
+                <div className="mt-1 text-[12px] font-bold text-blue-500">Resumen de resultados BDC</div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/60 to-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-2.5">
+                    <span className="text-xs font-black text-[#131E5C]">Filtros</span>
+                    <span className="text-[10px] font-semibold text-slate-400">{mes ? formatMesLargo(mes) : formatRangoFechas(fechaInicio, fechaFin)}</span>
+                </div>
+                <div className="grid gap-x-5 gap-y-3 px-5 py-4 sm:grid-cols-2 xl:grid-cols-12">
+                    <div className="xl:col-span-3">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Mes</label>
+                        <select
+                            value={mes}
+                            onChange={(e) => cambioMes(e.target.value)}
+                            className={cls("h-10 w-full rounded-lg border bg-white px-3 text-xs font-semibold outline-none transition", mes ? "border-slate-200 text-[#131E5C] hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10" : "border-slate-300 text-slate-400 italic")}
+                        >
+                            {!mes && <option value="" disabled>Seleccionar mes…</option>}
+                            {mesesDisponibles.map((m) => (
+                                <option key={m} value={m}>{formatMesLargo(m)}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="xl:col-span-2">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Desde</label>
+                        <input
+                            type="date"
+                            value={fechaInicio}
+                            onChange={(e) => cambioFechaCustom("inicio", e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10"
+                        />
+                    </div>
+                    <div className="xl:col-span-2">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Hasta</label>
+                        <input
+                            type="date"
+                            value={fechaFin}
+                            onChange={(e) => cambioFechaCustom("fin", e.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10"
+                        />
+                    </div>
+                    <div className="flex items-end gap-1.5 pb-0.5 xl:col-span-5">
+                        <button type="button" onClick={setRango7Dias} className={cls("h-10 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-[11px] font-bold text-white transition-all shadow-sm", is7DiasActivo ? "bg-blue-700 ring-2 ring-blue-300" : "bg-blue-600 hover:bg-blue-700")}>7 días</button>
+                        <button type="button" onClick={setRango30Dias} className={cls("h-10 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-[11px] font-bold text-white transition-all shadow-sm", is30DiasActivo ? "bg-amber-600 ring-2 ring-amber-300" : "bg-amber-500 hover:bg-amber-600")}>30 días</button>
+                        <button type="button" onClick={limpiarFiltros} className="h-10 shrink-0 whitespace-nowrap rounded-lg bg-slate-500 px-3.5 text-[11px] font-bold text-white transition-all shadow-sm hover:bg-red-500">Limpiar</button>
+                    </div>
+                    <div className="xl:col-span-3">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Asesora digital</label>
+                        <select value={asesor} onChange={(e) => setAsesor(e.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10">{asesores.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todas las asesoras" : item}</option>)}</select>
+                    </div>
+                    <div className="xl:col-span-3">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Agencia</label>
+                        <select value={agencia} onChange={(e) => setAgencia(e.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10">{agencias.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todas las agencias" : item}</option>)}</select>
+                    </div>
+                    <div className="xl:col-span-3">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Business</label>
+                        <select value={linea} onChange={(e) => setLinea(e.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10">{["Todos", "Nuevos + Seminuevos", "Nuevos", "Seminuevos", "Comerciales"].map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                    </div>
+                    <div className="xl:col-span-3">
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">Origen</label>
+                        <select value={origen} onChange={(e) => setOrigen(e.target.value)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition hover:border-[#131E5C]/30 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10">{origenes.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todos los orígenes" : item}</option>)}</select>
+                    </div>
                 </div>
             </div>
-            <div className="mt-2 flex min-h-5 flex-wrap items-center justify-between gap-2 text-[10px] font-semibold">
-                <span className="text-slate-400">Citas registradas: filas reales de Citas por fecha_hora_cita y asesor_digital exacto · Efectivas: asistencia=true · Facturados: facturado_at del Expediente Digital.</span>
+
+            <div className="mt-2 flex min-h-5 flex-wrap items-center justify-end gap-2 text-[10px] font-semibold">
                 <span className="inline-flex items-center gap-2">{loadingOperativoBDC ? <><Loader2 className="h-3.5 w-3.5 animate-spin text-[#131E5C]" /><span className="text-slate-500">Sincronizando citas…</span></> : errorOperativoBDC ? <span className="text-amber-600">{errorOperativoBDC}</span> : <span className="text-emerald-600">Citas sincronizadas</span>}</span>
             </div>
         </div>
@@ -594,14 +739,14 @@ export default function DashboardEjecutivoBDC({
 
             <div className="grid min-w-0 gap-4">
                 <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Cumplimiento de metas</h4><div className="space-y-2"><MetaRow label="Contacto" value={metricas.tasaContacto} meta={90} /><MetaRow label="Citas efectivas" value={metricas.efectividadCitas} meta={80} /><MetaRow label="Facturación" value={metricas.tasaFacturacion} meta={100} /></div></section>
-                <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Proceso comercial</h4><div className="overflow-hidden rounded-xl border border-slate-100 bg-white"><ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" /><ProcessRow label="ANF" value={metricas.anf} detail="Solicitud autorizada/condicionada aún sin VIN facturado" /><ProcessRow label="Facturados" value={metricas.facturados} detail="Expedientes con facturado_at dentro del mes seleccionado" /></div></section>
+                <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Proceso comercial</h4><div className="overflow-hidden rounded-xl border border-slate-100 bg-white"><ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" /><ProcessRow label="ANF" value={metricas.anf} detail="Solicitud autorizada/condicionada aún sin VIN facturado" /><ProcessRow label="Facturados" value={metricas.facturados} detail="Expedientes con facturado_at dentro del período seleccionado" /></div></section>
             </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-5 px-5 pb-3 text-[10px] font-bold text-slate-500"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />En meta</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Atención</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" />Crítico</span></div>
 
         <section className="px-5">
-            <div className="mb-1 flex items-center justify-end"><span className="text-[10px] text-slate-400">Comparativo del mes seleccionado</span></div>
+            <div className="mb-1 flex items-center justify-end"><span className="text-[10px] text-slate-400">Comparativo del período seleccionado</span></div>
             <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead><tr className="border-b border-slate-200 text-slate-500">{["Asesora", "Gestionables", "Contactados", "Citados", "Efectivas", "No show", "Solicitudes", "Facturados", "Efectividad", "Estado"].map((label, i) => <th key={label} className={cls("px-2 py-2 font-bold", i ? "text-center" : "")}>{label}</th>)}</tr></thead><tbody>
                 {resultadosAsesor.map((item) => { const estado = getEstadoAsesorBDC(item.efectividad); return <tr key={item.nombre} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"><td className="px-2 py-2.5 font-bold text-slate-900">{item.nombre}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.gestionables}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.contactados}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.citados}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.efectivas}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.noShow}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.solicitudes}</td><td className="px-2 py-2.5 text-center font-black text-slate-900">{item.facturados}</td><td className="px-2 py-2.5 text-center"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-black text-[#131E5C]">{item.efectividad.toFixed(1)}%</span></td><td className="px-2 py-2.5 text-center"><span className={cls("inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black", estado.cls)}>• {estado.label}</span></td></tr>; })}
                 {!resultadosAsesor.length ? <tr><td colSpan={10} className="px-3 py-8 text-center text-slate-400">Sin resultados para los filtros seleccionados.</td></tr> : null}
@@ -613,13 +758,6 @@ export default function DashboardEjecutivoBDC({
             <section><h4 className="mb-3 text-sm font-black text-slate-950">Leads descartados</h4><div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setShowDiscardDetails((value) => !value)} className="rounded-xl bg-slate-50 p-4 text-left transition hover:bg-slate-100"><div className="text-xs text-slate-500">Total descartados</div><div className="mt-1 text-3xl font-black text-slate-950">{metricas.descartados}</div><div className="mt-2 text-[10px] font-bold text-[#131E5C]">{showDiscardDetails ? "Ocultar motivos" : "Ver todos los motivos"}</div></button><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Principal motivo</div><div className="mt-1 line-clamp-2 text-xl font-black text-slate-950">{principalDescarte[0]}</div><div className="mt-1 text-xs text-slate-500">{principalDescarte[1]} leads</div></div></div>{showDiscardDetails && motivosDescarte.length ? <div className="mt-3 space-y-3 rounded-xl border border-slate-200 p-4">{motivosDescarte.map(([label, total]) => <div key={label}><div className="mb-1 flex items-center justify-between gap-3 text-[10px]"><span className="truncate font-semibold text-slate-600" title={label}>{label}</span><span className="font-black text-slate-900">{total}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full bg-slate-500", widthClass((total / maxMotivo) * 100))} /></div></div>)}</div> : null}</section>
         </div>
     </div>;
-}
-
-function formatDateYMDLocal(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
 }
 
 function getListItems(data) {
