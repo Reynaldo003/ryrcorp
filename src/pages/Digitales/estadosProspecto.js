@@ -15,6 +15,8 @@ export const ESTADOS_PROSPECTO = [
     { key: "solicitud_credito", label: "Solicitud de Crédito", color: "#7C3AED", match: ["solicitud de credito", "solicitud de crédito", "solicitud_credito"] },
     { key: "autorizado_no_formalizado", label: "Autorizado No Formalizado", color: "#CA8A04", match: ["autorizado no formalizado", "autorizado_no_formalizado"] },
     { key: "cierre_venta", label: "Cierre de la Venta", color: "#16A34A", match: ["cierre de la venta", "cierre_venta", "cierre de venta"] },
+    { key: "facturado", label: "Facturado", color: "#0284C7", match: ["facturado"] },
+    { key: "entregado", label: "Entregado", color: "#059669", match: ["entregado"] },
     { key: "descalificado", label: "Descalificado", color: "#94A3B8", match: ["descalificado"] },
 ];
 
@@ -36,9 +38,9 @@ export function resolverEstado(valor) {
 
 
 export const ETIQUETAS_ESTADO = ESTADOS_PROSPECTO
-    .filter((e) => e.key !== "cierre_venta")
+    .filter((e) => e.key !== "cierre_venta" && e.key !== "facturado" && e.key !== "entregado")
     .map((e) => e.label);
 
 export const ESTADOS_OPCIONES_BANDEJA = ESTADOS_PROSPECTO.filter(
-    (e) => e.key !== "cierre_venta" && e.key !== "requiere_asesor"
+    (e) => e.key !== "cierre_venta" && e.key !== "requiere_asesor" && e.key !== "facturado" && e.key !== "entregado"
 );

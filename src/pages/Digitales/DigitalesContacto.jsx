@@ -111,7 +111,7 @@ const VEHICULOS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-const ESTADOS_PROSPECTO = ["Descalificado", "Contactado", "Sin Respuesta"];
+const ESTADOS_PROSPECTO = ["Descalificado", "Contactado", "Sin Respuesta", "Facturado", "Entregado"];
 const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable", ""];
 
 const BURO_OPTIONS = [

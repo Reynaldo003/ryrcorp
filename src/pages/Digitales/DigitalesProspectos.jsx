@@ -30,7 +30,7 @@ const origenMeta = {
     "Llamada Entrante": { Icon: ImgIcon(PHONE, "Llamada Entrante"), label: "Llamada Entrante" },
 };
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez",];
-const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Descalificado"];
+const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Facturado", "Entregado", "Descalificado"];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [
@@ -689,6 +689,10 @@ function calcLeadScore(row) {
         score += 4;
     else if (estado === "sin respuesta")
         score -= 14;
+    else if (estado === "facturado")
+        score += 30;
+    else if (estado === "entregado")
+        score += 35;
     else if (estado === "descalificado")
         score -= 40;
     // Enganche contra mínimo estimado del 20%
@@ -925,6 +929,8 @@ function badgeCls(value) {
         "requiere asesor": "bg-orange-500/20 text-orange-900 border-orange-300/40",
         financiamiento: "bg-sky-500/15 text-sky-800 border-sky-300/30",
         "sin respuesta": "bg-red-500/15 text-red-800 border-red-300/25",
+        facturado: "bg-sky-600/15 text-sky-800 border-sky-300/25",
+        entregado: "bg-emerald-600/15 text-emerald-800 border-emerald-300/25",
         descalificado: "bg-slate-500/15 text-slate-700 border-slate-300/25",
     };
     return (map[String(value || "")
@@ -958,6 +964,8 @@ function BadgeEstado({ value }) {
         descalificado: "bg-blue-600/15 text-blue-800 font-bold border-blue-300/25",
         contactado: "bg-emerald-500/15 text-emerald-800 border-emerald-300/25",
         "sin respuesta": "bg-red-500/15 text-red-800 border-red-300/25",
+        facturado: "bg-sky-600/15 text-sky-800 border-sky-300/25",
+        entregado: "bg-emerald-600/15 text-emerald-800 border-emerald-300/25",
     };
     const key = String(value || "")
         .trim()
