@@ -800,6 +800,8 @@ export default function RegistroEntregas() {
         "Sportline",
         "GLI",
         "GTI",
+        "GT",
+        "Track",
         "R",
         "Peak Edition",
         "Robust",
@@ -817,6 +819,8 @@ export default function RegistroEntregas() {
         "Gris Platino",
         "Gris Carbon Steel",
         "Gris Franela",
+        "Gris Olivo",
+        "Gris Ascot",
         "Negro Ninja",
         "Negro Profundo",
         "Azul Rising",
@@ -825,6 +829,7 @@ export default function RegistroEntregas() {
         "Rojo Kings",
         "Amarillo Kurkuma",
         "Verde Vibrante",
+        "Verde Avocado",
     ];
 
     const ASESORES = [
@@ -1028,12 +1033,12 @@ export default function RegistroEntregas() {
             row,
         });
     };
-        const refreshList = useCallback(async () => {
-            setLoadingList(true);
+    const refreshList = useCallback(async () => {
+        setLoadingList(true);
 
-            try {
-                if (viewMode === "tabla") {
-                 const data = await apiEntregas.list({
+        try {
+            if (viewMode === "tabla") {
+                const data = await apiEntregas.list({
                     page: pagina,
                     page_size: PAGE_SIZE,
                     search: filters.q,
@@ -1046,51 +1051,51 @@ export default function RegistroEntregas() {
                     fecha_hasta: filters.rangoHasta,
                 });
 
-                    const lista = Array.isArray(data)
-                        ? data
-                        : data?.results || [];
+                const lista = Array.isArray(data)
+                    ? data
+                    : data?.results || [];
 
-                    setEntregas(lista);
+                setEntregas(lista);
 
-                    setTotalRegistros(
-                        Array.isArray(data)
-                            ? data.length
-                            : data?.count || 0
-                    );
+                setTotalRegistros(
+                    Array.isArray(data)
+                        ? data.length
+                        : data?.count || 0
+                );
 
-                    setHaySiguiente(!!data?.next);
-                    setHayAnterior(!!data?.previous);
-                } else {
-                    const data = await apiEntregas.listAll();
+                setHaySiguiente(!!data?.next);
+                setHayAnterior(!!data?.previous);
+            } else {
+                const data = await apiEntregas.listAll();
 
-                    setEntregas(Array.isArray(data) ? data : []);
-                    setTotalRegistros(Array.isArray(data) ? data.length : 0);
-                    setHaySiguiente(false);
-                    setHayAnterior(false);
-                }
-            } catch (error) {
-                console.error(error);
-                setEntregas([]);
-                setTotalRegistros(0);
+                setEntregas(Array.isArray(data) ? data : []);
+                setTotalRegistros(Array.isArray(data) ? data.length : 0);
                 setHaySiguiente(false);
                 setHayAnterior(false);
-            } finally {
-                setLoadingList(false);
             }
-     
-                    }, [
-                pagina,
-                viewMode,
-                filters.q,
-                filters.agencia,
-                filters.tipoVenta,
-                filters.rangoDesde,
-                filters.rangoHasta,
-            ]);
+        } catch (error) {
+            console.error(error);
+            setEntregas([]);
+            setTotalRegistros(0);
+            setHaySiguiente(false);
+            setHayAnterior(false);
+        } finally {
+            setLoadingList(false);
+        }
 
-            useEffect(() => {
-                refreshList();
-            }, [refreshList]);
+    }, [
+        pagina,
+        viewMode,
+        filters.q,
+        filters.agencia,
+        filters.tipoVenta,
+        filters.rangoDesde,
+        filters.rangoHasta,
+    ]);
+
+    useEffect(() => {
+        refreshList();
+    }, [refreshList]);
 
     const dealers = useMemo(() => {
         const set = new Set((entregas || []).map((item) => normalizeStr(item.agencia)).filter(Boolean));
@@ -1408,110 +1413,110 @@ export default function RegistroEntregas() {
         }
     };
 
-            const resetFilters = () => {
-                setPagina(1);
+    const resetFilters = () => {
+        setPagina(1);
 
-                setFilters({
-                    q: "",
-                    agencia: "Todos",
-                    tipoVenta: "Todos",
-                    rangoDesde: "",
-                    rangoHasta: "",
-                });
+        setFilters({
+            q: "",
+            agencia: "Todos",
+            tipoVenta: "Todos",
+            rangoDesde: "",
+            rangoHasta: "",
+        });
 
-                setCurrentWeekDate(new Date());
+        setCurrentWeekDate(new Date());
+    };
+
+    const toggleRangoFechas = (desde, hasta) => {
+        setPagina(1);
+
+        setFilters((prev) => {
+            const mismoRango =
+                prev.rangoDesde === desde &&
+                prev.rangoHasta === hasta;
+
+            return {
+                ...prev,
+                rangoDesde: mismoRango ? "" : desde,
+                rangoHasta: mismoRango ? "" : hasta,
             };
+        });
 
-            const toggleRangoFechas = (desde, hasta) => {
-                setPagina(1);
+        if (desde) {
+            setCurrentWeekDate(parseYMDLocal(desde));
+        }
+    };
 
-                setFilters((prev) => {
-                    const mismoRango =
-                        prev.rangoDesde === desde &&
-                        prev.rangoHasta === hasta;
+    const setHoy = () => {
+        const hoy = toYMDLocal(new Date());
 
-                    return {
-                        ...prev,
-                        rangoDesde: mismoRango ? "" : desde,
-                        rangoHasta: mismoRango ? "" : hasta,
-                    };
-                });
+        toggleRangoFechas(hoy, hoy);
+    };
 
-                if (desde) {
-                    setCurrentWeekDate(parseYMDLocal(desde));
-                }
-            };
+    const setAyer = () => {
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
 
-            const setHoy = () => {
-                const hoy = toYMDLocal(new Date());
+        const ymd = toYMDLocal(ayer);
 
-                toggleRangoFechas(hoy, hoy);
-            };
+        toggleRangoFechas(ymd, ymd);
+    };
 
-            const setAyer = () => {
-                const ayer = new Date();
-                ayer.setDate(ayer.getDate() - 1);
+    const setSemana = () => {
+        const hoy = new Date();
+        const lunes = startOfWeekMonday(hoy);
+        const domingo = addDays(lunes, 6);
 
-                const ymd = toYMDLocal(ayer);
+        toggleRangoFechas(
+            toYMDLocal(lunes),
+            toYMDLocal(domingo)
+        );
+    };
 
-                toggleRangoFechas(ymd, ymd);
-            };
+    const setUltimos7Dias = () => {
+        const hasta = new Date();
+        const desde = new Date();
 
-            const setSemana = () => {
-                const hoy = new Date();
-                const lunes = startOfWeekMonday(hoy);
-                const domingo = addDays(lunes, 6);
+        desde.setDate(desde.getDate() - 6);
 
-                toggleRangoFechas(
-                    toYMDLocal(lunes),
-                    toYMDLocal(domingo)
-                );
-            };
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    };
 
-            const setUltimos7Dias = () => {
-                const hasta = new Date();
-                const desde = new Date();
+    const setUltimos30Dias = () => {
+        const hasta = new Date();
+        const desde = new Date();
 
-                desde.setDate(desde.getDate() - 6);
+        desde.setDate(desde.getDate() - 29);
 
-                toggleRangoFechas(
-                    toYMDLocal(desde),
-                    toYMDLocal(hasta)
-                );
-            };
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    };
 
-            const setUltimos30Dias = () => {
-                const hasta = new Date();
-                const desde = new Date();
+    const setEsteMes = () => {
+        const hoy = new Date();
 
-                desde.setDate(desde.getDate() - 29);
+        const primero = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth(),
+            1
+        );
 
-                toggleRangoFechas(
-                    toYMDLocal(desde),
-                    toYMDLocal(hasta)
-                );
-            };
+        const ultimo = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth() + 1,
+            0
+        );
 
-            const setEsteMes = () => {
-                const hoy = new Date();
-
-                const primero = new Date(
-                    hoy.getFullYear(),
-                    hoy.getMonth(),
-                    1
-                );
-
-                const ultimo = new Date(
-                    hoy.getFullYear(),
-                    hoy.getMonth() + 1,
-                    0
-                );
-
-                toggleRangoFechas(
-                    toYMDLocal(primero),
-                    toYMDLocal(ultimo)
-                );
-            };
+        toggleRangoFechas(
+            toYMDLocal(primero),
+            toYMDLocal(ultimo)
+        );
+    };
 
     const onChangeDateFilter = (key, value) => {
         setFilters((prev) => ({ ...prev, [key]: value }));
@@ -1752,10 +1757,10 @@ export default function RegistroEntregas() {
         XLSX.writeFile(wb, `entregas_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
-        const totalPaginas = Math.max(
-            1,
-            Math.ceil(totalRegistros / PAGE_SIZE)
-        );
+    const totalPaginas = Math.max(
+        1,
+        Math.ceil(totalRegistros / PAGE_SIZE)
+    );
     return (
 
 
@@ -1831,176 +1836,176 @@ export default function RegistroEntregas() {
                 </div>
             </div>
 
-                    <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                        <div className="grid gap-3 md:grid-cols-12">
+            <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="grid gap-3 md:grid-cols-12">
 
-                            {/* FILA 1 */}
-                            <div className="md:col-span-6">
-                                <FilterBlock label="Búsqueda">
-                                    <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
-                                        <Search className="h-4 w-4 text-[#131E5C]" />
+                    {/* FILA 1 */}
+                    <div className="md:col-span-6">
+                        <FilterBlock label="Búsqueda">
+                            <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
+                                <Search className="h-4 w-4 text-[#131E5C]" />
 
-                                        <input
-                                            value={filters.q}
-                                            onChange={(e) =>
-                                                setFilters((prev) => ({
-                                                    ...prev,
-                                                    q: e.target.value,
-                                                }))
-                                            }
-                                            placeholder="Buscar por dealer, cliente, teléfono, VIN, modelo, versión, color, asesor…"
-                                            className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]"
-                                        />
+                                <input
+                                    value={filters.q}
+                                    onChange={(e) =>
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            q: e.target.value,
+                                        }))
+                                    }
+                                    placeholder="Buscar por dealer, cliente, teléfono, VIN, modelo, versión, color, asesor…"
+                                    className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]"
+                                />
 
-                                        {filters.q ? (
-                                            <button
-                                                onClick={() =>
-                                                    setFilters((prev) => ({
-                                                        ...prev,
-                                                        q: "",
-                                                    }))
-                                                }
-                                                className="rounded-lg bg-white p-1 text-[#131E5C] hover:bg-white/80 hover:text-red-500"
-                                                aria-label="Limpiar búsqueda"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </button>
-                                        ) : null}
-                                    </div>
-                                </FilterBlock>
-                            </div>
-
-                            <div className="md:col-span-3">
-                                <FilterBlock label="Dealer">
-                                    <select
-                                        value={filters.agencia}
-                                        onChange={(e) =>
+                                {filters.q ? (
+                                    <button
+                                        onClick={() =>
                                             setFilters((prev) => ({
                                                 ...prev,
-                                                agencia: e.target.value,
+                                                q: "",
                                             }))
                                         }
-                                        className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                        className="rounded-lg bg-white p-1 text-[#131E5C] hover:bg-white/80 hover:text-red-500"
+                                        aria-label="Limpiar búsqueda"
                                     >
-                                        {dealers.map((dealer) => (
-                                            <option key={dealer} value={dealer}>
-                                                {dealer}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </FilterBlock>
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                ) : null}
                             </div>
-
-                            <div className="md:col-span-3">
-                                <FilterBlock label="Tipo de venta">
-                                    <select
-                                        value={filters.tipoVenta}
-                                        onChange={(e) =>
-                                            setFilters((prev) => ({
-                                                ...prev,
-                                                tipoVenta: e.target.value,
-                                            }))
-                                        }
-                                        className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                                    >
-                                        <option value="Todos">Todos</option>
-
-                                        {TIPOS_VENTA.map((tipo) => (
-                                            <option key={tipo.value} value={tipo.value}>
-                                                {tipo.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </FilterBlock>
-                            </div>
-
-                            {/* FILA 2 */}
-                            <div className="md:col-span-3">
-                                <FilterBlock label="Desde">
-                                    <input
-                                        type="date"
-                                        value={filters.rangoDesde}
-                                        onChange={(e) =>
-                                            onChangeDateFilter("rangoDesde", e.target.value)
-                                        }
-                                        className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                                    />
-                                </FilterBlock>
-                            </div>
-
-                            <div className="md:col-span-3">
-                                <FilterBlock label="Hasta">
-                                    <input
-                                        type="date"
-                                        value={filters.rangoHasta}
-                                        onChange={(e) =>
-                                            onChangeDateFilter("rangoHasta", e.target.value)
-                                        }
-                                        className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                                    />
-                                </FilterBlock>
-                            </div>
-
-                            <div className="md:col-span-6">
-                                <FilterBlock label="Acciones">
-                                    <div className="flex flex-wrap gap-2">
-                                        <button
-                                            onClick={setHoy}
-                                            className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
-                                        >
-                                            Hoy
-                                        </button>
-
-                                        <button
-                                            onClick={setAyer}
-                                            className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
-                                        >
-                                            Ayer
-                                        </button>
-
-                                        <button
-                                            onClick={setSemana}
-                                            className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-sky-600"
-                                        >
-                                            Semana
-                                        </button>
-
-                                        <button
-                                            onClick={setUltimos7Dias}
-                                            className="rounded-lg bg-violet-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-600"
-                                        >
-                                            7 días
-                                        </button>
-
-                                        <button
-                                            onClick={setUltimos30Dias}
-                                            className="rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600"
-                                        >
-                                            30 días
-                                        </button>
-
-                                        <button
-                                            onClick={setEsteMes}
-                                            className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-600"
-                                        >
-                                            Este mes
-                                        </button>
-
-                                        <button
-                                            onClick={resetFilters}
-                                            className="rounded-lg border border-[#131E5C] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
-                                        >
-                                            <span className="inline-flex items-center gap-1">
-                                                <X className="h-3.5 w-3.5" />
-                                                Limpiar
-                                            </span>
-                                        </button>
-                                    </div>
-                                </FilterBlock>
-                            </div>
-
-                        </div>
+                        </FilterBlock>
                     </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Dealer">
+                            <select
+                                value={filters.agencia}
+                                onChange={(e) =>
+                                    setFilters((prev) => ({
+                                        ...prev,
+                                        agencia: e.target.value,
+                                    }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                {dealers.map((dealer) => (
+                                    <option key={dealer} value={dealer}>
+                                        {dealer}
+                                    </option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Tipo de venta">
+                            <select
+                                value={filters.tipoVenta}
+                                onChange={(e) =>
+                                    setFilters((prev) => ({
+                                        ...prev,
+                                        tipoVenta: e.target.value,
+                                    }))
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            >
+                                <option value="Todos">Todos</option>
+
+                                {TIPOS_VENTA.map((tipo) => (
+                                    <option key={tipo.value} value={tipo.value}>
+                                        {tipo.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </FilterBlock>
+                    </div>
+
+                    {/* FILA 2 */}
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Desde">
+                            <input
+                                type="date"
+                                value={filters.rangoDesde}
+                                onChange={(e) =>
+                                    onChangeDateFilter("rangoDesde", e.target.value)
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            />
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-3">
+                        <FilterBlock label="Hasta">
+                            <input
+                                type="date"
+                                value={filters.rangoHasta}
+                                onChange={(e) =>
+                                    onChangeDateFilter("rangoHasta", e.target.value)
+                                }
+                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                            />
+                        </FilterBlock>
+                    </div>
+
+                    <div className="md:col-span-6">
+                        <FilterBlock label="Acciones">
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={setHoy}
+                                    className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                                >
+                                    Hoy
+                                </button>
+
+                                <button
+                                    onClick={setAyer}
+                                    className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
+                                >
+                                    Ayer
+                                </button>
+
+                                <button
+                                    onClick={setSemana}
+                                    className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-sky-600"
+                                >
+                                    Semana
+                                </button>
+
+                                <button
+                                    onClick={setUltimos7Dias}
+                                    className="rounded-lg bg-violet-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-600"
+                                >
+                                    7 días
+                                </button>
+
+                                <button
+                                    onClick={setUltimos30Dias}
+                                    className="rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600"
+                                >
+                                    30 días
+                                </button>
+
+                                <button
+                                    onClick={setEsteMes}
+                                    className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-600"
+                                >
+                                    Este mes
+                                </button>
+
+                                <button
+                                    onClick={resetFilters}
+                                    className="rounded-lg border border-[#131E5C] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                >
+                                    <span className="inline-flex items-center gap-1">
+                                        <X className="h-3.5 w-3.5" />
+                                        Limpiar
+                                    </span>
+                                </button>
+                            </div>
+                        </FilterBlock>
+                    </div>
+
+                </div>
+            </div>
             {viewMode === "agenda" ? (
                 <>
                     <AgendaMobileList
@@ -2028,9 +2033,9 @@ export default function RegistroEntregas() {
 
             {viewMode === "tabla" ? (
                 <div className="overflow-hidden rounded-lg bg-white/[0.03] shadow-lg">
-                        <div className="max-h-[560px] overflow-auto">
-                            <table className="min-w-full text-left text-sm">
-                                <thead className="font-vw-header sticky top-0 z-10 border border-black bg-[#131E5C] text-xs text-white">
+                    <div className="max-h-[560px] overflow-auto">
+                        <table className="min-w-full text-left text-sm">
+                            <thead className="font-vw-header sticky top-0 z-10 border border-black bg-[#131E5C] text-xs text-white">
                                 <tr>
                                     <th className="px-4 py-3">
                                         <button
@@ -2216,7 +2221,7 @@ export default function RegistroEntregas() {
                             </tbody>
                         </table>
                     </div>
-                <div className="hidden lg:flex items-center justify-between gap-4 border-t border-black/10 bg-white px-4 py-3">
+                    <div className="hidden lg:flex items-center justify-between gap-4 border-t border-black/10 bg-white px-4 py-3">
                         <div className="text-xs font-semibold text-slate-500">
                             {totalRegistros} registros · Página {pagina} de {totalPaginas}
                         </div>
@@ -2261,7 +2266,7 @@ export default function RegistroEntregas() {
                         </div>
                     </div>
                 </div>
-                
+
             ) : null}
 
 
