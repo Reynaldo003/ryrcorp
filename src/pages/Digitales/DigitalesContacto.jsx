@@ -38,6 +38,7 @@ import {
     Ban,
     Phone,
     CalendarPlus,
+    CalendarClock,
     Mic,
     Square,
     Download,
@@ -2536,7 +2537,14 @@ export default function DigitalesContacto() {
     const silentChatsRefreshRef = useRef(false);
     const chatListScrollRef = useRef(null);
     const qRef = useRef("");
-    const chatsPaginationRef = useRef({ query: "", scope: "recientes", before: "", before_id: "", hasMore: true });
+    const chatsPaginationRef = useRef({
+        query: "",
+        scope: "recientes",
+        before: "",
+        before_id: "",
+        before_prioridad: "",
+        hasMore: true,
+    });
     const emojiRef = useRef(null);
     const fileInputRef = useRef(null);
     const inputRef = useRef(null);
@@ -2741,7 +2749,14 @@ export default function DigitalesContacto() {
         setChats([]);
         setChatsHasMore(true);
         setLoadingMoreChats(false);
-        chatsPaginationRef.current = { query: "", scope: "recientes", before: "", before_id: "", hasMore: true };
+        chatsPaginationRef.current = {
+            query: "",
+            scope: "recientes",
+            before: "",
+            before_id: "",
+            before_prioridad: "",
+            hasMore: true,
+        };
         setProspecto(null);
         setMensajes([]);
         setIaEstado(null);
@@ -2831,12 +2846,20 @@ export default function DigitalesContacto() {
         const scope = reset ? (busqueda ? "busqueda" : "recientes") : (actual.scope || (busqueda ? "busqueda" : "recientes"));
         const before = reset ? "" : (actual.before || "");
         const beforeId = reset ? "" : (actual.before_id || "");
+        const beforePrioridad = reset ? "" : (actual.before_prioridad || "");
         const requestId = chatsRequestRef.current + 1;
         chatsRequestRef.current = requestId;
 
         const response = await api.digitalesChats({
-            numero_asesor: numeroLinea, paginado: 1, limit: CHAT_LIST_PAGE_SIZE, dias: CHAT_LIST_DAYS,
-            q: busqueda, scope, before, before_id: beforeId,
+            numero_asesor: numeroLinea,
+            paginado: 1,
+            limit: CHAT_LIST_PAGE_SIZE,
+            dias: CHAT_LIST_DAYS,
+            q: busqueda,
+            scope,
+            before,
+            before_id: beforeId,
+            before_prioridad: beforePrioridad,
         });
 
         if (requestId !== chatsRequestRef.current || numeroAsesorActivoRef.current !== numeroLinea) return [];
@@ -2860,8 +2883,12 @@ export default function DigitalesContacto() {
         const siguienteScope = tieneMasEnScope ? scope : (paginacion.next_scope || "");
         const tieneMas = Boolean(tieneMasEnScope || siguienteScope);
         chatsPaginationRef.current = {
-            query: busqueda, scope: siguienteScope || scope, before: paginacion.before || "",
-            before_id: paginacion.before_id || "", hasMore: tieneMas,
+            query: busqueda,
+            scope: siguienteScope || scope,
+            before: paginacion.before || "",
+            before_id: paginacion.before_id || "",
+            before_prioridad: paginacion.before_prioridad || "",
+            hasMore: tieneMas,
         };
         setChatsHasMore(tieneMas);
 
@@ -5637,7 +5664,14 @@ export default function DigitalesContacto() {
                                                                         {chat.ia_estado?.puede_responder ? "IA lista" : "IA bloqueada"}
                                                                     </span>
                                                                 ) : null}
-
+                                                              {chat.ia_estado?.cita?.estado === "agendada" ? (
+                                                                <span
+                                                                    className="inline-flex items-center justify-center text-[#1746D1]"
+                                                                    title="Cita agendada por IA"
+                                                                >
+                                                                    <CalendarClock className="h-3.5 w-3.5" />
+                                                                </span>
+                                                            ) : null}
                                                                 {chat.agencia ? (
                                                                     <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-400">
                                                                         <Building2 className="h-2.5 w-2.5" />{chat.agencia}
@@ -5840,7 +5874,6 @@ export default function DigitalesContacto() {
                                         ) : null}
                                     </div>
                                 ) : null}
-
                                 {!activeTel ? (
                                     <div className="py-10 text-center font-semibold text-slate-500">Selecciona un chat del historial para ver la conversación.</div>
                                 ) : loadingChat ? (
