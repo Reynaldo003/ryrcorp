@@ -35,6 +35,9 @@ export default function FinancierosTopNav() {
             "USUARIOS_ADMIN",
             "CRM_CALIDAD",
         ];
+        const permisosPiso = [
+            "CRM_ASESOR_PISO",
+        ];
 
         return [
             {
@@ -48,6 +51,12 @@ export default function FinancierosTopNav() {
                 href: "/financieros/long_drive",
                 icon: CarFront,
                 show: hasAnyPermission(permisosFinancieros),
+            },
+            {
+                label: "Documentacion",
+                href: "/financieros/documentacion",
+                icon: CarFront,
+                show: hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosPiso),
             },
         ].filter((item) => item.show);
     }, [hasAnyPermission]);

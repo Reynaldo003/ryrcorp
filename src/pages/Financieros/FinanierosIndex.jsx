@@ -8,7 +8,7 @@ export default function FinancierosIndex() {
     const { hasAnyPermission } = useAuth();
 
     useEffect(() => {
-        const puedeVerFinancieros = hasAnyPermission(["CRM_DIGITALES", "CRM_FINANCIEROS", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES",]);
+        const puedeVerFinancieros = hasAnyPermission(["CRM_DIGITALES", "CRM_FINANCIEROS", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES", "CRM_ASESOR_PISO",]);
 
         if (puedeVerFinancieros) {
             navigate("/financieros/credito", { replace: true });

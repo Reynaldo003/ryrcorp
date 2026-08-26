@@ -77,6 +77,8 @@ import RegistroCredito from "./pages/Credito/RegistroCredito";
 import LongDriveLayout from "./pages/LongDrive/LongLayout";
 import RegistroLongDrive from "./pages/LongDrive/RegistroLong";
 
+import Documentacion from "./pages/Documentacion/Documentacion";
+
 import RegistroSatisfaccion from "./pages/Satisfaccion/RegistroSatisfaccion";
 import RegistroServicio from "./pages/Servicio/RegistroServicio";
 
@@ -682,6 +684,7 @@ export const router = createBrowserRouter(
                                         "USUARIOS_ADMIN",
                                         "CRM_CALIDAD",
                                         "CRM_COORDINADOR_DIGITAL",
+                                        "CRM_ASESOR_PISO",
                                     ]}
                                 >
                                     <FinancierosLayout />
@@ -704,6 +707,7 @@ export const router = createBrowserRouter(
                                                 "CRM_CALIDAD",
                                                 "CRM_COORDINADOR_DIGITAL",
                                                 "CRM_DIGITALES",
+                                                "CRM_ASESOR_PISO",
                                             ]}
                                         >
                                             <CreditoLayout />
@@ -735,6 +739,29 @@ export const router = createBrowserRouter(
                                         {
                                             index: true,
                                             element: <RegistroLongDrive />,
+                                        },
+                                    ],
+                                },
+                                {
+                                    path: "documentacion",
+                                    element: (
+                                        <RequirePermission
+                                            anyOf={[
+                                                "CRM_DIGITALES",
+                                                "CRM_FINANCIEROS",
+                                                "CRM_VENTAS",
+                                                "USUARIOS_ADMIN",
+                                                "CRM_CALIDAD",
+                                                "CRM_ASESOR_PISO",
+                                            ]}
+                                        >
+                                            <Documentacion />
+                                        </RequirePermission>
+                                    ),
+                                    children: [
+                                        {
+                                            index: true,
+                                            element: <Documentacion />,
                                         },
                                     ],
                                 },
