@@ -634,7 +634,7 @@ export default function DashboardEjecutivoBDC({
 
     const estadoRendimiento = getEstadoMetaBDC(metricas.efectividadCitas, 80);
 
-    return <div className="overflow-hidden">
+    return <div className="min-h-screen bg-slate-50/80">
         <div className="px-5 pt-5">
             <div className="mt-3">
                 <div className="text-[22px] font-black leading-[0.9] text-slate-950">Ventas Digitales</div>
@@ -707,55 +707,99 @@ export default function DashboardEjecutivoBDC({
             </div>
         </div>
 
-        <div className="mx-5 mt-4 grid overflow-hidden border-y border-slate-100 bg-white sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="mx-5 mt-4 grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <SummaryCard label="Oportunidades" value={metricas.oportunidades} /><SummaryCard label="Gestionables" value={metricas.gestionables} /><SummaryCard label="Contactados únicos" value={metricas.contactados} /><SummaryCard label="Citas registradas" value={metricas.citados} /><SummaryCard label="Citas efectivas" value={metricas.efectivas} /><SummaryCard label="Facturados" value={metricas.facturados} />
         </div>
 
-        <div className="grid gap-5 px-5 py-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(470px,1fr)]">
+        <div className="mx-5 mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(420px,1fr)]">
             <div className="min-w-0">
-                <h4 className="mb-2 text-sm font-black text-[#131E5C]">Embudo comercial</h4>
-                <div className="overflow-x-auto pb-28">
-                    <div className="min-w-[760px]">
-                        <div className="flex h-[130px] items-center">
-                            {funnel.map((stage) => <div key={stage.key} className={cls("group relative flex h-full min-w-0 items-center", stage.wrapCls)}>
-                                <div className={cls("relative -ml-px flex w-full items-center justify-center shadow-sm transition-transform duration-200 first:ml-0 group-hover:z-20 group-hover:scale-[1.02]", stage.boxCls)}><div className="text-center"><div className="text-[11px] font-bold">{stage.label}</div><div className="mt-1 text-2xl font-black">{stage.value.toLocaleString("es-MX")}</div></div></div>
-                                {stage.conversion !== null ? <div className="pointer-events-none absolute left-1/2 top-full z-[60] mt-2 hidden w-64 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 text-left text-slate-900 shadow-xl ring-1 ring-black/5 group-hover:block"><div className="text-[10px] font-black uppercase text-slate-500">{stage.label} → {stage.nextLabel}</div><div className="mt-2 flex justify-between text-xs"><span className="text-slate-600">Conversión clientes únicos</span><span className="font-black text-[#131E5C]">{stage.conversion.toFixed(1)}%</span></div><div className="mt-1 text-[10px] leading-relaxed text-slate-500">{stage.avanzaron} de {stage.baseClientes} clientes únicos avanzaron al siguiente paso.</div><div className="mt-2 flex justify-between text-xs"><span className="text-slate-600">No avanzaron</span><span className="font-black text-red-500">{stage.perdidos}</span></div></div> : null}
-                            </div>)}
-                        </div>
-                        <div className="flex">{funnel.map((stage) => <div key={`conversion-${stage.key}`} className={cls("min-w-0 text-center", stage.wrapCls)}>{stage.conversion !== null ? <div><div className={cls("text-[11px] font-black", stage.conversion >= 50 ? "text-emerald-500" : stage.conversion >= 20 ? "text-amber-500" : "text-red-500")}>{stage.conversion.toFixed(1)}%</div><div className="mt-0.5 text-[9px] font-semibold text-slate-400">→ {stage.nextLabel}</div></div> : null}</div>)}</div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="mb-5 text-sm font-black text-[#131E5C]">Embudo comercial</h4>
+                    <div className="flex flex-col items-stretch">
+                        {funnel.map((stage, index) => {
+                            const totalSteps = funnel.length;
+                            const widthPct = 100 - (index * (70 / Math.max(totalSteps - 1, 1)));
+                            const convColor = stage.conversion !== null
+                                ? stage.conversion >= 50 ? "text-emerald-600" : stage.conversion >= 20 ? "text-amber-500" : "text-red-500"
+                                : "";
+                            const convBg = stage.conversion !== null
+                                ? stage.conversion >= 50 ? "bg-emerald-50 border-emerald-200" : stage.conversion >= 20 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"
+                                : "";
+                            return <div key={stage.key} className="flex items-stretch gap-0">
+                                <div className="flex w-8 shrink-0 flex-col items-center">
+                                    <div className={cls("flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-black text-white", index === 0 ? "border-[#0B46D8] bg-[#0B46D8]" : "border-slate-300 bg-slate-300")}>{index + 1}</div>
+                                    {index < funnel.length - 1 && <div className="w-0.5 flex-1 bg-gradient-to-b from-slate-300 to-slate-200" />}
+                                </div>
+                                <div className="flex-1 pb-4">
+                                    <div className="ml-3 flex items-center gap-3">
+                                        <div className="relative overflow-hidden rounded-xl transition-all duration-200 hover:shadow-md" style={{ width: `${widthPct}%`, backgroundColor: stage.boxCls.includes("#0B46D8") ? "#0B46D8" : stage.boxCls.includes("#1670F5") ? "#1670F5" : stage.boxCls.includes("#55A6F6") ? "#55A6F6" : stage.boxCls.includes("#A9D1F7") ? "#A9D1F7" : stage.boxCls.includes("#F7A416") ? "#F7A416" : "#F52332", color: stage.boxCls.includes("#A9D1F7") ? "#131E5C" : "white" }}>
+                                            <div className="flex items-center justify-between px-4 py-3">
+                                                <span className="text-xs font-bold">{stage.label}</span>
+                                                <span className="text-xl font-black">{stage.value.toLocaleString("es-MX")}</span>
+                                            </div>
+                                        </div>
+                                        {stage.conversion !== null && <div className={cls("shrink-0 rounded-lg border px-3 py-1.5 text-center", convBg)}>
+                                            <div className={cls("text-sm font-black", convColor)}>{stage.conversion.toFixed(1)}%</div>
+                                            <div className="text-[8px] font-bold text-slate-400">→ {stage.nextLabel}</div>
+                                        </div>}
+                                    </div>
+                                    {stage.conversion !== null && <div className="ml-3 mt-2 flex items-center gap-4 pl-11 text-[10px]">
+                                        <span className="text-slate-500"><span className="font-bold text-slate-700">{stage.avanzaron}</span> de {stage.baseClientes} avanzaron</span>
+                                        <span className="text-red-400"><span className="font-bold text-red-500">{stage.perdidos}</span> no avanzaron</span>
+                                    </div>}
+                                </div>
+                            </div>;
+                        })}
                     </div>
                 </div>
 
-                <div className="-mt-20 rounded-xl border border-[#131E5C]/20 bg-white px-4 py-3">
-                    <h4 className="text-xs font-black text-[#131E5C]">Rendimiento de citas</h4>
-                    <div className="mt-2 grid items-center gap-4 sm:grid-cols-[1fr_80px_1fr]">
-                        <div className="text-center"><div className="text-xs font-bold text-slate-500">Citas registradas</div><div className="text-3xl font-black text-[#131E5C]">{metricas.citados}</div><div className="text-[10px] text-slate-400">Mismo criterio del módulo de Citas</div></div>
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="text-sm font-black text-[#131E5C]">Rendimiento de citas</h4>
+                    <div className="mt-4 grid items-center gap-4 sm:grid-cols-[1fr_80px_1fr]">
+                        <div className="text-center"><div className="text-xs font-bold text-slate-500">Citas registradas</div><div className="mt-1 text-3xl font-black text-[#131E5C]">{metricas.citados}</div><div className="text-[10px] text-slate-400">Mismo criterio del módulo de Citas</div></div>
                         <div className="flex items-center"><div className="h-px flex-1 bg-blue-500" /><div className="h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-[#1670F5]" /></div>
-                        <div className="text-center"><div className="text-xs font-bold text-slate-500">Citas efectivas</div><div className="text-3xl font-black text-[#131E5C]">{metricas.efectivas}</div><div className="text-[10px] text-slate-400">Asistencia=true</div></div>
+                        <div className="text-center"><div className="text-xs font-bold text-slate-500">Citas efectivas</div><div className="mt-1 text-3xl font-black text-[#131E5C]">{metricas.efectivas}</div><div className="text-[10px] text-slate-400">Asistencia=true</div></div>
                     </div>
-                    <div className="mt-3 grid grid-cols-[110px_minmax(0,1fr)_60px_auto] items-center gap-3"><div className="text-[10px] font-black text-slate-500">Efectividad de citas</div><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className={cls("h-full rounded-full bg-blue-600 transition-all", widthClass(metricas.efectividadCitas))} /></div><div className="text-right text-xs font-black text-[#131E5C]">{metricas.efectividadCitas.toFixed(1)}%</div><div className={cls("rounded-full border px-2 py-1 text-[9px] font-black", estadoRendimiento.bg, estadoRendimiento.border, estadoRendimiento.text)}>• {estadoRendimiento.label}</div></div>
+                    <div className="mt-4 grid grid-cols-[110px_minmax(0,1fr)_60px_auto] items-center gap-3"><div className="text-[10px] font-black text-slate-500">Efectividad de citas</div><div className="h-2.5 overflow-hidden rounded-full bg-blue-100"><div className={cls("h-full rounded-full bg-blue-600 transition-all", widthClass(metricas.efectividadCitas))} /></div><div className="text-right text-xs font-black text-[#131E5C]">{metricas.efectividadCitas.toFixed(1)}%</div><div className={cls("rounded-full border px-2 py-1 text-[9px] font-black", estadoRendimiento.bg, estadoRendimiento.border, estadoRendimiento.text)}>• {estadoRendimiento.label}</div></div>
                 </div>
             </div>
 
-            <div className="grid min-w-0 gap-4">
-                <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Cumplimiento de metas</h4><div className="space-y-2"><MetaRow label="Contacto" value={metricas.tasaContacto} meta={90} /><MetaRow label="Citas efectivas" value={metricas.efectividadCitas} meta={80} /><MetaRow label="Facturación" value={metricas.tasaFacturacion} meta={100} /></div></section>
-                <section><h4 className="mb-2 text-xs font-black text-[#131E5C]">Proceso comercial</h4><div className="overflow-hidden rounded-xl border border-slate-100 bg-white"><ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" /><ProcessRow label="ANF" value={metricas.anf} detail="Solicitud autorizada/condicionada aún sin VIN facturado" /><ProcessRow label="Facturados" value={metricas.facturados} detail="Expedientes con facturado_at dentro del período seleccionado" /></div></section>
+            <div className="grid min-w-0 gap-5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="mb-3 text-sm font-black text-[#131E5C]">Cumplimiento de metas</h4>
+                    <div className="space-y-2"><MetaRow label="Contacto" value={metricas.tasaContacto} meta={90} /><MetaRow label="Citas efectivas" value={metricas.efectividadCitas} meta={80} /><MetaRow label="Facturación" value={metricas.tasaFacturacion} meta={100} /></div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="mb-3 text-sm font-black text-[#131E5C]">Proceso comercial</h4>
+                    <div className="overflow-hidden rounded-xl border border-slate-100"><ProcessRow label="Solicitudes ingresadas" value={metricas.solicitudes} detail="Folio o estatus de solicitud capturado" /><ProcessRow label="ANF" value={metricas.anf} detail="Solicitud autorizada/condicionada aún sin VIN facturado" /><ProcessRow label="Facturados" value={metricas.facturados} detail="Expedientes con facturado_at dentro del período seleccionado" /></div>
+                </div>
             </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-5 px-5 pb-3 text-[10px] font-bold text-slate-500"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />En meta</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Atención</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" />Crítico</span></div>
+        <div className="mx-5 mt-3 flex flex-wrap items-center justify-center gap-5 text-[10px] font-bold text-slate-500"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />En meta</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Atención</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" />Crítico</span></div>
 
-        <section className="px-5">
-            <div className="mb-1 flex items-center justify-end"><span className="text-[10px] text-slate-400">Comparativo del período seleccionado</span></div>
-            <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead><tr className="border-b border-slate-200 text-slate-500">{["Asesora", "Gestionables", "Contactados", "Citados", "Efectivas", "No show", "Solicitudes", "Facturados", "Efectividad", "Estado"].map((label, i) => <th key={label} className={cls("px-2 py-2 font-bold", i ? "text-center" : "")}>{label}</th>)}</tr></thead><tbody>
-                {resultadosAsesor.map((item) => { const estado = getEstadoAsesorBDC(item.efectividad); return <tr key={item.nombre} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"><td className="px-2 py-2.5 font-bold text-slate-900">{item.nombre}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.gestionables}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.contactados}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.citados}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.efectivas}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.noShow}</td><td className="px-2 py-2.5 text-center font-semibold text-slate-600">{item.solicitudes}</td><td className="px-2 py-2.5 text-center font-black text-slate-900">{item.facturados}</td><td className="px-2 py-2.5 text-center"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-black text-[#131E5C]">{item.efectividad.toFixed(1)}%</span></td><td className="px-2 py-2.5 text-center"><span className={cls("inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black", estado.cls)}>• {estado.label}</span></td></tr>; })}
-                {!resultadosAsesor.length ? <tr><td colSpan={10} className="px-3 py-8 text-center text-slate-400">Sin resultados para los filtros seleccionados.</td></tr> : null}
-            </tbody></table></div>
+        <section className="mx-5 mt-5">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+                    <h4 className="text-sm font-black text-[#131E5C]">Comparativo por asesora</h4>
+                    <span className="text-[10px] text-slate-400">Período seleccionado</span>
+                </div>
+                <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead><tr className="border-b border-slate-200 text-slate-500">{["Asesora", "Gestionables", "Contactados", "Citados", "Efectivas", "No show", "Solicitudes", "Facturados", "Efectividad", "Estado"].map((label, i) => <th key={label} className={cls("px-3 py-2.5 font-bold", i ? "text-center" : "")}>{label}</th>)}</tr></thead><tbody>
+                    {resultadosAsesor.map((item) => { const estado = getEstadoAsesorBDC(item.efectividad); return <tr key={item.nombre} className="border-b border-slate-100 last:border-b-0 transition hover:bg-slate-50"><td className="px-3 py-2.5 font-bold text-slate-900">{item.nombre}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{item.gestionables}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{item.contactados}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{item.citados}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{item.efectivas}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{item.noShow}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{item.solicitudes}</td><td className="px-3 py-2.5 text-center font-black text-slate-900">{item.facturados}</td><td className="px-3 py-2.5 text-center"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-black text-[#131E5C]">{item.efectividad.toFixed(1)}%</span></td><td className="px-3 py-2.5 text-center"><span className={cls("inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black", estado.cls)}>• {estado.label}</span></td></tr>; })}
+                    {!resultadosAsesor.length ? <tr><td colSpan={10} className="px-3 py-8 text-center text-slate-400">Sin resultados para los filtros seleccionados.</td></tr> : null}
+                </tbody></table></div>
+            </div>
         </section>
 
-        <div className="grid gap-8 px-5 py-5 xl:grid-cols-2">
-            <section><h4 className="mb-4 text-sm font-black text-slate-950">¿De dónde vienen los resultados?</h4><div className="space-y-3">{origenStats.slice(0, 6).map(([label, total]) => { const pct = metricas.oportunidades ? (total / metricas.oportunidades) * 100 : 0; return <div key={label} className="grid grid-cols-[110px_minmax(0,1fr)_44px] items-center gap-3"><span className="truncate text-[11px] font-medium text-slate-600" title={label}>{label}</span><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full transition-all", widthClass((total / maxOrigen) * 100), getOriginBarClass(label))} /></div><span className="text-right text-[11px] font-black text-slate-900">{pct.toFixed(0)}%</span></div>; })}{!origenStats.length ? <div className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-400">Sin datos de origen.</div> : null}</div></section>
-            <section><h4 className="mb-3 text-sm font-black text-slate-950">Leads descartados</h4><div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setShowDiscardDetails((value) => !value)} className="rounded-xl bg-slate-50 p-4 text-left transition hover:bg-slate-100"><div className="text-xs text-slate-500">Total descartados</div><div className="mt-1 text-3xl font-black text-slate-950">{metricas.descartados}</div><div className="mt-2 text-[10px] font-bold text-[#131E5C]">{showDiscardDetails ? "Ocultar motivos" : "Ver todos los motivos"}</div></button><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Principal motivo</div><div className="mt-1 line-clamp-2 text-xl font-black text-slate-950">{principalDescarte[0]}</div><div className="mt-1 text-xs text-slate-500">{principalDescarte[1]} leads</div></div></div>{showDiscardDetails && motivosDescarte.length ? <div className="mt-3 space-y-3 rounded-xl border border-slate-200 p-4">{motivosDescarte.map(([label, total]) => <div key={label}><div className="mb-1 flex items-center justify-between gap-3 text-[10px]"><span className="truncate font-semibold text-slate-600" title={label}>{label}</span><span className="font-black text-slate-900">{total}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full bg-slate-500", widthClass((total / maxMotivo) * 100))} /></div></div>)}</div> : null}</section>
+        <div className="mx-5 mt-5 grid gap-5 pb-6 xl:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h4 className="mb-4 text-sm font-black text-[#131E5C]">¿De dónde vienen los resultados?</h4>
+                <div className="space-y-3">{origenStats.slice(0, 6).map(([label, total]) => { const pct = metricas.oportunidades ? (total / metricas.oportunidades) * 100 : 0; return <div key={label} className="grid grid-cols-[120px_minmax(0,1fr)_44px] items-center gap-3"><span className="truncate text-[11px] font-medium text-slate-600" title={label}>{label}</span><div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full transition-all", widthClass((total / maxOrigen) * 100), getOriginBarClass(label))} /></div><span className="text-right text-[11px] font-black text-slate-900">{pct.toFixed(0)}%</span></div>; })}{!origenStats.length ? <div className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-400">Sin datos de origen.</div> : null}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h4 className="mb-3 text-sm font-black text-[#131E5C]">Leads descartados</h4>
+                <div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setShowDiscardDetails((value) => !value)} className="rounded-xl bg-slate-50 p-4 text-left transition hover:bg-slate-100"><div className="text-xs text-slate-500">Total descartados</div><div className="mt-1 text-3xl font-black text-slate-950">{metricas.descartados}</div><div className="mt-2 text-[10px] font-bold text-[#131E5C]">{showDiscardDetails ? "Ocultar motivos" : "Ver todos los motivos"}</div></button><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Principal motivo</div><div className="mt-1 line-clamp-2 text-xl font-black text-slate-950">{principalDescarte[0]}</div><div className="mt-1 text-xs text-slate-500">{principalDescarte[1]} leads</div></div></div>{showDiscardDetails && motivosDescarte.length ? <div className="mt-3 space-y-3 rounded-xl border border-slate-200 p-4">{motivosDescarte.map(([label, total]) => <div key={label}><div className="mb-1 flex items-center justify-between gap-3 text-[10px]"><span className="truncate font-semibold text-slate-600" title={label}>{label}</span><span className="font-black text-slate-900">{total}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={cls("h-full rounded-full bg-slate-500", widthClass((total / maxMotivo) * 100))} /></div></div>)}</div> : null}
+            </div>
         </div>
     </div>;
 }
