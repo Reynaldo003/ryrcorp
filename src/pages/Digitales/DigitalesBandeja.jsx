@@ -11,11 +11,12 @@ import {
     ArrowLeft, Search, X, Building2, Loader2, Send, Phone,
     Play, Pause, FileText, Check, CheckCheck, Clock, AlertCircle,
     LayoutTemplate, Zap, ChevronLeft, ChevronDown, Smile, Paperclip, Mic, Square, Pencil, MessageCircle,
-    UserRound, Activity, CalendarClock, CheckCircle2, XCircle, Tag,
+    UserRound, Activity, CalendarClock, CheckCircle2, XCircle, Tag, Ban,
 } from "lucide-react";import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
 import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
+import { encontrarCategoriaDeMotivo, MOTIVOS_DESCALIFICACION_POR_CATEGORIA } from "./motivosDescalificacion";
 
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
@@ -357,6 +358,12 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
     const ultimoMensaje = String(chat?.last?.text || "").trim() || "Sin mensajes recientes";
     const hora = formatHoraCorta(chat?.last?.timestamp) || chat?.last?.time || "—";
     const quiereSeminuevos = normalizeText(chat?.autoInteres).includes("seminuevos");
+    const esDescalificado = safeLower(estado?.key) === "descalificado";
+    const motivoDesc = String(chat?.motivoDescalificacion || "").trim();
+    const categoriaMotivo = esDescalificado && motivoDesc ? encontrarCategoriaDeMotivo(motivoDesc) : null;
+    const labelCategoria = categoriaMotivo
+        ? (MOTIVOS_DESCALIFICACION_POR_CATEGORIA.find((c) => c.key === categoriaMotivo)?.label || "")
+        : "";
     const [savingEtapa, setSavingEtapa] = useState(false);
 
     async function handleEtapaChange(label) {
@@ -425,6 +432,20 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
                         <div className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-slate-400">
                             <Building2 className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">{chat.agencia}</span>
+                        </div>
+                    ) : null}
+
+                    {esDescalificado && motivoDesc ? (
+                        <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2 py-1">
+                            <Ban className="h-3 w-3 shrink-0 text-red-500" />
+                            <span className="truncate text-[10px] font-extrabold text-red-600" title={motivoDesc}>
+                                {motivoDesc}
+                            </span>
+                            {labelCategoria ? (
+                                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[8px] font-bold text-red-500 ring-1 ring-red-200/50">
+                                    {labelCategoria}
+                                </span>
+                            ) : null}
                         </div>
                     ) : null}
 
@@ -2452,6 +2473,12 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
     const interes = firstNonEmpty(prospecto?.auto_interes, prospecto?.interes, prospecto?.vehiculo, prospecto?.modelo) || "Por confirmar";
     const asignadoA = String(prospecto?.asignadoA || "").trim() || "Sin asignar";
     const estado = getEstadoBandeja(prospecto?.estado);
+    const esDescalificado = safeLower(estado?.key) === "descalificado";
+    const motivoDesc = String(prospecto?.motivo_descalificacion || "").trim();
+    const categoriaMotivo = esDescalificado && motivoDesc ? encontrarCategoriaDeMotivo(motivoDesc) : null;
+    const labelCategoria = categoriaMotivo
+        ? (MOTIVOS_DESCALIFICACION_POR_CATEGORIA.find((c) => c.key === categoriaMotivo)?.label || "")
+        : "";
     const actividad = useMemo(() => buildActividad(prospecto || {}), [prospecto]);
 
     if (!open || !prospecto) return null;
@@ -2531,6 +2558,26 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
                             </div>
                         </div>
                     </div>
+
+                    {esDescalificado && motivoDesc ? (
+                        <div className="mt-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 shadow-sm">
+                            <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-red-700">
+                                <Ban className="h-4 w-4" />
+                                Motivo de descalificación
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-red-200 bg-white px-2.5 py-1 text-[10px] font-extrabold text-red-700">
+                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                                    <span className="truncate">{motivoDesc}</span>
+                                </span>
+                                {labelCategoria ? (
+                                    <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-bold text-red-500 ring-1 ring-red-200/50">
+                                        {labelCategoria}
+                                    </span>
+                                ) : null}
+                            </div>
+                        </div>
+                    ) : null}
 
                     {cita ? (
                         <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
@@ -2798,6 +2845,7 @@ export default function DigitalesBandeja() {
                     chat?.auto_interes,
                     chat?.interes
                 ) || "",
+                motivoDescalificacion: prospecto?.motivo_descalificacion || "",
             };
         });
     }, [chats, prospectoPorTel, userAliases]);

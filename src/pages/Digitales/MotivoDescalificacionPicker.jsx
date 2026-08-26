@@ -108,10 +108,8 @@ export default function MotivoDescalificacionPicker({ value, onChange, invalid =
                         autoFocus
                         type="text"
                         value={otroTexto}
-                        onChange={(e) => {
-                            setOtroTexto(e.target.value);
-                            onChange(e.target.value);
-                        }}
+                        onChange={(e) => setOtroTexto(e.target.value)}
+                        onBlur={() => onChange(otroTexto)}
                         placeholder="Especifica el motivo…"
                         className={cls(
                             "h-10 w-full rounded-lg border px-3 text-sm font-bold outline-none transition focus:ring-2",
