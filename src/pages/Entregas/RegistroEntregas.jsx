@@ -794,20 +794,27 @@ export default function RegistroEntregas() {
     );
 
     const VERSIONES = [
+        "Track",
         "Trendline",
         "Comfortline",
         "Highline",
+        "Life",
+        "Style",
         "Sportline",
+        "R-Line",
         "GLI",
         "GTI",
         "GT",
-        "Track",
         "R",
         "Peak Edition",
+        "Dark Label",
+        "Panamericana",
+        "Aventura",
         "Robust",
         "Extreme",
-        "Cross Sport",
         "Goal",
+        "Maxi Cargo",
+        "Cargo Van",
     ];
 
     const COLORES = [
@@ -821,6 +828,7 @@ export default function RegistroEntregas() {
         "Gris Franela",
         "Gris Olivo",
         "Gris Ascot",
+        "Gris Moonstone",
         "Negro Ninja",
         "Negro Profundo",
         "Azul Rising",
