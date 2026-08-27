@@ -38,6 +38,7 @@ import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
 import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "../Digitales/asesoresPiso";
+import { estadoAutomaticoBandeja, tieneCalificacionRapida } from "../Digitales/estadosProspecto";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { FileDown } from "lucide-react";
@@ -114,13 +115,32 @@ async function sincronizarEtapaConAsistencia(cita = {}) {
     if (Number.isNaN(dt.getTime())) return;
     if (dt.getTime() > Date.now()) return; // la cita aún no ocurre
 
-    const estado = cita?.asistencia ? "Asistencia a la Cita" : "No asistió";
+    const asistio = Boolean(cita?.asistencia);
 
     try {
         const lista = await api.digitalesListProspectos({});
         const prospectos = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
         const prospecto = prospectos.find((p) => normalizaTelefonoMx(p?.telefono) === telefono);
         if (!prospecto?.id) return;
+
+        const estado = asistio
+            ? "Asistencia a la Cita"
+            : estadoAutomaticoBandeja({
+                  plazo: prospecto?.plazo_compra,
+                  vinFacturado: prospecto?.vin_facturado,
+                  vinEstatus: prospecto?.vin_estatus_entrega,
+                  folioSolicitudCredito: prospecto?.folio_solicitud_credito,
+                  evidencias: prospecto?.evidencias,
+                  calificacionRapidaLlena: tieneCalificacionRapida({
+                      enganche_monto: prospecto?.enganche_monto,
+                      presupuesto_mensual: prospecto?.presupuesto_mensual,
+                      buro_estado: prospecto?.buro_estado,
+                      plazo_compra: prospecto?.plazo_compra,
+                  }),
+                  citaNoAsistio: true,
+                  estadoBase: prospecto?.estado || "",
+              });
+
         await api.digitalesPatchProspecto(prospecto.id, { estado });
     } catch (error) {
         console.error("No se pudo sincronizar la etapa en la bandeja:", error);

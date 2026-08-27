@@ -62,6 +62,11 @@ const ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO = new Set([
     "documentos enviados",
     "solicitud de credito",
     "solicitud de crédito",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
     "autorizado no formalizado",
     "facturado",
     "entregado",
@@ -75,6 +80,11 @@ const ESTADOS_NO_SOBRESCRIBIR_FOLIO = new Set([
     "documentos enviados",
     "solicitud de credito",
     "solicitud de crédito",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
     "autorizado no formalizado",
     "facturado",
     "entregado",
@@ -88,6 +98,11 @@ const ESTADOS_NO_SOBRESCRIBIR_RECOPILACION = new Set([
     "documentos enviados",
     "solicitud de credito",
     "solicitud de crédito",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
     "autorizado no formalizado",
     "facturado",
     "entregado",
@@ -179,22 +194,76 @@ export function estadoBandejaRecopilacionDocumentos({
 //   3) Folio de solicitud de crédito          -> Solicitud de Crédito
 //   4) Contactado + PDF cargado + sin folio    -> Recopilación de Documentos
 //   5) Plazo 3 a 6 meses o más                 -> Seguimiento
+export function tieneCalificacionRapida({
+    enganche_monto,
+    presupuesto_mensual,
+    buro_estado,
+    plazo_compra,
+} = {}) {
+    return Boolean(
+        String(enganche_monto || "").trim() ||
+        String(presupuesto_mensual || "").trim() ||
+        String(buro_estado || "").trim() ||
+        String(plazo_compra || "").trim()
+    );
+}
+
+const ESTADOS_NO_SOBRESCRIBIR_NOSHOW = new Set([
+    "descalificado",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
+    "facturado",
+    "entregado",
+]);
+
+export function estadoBandejaNoShow({
+    yaContactado,
+    calificacionRapidaLlena,
+    citaNoAsistio,
+    estadoActual,
+}) {
+    if (!citaNoAsistio || !yaContactado || !calificacionRapidaLlena) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_NOSHOW.has(normalizaEstado(estadoActual || ""))) return estadoActual;
+    return "No asistió";
+}
+
+export function citaEsNoAsistio(cita) {
+    if (!cita) return false;
+    if (cita.asistencia === true) return false;
+    if (cita.asistencia === false) return true;
+    const e = normalizaEstado(cita.estado_cita || "");
+    return e === "no asistio" || e === "no_show" || e === "noshow" || e === "no asistió" || e === "no show";
+}
+
 export function estadoAutomaticoBandeja({
     plazo,
     vinFacturado,
     vinEstatus,
     folioSolicitudCredito,
     evidencias,
-    estadoBase,
+    calificacionRapidaLlena = false,
+    citaNoAsistio = false,
+    estadoBase = "",
 }) {
     const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
     const porVinEntregado = estadoBandejaVinEntregado(vinFacturado, vinEstatus, porPlazo);
     const porVinFacturado = estadoBandejaVinFacturado(vinFacturado, vinEstatus, porVinEntregado);
-    const porFolio = estadoBandejaFolioCredito(folioSolicitudCredito, porVinFacturado);
-    return estadoBandejaRecopilacionDocumentos({
+    const yaContactado = yaFueContactado(estadoBase);
+    const porNoShow = estadoBandejaNoShow({
+        yaContactado,
+        calificacionRapidaLlena,
+        citaNoAsistio,
+        estadoActual: porVinFacturado,
+    });
+    const porFolio = estadoBandejaFolioCredito(folioSolicitudCredito, porNoShow);
+    const porRecopilacion = estadoBandejaRecopilacionDocumentos({
         tienePdf: tienePdfEnEvidencias(evidencias),
-        yaContactado: yaFueContactado(estadoBase),
+        yaContactado,
         folioSolicitudCredito,
         estadoActual: porFolio,
     });
+    return porRecopilacion;
 }

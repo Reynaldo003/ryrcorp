@@ -59,7 +59,7 @@ import { apiCitas } from "../../lib/apiCitas";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
-import { ESTADOS_LABELS, estadoAutomaticoBandeja } from "./estadosProspecto";
+import { ESTADOS_LABELS, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio } from "./estadosProspecto";
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -4788,6 +4788,7 @@ export default function DigitalesContacto() {
 
         // Reglas automáticas de bandeja:
         // - VIN facturado + estatus "entregado" -> Entregado (prioridad).
+        // - Cita con estatus "No asistió" + contactado + Calificación Rápida llena -> No asistió (No Show).
         // - Plazo de 3 a 6 meses o más -> Seguimiento.
         const estado = estadoAutomaticoBandeja({
             plazo: quickEditDraft.plazo_compra,
@@ -4795,6 +4796,8 @@ export default function DigitalesContacto() {
             vinEstatus: quickEditDraft.vin_estatus_entrega,
             folioSolicitudCredito: quickEditDraft.folio_solicitud_credito,
             evidencias: prospecto?.evidencias,
+            calificacionRapidaLlena: tieneCalificacionRapida(quickEditDraft),
+            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
             estadoBase: estadoOriginal,
         });
 
@@ -6999,14 +7002,16 @@ export default function DigitalesContacto() {
                                                                         onClick={() => setQuickEditDraft(p => ({
                                                                 ...p,
                                                                 plazo_compra: plazo,
-                                                                estado: estadoAutomaticoBandeja({
-                                                                    plazo,
-                                                                    vinFacturado: p.vin_facturado,
-                                                                    vinEstatus: p.vin_estatus_entrega,
-                                                                    folioSolicitudCredito: p.folio_solicitud_credito,
-                                                                    evidencias: prospecto?.evidencias,
-                                                                    estadoBase: prospecto?.estado || "",
-                                                                }),
+                                                                    estado: estadoAutomaticoBandeja({
+                                                                        plazo,
+                                                                        vinFacturado: p.vin_facturado,
+                                                                        vinEstatus: p.vin_estatus_entrega,
+                                                                        folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                        evidencias: prospecto?.evidencias,
+                                                                        calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                        citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                        estadoBase: prospecto?.estado || "",
+                                                                    }),
                                                             }))}
                                                                         className={cls(
                                                                             "rounded-full border px-3 py-1.5 text-[11px] font-extrabold transition",
@@ -7097,6 +7102,8 @@ export default function DigitalesContacto() {
                                                                             vinEstatus: p.vin_estatus_entrega,
                                                                             folioSolicitudCredito: p.folio_solicitud_credito,
                                                                             evidencias: prospecto?.evidencias,
+                                                                            calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
                                                                             estadoBase: prospecto?.estado || "",
                                                                         }),
                                                                     };
@@ -7125,6 +7132,8 @@ export default function DigitalesContacto() {
                                                                                     vinEstatus,
                                                                                     folioSolicitudCredito: p.folio_solicitud_credito,
                                                                                     evidencias: prospecto?.evidencias,
+                                                                                    calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                                    citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
                                                                                     estadoBase: prospecto?.estado || "",
                                                                                 }),
                                                                             };

@@ -9,7 +9,7 @@ import PHONE from "/phone.svg";
 import { api } from "../../lib/apiPruebas";
 import { ASESORES_PISO } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
-import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja } from "./estadosProspecto";
+import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio } from "./estadosProspecto";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
@@ -162,13 +162,15 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
     }
     async function guardar({ cerrar = true, procesarArchivos = true } = {}) {
         if (saving || !validar()) return null;
-        // Estado automático según las reglas de bandeja (VIN, folio, PDF, plazo).
+        // Estado automático según las reglas de bandeja (VIN, No Show, folio, PDF, plazo).
         const estadoAuto = estadoAutomaticoBandeja({
             plazo: draft.plazo_compra,
             vinFacturado: draft.vin_facturado,
             vinEstatus: draft.vin_estatus_entrega,
             folioSolicitudCredito: draft.folio_solicitud_credito,
             evidencias: [...(draft.evidencias_existentes || []), ...(draft.evidencias_nuevas || [])],
+            calificacionRapidaLlena: tieneCalificacionRapida(draft),
+            citaNoAsistio: citaEsNoAsistio(draft.cita),
             estadoBase: draft.estado,
         });
         const payload = buildPayload();
