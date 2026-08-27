@@ -9,7 +9,7 @@ import PHONE from "/phone.svg";
 import { api } from "../../lib/apiPruebas";
 import { ASESORES_PISO } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
-import { ETIQUETAS_ESTADO } from "./estadosProspecto";
+import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja } from "./estadosProspecto";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
@@ -161,7 +161,19 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
         const eliminar = draft.delete_evidencia_ids || []; if (eliminar.length) await Promise.allSettled(eliminar.map((evidenciaId) => api.digitalesDeleteEvidencia(id, evidenciaId, { ...requestContext, numero_asesor: numeroLinea })));
     }
     async function guardar({ cerrar = true, procesarArchivos = true } = {}) {
-        if (saving || !validar()) return null; const payload = buildPayload(), firma = JSON.stringify(payload); setSaving(true);
+        if (saving || !validar()) return null;
+        // Estado automático según las reglas de bandeja (VIN, folio, PDF, plazo).
+        const estadoAuto = estadoAutomaticoBandeja({
+            plazo: draft.plazo_compra,
+            vinFacturado: draft.vin_facturado,
+            vinEstatus: draft.vin_estatus_entrega,
+            folioSolicitudCredito: draft.folio_solicitud_credito,
+            evidencias: [...(draft.evidencias_existentes || []), ...(draft.evidencias_nuevas || [])],
+            estadoBase: draft.estado,
+        });
+        const payload = buildPayload();
+        payload.estado = estadoAuto;
+        const firma = JSON.stringify(payload); setSaving(true);
         try {
             let id = draft.id_exp || prospectoId, respuesta = ultimoProspectoRef.current;
             if (!esEdicion && !id) { respuesta = await api.digitalesCreateProspecto(payload); id = respuesta?.id || respuesta?.id_exp || respuesta?.prospecto?.id || null; if (!id) throw new Error("El backend guardó el prospecto, pero no devolvió su ID."); }

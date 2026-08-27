@@ -47,3 +47,154 @@ export const ESTADOS_OPCIONES_BANDEJA = ESTADOS_PROSPECTO.filter(
 );
 
 export const ESTADOS_LABELS = ESTADOS_OPCIONES_BANDEJA.map((e) => e.label);
+
+// ─── Derivación automática de bandeja/estado ────────────────────────────────
+
+const ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO = new Set([
+    "descalificado",
+    "cita programada",
+    "asistencia a la cita",
+    "no show",
+    "no asistio",
+    "financiamiento",
+    "recopilacion de documentos",
+    "recopilación de documentos",
+    "documentos enviados",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "autorizado no formalizado",
+    "facturado",
+    "entregado",
+]);
+
+const ESTADOS_NO_SOBRESCRIBIR_FOLIO = new Set([
+    "descalificado",
+    "financiamiento",
+    "recopilacion de documentos",
+    "recopilación de documentos",
+    "documentos enviados",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "autorizado no formalizado",
+    "facturado",
+    "entregado",
+]);
+
+const ESTADOS_NO_SOBRESCRIBIR_RECOPILACION = new Set([
+    "descalificado",
+    "financiamiento",
+    "recopilacion de documentos",
+    "recopilación de documentos",
+    "documentos enviados",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "autorizado no formalizado",
+    "facturado",
+    "entregado",
+]);
+
+// Verifica que exista al menos un PDF cargado (por nombre o tipo MIME).
+export function tienePdfEnEvidencias(evidencias) {
+    const lista = Array.isArray(evidencias) ? evidencias : [];
+    return lista.some((ev) => {
+        const nombre = String(
+            ev?.name || ev?.nombre || ev?.filename || ev?.file?.name || ""
+        ).toLowerCase();
+        const tipo = String(
+            ev?.type || ev?.mime_type || ev?.content_type || ev?.file?.type || ""
+        ).toLowerCase();
+        return nombre.endsWith(".pdf") || tipo.includes("pdf");
+    });
+}
+
+// "Ya fue contactado" = cualquier estado distinto de vacío o "Sin Contactar".
+export function yaFueContactado(estado) {
+    const e = normalizaEstado(estado || "");
+    return e !== "" && e !== "sin contactar" && e !== "sin_contactar";
+}
+
+export function estadoBandejaSegunPlazo(plazo, estadoActual) {
+    const plazoNorm = normalizaEstado(plazo || "");
+    const esPlazoSeguimiento =
+        plazoNorm === "3 a 6 meses" ||
+        plazoNorm === "mas de 6 meses" ||
+        plazoNorm === "más de 6 meses";
+    if (!esPlazoSeguimiento) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO.has(normalizaEstado(estadoActual || ""))) {
+        return estadoActual;
+    }
+    return "Seguimiento";
+}
+
+export function estadoBandejaVinEntregado(vinFacturado, vinEstatus, estadoActual) {
+    if (
+        String(vinFacturado || "").trim() &&
+        normalizaEstado(vinEstatus || "") === "entregado"
+    ) {
+        return "Entregado";
+    }
+    return estadoActual;
+}
+
+export function estadoBandejaVinFacturado(vinFacturado, vinEstatus, estadoActual) {
+    if (normalizaEstado(estadoActual || "") === "descalificado") return estadoActual;
+    if (
+        String(vinFacturado || "").trim() &&
+        normalizaEstado(vinEstatus || "") !== "entregado"
+    ) {
+        return "Facturado";
+    }
+    return estadoActual;
+}
+
+export function estadoBandejaFolioCredito(folio, estadoActual) {
+    if (
+        String(folio || "").trim() &&
+        !ESTADOS_NO_SOBRESCRIBIR_FOLIO.has(normalizaEstado(estadoActual || ""))
+    ) {
+        return "Solicitud de Crédito";
+    }
+    return estadoActual;
+}
+
+export function estadoBandejaRecopilacionDocumentos({
+    tienePdf,
+    yaContactado,
+    folioSolicitudCredito,
+    estadoActual,
+}) {
+    if (!tienePdf || !yaContactado) return estadoActual;
+    if (String(folioSolicitudCredito || "").trim()) return estadoActual; // el folio va a Solicitud de Crédito
+    if (
+        ESTADOS_NO_SOBRESCRIBIR_RECOPILACION.has(normalizaEstado(estadoActual || ""))
+    ) {
+        return estadoActual;
+    }
+    return "Recopilación de Documentos";
+}
+
+// Orden de prioridad:
+//   1) VIN facturado + entregado              -> Entregado
+//   2) VIN facturado (sin entregar)           -> Facturado
+//   3) Folio de solicitud de crédito          -> Solicitud de Crédito
+//   4) Contactado + PDF cargado + sin folio    -> Recopilación de Documentos
+//   5) Plazo 3 a 6 meses o más                 -> Seguimiento
+export function estadoAutomaticoBandeja({
+    plazo,
+    vinFacturado,
+    vinEstatus,
+    folioSolicitudCredito,
+    evidencias,
+    estadoBase,
+}) {
+    const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
+    const porVinEntregado = estadoBandejaVinEntregado(vinFacturado, vinEstatus, porPlazo);
+    const porVinFacturado = estadoBandejaVinFacturado(vinFacturado, vinEstatus, porVinEntregado);
+    const porFolio = estadoBandejaFolioCredito(folioSolicitudCredito, porVinFacturado);
+    return estadoBandejaRecopilacionDocumentos({
+        tienePdf: tienePdfEnEvidencias(evidencias),
+        yaContactado: yaFueContactado(estadoBase),
+        folioSolicitudCredito,
+        estadoActual: porFolio,
+    });
+}

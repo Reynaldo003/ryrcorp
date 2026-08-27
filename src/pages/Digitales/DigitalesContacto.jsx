@@ -59,7 +59,7 @@ import { apiCitas } from "../../lib/apiCitas";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
-import { ESTADOS_LABELS } from "./estadosProspecto";
+import { ESTADOS_LABELS, estadoAutomaticoBandeja } from "./estadosProspecto";
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -313,102 +313,8 @@ function normalizeText(value) {
         .replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-// Plazos de compra de medio/largo plazo (3 a 6 meses o más) deben enviar al
-// prospecto directamente a la bandeja de Seguimiento, salvo que ya esté en una
-// etapa más avanzada o negativa que no deba sobrescribirse.
-const ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO = new Set([
-    "descalificado",
-    "cita programada",
-    "asistencia a la cita",
-    "no show",
-    "no asistio",
-    "financiamiento",
-    "recopilacion de documentos",
-    "recopilación de documentos",
-    "documentos enviados",
-    "solicitud de credito",
-    "solicitud de crédito",
-    "autorizado no formalizado",
-    "facturado",
-    "entregado",
-]);
-
-function estadoBandejaSegunPlazo(plazo, estadoActual) {
-    const plazoNorm = normalizeText(plazo || "");
-    const esPlazoSeguimiento =
-        plazoNorm === "3 a 6 meses" ||
-        plazoNorm === "mas de 6 meses" ||
-        plazoNorm === "más de 6 meses";
-    if (!esPlazoSeguimiento) return estadoActual;
-    if (ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO.has(normalizeText(estadoActual || ""))) {
-        return estadoActual;
-    }
-    return "Seguimiento";
-}
-
-// VIN facturado + estatus "entregado" -> bandeja Entregado (prioridad máxima).
-function estadoBandejaVinEntregado(vinFacturado, vinEstatus, estadoActual) {
-    if (
-        String(vinFacturado || "").trim() &&
-        normalizeText(vinEstatus || "") === "entregado"
-    ) {
-        return "Entregado";
-    }
-    return estadoActual;
-}
-
-// VIN facturado (sin estatus entregado) -> bandeja Facturado. No aplica si ya
-// está entregado (lo maneja la regla anterior) ni si está descalificado.
-function estadoBandejaVinFacturado(vinFacturado, vinEstatus, estadoActual) {
-    if (normalizeText(estadoActual || "") === "descalificado") return estadoActual;
-    if (
-        String(vinFacturado || "").trim() &&
-        normalizeText(vinEstatus || "") !== "entregado"
-    ) {
-        return "Facturado";
-    }
-    return estadoActual;
-}
-
-// Folio de solicitud de crédito -> bandeja Solicitud de Crédito (no importa
-// el estatus de la solicitud). No debe retroceder etapas más avanzadas ni
-// descalificar.
-const ESTADOS_NO_SOBRESCRIBIR_FOLIO = new Set([
-    "descalificado",
-    "financiamiento",
-    "recopilacion de documentos",
-    "recopilación de documentos",
-    "documentos enviados",
-    "solicitud de credito",
-    "solicitud de crédito",
-    "autorizado no formalizado",
-    "facturado",
-    "entregado",
-]);
-
-function estadoBandejaFolioCredito(folio, estadoActual) {
-    if (
-        String(folio || "").trim() &&
-        !ESTADOS_NO_SOBRESCRIBIR_FOLIO.has(normalizeText(estadoActual || ""))
-    ) {
-        return "Solicitud de Crédito";
-    }
-    return estadoActual;
-}
-
-// Estado automático combinando las reglas, usando como base el estado
-// persistido del prospecto para poder revertir correctamente al quitar la
-// condición en la interfaz. Orden de prioridad:
-//   1) VIN facturado + entregado -> Entregado
-//   2) VIN facturado (sin entregar) -> Facturado
-//   3) Folio de solicitud de crédito -> Solicitud de Crédito
-//   4) Plazo 3 a 6 meses o más -> Seguimiento
-function estadoAutomaticoBandeja({ plazo, vinFacturado, vinEstatus, folioSolicitudCredito, estadoBase }) {
-    const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
-    const porVinEntregado = estadoBandejaVinEntregado(vinFacturado, vinEstatus, porPlazo);
-    const porVinFacturado = estadoBandejaVinFacturado(vinFacturado, vinEstatus, porVinEntregado);
-    return estadoBandejaFolioCredito(folioSolicitudCredito, porVinFacturado);
-}
+// La derivación automática de bandeja/estado (VIN, folio, PDF, plazo) está
+// centralizada en "./estadosProspecto" (estadoAutomaticoBandeja).
 
 function asObject(value) {
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -4888,6 +4794,7 @@ export default function DigitalesContacto() {
             vinFacturado: quickEditDraft.vin_facturado,
             vinEstatus: quickEditDraft.vin_estatus_entrega,
             folioSolicitudCredito: quickEditDraft.folio_solicitud_credito,
+            evidencias: prospecto?.evidencias,
             estadoBase: estadoOriginal,
         });
 
@@ -7097,6 +7004,7 @@ export default function DigitalesContacto() {
                                                                     vinFacturado: p.vin_facturado,
                                                                     vinEstatus: p.vin_estatus_entrega,
                                                                     folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                    evidencias: prospecto?.evidencias,
                                                                     estadoBase: prospecto?.estado || "",
                                                                 }),
                                                             }))}
@@ -7188,6 +7096,7 @@ export default function DigitalesContacto() {
                                                                             vinFacturado,
                                                                             vinEstatus: p.vin_estatus_entrega,
                                                                             folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                            evidencias: prospecto?.evidencias,
                                                                             estadoBase: prospecto?.estado || "",
                                                                         }),
                                                                     };
@@ -7215,6 +7124,7 @@ export default function DigitalesContacto() {
                                                                                     vinFacturado: p.vin_facturado,
                                                                                     vinEstatus,
                                                                                     folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                                    evidencias: prospecto?.evidencias,
                                                                                     estadoBase: prospecto?.estado || "",
                                                                                 }),
                                                                             };
