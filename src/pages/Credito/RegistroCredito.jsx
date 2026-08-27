@@ -1,31 +1,8 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import {
-    Plus,
-    Search,
-    X,
-    Save,
-    User,
-    CarFront,
-    CalendarDays,
-    ArrowUpDown,
-    ChevronDown,
-    ChevronUp,
-    Trash2,
-    Loader2,
-    Phone,
-    Mail,
-    MessageSquareText,
-    Building2,
-    UserSearch,
-    UserStar,
-    CreditCard,
-    Wallet,
-    BadgeDollarSign,
-    Check,
-    TableProperties,
-    BarChart3,
-
-
+    Plus, Search, X, Save, User, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp,
+    Trash2, Loader2, Phone, Mail, MessageSquareText, Building2, UserSearch, UserStar,
+    CreditCard, Wallet, BadgeDollarSign, Check, TableProperties, BarChart3, FileDown,
 } from "lucide-react";
 import { apiCredito } from "../../lib/apiCredito";
 import { createPortal } from "react-dom";
@@ -33,8 +10,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import * as echarts from "echarts";
-
-
+import * as XLSX from "xlsx";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -1254,6 +1230,97 @@ export default function RegistroCredito() {
         });
     }, [filtered, sort]);
 
+    function limpiarValorExcel(value) {
+        if (value === null || value === undefined || value === "") return "—";
+        const texto = String(value).trim();
+        return /^[=+\-@]/.test(texto) ? `'${texto}` : texto;
+    }
+
+    function formatearFechaExcel(value) {
+        if (!value) return "—";
+        const fecha = new Date(value);
+        if (Number.isNaN(fecha.getTime())) return limpiarValorExcel(value);
+
+        return new Intl.DateTimeFormat("es-MX", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(fecha);
+    }
+
+    function formatearMontoExcel(value) {
+        if (value === null || value === undefined || value === "") return "—";
+
+        const numero = Number(String(value).replace(/,/g, ""));
+        if (!Number.isFinite(numero)) return limpiarValorExcel(value);
+
+        return numero.toLocaleString("es-MX", {
+            style: "currency",
+            currency: "MXN",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+    }
+
+    function exportarExcelSolicitudes() {
+        if (!sorted.length) {
+            alert("No hay solicitudes para exportar con los filtros actuales.");
+            return;
+        }
+
+        const ahora = new Date();
+        const fecha = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+        const hora = `${String(ahora.getHours()).padStart(2, "0")}-${String(ahora.getMinutes()).padStart(2, "0")}`;
+
+        const registros = sorted.map((row) => ({
+            ID: row.id ?? "",
+            "Fecha de Ingreso": formatearFechaExcel(row.creado),
+            Dealer: limpiarValorExcel(row.agencia),
+            Cliente: limpiarValorExcel(row?.cliente?.nombre),
+            Teléfono: limpiarValorExcel(row?.cliente?.telefono),
+            Correo: limpiarValorExcel(row?.cliente?.correo),
+            "ID Solicitud Crédito": limpiarValorExcel(row.id_soli_cred),
+            "Producto Financiero": limpiarValorExcel(row.producto_financiero),
+            "Plazo Meses": limpiarValorExcel(row.plazo_meses),
+            "Monto a Financiar": formatearMontoExcel(row.monto_financiero),
+            "Auto Interés": limpiarValorExcel(row.auto_interes),
+            "Canal de Origen": limpiarValorExcel(row.canal_origen),
+            "Asesor Ventas": limpiarValorExcel(row.asesor_ventas),
+            "Estado Financiamiento": limpiarValorExcel(row.estado_financiamiento),
+            "Estado Compra": limpiarValorExcel(row.estado_compra),
+            "Fecha de Respuesta": formatearFechaExcel(row.fecha_respuesta),
+            Comentarios: limpiarValorExcel(row.comentarios),
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(registros);
+
+        ws["!cols"] = [
+            { wch: 8 },
+            { wch: 20 },
+            { wch: 22 },
+            { wch: 32 },
+            { wch: 18 },
+            { wch: 30 },
+            { wch: 22 },
+            { wch: 24 },
+            { wch: 14 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 30 },
+            { wch: 24 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 45 },
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Solicitudes Crédito");
+        XLSX.writeFile(wb, `solicitudes_credito_${fecha}_${hora}.xlsx`, { compression: true });
+    }
+
     const openCreate = () => {
         setTouchedSave(false);
         setMode("create");
@@ -1558,9 +1625,7 @@ export default function RegistroCredito() {
                             onClick={() => setViewMode("tabla")}
                             className={[
                                 "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
-                                viewMode === "tabla"
-                                    ? "bg-[#131E5C] text-white"
-                                    : "text-[#131E5C] hover:bg-slate-100",
+                                viewMode === "tabla" ? "bg-[#131E5C] text-white" : "text-[#131E5C] hover:bg-slate-100",
                             ].join(" ")}
                         >
                             <TableProperties className="h-4 w-4" />
@@ -1572,9 +1637,7 @@ export default function RegistroCredito() {
                             onClick={() => setViewMode("graficas")}
                             className={[
                                 "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
-                                viewMode === "graficas"
-                                    ? "bg-[#131E5C] text-white"
-                                    : "text-[#131E5C] hover:bg-slate-100",
+                                viewMode === "graficas" ? "bg-[#131E5C] text-white" : "text-[#131E5C] hover:bg-slate-100",
                             ].join(" ")}
                         >
                             <BarChart3 className="h-4 w-4" />
@@ -1583,6 +1646,17 @@ export default function RegistroCredito() {
                     </div>
 
                     <button
+                        type="button"
+                        onClick={exportarExcelSolicitudes}
+                        disabled={loadingList || sorted.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <FileDown className="h-4 w-4" />
+                        Exportar Excel
+                    </button>
+
+                    <button
+                        type="button"
                         onClick={openCreate}
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80"
                     >
