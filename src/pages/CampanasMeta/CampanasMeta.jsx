@@ -510,7 +510,7 @@ function VistaTabla({ datos }) {
         <tbody>
           {datos.map((c, i) => (
             <tr key={c.id_campana} className={`border-t border-gray-100 hover:bg-blue-50/40 transition ${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
-              <td className="px-4 py-3 font-medium text-gray-800 max-w-[200px] truncate">{c.nombre_campana}</td>
+              <td className="px-4 py-3 font-medium text-gray-800 max-w-[300px] truncate">{c.nombre_campana}</td>
               <td className="px-4 py-3 text-gray-600">{c.sucursal}</td>
               <td className="px-4 py-3">
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${c.canal === "Nuevos" ? "bg-blue-100 text-blue-700" : c.canal === "Usados" ? "bg-violet-100 text-violet-700" : c.canal === "Comerciales" ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-700"}`}>

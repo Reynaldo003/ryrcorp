@@ -1,3 +1,4 @@
+//src/pages/Digitales/asesoresPiso.js
 export const ASESORES_PISO = [
   "Adrian Galvez Roldan",
   "Aura Marlizeth Fernandez Lopez",
@@ -75,9 +76,7 @@ export const ASESORES_PISO = [
 
 export const AGENCIAS_DIGITALES = [
   "VW Cordoba",
-  "VW Cordoba-Usados",
   "VW Orizaba",
-  "VW Orizaba-Usados",
   "VW Poza Rica",
   "VW Tuxtepec",
   "VW Tuxpan",
