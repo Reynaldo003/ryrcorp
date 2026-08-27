@@ -123,23 +123,22 @@ async function sincronizarEtapaConAsistencia(cita = {}) {
         const prospecto = prospectos.find((p) => normalizaTelefonoMx(p?.telefono) === telefono);
         if (!prospecto?.id) return;
 
-        const estado = asistio
-            ? "Asistencia a la Cita"
-            : estadoAutomaticoBandeja({
-                  plazo: prospecto?.plazo_compra,
-                  vinFacturado: prospecto?.vin_facturado,
-                  vinEstatus: prospecto?.vin_estatus_entrega,
-                  folioSolicitudCredito: prospecto?.folio_solicitud_credito,
-                  evidencias: prospecto?.evidencias,
-                  calificacionRapidaLlena: tieneCalificacionRapida({
-                      enganche_monto: prospecto?.enganche_monto,
-                      presupuesto_mensual: prospecto?.presupuesto_mensual,
-                      buro_estado: prospecto?.buro_estado,
-                      plazo_compra: prospecto?.plazo_compra,
-                  }),
-                  citaNoAsistio: true,
-                  estadoBase: prospecto?.estado || "",
-              });
+        const estado = estadoAutomaticoBandeja({
+            plazo: prospecto?.plazo_compra,
+            vinFacturado: prospecto?.vin_facturado,
+            vinEstatus: prospecto?.vin_estatus_entrega,
+            folioSolicitudCredito: prospecto?.folio_solicitud_credito,
+            evidencias: prospecto?.evidencias,
+            calificacionRapidaLlena: tieneCalificacionRapida({
+                enganche_monto: prospecto?.enganche_monto,
+                presupuesto_mensual: prospecto?.presupuesto_mensual,
+                buro_estado: prospecto?.buro_estado,
+                plazo_compra: prospecto?.plazo_compra,
+            }),
+            citaNoAsistio: !asistio,
+            citaAsistio: asistio,
+            estadoBase: prospecto?.estado || "",
+        });
 
         await api.digitalesPatchProspecto(prospecto.id, { estado });
     } catch (error) {

@@ -9,7 +9,7 @@ import PHONE from "/phone.svg";
 import { api } from "../../lib/apiPruebas";
 import { ASESORES_PISO } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
-import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio } from "./estadosProspecto";
+import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
@@ -171,6 +171,7 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             evidencias: [...(draft.evidencias_existentes || []), ...(draft.evidencias_nuevas || [])],
             calificacionRapidaLlena: tieneCalificacionRapida(draft),
             citaNoAsistio: citaEsNoAsistio(draft.cita),
+            citaAsistio: citaEsAsistida(draft.cita),
             estadoBase: draft.estado,
         });
         const payload = buildPayload();

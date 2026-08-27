@@ -59,7 +59,7 @@ import { apiCitas } from "../../lib/apiCitas";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
-import { ESTADOS_LABELS, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio } from "./estadosProspecto";
+import { ESTADOS_LABELS, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -4798,6 +4798,7 @@ export default function DigitalesContacto() {
             evidencias: prospecto?.evidencias,
             calificacionRapidaLlena: tieneCalificacionRapida(quickEditDraft),
             citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+            citaAsistio: citaEsAsistida(prospecto?.cita),
             estadoBase: estadoOriginal,
         });
 
@@ -7009,8 +7010,9 @@ export default function DigitalesContacto() {
                                                                         folioSolicitudCredito: p.folio_solicitud_credito,
                                                                         evidencias: prospecto?.evidencias,
                                                                         calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                        citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                        estadoBase: prospecto?.estado || "",
+                                                                         citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                         citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                         estadoBase: prospecto?.estado || "",
                                                                     }),
                                                             }))}
                                                                         className={cls(
@@ -7103,8 +7105,9 @@ export default function DigitalesContacto() {
                                                                             folioSolicitudCredito: p.folio_solicitud_credito,
                                                                             evidencias: prospecto?.evidencias,
                                                                             calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                            estadoBase: prospecto?.estado || "",
+                                                                             citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                             citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                             estadoBase: prospecto?.estado || "",
                                                                         }),
                                                                     };
                                                                 })}
@@ -7133,8 +7136,9 @@ export default function DigitalesContacto() {
                                                                                     folioSolicitudCredito: p.folio_solicitud_credito,
                                                                                     evidencias: prospecto?.evidencias,
                                                                                     calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                                    citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                                    estadoBase: prospecto?.estado || "",
+                                                                                     citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                                     citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                     estadoBase: prospecto?.estado || "",
                                                                                 }),
                                                                             };
                                                                         })}

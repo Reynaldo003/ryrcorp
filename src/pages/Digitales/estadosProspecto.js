@@ -48,7 +48,6 @@ export const ESTADOS_OPCIONES_BANDEJA = ESTADOS_PROSPECTO.filter(
 
 export const ESTADOS_LABELS = ESTADOS_OPCIONES_BANDEJA.map((e) => e.label);
 
-// ─── Derivación automática de bandeja/estado ────────────────────────────────
 
 const ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO = new Set([
     "descalificado",
@@ -108,7 +107,7 @@ const ESTADOS_NO_SOBRESCRIBIR_RECOPILACION = new Set([
     "entregado",
 ]);
 
-// Verifica que exista al menos un PDF cargado (por nombre o tipo MIME).
+// Verificar que exista al menos un PDF cargado (por nombre o tipo)
 export function tienePdfEnEvidencias(evidencias) {
     const lista = Array.isArray(evidencias) ? evidencias : [];
     return lista.some((ev) => {
@@ -188,7 +187,7 @@ export function estadoBandejaRecopilacionDocumentos({
     return "Recopilación de Documentos";
 }
 
-// Orden de prioridad:
+// Orden de prioridad: segun yoxd
 //   1) VIN facturado + entregado              -> Entregado
 //   2) VIN facturado (sin entregar)           -> Facturado
 //   3) Folio de solicitud de crédito          -> Solicitud de Crédito
@@ -238,6 +237,38 @@ export function citaEsNoAsistio(cita) {
     return e === "no asistio" || e === "no_show" || e === "noshow" || e === "no asistió" || e === "no show";
 }
 
+export function citaEsAsistida(cita) {
+    if (!cita) return false;
+    if (cita.asistencia === true) return true;
+    if (cita.asistencia === false) return false;
+    const e = normalizaEstado(cita.estado_cita || "");
+    return e === "asistio" || e === "asistencia a la cita" || e === "asistencia_cita";
+}
+
+const ESTADOS_NO_SOBRESCRIBIR_ASISTENCIA = new Set([
+    "descalificado",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
+    "asistencia a la cita",
+    "asistencia_cita",
+    "facturado",
+    "entregado",
+]);
+
+export function estadoBandejaCitaAsistida({
+    yaContactado,
+    calificacionRapidaLlena,
+    citaAsistio,
+    estadoActual,
+}) {
+    if (!citaAsistio || !yaContactado || !calificacionRapidaLlena) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_ASISTENCIA.has(normalizaEstado(estadoActual || ""))) return estadoActual;
+    return "Asistencia a la Cita";
+}
+
 export function estadoAutomaticoBandeja({
     plazo,
     vinFacturado,
@@ -246,6 +277,7 @@ export function estadoAutomaticoBandeja({
     evidencias,
     calificacionRapidaLlena = false,
     citaNoAsistio = false,
+    citaAsistio = false,
     estadoBase = "",
 }) {
     const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
@@ -258,7 +290,13 @@ export function estadoAutomaticoBandeja({
         citaNoAsistio,
         estadoActual: porVinFacturado,
     });
-    const porFolio = estadoBandejaFolioCredito(folioSolicitudCredito, porNoShow);
+    const porCitaAsistida = estadoBandejaCitaAsistida({
+        yaContactado,
+        calificacionRapidaLlena,
+        citaAsistio,
+        estadoActual: porNoShow,
+    });
+    const porFolio = estadoBandejaFolioCredito(folioSolicitudCredito, porCitaAsistida);
     const porRecopilacion = estadoBandejaRecopilacionDocumentos({
         tienePdf: tienePdfEnEvidencias(evidencias),
         yaContactado,
