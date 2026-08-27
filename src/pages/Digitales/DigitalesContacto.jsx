@@ -4801,6 +4801,7 @@ export default function DigitalesContacto() {
             citaAsistio: citaEsAsistida(prospecto?.cita),
             engancheMonto: quickEditDraft.enganche_monto,
             presupuestoMensual: quickEditDraft.presupuesto_mensual,
+            idCotizacion: quickEditDraft.id_cotizacion,
             estadoBase: estadoOriginal,
         });
 
@@ -7016,6 +7017,7 @@ export default function DigitalesContacto() {
                                                                           citaAsistio: citaEsAsistida(prospecto?.cita),
                                                                           engancheMonto: p.enganche_monto,
                                                                           presupuestoMensual: p.presupuesto_mensual,
+                                                                          idCotizacion: p.id_cotizacion,
                                                                           estadoBase: prospecto?.estado || "",
                                                                     }),
                                                             }))}
@@ -7113,6 +7115,7 @@ export default function DigitalesContacto() {
                                                                               citaAsistio: citaEsAsistida(prospecto?.cita),
                                                                               engancheMonto: p.enganche_monto,
                                                                               presupuestoMensual: p.presupuesto_mensual,
+                                                                              idCotizacion: p.id_cotizacion,
                                                                               estadoBase: prospecto?.estado || "",
                                                                         }),
                                                                     };
@@ -7146,6 +7149,7 @@ export default function DigitalesContacto() {
                                                                                       citaAsistio: citaEsAsistida(prospecto?.cita),
                                                                                       engancheMonto: p.enganche_monto,
                                                                                       presupuestoMensual: p.presupuesto_mensual,
+                                                                                      idCotizacion: p.id_cotizacion,
                                                                                       estadoBase: prospecto?.estado || "",
                                                                                 }),
                                                                             };

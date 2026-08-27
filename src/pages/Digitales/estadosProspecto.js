@@ -6,6 +6,7 @@ export const ESTADOS_PROSPECTO = [
     { key: "sin_respuesta", label: "Sin Respuesta", color: "#64748B", match: ["sin respuesta", "sin_respuesta"] },
     { key: "calificado", label: "Calificado", color: "#10B981", match: ["calificado"] },
     { key: "cotizacion", label: "Pendiente de Cotización", color: "#8B5CF6", match: ["pendiente de cotizacion", "pendiente de cotización", "cotización", "cotizacion"] },
+    { key: "cotizacion_realizada", label: "Cotización realizada", color: "#0891B2", match: ["cotizacion realizada", "cotización realizada", "cotizacion_realizada"] },
     { key: "requiere_atencion", label: "Requiere Atención", color: "#f9cf16", match: ["requiere atencion", "requiere atención", "requiere_atencion"] },
     { key: "potencialmente_viable", label: "Potencialmente Viable", color: "#16A34A", match: ["potencialmente viable", "potencialmente_viable"] },
     { key: "cita_programada", label: "Cita Programada", color: "#0891B2", match: ["cita programada", "cita_programada"] },
@@ -312,6 +313,37 @@ export function estadoBandejaPotencialmenteViable({
     return "Potencialmente Viable";
 }
 
+const ESTADOS_NO_SOBRESCRIBIR_COTIZACION = new Set([
+    "descalificado",
+    "entregado",
+    "facturado",
+    "autorizado no formalizado",
+    "financiamiento",
+    "documentos enviados",
+    "recopilacion de documentos",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "solicitud_credito",
+    "asistencia a la cita",
+    "asistencia_cita",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
+    "potencialmente viable",
+    "potencialmente_viable",
+    "cita programada",
+    "cita_programada",
+]);
+
+export function estadoBandejaCotizacionRealizada({ yaContactado, idCotizacion, estadoActual }) {
+    if (!yaContactado) return estadoActual;
+    if (!String(idCotizacion || "").trim()) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_COTIZACION.has(normalizaEstado(estadoActual || ""))) return estadoActual;
+    return "Cotización realizada";
+}
+
 export function estadoAutomaticoBandeja({
     plazo,
     vinFacturado,
@@ -323,6 +355,7 @@ export function estadoAutomaticoBandeja({
     citaAsistio = false,
     engancheMonto = "",
     presupuestoMensual = "",
+    idCotizacion = "",
     estadoBase = "",
 }) {
     const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
@@ -354,5 +387,10 @@ export function estadoAutomaticoBandeja({
         presupuestoMensual,
         estadoActual: porRecopilacion,
     });
-    return porViable;
+    const porCotizacion = estadoBandejaCotizacionRealizada({
+        yaContactado,
+        idCotizacion,
+        estadoActual: porViable,
+    });
+    return porCotizacion;
 }

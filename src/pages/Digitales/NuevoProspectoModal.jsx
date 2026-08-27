@@ -174,6 +174,7 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             citaAsistio: citaEsAsistida(draft.cita),
             engancheMonto: draft.enganche_monto,
             presupuestoMensual: draft.presupuesto_mensual,
+            idCotizacion: draft.id_cotizacion,
             estadoBase: draft.estado,
         });
         const payload = buildPayload();

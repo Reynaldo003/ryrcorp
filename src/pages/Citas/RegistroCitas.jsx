@@ -139,6 +139,7 @@ async function sincronizarEtapaConAsistencia(cita = {}) {
             citaAsistio: asistio,
             engancheMonto: prospecto?.enganche_monto,
             presupuestoMensual: prospecto?.presupuesto_mensual,
+            idCotizacion: prospecto?.id_cotizacion,
             estadoBase: prospecto?.estado || "",
         });
 
