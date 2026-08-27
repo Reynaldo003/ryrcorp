@@ -172,6 +172,8 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             calificacionRapidaLlena: tieneCalificacionRapida(draft),
             citaNoAsistio: citaEsNoAsistio(draft.cita),
             citaAsistio: citaEsAsistida(draft.cita),
+            engancheMonto: draft.enganche_monto,
+            presupuestoMensual: draft.presupuesto_mensual,
             estadoBase: draft.estado,
         });
         const payload = buildPayload();

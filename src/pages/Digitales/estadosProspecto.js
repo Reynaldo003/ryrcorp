@@ -7,6 +7,7 @@ export const ESTADOS_PROSPECTO = [
     { key: "calificado", label: "Calificado", color: "#10B981", match: ["calificado"] },
     { key: "cotizacion", label: "Pendiente de Cotización", color: "#8B5CF6", match: ["pendiente de cotizacion", "pendiente de cotización", "cotización", "cotizacion"] },
     { key: "requiere_atencion", label: "Requiere Atención", color: "#f9cf16", match: ["requiere atencion", "requiere atención", "requiere_atencion"] },
+    { key: "potencialmente_viable", label: "Potencialmente Viable", color: "#16A34A", match: ["potencialmente viable", "potencialmente_viable"] },
     { key: "cita_programada", label: "Cita Programada", color: "#0891B2", match: ["cita programada", "cita_programada"] },
     { key: "asistencia_cita", label: "Asistencia a la Cita", color: "#059669", match: ["asistencia a la cita", "asistencia_cita"] },
     { key: "no_show", label: "No asistió", color: "#DC2626", match: ["no show", "no_show", "noshow", "no asistio", "no asistió"] },
@@ -269,6 +270,48 @@ export function estadoBandejaCitaAsistida({
     return "Asistencia a la Cita";
 }
 
+function numeroDeImporte(valor) {
+    const n = Number(String(valor ?? "").replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+}
+
+export function esPotencialmenteViable({ enganche_monto, presupuesto_mensual }) {
+    const enganche = numeroDeImporte(enganche_monto);
+    const mensual = numeroDeImporte(presupuesto_mensual);
+    return enganche > 70000 && mensual > 6000;
+}
+
+const ESTADOS_NO_SOBRESCRIBIR_VIABLE = new Set([
+    "descalificado",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
+    "asistencia a la cita",
+    "asistencia_cita",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "solicitud_credito",
+    "recopilacion de documentos",
+    "recopilacion_documentos",
+    "autorizado no formalizado",
+    "facturado",
+    "entregado",
+]);
+
+export function estadoBandejaPotencialmenteViable({
+    yaContactado,
+    engancheMonto,
+    presupuestoMensual,
+    estadoActual,
+}) {
+    if (!yaContactado) return estadoActual;
+    if (!esPotencialmenteViable({ enganche_monto: engancheMonto, presupuesto_mensual: presupuestoMensual })) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_VIABLE.has(normalizaEstado(estadoActual || ""))) return estadoActual;
+    return "Potencialmente Viable";
+}
+
 export function estadoAutomaticoBandeja({
     plazo,
     vinFacturado,
@@ -278,6 +321,8 @@ export function estadoAutomaticoBandeja({
     calificacionRapidaLlena = false,
     citaNoAsistio = false,
     citaAsistio = false,
+    engancheMonto = "",
+    presupuestoMensual = "",
     estadoBase = "",
 }) {
     const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
@@ -303,5 +348,11 @@ export function estadoAutomaticoBandeja({
         folioSolicitudCredito,
         estadoActual: porFolio,
     });
-    return porRecopilacion;
+    const porViable = estadoBandejaPotencialmenteViable({
+        yaContactado,
+        engancheMonto,
+        presupuestoMensual,
+        estadoActual: porRecopilacion,
+    });
+    return porViable;
 }

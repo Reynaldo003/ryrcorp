@@ -137,6 +137,8 @@ async function sincronizarEtapaConAsistencia(cita = {}) {
             }),
             citaNoAsistio: !asistio,
             citaAsistio: asistio,
+            engancheMonto: prospecto?.enganche_monto,
+            presupuestoMensual: prospecto?.presupuesto_mensual,
             estadoBase: prospecto?.estado || "",
         });
 

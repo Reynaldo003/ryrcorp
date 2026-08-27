@@ -4799,6 +4799,8 @@ export default function DigitalesContacto() {
             calificacionRapidaLlena: tieneCalificacionRapida(quickEditDraft),
             citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
             citaAsistio: citaEsAsistida(prospecto?.cita),
+            engancheMonto: quickEditDraft.enganche_monto,
+            presupuestoMensual: quickEditDraft.presupuesto_mensual,
             estadoBase: estadoOriginal,
         });
 
@@ -7011,8 +7013,10 @@ export default function DigitalesContacto() {
                                                                         evidencias: prospecto?.evidencias,
                                                                         calificacionRapidaLlena: tieneCalificacionRapida(p),
                                                                          citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                         citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                         estadoBase: prospecto?.estado || "",
+                                                                          citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                          engancheMonto: p.enganche_monto,
+                                                                          presupuestoMensual: p.presupuesto_mensual,
+                                                                          estadoBase: prospecto?.estado || "",
                                                                     }),
                                                             }))}
                                                                         className={cls(
@@ -7106,8 +7110,10 @@ export default function DigitalesContacto() {
                                                                             evidencias: prospecto?.evidencias,
                                                                             calificacionRapidaLlena: tieneCalificacionRapida(p),
                                                                              citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                             citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                             estadoBase: prospecto?.estado || "",
+                                                                              citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                              engancheMonto: p.enganche_monto,
+                                                                              presupuestoMensual: p.presupuesto_mensual,
+                                                                              estadoBase: prospecto?.estado || "",
                                                                         }),
                                                                     };
                                                                 })}
@@ -7137,8 +7143,10 @@ export default function DigitalesContacto() {
                                                                                     evidencias: prospecto?.evidencias,
                                                                                     calificacionRapidaLlena: tieneCalificacionRapida(p),
                                                                                      citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                                     citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                                     estadoBase: prospecto?.estado || "",
+                                                                                      citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                      engancheMonto: p.enganche_monto,
+                                                                                      presupuestoMensual: p.presupuesto_mensual,
+                                                                                      estadoBase: prospecto?.estado || "",
                                                                                 }),
                                                                             };
                                                                         })}
