@@ -5,6 +5,7 @@ import {
     LINEAS_WHATSAPP,
     obtenerNumerosWhatsAppUsuario,
     obtenerEtiquetaLinea,
+    obtenerNombreAsesorSesion,
 } from "../../config/lineasWhatsApp";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
@@ -5656,7 +5657,7 @@ export default function DigitalesContacto() {
                                             >
                                                 {numerosDisponibles.map((numero) => (
                                                     <option key={numero} value={numero}>
-                                                        {obtenerEtiquetaLinea(numero)} · {formateaTelUi(numero)}
+                                                        {obtenerNombreAsesorSesion(numero, user) || obtenerEtiquetaLinea(numero)} · {formateaTelUi(numero)}
                                                     </option>
                                                 ))}
                                             </select>
@@ -5740,8 +5741,11 @@ export default function DigitalesContacto() {
                                                                         </span>
                                                                     ) : null}
                                                                 </div>
-                                                                <div className="shrink-0 text-[11px] font-semibold text-slate-400 leading-tight">
-                                                                    {chat.last?.timestamp ? formatearFechaConDia(chat.last.timestamp) : chat.last?.time || ""}
+                                                                <div className="shrink-0 text-right text-[11px] font-semibold text-slate-400 leading-tight">
+                                                                    <div>{chat.last?.timestamp ? formatearFechaConDia(chat.last.timestamp) : chat.last?.time || ""}</div>
+                                                                    {chat.last?.timestamp ? (
+                                                                        <div className="text-[10px] font-medium text-slate-300">{formatMessageTime(chat.last.timestamp)}</div>
+                                                                    ) : null}
                                                                 </div>                                                            </div>
 
                                                             {/* Fila 2: último mensaje + badge unread */}

@@ -2208,7 +2208,7 @@ export default function DigitalesProspectos() {
                                 setSelectedNumeroAsesor(event.target.value);
                                 setPage(1);
                             }} className="h-10 w-full cursor-pointer rounded-xl border border-[#131E5C]/15 bg-white px-3 text-xs font-bold text-[#131E5C] outline-none transition hover:bg-slate-50 focus:ring-4 focus:ring-[#131E5C]/10 truncate">
-                                {phoneOptions.map((numero) => (<option key={numero} value={numero}>{numero === "Todos" ? "Todos los números" : `${formatTelefonoMx(numero)} • ${getEtiquetaDigitalPorNumero(numero)}`}</option>))}
+                                {phoneOptions.map((numero) => (<option key={numero} value={numero}>{numero === "Todos" ? "Todos los asesores" : `${getAsesorDigitalPorNumero(numero, user) || getEtiquetaDigitalPorNumero(numero)} · ${formatTelefonoMx(numero)}`}</option>))}
                             </select>
                         </div>) : null}
                         <div className="min-w-0 flex-[1.2]">
