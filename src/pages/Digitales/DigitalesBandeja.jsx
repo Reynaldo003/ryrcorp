@@ -11,12 +11,13 @@ import {
     ArrowLeft, Search, X, Building2, Loader2, Send, Phone,
     Play, Pause, FileText, Check, CheckCheck, Clock, AlertCircle,
     LayoutTemplate, Zap, ChevronLeft, ChevronDown, Smile, Paperclip, Mic, Square, Pencil, MessageCircle,
-    UserRound, Activity, CalendarClock, CheckCircle2, XCircle, Tag, Ban,
+    UserRound, Activity, CalendarClock, CheckCircle2, XCircle, Tag, Ban, CreditCard,
 } from "lucide-react";import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
 import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 import { encontrarCategoriaDeMotivo, MOTIVOS_DESCALIFICACION_POR_CATEGORIA } from "./motivosDescalificacion";
+import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
@@ -183,7 +184,6 @@ function PulseRing({ value = 0, label, color = BRAND_BLUE, size = 60, stroke = 6
                     {clamped}%
                 </div>
             </div>
-            <span className="max-w-[64px] text-center text-[9px] font-bold leading-tight text-slate-400">{label}</span>
         </div>
     );
 }
@@ -365,9 +365,16 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
         ? (MOTIVOS_DESCALIFICACION_POR_CATEGORIA.find((c) => c.key === categoriaMotivo)?.label || "")
         : "";
     const [savingEtapa, setSavingEtapa] = useState(false);
+    const [descModalOpen, setDescModalOpen] = useState(false);
+    const [descMotivo, setDescMotivo] = useState("");
 
     async function handleEtapaChange(label) {
         if (savingEtapa) return;
+        if (normalizeText(label) === "descalificado") {
+            setDescMotivo("");
+            setDescModalOpen(true);
+            return;
+        }
         setSavingEtapa(true);
         try {
             await onChangeEtapa?.(chat, label);
@@ -376,7 +383,18 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
         }
     }
 
-    return (
+    async function confirmDescalificacion() {
+        if (!descMotivo.trim()) return;
+        setDescModalOpen(false);
+        setSavingEtapa(true);
+        try {
+            await onChangeEtapa?.(chat, "Descalificado", descMotivo.trim());
+        } finally {
+            setSavingEtapa(false);
+        }
+    }
+
+    return (<>
         <div
             role="button"
             tabIndex={0}
@@ -462,7 +480,50 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
                 </div>
             </div>
         </div>
-    );
+
+        {descModalOpen ? (
+            <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                onClick={() => setDescModalOpen(false)}
+            >
+                <div
+                    className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-sm font-extrabold text-[#131E5C]">Motivo de descalificación</h3>
+                        <button type="button" onClick={() => setDescModalOpen(false)} className="rounded-lg p-1 hover:bg-slate-100">
+                            <X className="h-4 w-4 text-slate-400" />
+                        </button>
+                    </div>
+
+                    <MotivoDescalificacionPicker
+                        value={descMotivo}
+                        onChange={setDescMotivo}
+                        invalid={!descMotivo.trim()}
+                    />
+
+                    <div className="mt-4 flex justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setDescModalOpen(false)}
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            disabled={!descMotivo.trim()}
+                            onClick={confirmDescalificacion}
+                            className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-40"
+                        >
+                            Descalificar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        ) : null}
+    </>);
 }
 
 function EtapaSelect({ estado, onChange, saving = false }) {
@@ -2579,6 +2640,42 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
                         </div>
                     ) : null}
 
+                    {(() => {
+                        const esSolicitud = safeLower(estado?.key) === "solicitud_credito";
+                        const folio = String(prospecto?.folio_solicitud_credito || "").trim();
+                        const estatusCredito = String(prospecto?.solicitud_credito_estado || "").trim().toLowerCase();
+                        if (!esSolicitud || !folio) return null;
+
+                        const estatusColor = estatusCredito === "autorizado"
+                            ? { color: "#16A34A", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" }
+                            : estatusCredito === "rechazado"
+                                ? { color: "#DC2626", bg: "bg-red-50", border: "border-red-200", text: "text-red-700" }
+                                : estatusCredito === "condicionado"
+                                    ? { color: "#CA8A04", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700" }
+                                    : { color: "#64748B", bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-600" };
+
+                        return (
+                            <div className="mt-3 rounded-2xl border border-purple-200 bg-purple-50/80 p-4 shadow-sm">
+                                <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-purple-700">
+                                    <CreditCard className="h-4 w-4" />
+                                    Solicitud de Crédito
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                    <InfoRow label="Folio" value={folio} />
+                                    <div className="min-w-0">
+                                        <div className="text-[10px] font-bold text-slate-400">Estatus</div>
+                                        <div className="mt-1">
+                                            <span className={cls("inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold", estatusColor.border, estatusColor.bg, estatusColor.text)}>
+                                                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: estatusColor.color }} />
+                                                <span className="truncate">{estatusCredito ? estatusCredito.charAt(0).toUpperCase() + estatusCredito.slice(1) : "Sin estatus"}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {cita ? (
                         <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
                             <div className="mb-3 flex items-center justify-between gap-2">
@@ -2772,6 +2869,16 @@ export default function DigitalesBandeja() {
         cargarTodo();
     }, [numeroAsesorActivo]);
 
+    useEffect(() => {
+        function handleVisibility() {
+            if (document.visibilityState === "visible" && numeroAsesorActivo) {
+                cargarTodo();
+            }
+        }
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => document.removeEventListener("visibilitychange", handleVisibility);
+    }, [numeroAsesorActivo]);
+
     const prospectoPorTel = useMemo(() => {
         const map = new Map();
 
@@ -2834,6 +2941,7 @@ export default function DigitalesBandeja() {
 
             return {
                 ...chat,
+                estado: prospecto?.estado || chat.estado,
                 asignadoA,
                 esMio: Boolean(chat.esMio || coincideUsuario),
                 prospectoId: prospecto?.id || "",
@@ -2846,6 +2954,8 @@ export default function DigitalesBandeja() {
                     chat?.interes
                 ) || "",
                 motivoDescalificacion: prospecto?.motivo_descalificacion || "",
+                folioSolicitudCredito: prospecto?.folio_solicitud_credito || "",
+                solicitudCreditoEstado: prospecto?.solicitud_credito_estado || "",
             };
         });
     }, [chats, prospectoPorTel, userAliases]);
@@ -3032,10 +3142,10 @@ export default function DigitalesBandeja() {
     function abrirProspecto(chat) {
         const prospecto = prospectoPorTel.get(chat.telefono);
         const cita = citaPorTel.get(chat.telefono);
-        setProspectoSeleccionado({ ...chat, ...prospecto, cita, estado: chat.estado });
+        setProspectoSeleccionado({ ...chat, ...prospecto, cita, estado: prospecto?.estado || chat.estado });
     }
 
-    async function guardarEtapa(chat, label) {
+    async function guardarEtapa(chat, label, motivoDescalificacion) {
         const id = chat?.prospectoId;
         if (!id) return;
 
@@ -3043,15 +3153,17 @@ export default function DigitalesBandeja() {
 
         setChats((prev) =>
             prev.map((c) =>
-                c.telefono === chat.telefono ? { ...c, estado: label } : c
+                c.telefono === chat.telefono ? { ...c, estado: label, motivoDescalificacion: motivoDescalificacion || "" } : c
             )
         );
         setProspectoSeleccionado((prev) =>
-            prev && prev.telefono === chat.telefono ? { ...prev, estado: label } : prev
+            prev && prev.telefono === chat.telefono ? { ...prev, estado: label, motivoDescalificacion: motivoDescalificacion || "" } : prev
         );
 
         try {
-            await api.digitalesPatchProspecto(id, { estado: label });
+            const patch = { estado: label };
+            if (motivoDescalificacion) patch.motivo_descalificacion = motivoDescalificacion;
+            await api.digitalesPatchProspecto(id, patch);
         } catch (error) {
             console.error("No se pudo actualizar la etapa:", error);
             setChats((prev) =>

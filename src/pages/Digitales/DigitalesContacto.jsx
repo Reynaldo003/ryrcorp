@@ -58,6 +58,7 @@ import { apiCitas } from "../../lib/apiCitas";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
+import { ESTADOS_LABELS } from "./estadosProspecto";
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -111,7 +112,6 @@ const VEHICULOS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-const ESTADOS_PROSPECTO = ["Descalificado", "Contactado", "Sin Respuesta", "Facturado", "Entregado"];
 const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable", ""];
 
 const BURO_OPTIONS = [
@@ -157,15 +157,12 @@ const PAUTAS_ORIGEN = [
 const CHAT_FILTERS = [
     { key: "todos", label: "Todos" },
     { key: "no_leidos", label: "No leídos" },
-    { key: "pendiente_cotizacion", label: "Pend. cotización", estados: ["pendiente cotización", "pendiente de cotizacion", "pendiente cotizacion"] },
+    { key: "pendiente_cotizacion", label: "Pend. cotización", estados: ["pendiente de cotización", "pendiente de cotizacion", "pendiente cotización", "pendiente cotizacion"] },
     { key: "seguimiento", label: "Seguimiento", estados: ["seguimiento"] },
-    { key: "lead_calificado", label: "Lead calificado", estados: ["lead calificado", "lead_calificado"] },
+    { key: "calificado", label: "Calificado", estados: ["calificado"] },
 ];
 
-const ESTADOS_HEADER = [
-    "Sin Respuesta", "Contactado", "Descalificado",
-    "Pendiente cotización", "Seguimiento", "Lead calificado",
-];
+const ESTADOS_HEADER = ESTADOS_LABELS;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -3233,9 +3230,12 @@ export default function DigitalesContacto() {
         if (forceBottom) shouldStickToBottomRef.current = true;
 
         const ultimo = incoming[incoming.length - 1];
-        if (ultimo) {
+        const nuevoEstado = data?.prospecto?.estado || "";
+        if (ultimo || nuevoEstado) {
             setChats((actuales) => actuales.map((chat) => chat.telefono === target ? {
-                ...chat, unread: 0,
+                ...chat,
+                unread: 0,
+                estado: nuevoEstado || chat.estado,
                 last: {
                     text: ultimo?.text || chat.last?.text || "",
                     time: ultimo?.created_at || chat.last?.time || "",

@@ -16,6 +16,7 @@ import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 import ResultadosIA from "./ResultadosIA";
 import DashboardEjecutivoBDC from "./DashboardEjecutivoBDC";
+import { ETIQUETAS_ESTADO } from "./estadosProspecto";
 const PAGE_SIZE = 200;
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = {
@@ -30,7 +31,6 @@ const origenMeta = {
     "Llamada Entrante": { Icon: ImgIcon(PHONE, "Llamada Entrante"), label: "Llamada Entrante" },
 };
 const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez",];
-const ESTADOS_PROSPECTO = ["Contactado", "Calificado", "Pendiente de Cotización", "Requiere Asesor", "Financiamiento", "Sin Respuesta", "Facturado", "Entregado", "Descalificado"];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [
@@ -689,6 +689,12 @@ function calcLeadScore(row) {
         score += 4;
     else if (estado === "sin respuesta")
         score -= 14;
+    else if (estado === "recopilación de documentos" || estado === "recopilacion de documentos")
+        score += 15;
+    else if (estado === "solicitud de crédito" || estado === "solicitud de credito")
+        score += 20;
+    else if (estado === "seguimiento")
+        score += 18;
     else if (estado === "facturado")
         score += 30;
     else if (estado === "entregado")
@@ -928,10 +934,13 @@ function badgeCls(value) {
         "pendiente de cotización": "bg-amber-500/20 text-amber-900 border-amber-300/40",
         "requiere asesor": "bg-orange-500/20 text-orange-900 border-orange-300/40",
         financiamiento: "bg-sky-500/15 text-sky-800 border-sky-300/30",
+        "recopilación de documentos": "bg-cyan-500/15 text-cyan-800 border-cyan-300/25",
+        "solicitud de crédito": "bg-purple-500/15 text-purple-800 border-purple-300/25",
         "sin respuesta": "bg-red-500/15 text-red-800 border-red-300/25",
         facturado: "bg-sky-600/15 text-sky-800 border-sky-300/25",
         entregado: "bg-emerald-600/15 text-emerald-800 border-emerald-300/25",
         descalificado: "bg-slate-500/15 text-slate-700 border-slate-300/25",
+        seguimiento: "bg-indigo-500/15 text-indigo-800 border-indigo-300/25",
     };
     return (map[String(value || "")
         .trim()
@@ -964,8 +973,11 @@ function BadgeEstado({ value }) {
         descalificado: "bg-blue-600/15 text-blue-800 font-bold border-blue-300/25",
         contactado: "bg-emerald-500/15 text-emerald-800 border-emerald-300/25",
         "sin respuesta": "bg-red-500/15 text-red-800 border-red-300/25",
+        "recopilación de documentos": "bg-cyan-500/15 text-cyan-800 border-cyan-300/25",
+        "solicitud de crédito": "bg-purple-500/15 text-purple-800 border-purple-300/25",
         facturado: "bg-sky-600/15 text-sky-800 border-sky-300/25",
         entregado: "bg-emerald-600/15 text-emerald-800 border-emerald-300/25",
+        seguimiento: "bg-indigo-500/15 text-indigo-800 border-indigo-300/25",
     };
     const key = String(value || "")
         .trim()
@@ -2293,7 +2305,7 @@ export default function DigitalesProspectos() {
                                                         e.stopPropagation();
                                                         updateEstadoInline(row, e.target.value);
                                                     }} className={cls("appearance-none rounded-full border bg-transparent px-2.5 py-0.5 pr-7 text-[11px] font-semibold outline-none", badgeCls(row.estado), isUpdating ? "cursor-not-allowed opacity-70" : "cursor-pointer")}>
-                                                        {ESTADOS_PROSPECTO.map((s) => (<option key={s} value={s} className="bg-white text-[#131E5C]">
+                                                        {ETIQUETAS_ESTADO.map((s) => (<option key={s} value={s} className="bg-white text-[#131E5C]">
                                                             {s}
                                                         </option>))}
                                                     </select>

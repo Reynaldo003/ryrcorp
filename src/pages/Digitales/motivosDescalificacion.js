@@ -27,7 +27,7 @@ export const MOTIVOS_DESCALIFICACION_POR_CATEGORIA = [
         key: "otro",
         label: "Otro",
         icon: "otro",
-        opciones: [],
+        opciones: ["Servicio", "Refacciones", "Busca trabajo", "Ofrece otros servicios"],
     },
 ];
 

@@ -49,9 +49,17 @@ export default function MotivoDescalificacionPicker({ value, onChange, invalid =
             setOtroTexto("");
             onChange("");
         } else {
+            setOtroTexto("");
             onChange("");
         }
     };
+
+    const seleccionarOtroOpcion = (opcion) => {
+        setOtroTexto("");
+        onChange(opcion);
+    };
+
+    const esOtroSeleccion = categoria === "otro" && !esMotivoEstandar(value);
 
     return (
         <div>
@@ -102,30 +110,6 @@ export default function MotivoDescalificacionPicker({ value, onChange, invalid =
                 })}
             </div>
 
-            {categoria === "otro" ? (
-                <div className="mt-2">
-                    <input
-                        autoFocus
-                        type="text"
-                        value={otroTexto}
-                        onChange={(e) => setOtroTexto(e.target.value)}
-                        onBlur={() => onChange(otroTexto)}
-                        placeholder="Especifica el motivo…"
-                        className={cls(
-                            "h-10 w-full rounded-lg border px-3 text-sm font-bold outline-none transition focus:ring-2",
-                            otroTexto.trim()
-                                ? "border-slate-200 text-[#131E5C] focus:border-[#1746D1]/50 focus:ring-[#1746D1]/10"
-                                : "border-red-300 bg-red-50 text-red-700 focus:border-red-400 focus:ring-red-100",
-                        )}
-                    />
-                    {!otroTexto.trim() ? (
-                        <div className="mt-1 text-xs font-bold text-red-600">
-                            Especifica el motivo por escrito.
-                        </div>
-                    ) : null}
-                </div>
-            ) : null}
-
             {categoria && categoria !== "otro" ? (
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     {MOTIVOS_DESCALIFICACION_POR_CATEGORIA.find((c) => c.key === categoria)
@@ -149,6 +133,51 @@ export default function MotivoDescalificacionPicker({ value, onChange, invalid =
                                 </button>
                             );
                         })}
+                </div>
+            ) : null}
+
+            {categoria === "otro" ? (
+                <div className="mt-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        {MOTIVOS_DESCALIFICACION_POR_CATEGORIA.find((c) => c.key === "otro")
+                            ?.opciones.map((opcion) => {
+                                const activa = String(value || "").trim() === opcion;
+
+                                return (
+                                    <button
+                                        key={opcion}
+                                        type="button"
+                                        onClick={() => seleccionarOtroOpcion(opcion)}
+                                        className={cls(
+                                            "flex items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-left text-xs font-bold transition",
+                                            activa
+                                                ? "border-[#1746D1] bg-[#1746D1]/5 text-[#1746D1]"
+                                                : "border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200 hover:bg-white",
+                                        )}
+                                    >
+                                        <span>{opcion}</span>
+                                        {activa ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                                    </button>
+                                );
+                            })}
+                    </div>
+
+                    <div className="mt-2">
+                        <input
+                            autoFocus
+                            type="text"
+                            value={otroTexto}
+                            onChange={(e) => setOtroTexto(e.target.value)}
+                            onBlur={() => onChange(otroTexto)}
+                            placeholder="Otro motivo…"
+                            className={cls(
+                                "h-10 w-full rounded-lg border px-3 text-sm font-bold outline-none transition focus:ring-2",
+                                otroTexto.trim()
+                                    ? "border-slate-200 text-[#131E5C] focus:border-[#1746D1]/50 focus:ring-[#1746D1]/10"
+                                    : "border-slate-200 text-slate-400 focus:border-[#1746D1]/50 focus:ring-[#1746D1]/10",
+                            )}
+                        />
+                    </div>
                 </div>
             ) : null}
         </div>
