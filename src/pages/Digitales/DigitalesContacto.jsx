@@ -312,6 +312,103 @@ function normalizeText(value) {
         .replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+// Plazos de compra de medio/largo plazo (3 a 6 meses o más) deben enviar al
+// prospecto directamente a la bandeja de Seguimiento, salvo que ya esté en una
+// etapa más avanzada o negativa que no deba sobrescribirse.
+const ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO = new Set([
+    "descalificado",
+    "cita programada",
+    "asistencia a la cita",
+    "no show",
+    "no asistio",
+    "financiamiento",
+    "recopilacion de documentos",
+    "recopilación de documentos",
+    "documentos enviados",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "autorizado no formalizado",
+    "facturado",
+    "entregado",
+]);
+
+function estadoBandejaSegunPlazo(plazo, estadoActual) {
+    const plazoNorm = normalizeText(plazo || "");
+    const esPlazoSeguimiento =
+        plazoNorm === "3 a 6 meses" ||
+        plazoNorm === "mas de 6 meses" ||
+        plazoNorm === "más de 6 meses";
+    if (!esPlazoSeguimiento) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO.has(normalizeText(estadoActual || ""))) {
+        return estadoActual;
+    }
+    return "Seguimiento";
+}
+
+// VIN facturado + estatus "entregado" -> bandeja Entregado (prioridad máxima).
+function estadoBandejaVinEntregado(vinFacturado, vinEstatus, estadoActual) {
+    if (
+        String(vinFacturado || "").trim() &&
+        normalizeText(vinEstatus || "") === "entregado"
+    ) {
+        return "Entregado";
+    }
+    return estadoActual;
+}
+
+// VIN facturado (sin estatus entregado) -> bandeja Facturado. No aplica si ya
+// está entregado (lo maneja la regla anterior) ni si está descalificado.
+function estadoBandejaVinFacturado(vinFacturado, vinEstatus, estadoActual) {
+    if (normalizeText(estadoActual || "") === "descalificado") return estadoActual;
+    if (
+        String(vinFacturado || "").trim() &&
+        normalizeText(vinEstatus || "") !== "entregado"
+    ) {
+        return "Facturado";
+    }
+    return estadoActual;
+}
+
+// Folio de solicitud de crédito -> bandeja Solicitud de Crédito (no importa
+// el estatus de la solicitud). No debe retroceder etapas más avanzadas ni
+// descalificar.
+const ESTADOS_NO_SOBRESCRIBIR_FOLIO = new Set([
+    "descalificado",
+    "financiamiento",
+    "recopilacion de documentos",
+    "recopilación de documentos",
+    "documentos enviados",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "autorizado no formalizado",
+    "facturado",
+    "entregado",
+]);
+
+function estadoBandejaFolioCredito(folio, estadoActual) {
+    if (
+        String(folio || "").trim() &&
+        !ESTADOS_NO_SOBRESCRIBIR_FOLIO.has(normalizeText(estadoActual || ""))
+    ) {
+        return "Solicitud de Crédito";
+    }
+    return estadoActual;
+}
+
+// Estado automático combinando las reglas, usando como base el estado
+// persistido del prospecto para poder revertir correctamente al quitar la
+// condición en la interfaz. Orden de prioridad:
+//   1) VIN facturado + entregado -> Entregado
+//   2) VIN facturado (sin entregar) -> Facturado
+//   3) Folio de solicitud de crédito -> Solicitud de Crédito
+//   4) Plazo 3 a 6 meses o más -> Seguimiento
+function estadoAutomaticoBandeja({ plazo, vinFacturado, vinEstatus, folioSolicitudCredito, estadoBase }) {
+    const porPlazo = estadoBandejaSegunPlazo(plazo, estadoBase);
+    const porVinEntregado = estadoBandejaVinEntregado(vinFacturado, vinEstatus, porPlazo);
+    const porVinFacturado = estadoBandejaVinFacturado(vinFacturado, vinEstatus, porVinEntregado);
+    return estadoBandejaFolioCredito(folioSolicitudCredito, porVinFacturado);
+}
+
 function asObject(value) {
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -4769,17 +4866,29 @@ export default function DigitalesContacto() {
     async function saveQuickEdit() {
         if (!prospecto?.id || !activeTel) return;
 
-        const estado = String(quickEditDraft.estado || "").trim();
+        const estadoOriginal = String(quickEditDraft.estado || "").trim();
+        const estadoNormalizado = normalizeText(estadoOriginal);
         const motivoDescalificacion = String(
             quickEditDraft.motivo_descalificacion || ""
         ).trim();
 
         if (
-            estado.toLowerCase() === "descalificado" &&
+            estadoNormalizado === "descalificado" &&
             !motivoDescalificacion
         ) {
             return;
         }
+
+        // Reglas automáticas de bandeja:
+        // - VIN facturado + estatus "entregado" -> Entregado (prioridad).
+        // - Plazo de 3 a 6 meses o más -> Seguimiento.
+        const estado = estadoAutomaticoBandeja({
+            plazo: quickEditDraft.plazo_compra,
+            vinFacturado: quickEditDraft.vin_facturado,
+            vinEstatus: quickEditDraft.vin_estatus_entrega,
+            folioSolicitudCredito: quickEditDraft.folio_solicitud_credito,
+            estadoBase: estadoOriginal,
+        });
 
         setSavingQuickEdit(true);
 
@@ -6976,7 +7085,17 @@ export default function DigitalesContacto() {
                                                                     <button
                                                                         key={plazo}
                                                                         type="button"
-                                                                        onClick={() => setQuickEditDraft(p => ({ ...p, plazo_compra: plazo }))}
+                                                                        onClick={() => setQuickEditDraft(p => ({
+                                                                ...p,
+                                                                plazo_compra: plazo,
+                                                                estado: estadoAutomaticoBandeja({
+                                                                    plazo,
+                                                                    vinFacturado: p.vin_facturado,
+                                                                    vinEstatus: p.vin_estatus_entrega,
+                                                                    folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                    estadoBase: prospecto?.estado || "",
+                                                                }),
+                                                            }))}
                                                                         className={cls(
                                                                             "rounded-full border px-3 py-1.5 text-[11px] font-extrabold transition",
                                                                             selected
@@ -7055,7 +7174,20 @@ export default function DigitalesContacto() {
                                                             <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
                                                             <input
                                                                 value={quickEditDraft.vin_facturado || ""}
-                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, vin_facturado: e.target.value.toUpperCase() }))}
+                                                                onChange={(e) => setQuickEditDraft(p => {
+                                                                    const vinFacturado = e.target.value.toUpperCase();
+                                                                    return {
+                                                                        ...p,
+                                                                        vin_facturado: vinFacturado,
+                                                                        estado: estadoAutomaticoBandeja({
+                                                                            plazo: p.plazo_compra,
+                                                                            vinFacturado,
+                                                                            vinEstatus: p.vin_estatus_entrega,
+                                                                            folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                            estadoBase: prospecto?.estado || "",
+                                                                        }),
+                                                                    };
+                                                                })}
                                                                 placeholder="17 caracteres VIN"
                                                                 maxLength={32}
                                                                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
@@ -7069,7 +7201,20 @@ export default function DigitalesContacto() {
                                                                     <button
                                                                         key={opt.value}
                                                                         type="button"
-                                                                        onClick={() => setQuickEditDraft(p => ({ ...p, vin_estatus_entrega: p.vin_estatus_entrega === opt.value ? "" : opt.value }))}
+                                                                        onClick={() => setQuickEditDraft(p => {
+                                                                            const vinEstatus = p.vin_estatus_entrega === opt.value ? "" : opt.value;
+                                                                            return {
+                                                                                ...p,
+                                                                                vin_estatus_entrega: vinEstatus,
+                                                                                estado: estadoAutomaticoBandeja({
+                                                                                    plazo: p.plazo_compra,
+                                                                                    vinFacturado: p.vin_facturado,
+                                                                                    vinEstatus,
+                                                                                    folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                                    estadoBase: prospecto?.estado || "",
+                                                                                }),
+                                                                            };
+                                                                        })}
                                                                         className={cls(
                                                                             "h-9 rounded-lg text-xs font-extrabold transition",
                                                                             quickEditDraft.vin_estatus_entrega === opt.value
