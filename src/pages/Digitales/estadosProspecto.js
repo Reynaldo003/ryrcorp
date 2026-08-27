@@ -7,6 +7,7 @@ export const ESTADOS_PROSPECTO = [
     { key: "calificado", label: "Calificado", color: "#10B981", match: ["calificado"] },
     { key: "cotizacion", label: "Pendiente de Cotización", color: "#8B5CF6", match: ["pendiente de cotizacion", "pendiente de cotización", "cotización", "cotizacion"] },
     { key: "cotizacion_realizada", label: "Cotización realizada", color: "#0891B2", match: ["cotizacion realizada", "cotización realizada", "cotizacion_realizada"] },
+    { key: "en_perfilamiento", label: "En perfilamiento", color: "#F59E0B", match: ["en perfilamiento", "en_perfilamiento"] },
     { key: "requiere_atencion", label: "Requiere Atención", color: "#f9cf16", match: ["requiere atencion", "requiere atención", "requiere_atencion"] },
     { key: "potencialmente_viable", label: "Potencialmente Viable", color: "#16A34A", match: ["potencialmente viable", "potencialmente_viable"] },
     { key: "cita_programada", label: "Cita Programada", color: "#0891B2", match: ["cita programada", "cita_programada"] },
@@ -189,12 +190,18 @@ export function estadoBandejaRecopilacionDocumentos({
     return "Recopilación de Documentos";
 }
 
-// Orden de prioridad: segun yoxd
-//   1) VIN facturado + entregado              -> Entregado
-//   2) VIN facturado (sin entregar)           -> Facturado
-//   3) Folio de solicitud de crédito          -> Solicitud de Crédito
-//   4) Contactado + PDF cargado + sin folio    -> Recopilación de Documentos
-//   5) Plazo 3 a 6 meses o más                 -> Seguimiento
+// Jerarquía de prioridad (de MAYOR a MENOR importancia) segun yo
+// sobre-escribe si el estado actual NO está en su Set "no sobrescribir",
+//   1) Entregado               -> VIN facturado + estatus "entregado"
+//   2) Facturado               -> VIN facturado (sin entregar)
+//   3) No asistió              -> cita no asistida + contactado + calificación rápida
+//   4) Asistencia a la Cita    -> cita asistida + contactado + calificación rápida
+//   5) Solicitud de Crédito    -> folio de solicitud de crédito
+//   6) Recopilación Documentos -> contactado + PDF cargado + sin folio
+//   7) Potencialmente Viable   -> enganche > 70000 y presupuesto mensual > 6000
+//   8) Cotización realizada    -> id_cotizacion presente
+//   9) En perfilamiento        -> contactado + cualquier campo de calificación rápida
+//  10) Seguimiento             -> plazo 3-6 meses o más (se evalúa primero en la cadena, pero todas las reglas de arriba lo pueden sobreescribir)
 export function tieneCalificacionRapida({
     enganche_monto,
     presupuesto_mensual,
@@ -344,6 +351,39 @@ export function estadoBandejaCotizacionRealizada({ yaContactado, idCotizacion, e
     return "Cotización realizada";
 }
 
+const ESTADOS_NO_SOBRESCRIBIR_PERFILAMIENTO = new Set([
+    "descalificado",
+    "entregado",
+    "facturado",
+    "autorizado no formalizado",
+    "financiamiento",
+    "documentos enviados",
+    "recopilacion de documentos",
+    "solicitud de credito",
+    "solicitud de crédito",
+    "solicitud_credito",
+    "asistencia a la cita",
+    "asistencia_cita",
+    "no asistio",
+    "no asistió",
+    "no show",
+    "no_show",
+    "noshow",
+    "potencialmente viable",
+    "potencialmente_viable",
+    "cotizacion realizada",
+    "cotización realizada",
+    "cotizacion_realizada",
+    "cita programada",
+    "cita_programada",
+]);
+
+export function estadoBandejaEnPerfilamiento({ yaContactado, calificacionRapidaLlena, estadoActual }) {
+    if (!yaContactado || !calificacionRapidaLlena) return estadoActual;
+    if (ESTADOS_NO_SOBRESCRIBIR_PERFILAMIENTO.has(normalizaEstado(estadoActual || ""))) return estadoActual;
+    return "En perfilamiento";
+}
+
 export function estadoAutomaticoBandeja({
     plazo,
     vinFacturado,
@@ -392,5 +432,10 @@ export function estadoAutomaticoBandeja({
         idCotizacion,
         estadoActual: porViable,
     });
-    return porCotizacion;
+    const porPerfilamiento = estadoBandejaEnPerfilamiento({
+        yaContactado,
+        calificacionRapidaLlena,
+        estadoActual: porCotizacion,
+    });
+    return porPerfilamiento;
 }

@@ -23,6 +23,12 @@ const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
 const MAX_RECORDING_SECONDS = 300;
 
+function fmtMoney(v) {
+    const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(n) || n === 0) return "—";
+    return "$" + n.toLocaleString("es-MX");
+}
+
 const DEALERS = [
     "VW Cordoba",
     "VW Orizaba",
@@ -2677,7 +2683,7 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
                     })()}
 
                     {cita ? (
-                        <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                        <div className="mt-3 rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
                             <div className="mb-3 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
                                     <CalendarClock className="h-4 w-4" />
@@ -2698,6 +2704,28 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
                             </div>
                         </div>
                     ) : null}
+
+                    {(() => {
+                        const eng = String(prospecto?.enganche_monto || "").trim();
+                        const men = String(prospecto?.presupuesto_mensual || "").trim();
+                        const bur = String(prospecto?.buro_estado || "").trim();
+                        const pla = String(prospecto?.plazo_compra || "").trim();
+                        if (!eng && !men && !bur && !pla) return null;
+                        return (
+                            <div className="mt-3 rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                                <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
+                                    <Zap className="h-4 w-4" />
+                                    Calificación rápida
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                    <InfoRow label="Enganche" value={fmtMoney(eng)} />
+                                    <InfoRow label="Presupuesto mensual" value={fmtMoney(men)} />
+                                    <InfoRow label="Buró" value={bur} />
+                                    <InfoRow label="Plazo de compra" value={pla} />
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     <div className="mt-4 rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
                         <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
