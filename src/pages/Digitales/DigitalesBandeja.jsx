@@ -41,6 +41,30 @@ const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"]
 
 const ESTADOS_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
 
+// Estados que ya no se muestran como columnas propias en la bandeja.
+// Sus prospectos se agrupan en la columna "Contactado" conservando su estado real.
+const ESTADOS_SIN_COLUMNA = [
+    "cotizacion",
+    "requiere_atencion",
+    "seguimiento",
+    "autorizado_no_formalizado",
+    "financiamiento",
+];
+
+// Columnas visibles del tablero (Kanban) de la bandeja.
+const COLUMNAS_BANDEJA = ESTADOS_BANDEJA.filter(
+    (estado) => !ESTADOS_SIN_COLUMNA.includes(estado.key)
+);
+
+// Resuelve en qué columna del tablero debe aparecer un prospecto.
+// Los estados de ESTADOS_SIN_COLUMNA se agrupan en "contactado".
+function getColumnaBandeja(estado) {
+    const resuelto = resolverEstado(estado);
+    if (ESTADOS_SIN_COLUMNA.includes(resuelto.key)) return "contactado";
+    if (COLUMNAS_BANDEJA.some((c) => c.key === resuelto.key)) return resuelto.key;
+    return ESTADOS_BANDEJA[0].key;
+}
+
 
 function cls(...items) { return items.filter(Boolean).join(" "); }
 function safeLower(v) { return String(v || "").toLowerCase(); }
@@ -90,16 +114,14 @@ function getEstadoBandeja(estado) {
     return ESTADOS_BANDEJA.find((b) => b.key === resuelto.key) || ESTADOS_BANDEJA[0];
 }
 
-function esFechaDeHoy(iso) {
+// Identifica si un prospecto es "nuevo": dado de alta hace menos de 24 horas.
+// La etiqueta NUEVO en la bandeja desaparece al cumplirse este plazo.
+function esProspectoNuevo(iso) {
     if (!iso) return false;
     const fecha = new Date(iso);
     if (Number.isNaN(fecha.getTime())) return false;
-    const ahora = new Date();
-    return (
-        fecha.getFullYear() === ahora.getFullYear() &&
-        fecha.getMonth() === ahora.getMonth() &&
-        fecha.getDate() === ahora.getDate()
-    );
+    const diffMs = new Date().getTime() - fecha.getTime();
+    return diffMs >= 0 && diffMs <= 24 * 60 * 60 * 1000;
 }
 
 function formatHoraCorta(iso) {
@@ -412,11 +434,22 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
                 }
             }}
             className={cls(
-                "group w-full min-w-0 cursor-pointer select-none rounded-xl border border-black/10 bg-white px-3 py-2.5 shadow-sm transition hover:border-[#131E5C]/30 hover:shadow-md",
+                "group relative w-full min-w-0 cursor-pointer select-none rounded-xl border border-black/10 px-3 py-2.5 shadow-sm transition hover:border-[#131E5C]/30 hover:shadow-md",
                 selected ? "border-[#7AA7FF] bg-[#F5F8FF] ring-1 ring-[#7AA7FF]" : ""
             )}
+            style={selected ? undefined : { backgroundColor: mutedColor(estado.color, 0.94), borderLeftColor: estado.color, borderLeftWidth: "3px" }}
             title="Haz clic para abrir la conversación"
         >
+            {chat.esNuevo ? (
+                <span
+                    className="absolute -top-2 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-blue-500 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wide text-white shadow-sm ring-2 ring-white"
+                    title="Prospecto nuevo (menos de 24 h)"
+                >
+                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                    Nuevo prospecto
+                </span>
+            ) : null
+            }
             <div className="flex items-center gap-2.5">
                 <Avatar name={chat.nombre} />
 
@@ -432,6 +465,14 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
                                     title="Interés en Seminuevos (configurado desde Contacto)"
                                 >
                                     Seminuevo
+                                </span>
+                            ) : null}
+                            {estado.key === "seguimiento" ? (
+                                <span
+                                    className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-indigo-500 shadow-sm"
+                                    title="Prospecto en seguimiento"
+                                >
+                                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
                                 </span>
                             ) : null}
                         </div>
@@ -2805,7 +2846,8 @@ export default function DigitalesBandeja() {
         if (["todos", "no_leidos", "nuevos", "mios"].includes(filtroActivo)) {
             return;
         }
-        const column = kanbanColumnRefs.current.get(filtroActivo);
+        const columnaDestino = ESTADOS_SIN_COLUMNA.includes(filtroActivo) ? "contactado" : filtroActivo;
+        const column = kanbanColumnRefs.current.get(columnaDestino);
         const container = kanbanScrollRef.current;
         if (column && container) {
             const containerRect = container.getBoundingClientRect();
@@ -2984,6 +3026,11 @@ export default function DigitalesBandeja() {
                 motivoDescalificacion: prospecto?.motivo_descalificacion || "",
                 folioSolicitudCredito: prospecto?.folio_solicitud_credito || "",
                 solicitudCreditoEstado: prospecto?.solicitud_credito_estado || "",
+                esNuevo: esProspectoNuevo(
+                    prospecto?.creado ||
+                    prospecto?.primer_contacto_at ||
+                    chat?.last?.timestamp
+                ),
             };
         });
     }, [chats, prospectoPorTel, userAliases]);
@@ -3016,7 +3063,7 @@ export default function DigitalesBandeja() {
                     prospecto?.primer_contacto_at ||
                     chat.last?.timestamp;
 
-                return esFechaDeHoy(fechaReferencia);
+                return esProspectoNuevo(fechaReferencia);
             })
             .sort((a, b) => {
                 const ta = new Date(a.last?.timestamp || 0).getTime();
@@ -3080,6 +3127,9 @@ export default function DigitalesBandeja() {
             items = items.filter((chat) => Number(chat.unread || 0) > 0);
         } else if (filtroActivo === "mios") {
             items = items.filter((chat) => Boolean(chat.esMio));
+        } else if (ESTADOS_SIN_COLUMNA.includes(filtroActivo)) {
+            // Estos estados viven en la columna "Contactado"; filtramos por el estado real.
+            items = items.filter((chat) => getEstadoBandeja(chat.estado).key === filtroActivo);
         }
 
         return items.sort((a, b) => {
@@ -3100,8 +3150,8 @@ export default function DigitalesBandeja() {
     const chatsPorColumna = useMemo(() => {
         const map = new Map(ESTADOS_BANDEJA.map((estado) => [estado.key, []]));
         for (const chat of chatsVisibles) {
-            const estado = getEstadoBandeja(chat.estado);
-            map.get(estado.key)?.push(chat);
+            const columna = getColumnaBandeja(chat.estado);
+            map.get(columna)?.push(chat);
         }
         return map;
     }, [chatsVisibles]);
@@ -3130,7 +3180,7 @@ export default function DigitalesBandeja() {
             return {
                 label: "Nuevos prospectos",
                 color: "#0EA5E9",
-                description: "Prospectos que ingresaron hoy",
+                description: "Prospectos ingresados en las últimas 24 h",
             };
         }
 
@@ -3366,9 +3416,12 @@ export default function DigitalesBandeja() {
                             </div>
                         ) : (
                             <div ref={kanbanScrollRef} className="flex h-full min-w-0 items-stretch gap-3 overflow-x-auto overflow-y-hidden px-3 py-3">
-                                {ESTADOS_BANDEJA.map((estado) => {
+                                {COLUMNAS_BANDEJA.map((estado) => {
                                     const items = chatsPorColumna.get(estado.key) || [];
-                                    const activo = filtroActivo === estado.key;
+                                    const activo =
+                                        filtroActivo === estado.key ||
+                                        (estado.key === "contactado" &&
+                                            ESTADOS_SIN_COLUMNA.includes(filtroActivo));
                                     return (
                                         <div
                                             key={estado.key}
