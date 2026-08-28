@@ -65,6 +65,17 @@ function getColumnaBandeja(estado) {
     return ESTADOS_BANDEJA[0].key;
 }
 
+// Tamaño de cada página que se pide al backend (chunk pequeño para no penalizar la carga).
+const CHAT_BANDEJA_PAGE_SIZE = 50;
+
+// Ventanas de tiempo para segmentar la bandeja sin traer todo de golpe.
+const PERIODO_DIAS = { recientes: 3, mensual: 30, todo: 120 };
+const PERIODO_OPCIONES = [
+    { key: "recientes", label: "3 días" },
+    { key: "mensual", label: "Mensual" },
+    { key: "todo", label: "Todo" },
+];
+
 
 function cls(...items) { return items.filter(Boolean).join(" "); }
 function safeLower(v) { return String(v || "").toLowerCase(); }
@@ -1986,6 +1997,8 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
         clienteRetencion?.estado_actividad ||
         "Sin estado";
 
+    const colorEstadoDrawer = getEstadoBandeja(estadoMostrar).color;
+
     const vehiculoMostrar =
         prospecto?.auto_interes ||
         clienteRetencion?.modelo_nombre ||
@@ -2036,7 +2049,13 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
                 <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-black/10 bg-neutral-50 px-4 py-3">
                     <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
                         <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#131E5C]/50">Estado actual</div>
-                        <div className="mt-0.5 truncate text-sm font-extrabold text-[#131E5C]">{estadoMostrar}</div>
+                        <div
+                            className="mt-0.5 inline-flex items-center gap-1 truncate text-sm font-extrabold"
+                            style={{ color: colorEstadoDrawer }}
+                        >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: colorEstadoDrawer }} />
+                            {estadoMostrar}
+                        </div>
                     </div>
                     <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
                         <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#131E5C]/50">Vehículo de interés</div>
@@ -2836,6 +2855,7 @@ export default function DigitalesBandeja() {
     const [drawerTel, setDrawerTel] = useState("");
     const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
     const [filtroActivo, setFiltroActivo] = useState("todos");
+    const [periodo, setPeriodo] = useState("mensual");
     const [orden, setOrden] = useState("reciente");
 
     const requestRef = useRef(0);
@@ -2886,21 +2906,57 @@ export default function DigitalesBandeja() {
         setLoading(true);
 
         try {
-            const [chatsResp, prospectosResp, citasResp] = await Promise.all([
-                api.digitalesChats({ numero_asesor: numeroLinea }),
-                api.digitalesListProspectos({ numero_asesor: numeroLinea }).catch(() => []),
-                apiCitas.list().catch(() => []),
-            ]);
+            const dias = PERIODO_DIAS[periodo] ?? 30;
+            const incluirHistorico = periodo === "todo";
+
+            // Carga paginada en chunks pequeños: así se ven todas las conversaciones
+            // del periodo (p. ej. mensual) sin una sola petición pesada.
+            let acumulados = [];
+            let scope = "recientes";
+            let before = "";
+            let before_id = 0;
+            let before_prioridad = 0;
+            const MAX_PAGINAS = 40;
+
+            for (let pagina = 0; pagina < MAX_PAGINAS; pagina += 1) {
+                const resp = await api.digitalesChats({
+                    numero_asesor: numeroLinea,
+                    scope,
+                    dias,
+                    limit: CHAT_BANDEJA_PAGE_SIZE,
+                    paginado: 1,
+                    before,
+                    before_id,
+                    before_prioridad,
+                });
+                if (requestId !== requestRef.current) return;
+
+                const resultados = Array.isArray(resp)
+                    ? resp
+                    : Array.isArray(resp?.results)
+                        ? resp.results
+                        : [];
+                acumulados = acumulados.concat(resultados);
+
+                const pag = resp?.paginacion || {};
+                if (!pag.has_more) break;
+                // Para "3 días" y "Mensual" nos quedamos solo en el periodo reciente.
+                if (pag.next_scope === "historico" && !incluirHistorico) break;
+                before = pag.before || "";
+                before_id = pag.before_id || 0;
+                before_prioridad = pag.before_prioridad || 0;
+                scope = pag.next_scope || scope;
+            }
 
             if (requestId !== requestRef.current) return;
 
-            const items = Array.isArray(chatsResp)
-                ? chatsResp
-                : Array.isArray(chatsResp?.results)
-                    ? chatsResp.results
-                    : [];
+            const [prospectosResp, citasResp] = await Promise.all([
+                api.digitalesListProspectos({ numero_asesor: numeroLinea }).catch(() => []),
+                apiCitas.list().catch(() => []),
+            ]);
+            if (requestId !== requestRef.current) return;
 
-            const normalized = items
+            const normalized = acumulados
                 .map((chat) => ({
                     id: chat?.id || `${numeroLinea}-${chat?.telefono}`,
                     telefono: normalizaTelefonoMx(chat?.telefono || ""),
@@ -2937,7 +2993,7 @@ export default function DigitalesBandeja() {
 
     useEffect(() => {
         cargarTodo();
-    }, [numeroAsesorActivo]);
+    }, [numeroAsesorActivo, periodo]);
 
     useEffect(() => {
         function handleVisibility() {
@@ -3311,6 +3367,25 @@ export default function DigitalesBandeja() {
                             <X className="h-3.5 w-3.5" />
                         </button>
                     ) : null}
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1 rounded-xl border border-[#131E5C]/15 bg-white p-1">
+                    {PERIODO_OPCIONES.map((op) => (
+                        <button
+                            key={op.key}
+                            type="button"
+                            onClick={() => setPeriodo(op.key)}
+                            className={cls(
+                                "rounded-lg px-2.5 py-1.5 text-[11px] font-extrabold transition",
+                                periodo === op.key
+                                    ? "bg-[#131E5C] text-white shadow-sm"
+                                    : "text-[#131E5C]/70 hover:bg-[#131E5C]/5"
+                            )}
+                            title={`Mostrar conversaciones de los últimos ${PERIODO_DIAS[op.key]} días`}
+                        >
+                            {op.label}
+                        </button>
+                    ))}
                 </div>
 
                 {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#131E5C]/50" /> : null}

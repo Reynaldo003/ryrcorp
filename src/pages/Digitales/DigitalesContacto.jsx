@@ -65,6 +65,7 @@ import {
   tieneCalificacionRapida,
   citaEsNoAsistio,
   citaEsAsistida,
+  colorDeEstado,
 } from "./estadosProspecto";
 
 import {
@@ -5670,10 +5671,14 @@ export default function DigitalesContacto() {
 
                                                             {/* Fila 3: badges */}
                                                             <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                                                                <span className={cls(
-                                                                    "inline-flex items-center rounded-full border bg-white px-2 py-0.5 text-[10px] font-bold leading-tight",
-                                                                    chat.estado ? "border-[#131E5C]/15 text-[#131E5C]/70" : "border-slate-200 text-slate-400",
-                                                                )}>
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-bold leading-tight"
+                                                                    style={{
+                                                                        color: colorDeEstado(chat.estado),
+                                                                        borderColor: `${colorDeEstado(chat.estado)}66`,
+                                                                    }}
+                                                                >
+                                                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: colorDeEstado(chat.estado) }} />
                                                                     {chat.estado || "Sin estado"}
                                                                 </span>
 

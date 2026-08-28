@@ -51,6 +51,13 @@ export const ESTADOS_OPCIONES_BANDEJA = ESTADOS_PROSPECTO.filter(
 
 export const ESTADOS_LABELS = ESTADOS_OPCIONES_BANDEJA.map((e) => e.label);
 
+// Color asociado a un estado (para pintar etiquetas/badges en la UI).
+export function colorDeEstado(valor) {
+    const resuelto = resolverEstado(valor);
+    const def = ESTADOS_PROSPECTO.find((e) => e.key === resuelto.key);
+    return def?.color || "#64748B";
+}
+
 
 const ESTADOS_NO_SOBRESCRIBIR_POR_PLAZO = new Set([
     "descalificado",
