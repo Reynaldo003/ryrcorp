@@ -28,6 +28,7 @@
     "ldrs": "^1.1.9",
     "lucide-react": "^0.563.0",
     "motion": "^12.34.0",
+    "pdf-lib": "^1.17.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",

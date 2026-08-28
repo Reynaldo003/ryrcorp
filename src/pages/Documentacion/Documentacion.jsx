@@ -1,7 +1,8 @@
 // src/pages/Documentacion/Documentacion.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Building2, CheckCircle2, ChevronDown, CircleAlert, Eye, FileCheck2, FileText, FolderOpen, Loader2, Plus, Search, Trash2, UploadCloud, UserRound, X } from "lucide-react";
+import { Building2, CheckCircle2, ChevronDown, CircleAlert, Eye, FileCheck2, FileText, FolderOpen, Loader2, Pencil, Plus, Search, Trash2, UploadCloud, UserRound, X } from "lucide-react";
+import EditorFormatoPdf from "./EditorFormatoPDF";
 import { useAuth } from "../../auth/AuthContext";
 import { apiDocumentacion } from "../../lib/apiDocumentacion";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "../Digitales/asesoresPiso";
@@ -16,6 +17,41 @@ const FINANCIAMIENTOS = [
     { value: "credit", label: "Credit" },
     { value: "leasing", label: "Leasing" },
 ];
+
+const FORMATOS_SOLICITUD = [
+    {
+        value: "arrendamiento_personas_fisicas",
+        label: "Solicitud Arrendamiento - Personas Físicas",
+        archivo: "Solicitud-Arrendamiento-Personas-Fisicas.pdf",
+        url: "/crm/solicitudes_credito/Solicitud-Arrendamiento-Personas-Fisicas.pdf",
+    },
+    {
+        value: "arrendamiento_personas_morales",
+        label: "Solicitud Arrendamiento - Personas Morales",
+        archivo: "Solicitud-Arrendamiento-Personas-Morales.pdf",
+        url: "/crm/solicitudes_credito/Solicitud-Arrendamiento-Personas-Morales.pdf",
+    },
+    {
+        value: "credito_personas_fisicas",
+        label: "Solicitud Crédito - Personas Físicas",
+        archivo: "Solicitud-Credito-Personas-Fisicas.pdf",
+        url: "/crm/solicitudes_credito/Solicitud-Credito-Personas-Fisicas.pdf",
+    },
+    {
+        value: "credito_personas_morales",
+        label: "Solicitud Crédito - Personas Morales",
+        archivo: "Solicitud-Credito-Personas-Morales.pdf",
+        url: "/crm/solicitudes_credito/Solicitud-Credito-Personas-Morales.pdf",
+    },
+    {
+        value: "persona_fisica_asalariada",
+        label: "Solicitud Persona Física Asalariada",
+        archivo: "Solicitud-Persona-Fisica-Asalariada.pdf",
+        url: "/crm/solicitudes_credito/Solicitud-Persona-Fisica-Asalariada.pdf",
+    },
+];
+
+const obtenerFormatoSolicitud = (value) => FORMATOS_SOLICITUD.find((item) => item.value === value) || null;
 
 const limpiar = (value) => String(value ?? "").trim();
 const normalizar = (value) => limpiar(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -33,6 +69,7 @@ function formatBytes(bytes = 0) {
 
 async function validarPdf(file) {
     if (!file) return { ok: false, error: "Selecciona un archivo." };
+    if (!file.size) return { ok: false, error: "El archivo está vacío." };
     if (!normalizar(file.name).endsWith(".pdf")) return { ok: false, error: "Solo se permiten archivos PDF." };
     if (file.type && normalizar(file.type) !== "application/pdf") return { ok: false, error: "El archivo seleccionado no tiene formato PDF." };
 
@@ -40,6 +77,7 @@ async function validarPdf(file) {
         if (await file.slice(0, 5).text() !== "%PDF-") return { ok: false, error: "El archivo seleccionado no parece ser un PDF válido." };
     } catch (error) {
         console.error("No fue posible validar la cabecera del PDF:", error);
+        return { ok: false, error: "No fue posible validar el archivo PDF." };
     }
 
     return { ok: true };
@@ -112,258 +150,321 @@ function ProgressRing({ value = 0 }) {
 
 function DocumentoCard({ requisito, documento, uploading, editable, onSeleccionar, onVer, onEliminar }) {
     return (
-        <div className={`relative overflow-hidden rounded-2xl border transition ${documento ? "border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70" : "border-slate-200 bg-white hover:border-[#131E5C]/30 hover:shadow-sm"}`}>
-            <div className="p-4">
+        <tr className="border-b border-slate-200 last:border-b-0 hover:bg-slate-50/70">
+            {/* REQUISITO */}
+            <td className="min-w-[300px] px-4 py-3 align-top">
                 <div className="flex items-start gap-3">
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${documento ? "bg-emerald-100 text-emerald-700" : "bg-[#131E5C]/[0.07] text-[#131E5C]"}`}>
-                        {documento ? <FileCheck2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                    <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${documento ? "bg-emerald-100 text-emerald-700" : "bg-[#131E5C]/[0.07] text-[#131E5C]"}`}>
+                        {documento ? <FileCheck2 className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="text-sm font-black leading-5 text-[#131E5C]">{requisito.nombre}</div>
-                            {requisito.obligatorio ? <Badge type="red">Obligatorio</Badge> : <Badge type="yellow">Opcional</Badge>}
-                        </div>
+                    <div className="min-w-0">
+                        <div className="text-xs font-black text-[#131E5C]">{requisito.nombre}</div>
 
-                        {requisito.descripcion ? <p className="mt-1.5 text-[11px] leading-5 text-slate-500">{requisito.descripcion}</p> : null}
+                        {requisito.descripcion ? (
+                            <div className="mt-1 text-[10px] leading-4 text-slate-500">
+                                <span className="font-black text-slate-600">Especificación: </span>
+                                {requisito.descripcion}
+                            </div>
+                        ) : (
+                            <div className="mt-1 text-[10px] text-slate-400">Sin especificaciones adicionales.</div>
+                        )}
                     </div>
                 </div>
+            </td>
 
+            {/* TIPO */}
+            <td className="whitespace-nowrap px-4 py-3 align-middle">
+                {requisito.obligatorio ? <Badge type="red">Obligatorio</Badge> : <Badge type="yellow">Opcional</Badge>}
+            </td>
+
+            {/* ESTADO */}
+            <td className="whitespace-nowrap px-4 py-3 align-middle">
                 {documento ? (
-                    <div className="mt-4 overflow-hidden rounded-xl border border-emerald-200 bg-white">
-                        <div className="flex items-center gap-3 p-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[10px] font-black text-red-600">PDF</div>
-
-                            <div className="min-w-0 flex-1">
-                                <div className="truncate text-xs font-extrabold text-[#131E5C]">{documento.nombre_original || documento.requisito_nombre}</div>
-                                <div className="mt-1 text-[10px] font-semibold text-slate-400">{formatBytes(documento.tamano_bytes)} · Documento cargado</div>
-                            </div>
-
-                            <button type="button" onClick={() => onVer(documento)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#131E5C]/15 text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white" title="Visualizar PDF">
-                                <Eye className="h-4 w-4" />
-                            </button>
-
-                            {editable ? (
-                                <button type="button" disabled={uploading} onClick={() => onEliminar(documento)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-600 transition hover:bg-red-600 hover:text-white disabled:opacity-50" title="Eliminar documento">
-                                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : editable ? (
-                    <div className="mt-4">
-                        <label className={`group flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#131E5C]/20 bg-[#131E5C]/[0.025] px-4 py-4 text-center transition hover:border-[#131E5C]/60 hover:bg-[#131E5C]/[0.05] ${uploading ? "pointer-events-none opacity-50" : ""}`}>
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#131E5C] shadow-sm transition group-hover:-translate-y-0.5">
-                                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                            </div>
-
-                            <div className="mt-2 text-xs font-black text-[#131E5C]">{uploading ? "Subiendo PDF..." : "Seleccionar PDF"}</div>
-                            <div className="mt-1 text-[10px] font-semibold text-slate-400">Solo 1 archivo · Formato PDF</div>
-
-                            <input
-                                type="file"
-                                accept=".pdf,application/pdf"
-                                disabled={uploading}
-                                className="hidden"
-                                onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    event.target.value = "";
-                                    if (file) onSeleccionar(requisito, file);
-                                }}
-                            />
-                        </label>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-700">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Cargado
                     </div>
                 ) : (
-                    <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-center text-[11px] font-semibold text-slate-400">
-                        Documento pendiente
+                    <div className={`inline-flex items-center gap-1.5 text-xs font-black ${requisito.obligatorio ? "text-amber-600" : "text-slate-400"}`}>
+                        <CircleAlert className="h-4 w-4" />
+                        Pendiente
                     </div>
                 )}
-            </div>
-        </div>
+            </td>
+
+            {/* ARCHIVO */}
+            <td className="min-w-[220px] px-4 py-3 align-middle">
+                {documento ? (
+                    <div className="flex min-w-0 items-center gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-50 text-[9px] font-black text-red-600">
+                            PDF
+                        </div>
+
+                        <div className="min-w-0">
+                            <div className="max-w-[240px] truncate text-xs font-bold text-[#131E5C]" title={documento.nombre_original || documento.requisito_nombre}>
+                                {documento.nombre_original || documento.requisito_nombre}
+                            </div>
+
+                            <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                {formatBytes(documento.tamano_bytes)}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <span className="text-xs font-semibold text-slate-400">Sin archivo</span>
+                )}
+            </td>
+
+            {/* ACCIONES */}
+            <td className="whitespace-nowrap px-4 py-3 text-right align-middle">
+                {documento ? (
+                    <div className="inline-flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => onVer(documento)}
+                            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-3 text-xs font-bold text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white"
+                        >
+                            <Eye className="h-4 w-4" />
+                            Ver
+                        </button>
+
+                        {editable ? (
+                            <button
+                                type="button"
+                                disabled={uploading}
+                                onClick={() => onEliminar(documento)}
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 text-xs font-bold text-red-600 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                Eliminar
+                            </button>
+                        ) : null}
+                    </div>
+                ) : editable ? (
+                    <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-3 text-xs font-bold text-white transition hover:bg-[#1d2d86] ${uploading ? "pointer-events-none opacity-50" : ""}`}>
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                        {uploading ? "Subiendo..." : "Subir PDF"}
+
+                        <input
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            disabled={uploading}
+                            className="hidden"
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) onSeleccionar(requisito, file);
+                            }}
+                        />
+                    </label>
+                ) : (
+                    <span className="text-xs font-semibold text-slate-400">Solo lectura</span>
+                )}
+            </td>
+        </tr>
     );
 }
 
-function ExpedienteCard({ expediente, abierto, editable, uploading, onToggle, onSeleccionar, onVer, onEliminar }) {
+function ExpedienteCard({
+    expediente,
+    abierto,
+    editable,
+    uploading,
+    formatoSeleccionado,
+    onFormatoChange,
+    onEditarFormato,
+    onVerFormato,
+    onToggle,
+    onSeleccionar,
+    onVer,
+    onEliminar,
+}) {
     const avance = expediente.avance || { porcentaje: 0, completados: 0, faltantes: 0, total: 0 };
+    const completo = avance.porcentaje >= 100;
+    const formatoGuardado = expediente.solicitud_pdf_plantilla || "";
+    const tienePdfGuardado = !!expediente.solicitud_pdf_url;
+    const cambioFormatoPendiente = !!formatoGuardado && !!formatoSeleccionado && formatoGuardado !== formatoSeleccionado;
+
     return (
-        <article className={`overflow-hidden rounded-2xl border bg-white transition-all duration-900 ${abierto ? "border-[#131E5C]/40 shadow-[0_18px_50px_rgba(19,30,92,.09)]" : "border-slate-200 shadow-sm hover:border-[#131E5C]/20 hover:shadow-md"}`}>
-            <button
-                type="button"
+        <>
+            <tr
                 onClick={onToggle}
-                className="group w-full text-left"
+                className={`cursor-pointer border-b border-black/10 transition hover:bg-[#131E5C]/[0.035] ${abierto ? "bg-[#131E5C]/[0.045]" : "bg-white"}`}
             >
-                <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center">
-                    {/* PROGRESO */}
-                    <div className="flex shrink-0 items-center justify-between gap-3 lg:block">
-                        <ProgressRing value={avance.porcentaje} />
-
-                        <div className="lg:hidden">
-                            {avance.porcentaje >= 100
-                                ? <Badge type="green">Completo</Badge>
-                                : <Badge type="yellow">En proceso</Badge>}
-                        </div>
+                <td className="w-12 px-3 py-3">
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${abierto ? "bg-[#131E5C] text-white" : "bg-slate-100 text-[#131E5C]"}`}>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${abierto ? "rotate-180" : ""}`} />
                     </div>
+                </td>
 
-                    {/* CLIENTE / EXPEDIENTE */}
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="truncate text-base font-black text-[#131E5C] sm:text-lg">
-                                {expediente.cliente}
-                            </h2>
+                <td className="min-w-[230px] px-4 py-3">
+                    <div className="font-black text-[#131E5C]">{expediente.cliente || "Sin cliente"}</div>
 
-                            <div className="hidden lg:block">
-                                {avance.porcentaje >= 100
-                                    ? <Badge type="green">Completo</Badge>
-                                    : <Badge type="yellow">En proceso</Badge>}
-                            </div>
-                        </div>
-
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400">
-                                {expediente.folio}
-                            </span>
-
-                            <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:block" />
-
-                            <span className="text-[10px] font-semibold text-slate-400">
-                                {avance.completados} de {avance.total} requisitos completos
-                            </span>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            <Badge type="blue">{nombrePersona(expediente.tipo_persona)}</Badge>
-                            <Badge>{nombreFinanciamiento(expediente.financiamiento)}</Badge>
-                        </div>
+                    <div className="mt-1 flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-400">{expediente.folio || "Sin folio"}</span>
+                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                        <span className="text-[10px] font-semibold text-slate-400">{avance.completados} de {avance.total} documentos</span>
                     </div>
+                </td>
 
-                    {/* INFORMACIÓN OPERATIVA */}
-                    <div className="grid min-w-0 gap-2 sm:grid-cols-3 lg:w-[560px] lg:shrink-0">
-                        {/* ASESOR */}
-                        <div className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 transition group-hover:bg-white">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#131E5C]/[0.07] text-[#131E5C]">
-                                <UserRound className="h-4 w-4" />
-                            </div>
+                <td className="min-w-[180px] px-4 py-3">
+                    <Badge type="blue">{nombrePersona(expediente.tipo_persona)}</Badge>
+                </td>
 
-                            <div className="min-w-0">
-                                <div className="text-[8px] font-black uppercase tracking-[.13em] text-slate-400">
-                                    Asesor
-                                </div>
+                <td className="px-4 py-3">
+                    <Badge>{nombreFinanciamiento(expediente.financiamiento)}</Badge>
+                </td>
 
-                                <div className="mt-0.5 truncate text-[11px] font-black text-[#131E5C]">
-                                    {expediente.asesor_nombre || "Sin asignar"}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* DEALER */}
-                        <div className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 transition group-hover:bg-white">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#131E5C]/[0.07] text-[#131E5C]">
-                                <Building2 className="h-4 w-4" />
-                            </div>
-
-                            <div className="min-w-0">
-                                <div className="text-[8px] font-black uppercase tracking-[.13em] text-slate-400">
-                                    Dealer
-                                </div>
-
-                                <div className="mt-0.5 truncate text-[11px] font-black text-[#131E5C]">
-                                    {expediente.agencia || "Sin Dealer"}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* CREADO POR */}
-                        <div className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 transition group-hover:bg-white">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#131E5C]/[0.07] text-[#131E5C]">
-                                <FileCheck2 className="h-4 w-4" />
-                            </div>
-
-                            <div className="min-w-0">
-                                <div className="text-[8px] font-black uppercase tracking-[.13em] text-slate-400">
-                                    Creado por
-                                </div>
-
-                                <div className="mt-0.5 truncate text-[11px] font-black text-[#131E5C]">
-                                    {expediente.creado_por || "—"}
-                                </div>
-                            </div>
-                        </div>
+                <td className="min-w-[160px] px-4 py-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#131E5C]">
+                        <Building2 className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{expediente.agencia || "Sin Dealer"}</span>
                     </div>
+                </td>
 
-                    {/* DESPLEGAR */}
-                    <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-xl transition-all duration-300 lg:self-auto ${abierto
-                                ? "rotate-180 bg-[#131E5C] text-white shadow-md"
-                                : "bg-slate-100 text-[#131E5C] group-hover:bg-[#131E5C] group-hover:text-white"
-                            }`}
-                    >
-                        <ChevronDown className="h-4 w-4" />
+                <td className="min-w-[180px] px-4 py-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#131E5C]">
+                        <UserRound className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{expediente.asesor_nombre || "Sin asignar"}</span>
                     </div>
-                </div>
+                </td>
 
-                {/* BARRA DE AVANCE */}
-                <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+                <td className="min-w-[150px] px-4 py-3 text-xs font-semibold text-[#131E5C]">
+                    {expediente.creado_por || "—"}
+                </td>
+
+                <td className="min-w-[170px] px-4 py-3">
                     <div className="flex items-center gap-3">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-2 min-w-[90px] flex-1 overflow-hidden rounded-full bg-slate-200">
                             <div
-                                className={`h-full rounded-full transition-all duration-500 ${avance.porcentaje >= 100
-                                        ? "bg-emerald-500"
-                                        : "bg-[#131E5C]"
-                                    }`}
-                                style={{ width: `${avance.porcentaje}%` }}
+                                className={`h-full rounded-full transition-all duration-500 ${completo ? "bg-emerald-500" : "bg-[#131E5C]"}`}
+                                style={{ width: `${Math.min(avance.porcentaje || 0, 100)}%` }}
                             />
                         </div>
 
-                        <span
-                            className={`min-w-[38px] text-right text-[10px] font-black ${avance.porcentaje >= 100
-                                    ? "text-emerald-600"
-                                    : "text-[#131E5C]"
-                                }`}
-                        >
+                        <span className={`w-9 text-right text-xs font-black ${completo ? "text-emerald-600" : "text-[#131E5C]"}`}>
                             {avance.porcentaje}%
                         </span>
                     </div>
-                </div>
-            </button>
+                </td>
+
+                <td className="whitespace-nowrap px-4 py-3">
+                    {completo ? <Badge type="green">Completo</Badge> : <Badge type="yellow">En proceso</Badge>}
+                </td>
+            </tr>
 
             {abierto ? (
-                <div className="border-t border-slate-100 bg-slate-50/60 p-4 sm:p-5">
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <h3 className="text-sm font-black text-[#131E5C]">Documentos del expediente</h3>
+                <tr>
+                    <td colSpan={9} className="border-b border-[#131E5C]/20 bg-slate-50/80 p-0">
+                        <div className="p-4 sm:p-5">
+                            {/* DOCUMENTOS */}
+                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                                <div className="overflow-auto">
+                                    <table className="min-w-full text-left text-sm">
+                                        <thead className="border border-black bg-[#131E5C] text-xs text-white">
+                                            <tr>
+                                                <th className="px-4 py-3 font-bold">Documento / Especificación</th>
+                                                <th className="px-4 py-3 font-bold">Tipo</th>
+                                                <th className="px-4 py-3 font-bold">Estado</th>
+                                                <th className="px-4 py-3 font-bold">Archivo</th>
+                                                <th className="px-4 py-3 text-right font-bold">Acciones</th>
+                                            </tr>
+                                        </thead>
 
-                            <p className="mt-1 text-[11px] text-slate-400">
-                                {avance.faltantes
-                                    ? `${avance.faltantes} requisito${avance.faltantes === 1 ? "" : "s"} obligatorio${avance.faltantes === 1 ? "" : "s"} pendiente${avance.faltantes === 1 ? "" : "s"}.`
-                                    : "Todos los requisitos obligatorios están completos."}
-                            </p>
+                                        <tbody>
+                                            {(expediente.requisitos || []).map((requisito) => {
+                                                const documento = expediente.documentos?.[requisito.id];
+                                                const key = `${expediente.id_expediente}-${requisito.id}`;
+
+                                                return (
+                                                    <DocumentoCard
+                                                        key={requisito.id}
+                                                        requisito={requisito}
+                                                        documento={documento}
+                                                        uploading={!!uploading[key]}
+                                                        editable={editable}
+                                                        onSeleccionar={(req, file) => onSeleccionar(expediente, req, file)}
+                                                        onVer={onVer}
+                                                        onEliminar={(doc) => onEliminar(expediente, requisito, doc)}
+                                                    />
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
+                        {/* FORMATO PDF EDITABLE */}
+                        <div className="mb-4 overflow-hidden">
+                            <div className="grid gap-3 p-4 lg:grid-cols-[minmax(300px,1fr)_auto_auto] lg:items-end">
+                                <label>
+                                    <div className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                                        Formato asignado
+                                    </div>
 
-                        {!editable ? <Badge type="blue">Modo solo lectura</Badge> : null}
-                    </div>
+                                    <select
+                                        value={formatoSeleccionado || ""}
+                                        disabled={!editable}
+                                        onChange={(event) => onFormatoChange(event.target.value)}
+                                        className="h-10 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-xs font-bold text-[#131E5C] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <option value="">Selecciona un formato...</option>
 
-                    <div className="grid gap-3 lg:grid-cols-2">
-                        {(expediente.requisitos || []).map((requisito) => {
-                            const documento = expediente.documentos?.[requisito.id];
-                            const key = `${expediente.id_expediente}-${requisito.id}`;
+                                        {FORMATOS_SOLICITUD.map((formato) => (
+                                            <option key={formato.value} value={formato.value}>
+                                                {formato.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
 
-                            return (
-                                <DocumentoCard
-                                    key={requisito.id}
-                                    requisito={requisito}
-                                    documento={documento}
-                                    uploading={!!uploading[key]}
-                                    editable={editable}
-                                    onSeleccionar={(req, file) => onSeleccionar(expediente, req, file)}
-                                    onVer={onVer}
-                                    onEliminar={(doc) => onEliminar(expediente, requisito, doc)}
-                                />
-                            );
-                        })}
-                    </div>
-                </div>
-            ) : null}
-        </article>
+                                {editable ? (
+                                    <button
+                                        type="button"
+                                        disabled={!formatoSeleccionado}
+                                        onClick={() => onEditarFormato(formatoSeleccionado)}
+                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 text-xs font-black text-white hover:bg-[#1d2d86] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <Pencil className="h-4 w-4" />
+
+                                        {tienePdfGuardado && formatoGuardado === formatoSeleccionado ? "Editar formato" : "Llenar formato"}
+                                    </button>
+                                ) : null}
+                                <div className="inline-flex h-10 items-center justify-center  gap-2 rounded-lg bg-[#131E5C] px-4 text-xs font-black text-white hover:bg-[#1d2d86] disabled:cursor-not-allowed disabled:opacity-50">
+                                    {tienePdfGuardado ? <div className="bg-green-500">PDF guardado</div> : <div>Sin generar</div>}
+                                </div>
+                                {tienePdfGuardado ? (
+                                    <button
+                                        type="button"
+                                        onClick={onVerFormato}
+                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-xs font-black text-[#131E5C] hover:bg-slate-50"
+                                    >
+                                        <Eye className="h-4 w-4" />
+                                        Ver PDF guardado
+                                    </button>
+                                ) : null}
+                            </div>
+
+                            {cambioFormatoPendiente ? (
+                                <div className="border-t border-amber-200 bg-amber-50 px-4 py-2.5 text-[10px] font-bold text-amber-700">
+                                    Cambiaste de formato. El PDF guardado actualmente corresponde a otra plantilla. Al guardar el nuevo se reemplazará.
+                                </div>
+                            ) : null}
+
+                            {tienePdfGuardado && formatoGuardado === formatoSeleccionado ? (
+                                <div className="border-t border-emerald-100 bg-emerald-50/60 px-4 py-2.5 text-[10px] font-semibold text-emerald-700">
+                                    Última actualización: {expediente.solicitud_pdf_actualizado
+                                        ? new Date(expediente.solicitud_pdf_actualizado).toLocaleString("es-MX")
+                                        : "—"}
+                                </div>
+                            ) : null}
+                        </div>
+                    </td>
+                </tr >
+            ) : null
+            }
+        </>
     );
 }
 
@@ -402,6 +503,13 @@ export default function Documentacion() {
     const [combinacionDisponible, setCombinacionDisponible] = useState(true);
     const [cantidadRequisitos, setCantidadRequisitos] = useState(0);
     const [preview, setPreview] = useState({ open: false, url: "", title: "" });
+    const [formatosSeleccionados, setFormatosSeleccionados] = useState({});
+    const [editorPdf, setEditorPdf] = useState({
+        open: false,
+        expediente: null,
+        formato: null,
+        camposIniciales: {},
+    });
 
     const [nuevo, setNuevo] = useState({
         tipo_persona: "",
@@ -422,7 +530,23 @@ export default function Documentacion() {
 
         try {
             const data = await apiDocumentacion.list();
-            setExpedientes(normalizarListado(data));
+            const lista = normalizarListado(data);
+
+            setExpedientes(lista);
+
+            setFormatosSeleccionados((prev) => {
+                const next = { ...prev };
+
+                lista.forEach((expediente) => {
+                    const id = expediente.id_expediente;
+
+                    if (!next[id] && expediente.solicitud_pdf_plantilla) {
+                        next[id] = expediente.solicitud_pdf_plantilla;
+                    }
+                });
+
+                return next;
+            });
         } catch (error) {
             console.error("Error cargando expedientes:", error);
             mostrarMensaje("error", error?.message || "No fue posible cargar los expedientes.");
@@ -533,8 +657,15 @@ export default function Documentacion() {
                 String(exp.id_expediente) === String(idExpediente)
                     ? actualizado
                     : exp
-            ),
+            )
         );
+
+        if (actualizado?.solicitud_pdf_plantilla) {
+            setFormatosSeleccionados((prev) => ({
+                ...prev,
+                [idExpediente]: actualizado.solicitud_pdf_plantilla,
+            }));
+        }
 
         return actualizado;
     };
@@ -636,6 +767,95 @@ export default function Documentacion() {
         });
     };
 
+    const cambiarFormatoExpediente = (expediente, plantilla) => {
+        setFormatosSeleccionados((prev) => ({
+            ...prev,
+            [expediente.id_expediente]: plantilla,
+        }));
+    };
+
+    const abrirEditorFormato = (expediente, plantilla) => {
+        const formato = obtenerFormatoSolicitud(plantilla);
+
+        if (!formato) {
+            mostrarMensaje("error", "Selecciona un formato de solicitud.");
+            return;
+        }
+
+        /*
+         * Solamente recuperamos los campos guardados cuando el formato
+         * almacenado en backend coincide con la plantilla seleccionada.
+         *
+         * Si el usuario cambia de plantilla comenzamos con el PDF limpio.
+         */
+        const camposIniciales =
+            expediente.solicitud_pdf_plantilla === plantilla
+                ? expediente.solicitud_pdf_campos || {}
+                : {};
+
+        setEditorPdf({
+            open: true,
+            expediente,
+            formato,
+            camposIniciales,
+        });
+    };
+
+    const cerrarEditorFormato = () => {
+        setEditorPdf({
+            open: false,
+            expediente: null,
+            formato: null,
+            camposIniciales: {},
+        });
+    };
+
+    const guardarFormatoPdf = async ({ archivo, campos, plantilla }) => {
+        const expediente = editorPdf.expediente;
+
+        if (!expediente?.id_expediente) {
+            throw new Error("No se encontró el expediente.");
+        }
+
+        await apiDocumentacion.guardarFormatoPdf(
+            expediente.id_expediente,
+            {
+                archivo,
+                plantilla,
+                campos,
+            }
+        );
+
+        await refrescarExpediente(expediente.id_expediente);
+
+        setFormatosSeleccionados((prev) => ({
+            ...prev,
+            [expediente.id_expediente]: plantilla,
+        }));
+
+        cerrarEditorFormato();
+
+        mostrarMensaje(
+            "success",
+            "El formato PDF fue guardado correctamente en el expediente."
+        );
+    };
+
+    const verFormatoGuardado = (expediente) => {
+        if (!expediente?.solicitud_pdf_url) {
+            mostrarMensaje("error", "Este expediente todavía no tiene un formato PDF guardado.");
+            return;
+        }
+
+        const formato = obtenerFormatoSolicitud(expediente.solicitud_pdf_plantilla);
+
+        setPreview({
+            open: true,
+            url: expediente.solicitud_pdf_url,
+            title: formato?.label || "Formato de solicitud",
+        });
+    };
+
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-5">
             {/* HEADER */}
@@ -710,36 +930,78 @@ export default function Documentacion() {
 
             {/* EXPEDIENTES */}
             {loading ? (
-                <div className="flex min-h-[350px] items-center justify-center rounded-2xl border border-slate-200 bg-white">
+                <div className="flex min-h-[350px] items-center justify-center rounded-lg border border-slate-200 bg-white">
                     <div className="text-center">
                         <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#131E5C]" />
-                        <div className="mt-3 text-xs font-black text-[#131E5C]">Cargando expedientes...</div>
+                        <div className="mt-3 text-xs font-black text-[#131E5C]">
+                            Cargando expedientes...
+                        </div>
                     </div>
                 </div>
             ) : expedientesVisibles.length ? (
-                <div className="space-y-3">
-                    {expedientesVisibles.map((expediente) => (
-                        <ExpedienteCard
-                            key={expediente.id_expediente}
-                            expediente={expediente}
-                            abierto={String(abiertoId) === String(expediente.id_expediente)}
-                            editable={puedeEditar(expediente)}
-                            uploading={uploading}
-                            onToggle={() => setAbiertoId((prev) => String(prev) === String(expediente.id_expediente) ? null : expediente.id_expediente)}
-                            onSeleccionar={subirDocumento}
-                            onVer={verDocumento}
-                            onEliminar={eliminarDocumento}
-                        />
-                    ))}
+                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1250px] text-left text-sm">
+                            <thead className="bg-[#131E5C] text-xs text-white">
+                                <tr>
+                                    <th className="w-12 px-3 py-3" />
+                                    <th className="px-4 py-3 font-bold">Expediente / Cliente</th>
+                                    <th className="px-4 py-3 font-bold">Tipo de Persona</th>
+                                    <th className="px-4 py-3 font-bold">Financiamiento</th>
+                                    <th className="px-4 py-3 font-bold">Dealer</th>
+                                    <th className="px-4 py-3 font-bold">Asesor</th>
+                                    <th className="px-4 py-3 font-bold">Creado por</th>
+                                    <th className="px-4 py-3 font-bold">Avance</th>
+                                    <th className="px-4 py-3 font-bold">Estado</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {expedientesVisibles.map((expediente) => (
+                                    <ExpedienteCard
+                                        key={expediente.id_expediente}
+                                        expediente={expediente}
+                                        abierto={String(abiertoId) === String(expediente.id_expediente)}
+                                        editable={puedeEditar(expediente)}
+                                        uploading={uploading}
+                                        formatoSeleccionado={
+                                            formatosSeleccionados[expediente.id_expediente]
+                                            ?? expediente.solicitud_pdf_plantilla
+                                            ?? ""
+                                        }
+                                        onFormatoChange={(plantilla) =>
+                                            cambiarFormatoExpediente(expediente, plantilla)
+                                        }
+                                        onEditarFormato={(plantilla) =>
+                                            abrirEditorFormato(expediente, plantilla)
+                                        }
+                                        onVerFormato={() => verFormatoGuardado(expediente)}
+                                        onToggle={() =>
+                                            setAbiertoId((prev) =>
+                                                String(prev) === String(expediente.id_expediente)
+                                                    ? null
+                                                    : expediente.id_expediente
+                                            )
+                                        }
+                                        onSeleccionar={subirDocumento}
+                                        onVer={verDocumento}
+                                        onEliminar={eliminarDocumento}
+                                    />
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             ) : (
-                <div className="flex min-h-[380px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                <div className="flex min-h-[380px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
                     <div>
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#131E5C]/[0.06] text-[#131E5C]">
                             <FolderOpen className="h-7 w-7" />
                         </div>
 
-                        <h2 className="mt-4 text-base font-black text-[#131E5C]">No hay expedientes</h2>
+                        <h2 className="mt-4 text-base font-black text-[#131E5C]">
+                            No hay expedientes
+                        </h2>
 
                         <p className="mt-1 text-xs leading-5 text-slate-400">
                             {busqueda || filtroDealer !== "Todos" || filtroAsesor !== "Todos"
@@ -748,7 +1010,11 @@ export default function Documentacion() {
                         </p>
 
                         {!busqueda && filtroDealer === "Todos" && filtroAsesor === "Todos" ? (
-                            <button type="button" onClick={abrirCrear} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#131E5C] px-4 py-2.5 text-xs font-black text-white">
+                            <button
+                                type="button"
+                                onClick={abrirCrear}
+                                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2.5 text-xs font-black text-white"
+                            >
                                 <Plus className="h-4 w-4" />
                                 Crear Expediente
                             </button>
@@ -756,7 +1022,6 @@ export default function Documentacion() {
                     </div>
                 </div>
             )}
-
             {/* CREAR EXPEDIENTE */}
             <Modal open={openCrear} title="Crear nuevo expediente" onClose={() => !creando && setOpenCrear(false)}>
                 <div>
@@ -934,6 +1199,15 @@ export default function Documentacion() {
                     </div>
                 </div>
             </Modal>
+
+            <EditorFormatoPdf
+                open={editorPdf.open}
+                expediente={editorPdf.expediente}
+                formato={editorPdf.formato}
+                camposIniciales={editorPdf.camposIniciales}
+                onClose={cerrarEditorFormato}
+                onGuardar={guardarFormatoPdf}
+            />
 
             {/* PREVIEW PDF */}
             <Modal

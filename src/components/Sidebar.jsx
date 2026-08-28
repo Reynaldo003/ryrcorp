@@ -26,6 +26,7 @@ import {
     Sparkles,
     LayoutList,
     Workflow,
+    Globe,
 } from "lucide-react";
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
@@ -274,6 +275,13 @@ export default function Sidebar() {
                 to: "/flujo_procesos",
                 label: "Flows",
                 icon: Workflow,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
+            },
+            {
+                section: "Herramientas",
+                to: "/webs",
+                label: "Interfacez Web",
+                icon: Globe,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
             },
             {

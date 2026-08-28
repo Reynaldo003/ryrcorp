@@ -1,7 +1,8 @@
 // src/pages/Retencion/Retencion.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext";
 import { ChatDrawer } from "../Digitales/DigitalesBandeja";
+import { obtenerNumerosWhatsAppUsuario } from "../../config/lineasWhatsApp";
 import { createPortal } from "react-dom";
 import ReactECharts from "echarts-for-react";
 import * as echarts from "echarts";
@@ -41,6 +42,17 @@ const NAVY = "#131E5C";
 const ACCENT = "#378ADD";
 
 const DEALERS_RETENCION = ["VW Cordoba", "VW Orizaba"];
+
+const WHATSAPP_NUMERO_SERVICIO_CBA = "522711076834";
+const WHATSAPP_NUMERO_SERVICIO_OBA = "522721831635";
+const STORAGE_LINEA_RETENCION = "retencion_numero_servicio_activo";
+
+const LINEAS_WHATSAPP_SERVICIO = [
+    { numero: WHATSAPP_NUMERO_SERVICIO_CBA, etiqueta: "Servicio Córdoba" },
+    { numero: WHATSAPP_NUMERO_SERVICIO_OBA, etiqueta: "Servicio Orizaba" },
+];
+
+const NUMEROS_WHATSAPP_SERVICIO = LINEAS_WHATSAPP_SERVICIO.map((linea) => linea.numero);
 
 const SEGMENTO_COLORS = ["#378ADD", "#1D9E75", "#D85A30", "#7F77DD", "#D4537E", "#F0A500"];
 const ESTADO_COLORS = { activo: "#1D9E75", inactivo: "#D85A30" };
@@ -117,6 +129,70 @@ function normalizarTexto(valor) {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
         .trim();
+}
+
+function normalizaTelefonoMx(telefono) {
+    const digits = String(telefono || "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("521") && digits.length === 13) return `52${digits.slice(3)}`;
+    if (digits.length === 10) return `52${digits}`;
+    if (digits.length === 12 && digits.startsWith("52")) return digits;
+    return digits;
+}
+
+function formateaTelUi(telefono) {
+    const digits = normalizaTelefonoMx(telefono);
+    if (!digits) return "";
+    if (digits.length === 12 && digits.startsWith("52")) {
+        const nacional = digits.slice(2);
+        return `+52 ${nacional.slice(0, 3)} ${nacional.slice(3, 6)} ${nacional.slice(6)}`;
+    }
+    return `+${digits}`;
+}
+
+function obtenerRolUsuario(user) {
+    const rol =
+        user?.rol ??
+        user?.role ??
+        user?.rol_usuario ??
+        user?.tipo_usuario ??
+        "";
+
+    if (typeof rol === "string") {
+        return normalizarTexto(rol);
+    }
+
+    return normalizarTexto(
+        rol?.nombre ||
+        rol?.name ||
+        rol?.descripcion ||
+        ""
+    );
+}
+
+function obtenerPermisosUsuario(user) {
+    const permisos = Array.isArray(user?.permisos)
+        ? user.permisos
+        : [];
+
+    return permisos
+        .map((permiso) => {
+            if (typeof permiso === "string") {
+                return normalizarTexto(permiso);
+            }
+
+            return normalizarTexto(
+                permiso?.codigo ||
+                permiso?.nombre ||
+                permiso?.name ||
+                ""
+            );
+        })
+        .filter(Boolean);
+}
+
+function obtenerEtiquetaLineaServicio(numero) {
+    return LINEAS_WHATSAPP_SERVICIO.find((linea) => linea.numero === normalizaTelefonoMx(numero))?.etiqueta || "Línea de servicio";
 }
 
 function moneda(valor) {
@@ -1509,11 +1585,13 @@ function InfoItem({ icon: Icon, label, value }) {
 }
 
 export default function Retencion() {
+    const { user, ready } = useAuth();
     const [vista, setVista] = useState("tabla");
-    const navigate = useNavigate();
 
     const [clienteChat, setClienteChat] = useState(null);
     const [drawerTel, setDrawerTel] = useState("");
+    const [errorWhatsApp, setErrorWhatsApp] = useState("");
+    const [numeroAsesorActivo, setNumeroAsesorActivo] = useState("");
 
     const [anio, setAnio] = useState("Todos");
     const [mes, setMes] = useState("Todos");
@@ -1556,6 +1634,71 @@ export default function Retencion() {
     const [errorTareas, setErrorTareas] = useState(null);
 
     const cacheRef = useRef(new Map());
+
+    const rolUsuario = useMemo(
+        () => obtenerRolUsuario(user),
+        [user]
+    );
+
+    const permisosUsuario = useMemo(
+        () => obtenerPermisosUsuario(user),
+        [user]
+    );
+
+    const isAdmin = useMemo(() => {
+        if (!user) return false;
+
+        return (
+            rolUsuario === "administrador" ||
+            rolUsuario === "admin" ||
+            permisosUsuario.includes("all") ||
+            permisosUsuario.includes("usuarios_admin") ||
+            user?.is_superuser === true
+        );
+    }, [user, rolUsuario, permisosUsuario]);
+
+    const numerosServicioAsignados = useMemo(() => {
+        const asignados = obtenerNumerosWhatsAppUsuario(user)
+            .map(normalizaTelefonoMx)
+            .filter((numero) => NUMEROS_WHATSAPP_SERVICIO.includes(numero));
+
+        return [...new Set(asignados)];
+    }, [user]);
+
+    const numerosServicioDisponibles = useMemo(
+        () => isAdmin ? NUMEROS_WHATSAPP_SERVICIO : numerosServicioAsignados,
+        [isAdmin, numerosServicioAsignados]
+    );
+
+    const lineaServicioActiva = useMemo(
+        () => LINEAS_WHATSAPP_SERVICIO.find((linea) => linea.numero === numeroAsesorActivo) || null,
+        [numeroAsesorActivo]
+    );
+
+    useEffect(() => {
+        if (!ready) return;
+
+        if (!numerosServicioDisponibles.length) {
+            setNumeroAsesorActivo("");
+            return;
+        }
+
+        if (!isAdmin) {
+            setNumeroAsesorActivo(numerosServicioDisponibles[0]);
+            return;
+        }
+
+        const guardado = normalizaTelefonoMx(localStorage.getItem(STORAGE_LINEA_RETENCION) || "");
+        const inicial = numerosServicioDisponibles.includes(guardado) ? guardado : numerosServicioDisponibles[0];
+
+        setNumeroAsesorActivo((actual) =>
+            actual && numerosServicioDisponibles.includes(actual) ? actual : inicial
+        );
+    }, [ready, isAdmin, numerosServicioDisponibles]);
+
+    useEffect(() => {
+        if (numeroAsesorActivo) setErrorWhatsApp("");
+    }, [numeroAsesorActivo]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -1872,17 +2015,41 @@ export default function Retencion() {
         }
     }
 
+    function cambiarNumeroServicio(nuevoNumero) {
+        if (!isAdmin) return;
+
+        const numero = normalizaTelefonoMx(nuevoNumero);
+        if (!NUMEROS_WHATSAPP_SERVICIO.includes(numero)) return;
+
+        setNumeroAsesorActivo(numero);
+        localStorage.setItem(STORAGE_LINEA_RETENCION, numero);
+        setErrorWhatsApp("");
+
+        // Cerramos el drawer para que un chat abierto no cambie de remitente a mitad de conversación.
+        setDrawerTel("");
+        setClienteChat(null);
+    }
+
     function abrirChatCliente(cliente) {
         const telefonos = obtenerTelefonosCliente(cliente);
 
-        if (telefonos.length === 0) {
-            alert("Este cliente no tiene números de teléfono registrados.");
+        if (!numeroAsesorActivo) {
+            setErrorWhatsApp(
+                isAdmin
+                    ? "Selecciona una línea de servicio antes de abrir el chat."
+                    : "Tu usuario no tiene asignada una línea de WhatsApp de Servicio Córdoba u Orizaba."
+            );
             return;
         }
 
+        if (telefonos.length === 0) {
+            setErrorWhatsApp("Este cliente no tiene números de teléfono registrados.");
+            return;
+        }
+
+        setErrorWhatsApp("");
         setClienteChat(cliente);
         setDrawerTel(telefonos[0]);
-
     }
 
 
@@ -1920,6 +2087,26 @@ export default function Retencion() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    {isAdmin ? (
+                        <div className="relative min-w-[245px]">
+                            <PhoneCall className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#131E5C]" />
+                            <select
+                                value={numeroAsesorActivo}
+                                onChange={(e) => cambiarNumeroServicio(e.target.value)}
+                                disabled={!ready || numerosServicioDisponibles.length === 0}
+                                className="h-10 w-full appearance-none rounded-lg border border-[#131E5C]/20 bg-white py-2 pl-9 pr-9 text-xs font-extrabold text-[#131E5C] outline-none transition hover:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/15 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Línea de WhatsApp utilizada para enviar mensajes desde Retención"
+                            >
+                                {LINEAS_WHATSAPP_SERVICIO.map((linea) => (
+                                    <option key={linea.numero} value={linea.numero}>
+                                        {linea.etiqueta} · {formateaTelUi(linea.numero)}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#131E5C]/50" />
+                        </div>
+                    ) : null}
+
                     <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1">
                         <button
                             onClick={() => setVista("tabla")}
@@ -1952,9 +2139,31 @@ export default function Retencion() {
 
             </div>
 
+            {!isAdmin && ready && lineaServicioActiva ? (
+                <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-[#131E5C]">
+                    <PhoneCall className="h-4 w-4 shrink-0" />
+                    Envío de WhatsApp con {obtenerEtiquetaLineaServicio(numeroAsesorActivo)} · {formateaTelUi(numeroAsesorActivo)}
+                </div>
+            ) : null}
+
+            {!isAdmin && ready && !numeroAsesorActivo ? (
+                <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                    <PhoneCall className="h-4 w-4 shrink-0" />
+                    Tu usuario no tiene asignado ninguno de los dos números de WhatsApp de servicio.
+                </div>
+            ) : null}
+
+            {errorWhatsApp ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    <span>{errorWhatsApp}</span>
+                    <button type="button" onClick={() => setErrorWhatsApp("")} className="rounded-full p-1 transition hover:bg-red-100" aria-label="Cerrar aviso">
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            ) : null}
 
             {/* KPIs */}
-            <               div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <KpiCard
                     icon={Car}
                     label="Vehículos"
@@ -2023,8 +2232,8 @@ export default function Retencion() {
                             type="button"
                             onClick={() => setSegmento("Todos")}
                             className={`h-full flex-1 rounded-full text-[11px] font-bold transition ${segmento === "Todos"
-                                    ? "text-white"
-                                    : "text-slate-500 hover:bg-white"
+                                ? "text-white"
+                                : "text-slate-500 hover:bg-white"
                                 }`}
                             style={segmento === "Todos" ? { backgroundColor: NAVY } : {}}
                         >
@@ -2037,8 +2246,8 @@ export default function Retencion() {
                                 type="button"
                                 onClick={() => setSegmento(item)}
                                 className={`h-full flex-1 rounded-full text-[11px] font-bold transition ${segmento === item
-                                        ? "text-white"
-                                        : "text-slate-500 hover:bg-white"
+                                    ? "text-white"
+                                    : "text-slate-500 hover:bg-white"
                                     }`}
                                 style={segmento === item ? { backgroundColor: NAVY } : {}}
                             >
@@ -2195,12 +2404,15 @@ export default function Retencion() {
             />
 
             <ChatDrawer
-                open={Boolean(drawerTel)}
+                open={Boolean(drawerTel && numeroAsesorActivo)}
                 telefono={drawerTel}
-                numeroAsesor="522711076834"
+                numeroAsesor={numeroAsesorActivo}
                 clienteRetencion={clienteChat}
                 onTelefonoChange={setDrawerTel}
-                onClose={() => setDrawerTel("")}
+                onClose={() => {
+                    setDrawerTel("");
+                    setClienteChat(null);
+                }}
             />
 
 
