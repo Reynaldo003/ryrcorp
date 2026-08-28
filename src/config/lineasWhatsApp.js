@@ -1,10 +1,14 @@
 // src/config/lineasWhatsApp.js
+import {
+  NOMBRES_ASESORES_DIGITALES,
+  ASESORES_TUXTEPEC,
+} from "./asesoresGestionComercial";
 export const NUMERO_WHATSAPP_TUXTEPEC = "522871232641";
 
 export const LINEAS_WHATSAPP = {
   522712638803: {
     key: "cordoba-ia",
-    asesor_digital: "IA Vagen",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.IA_VAGEN,
     agencia: "VW Cordoba",
     etiqueta: "Córdoba IA",
     compartida: false,
@@ -13,7 +17,7 @@ export const LINEAS_WHATSAPP = {
 
   522721111244: {
     key: "orizaba",
-    asesor_digital: "Lizbeth Cano Clara",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.LIZBETH_CANO_CLARA,
     agencia: "VW Orizaba",
     etiqueta: "VW Orizaba",
     compartida: false,
@@ -22,7 +26,7 @@ export const LINEAS_WHATSAPP = {
 
   522713133332: {
     key: "cordoba",
-    asesor_digital: "Erendira Santos Coyotzi",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.ERENDIRA_SANTOS_COYOTZI,
     agencia: "VW Cordoba",
     etiqueta: "VW Córdoba",
     compartida: false,
@@ -31,28 +35,17 @@ export const LINEAS_WHATSAPP = {
 
   522871232641: {
     key: "tuxtepec",
-    asesor_digital: "Equipo Digital Tuxtepec",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.EQUIPO_DIGITAL_TUXTEPEC,
 
     agencia: "VW Tuxtepec",
     etiqueta: "VW Tuxtepec",
     compartida: true,
-    asesores: [
-      {
-        usuario: "ADTuxte",
-        nombre: "Marelly Tenorio Salinas",
-        activo: true,
-      },
-      {
-        usuario: "julioRL",
-        nombre: "Julio Ramirez Lopez",
-        activo: true,
-      },
-    ],
+    asesores: ASESORES_TUXTEPEC,
   },
 
   527831263814: {
     key: "tuxpan",
-    asesor_digital: "Edgar Omar Noguera Solis",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.EDGAR_OMAR_NOGUERA_SOLIS,
     agencia: "VW Tuxpan",
     etiqueta: "VW Tuxpan",
     compartida: false,
@@ -61,7 +54,7 @@ export const LINEAS_WHATSAPP = {
 
   527821820706: {
     key: "poza-rica",
-    asesor_digital: "Dulce Abigail Garcia Olivares",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.DULCE_ABIGAIL_GARCIA_OLIVARES,
     agencia: "VW Poza Rica",
     etiqueta: "VW Poza Rica",
     compartida: false,
@@ -70,7 +63,7 @@ export const LINEAS_WHATSAPP = {
 
   522712837999: {
     key: "cordoba-usados",
-    asesor_digital: "Bianca Chavez Alarcon",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.BIANCA_CHAVEZ_ALARCON,
     agencia: "VW Cordoba Usados",
     etiqueta: "Córdoba Usados",
     compartida: false,
@@ -79,7 +72,7 @@ export const LINEAS_WHATSAPP = {
 
   522721986539: {
     key: "orizaba-usados",
-    asesor_digital: "Candy Denisse Marquez",
+    asesor_digital: NOMBRES_ASESORES_DIGITALES.CANDY_DENISSE_MARQUEZ,
     agencia: "VW Orizaba Usados",
     etiqueta: "Orizaba Usados",
     compartida: false,

@@ -17,6 +17,19 @@ import NuevoProspectoModal from "./NuevoProspectoModal";
 import ResultadosIA from "./ResultadosIA";
 import DashboardEjecutivoBDC from "./DashboardEjecutivoBDC";
 import { ETIQUETAS_ESTADO } from "./estadosProspecto";
+
+import {
+    ASESORES_DIGITALES,
+    ASESORES_PISO,
+    canonicalAsesorDigital,
+} from "../../config/asesoresGestionComercial";
+
+import {
+    LINEAS_WHATSAPP,
+    obtenerContextoLinea,
+    obtenerNombreAsesorSesion,
+} from "../../config/lineasWhatsApp";
+
 const PAGE_SIZE = 200;
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = {
@@ -30,7 +43,15 @@ const origenMeta = {
     Facebook: { Icon: ImgIcon(FB, "Facebook"), label: "Facebook" },
     "Llamada Entrante": { Icon: ImgIcon(PHONE, "Llamada Entrante"), label: "Llamada Entrante" },
 };
-const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez",];
+const ESTADOS_PROSPECTO = [
+    "Contactado",
+    "Calificado",
+    "Pendiente de Cotización",
+    "Requiere Asesor",
+    "Financiamiento",
+    "Sin Respuesta",
+    "Descalificado",
+];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [
@@ -71,95 +92,7 @@ const INITIAL_FILTERS = {
     fechaRegistroDesde: "",
     fechaRegistroHasta: "",
 };
-const NUMERO_TUXTEPEC = "522871232641";
-const ASESOR_TUXTEPEC_POR_USUARIO = {
-    adtuxte: "Marelly Tenorio Salinas",
-    juliorl: "Julio Ramirez Lopez",
-};
-const ASESOR_DIGITAL_POR_NUMERO = {
-    "522712638803": { asesor_digital: "IA Vagen", agencia: "VW Cordoba", etiqueta: "IA Vagen", },
-    "522721111244": { asesor_digital: "Lizbeth Cano Clara", agencia: "VW Orizaba", etiqueta: "Lizbeth Cano Clara", },
-    "522713133332": { asesor_digital: "Erendira Santos Coyotzi", agencia: "VW Cordoba", etiqueta: "Erendira Santos Coyotzi", },
-    "522871232641": { asesor_digital: "", agencia: "VW Tuxtepec", etiqueta: "Equipo Digital Tuxtepec", },
-    "527831263814": { asesor_digital: "Edgar Omar Noguera Solis", agencia: "VW Tuxpan", etiqueta: "Edgar Omar Noguera Solis", },
-    "527821820706": { asesor_digital: "Dulce Abigail Garcia Olivares", agencia: "VW Poza Rica", etiqueta: "Dulce Abigail Garcia Olivares", },
-    "522712837999": { asesor_digital: "Bianca Isabel Chavez Alarcon", agencia: "VW Cordoba Usados", etiqueta: "Bianca Isabel Chavez Alarcon", },
-    "522721986539": { asesor_digital: "Candy Denisse Marquez", agencia: "VW Orizaba Usados", etiqueta: "Candy Denisse Marquez", },
-};
-const ASESORES = [
-    "ADRIAN GALVEZ ROLDAN",
-    "AURA MARLIZETH FERNANDEZ LOPEZ",
-    "Bianca Isabel Chavez Alarcon",
-    "Blanca Patricia Hernandez Hernandez",
-    "CANDY DENISSE MARQUEZ CORTES",
-    "Carlos Arturo Garces Venegas",
-    "Cesar Ivan Salazar Reyes",
-    "Cristian Fernando Rivera Godinez",
-    "David Uriel García Navarro",
-    "DELMAR JAVIER ILLESCAS DOMINGUEZ",
-    "DULCE ABIGAIL GARCIA OLIVARES",
-    "EDGAR JESUS GOMEZ PEREZ",
-    "Edgar Omar Noguera Solis",
-    "ELIA INES ARANO REYES",
-    "ERENDIRA SANTOS COYOTZI",
-    "Estefano Marlom De Azcue Aparicio",
-    "Felix Emmanuel Solis Angeles",
-    "GEOVANI NAVA DIAZ",
-    "GERMAN JARITH SALAZAR MIRANDA",
-    "Gustavo Chontal Romero",
-    "Hector Rodriguez",
-    "IDALMY JIMENEZ SANCHEZ",
-    "IRENE DEL CARMEN GUIZA LOPEZ",
-    "Iris Yazmín Gómez Velázquez",
-    "Israel Garcia Juarez",
-    "IVAN JUAREZ ORTEGA",
-    "Javier Perez Meraz",
-    "JESSICA OLIVARES CAMPOS",
-    "JESUS XITLAMA GOMEZ",
-    "JORGE ANTONIO RODRIGUEZ MARTINEZ",
-    "JORGE LUIS ALAMILLO RODRIGUEZ",
-    "JOSE ALBERTO SEDAS FLORES",
-    "JOSE ALFREDO BARRANCA REYES",
-    "JOSE DE JESUS GARCIA ROMAN",
-    "JUAN JESUS MARQUEZ AQUINO",
-    "JUAN MANUEL SOBREVILLA VICENCIO",
-    "Julio Ramirez Lopez",
-    "LIZBETH CANO CLARA",
-    "Luis Alberto Ramirez Santamaria",
-    "LUIS ALFONSO CORIA MARROQUIN",
-    "Luis Armando Almora Perez",
-    "Luis Manuel Alvarez Martinez",
-    "Luis Manuel Hernandez Espejo",
-    "LUIS MANUEL PALOMARES OLAYO",
-    "Mara Erubey Soto Villegas",
-    "MARCOS RAUL DIAZ RAMOS",
-    "Marelly Tenorio Salinas",
-    "MARIA DE GUADALUPE VANVOLLENHOVEN DIAZ",
-    "MARIA DEL CARMEN ZAVALA VELAZQUEZ",
-    "Maria Monserrath Zarate Gamboa",
-    "MARIO ALBERTO LOPEZ RAMOS",
-    "MARISOL LAGUNES GONZALEZ",
-    "Miguel Capitanachi Paredes",
-    "NALLELY HERNANDEZ GARCIA",
-    "OCTAVIO BRUNO GONZALEZ",
-    "OLIMPIA VAZQUEZ MENDEZ",
-    "OMAR VILLIERS MONDRAGON",
-    "Paul Serrano Vera",
-    "Roberto Ramses Luna Fajardo",
-    "ROGELIO VAZQUEZ SANCHEZ",
-    "RUBEN ALBERTO TOSQUY ADRIANO",
-    "RUBEN ROMERO VALDES",
-    "Saja Azzam Mohammad Jamous",
-    "SANDRA LUZ PRIETO PEREZ",
-    "Sergio Ivan Quintana Martinez",
-    "Sergio Rene Delgado Sarmiento",
-    "Valeria Zilli Durante",
-    "VANESSA JIMENEZ MEDINA",
-    "VERONICA CASTILLO FUENTES",
-    "YAMIL MISAEL RODRIGUEZ AGUILAR",
-    "Yoseth Ruiz Castellanos",
-    "ZEILA NAVARRO CONTRERAS",
-];
+
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function normalizaTelefonoMx(tel) {
@@ -273,29 +206,35 @@ function getNumerosUsuarioSesion(user) {
 function getUsuarioCrm(user) {
     return normalizeText(user?.usuario || user?.username || user?.user || user?.nombre_usuario || "");
 }
+
 function getAsesorDigitalPorNumero(numero, user = null) {
-    const numeroNormalizado = normalizaTelefonoMx(numero);
-    if (numeroNormalizado === NUMERO_TUXTEPEC) {
-        const usuario = getUsuarioCrm(user);
-        return (ASESOR_TUXTEPEC_POR_USUARIO[usuario] || "");
-    }
-    return (ASESOR_DIGITAL_POR_NUMERO[numeroNormalizado]?.asesor_digital || "");
+    return obtenerNombreAsesorSesion(numero, user) || "";
 }
+
 function getEtiquetaDigitalPorNumero(numero) {
-    const numeroNormalizado = normalizaTelefonoMx(numero);
-    const configuracion = ASESOR_DIGITAL_POR_NUMERO[numeroNormalizado];
-    return (configuracion?.etiqueta || configuracion?.asesor_digital || "");
+    const configuracion = obtenerContextoLinea(numero);
+
+    return (
+        configuracion?.etiqueta ||
+        configuracion?.asesor_digital ||
+        ""
+    );
 }
+
 function getContextoDigitalPorNumero(numero, user = null) {
-    const numeroNormalizado = normalizaTelefonoMx(numero);
-    const configuracion = ASESOR_DIGITAL_POR_NUMERO[numeroNormalizado];
+    const configuracion = obtenerContextoLinea(numero);
+
     if (!configuracion) {
         return null;
     }
+
     return {
-        ...configuracion, asesor_digital: getAsesorDigitalPorNumero(numeroNormalizado, user),
+        ...configuracion,
+        asesor_digital:
+            obtenerNombreAsesorSesion(numero, user) || "",
     };
 }
+
 function toDTLocal(isoOrNull) {
     if (!isoOrNull)
         return "";
@@ -1242,24 +1181,9 @@ function VistaGraficos({ rows }) {
         </div>
     </div>);
 }
-const ASESOR_DIGITAL_CANONICO_BDC = new Map([
-    ["lizbeth cano clara", "Lizbeth Cano Clara"],
-    ["erendira santos coyotzi", "Erendira Santos Coyotzi"],
-    ["marelly tenorio salinas", "Marelly Tenorio Salinas"],
-    ["ia vagen", "IA Vagen"],
-    ["edgar omar noguera solis", "Edgar Omar Noguera Solis"],
-    ["dulce abigail garcia olivares", "Dulce Abigail Garcia Olivares"],
-    ["bianca chavez alarcon", "Bianca Chavez Alarcon"],
-    ["bianca isabel chavez alarcon", "Bianca Isabel Chavez Alarcon"],
-    ["candy denisse marquez", "Candy Denisse Marquez"],
-    ["candy denisse marquez cortes", "Candy Denisse Marquez"],
-    ["julio ramirez lopez", "Julio Ramirez Lopez"],
-]);
-function canonicalAsesorDigitalBDC(value) {
-    const normalized = normalizeText(value);
-    if (!normalized) return "";
-    return ASESOR_DIGITAL_CANONICO_BDC.get(normalized) || String(value || "").trim();
-}
+
+const canonicalAsesorDigitalBDC = canonicalAsesorDigital;
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 function Modal({ open, title, onClose, children, footer }) {
     if (!open)
@@ -1342,7 +1266,7 @@ export default function DigitalesProspectos() {
     const numerosPermitidosCoordinador = useMemo(() => {
         if (!isCoordinador) return [];
 
-        const lineasConfiguradas = new Set(Object.keys(ASESOR_DIGITAL_POR_NUMERO).map(normalizaTelefonoMx));
+        const lineasConfiguradas = new Set(Object.keys(LINEAS_WHATSAPP).map(normalizaTelefonoMx));
 
         return [...new Set(
             numerosUsuarioSesion
@@ -1470,7 +1394,7 @@ export default function DigitalesProspectos() {
             }
 
             const numero = normalizaTelefonoMx(selectedNumeroAsesor);
-            if (!numero || !ASESOR_DIGITAL_POR_NUMERO[numero]) {
+            if (!numero || !LINEAS_WHATSAPP[numero]) {
                 setCases([]);
                 return;
             }
@@ -1559,7 +1483,7 @@ export default function DigitalesProspectos() {
                 if (actual === "Todos") return actual;
 
                 const numero = normalizaTelefonoMx(actual);
-                return numero && ASESOR_DIGITAL_POR_NUMERO[numero] ? numero : "Todos";
+                return numero && LINEAS_WHATSAPP[numero] ? numero : "Todos";
             });
 
             return;
@@ -1594,7 +1518,7 @@ export default function DigitalesProspectos() {
     const filtroNumeroActivo = useMemo(() => {
         if ((isAdmin || isCoordinador) && selectedNumeroAsesor === "Todos") return null;
         const numero = numeroAsesorActivo || numeroUsuarioSesion;
-        return ASESOR_DIGITAL_POR_NUMERO[normalizaTelefonoMx(numero)] || null;
+        return LINEAS_WHATSAPP[normalizaTelefonoMx(numero)] || null;
     }, [isAdmin, isCoordinador, selectedNumeroAsesor, numeroAsesorActivo, numeroUsuarioSesion]);
     const dealers = useMemo(() => {
         const ordenDealers = [
@@ -1605,7 +1529,7 @@ export default function DigitalesProspectos() {
             "VW Tuxpan",
         ];
         const agenciasPorNumero = numerosUsuarioSesion
-            .map((numero) => ASESOR_DIGITAL_POR_NUMERO[normalizaTelefonoMx(numero)]?.agencia ||
+            .map((numero) => LINEAS_WHATSAPP[normalizaTelefonoMx(numero)]?.agencia ||
                 "")
             .filter(Boolean);
         const source = isAdmin
@@ -1656,12 +1580,12 @@ export default function DigitalesProspectos() {
         return ["Todos", ...items.sort((a, b) => valueOrDash(a).localeCompare(valueOrDash(b), "es"))];
     }, [cases]);
     const phoneOptions = useMemo(() => {
-        if (isAdmin) return ["Todos", ...Object.keys(ASESOR_DIGITAL_POR_NUMERO)];
+        if (isAdmin) return ["Todos", ...Object.keys(LINEAS_WHATSAPP)];
         if (isCoordinador) return ["Todos", ...numerosPermitidosCoordinador];
 
         return numerosUsuarioSesion
             .map(normalizaTelefonoMx)
-            .filter((numero) => Boolean(ASESOR_DIGITAL_POR_NUMERO[numero]))
+            .filter((numero) => Boolean(LINEAS_WHATSAPP[numero]))
             .slice(0, 1);
     }, [isAdmin, isCoordinador, numerosUsuarioSesion, numerosPermitidosCoordinador]);
     function toggleSort(key) {
@@ -2527,7 +2451,7 @@ export default function DigitalesProspectos() {
                 <Field label="Asesor Asignado" icon={UserStar}>
                     <select value={drafter.asesor_solicita || ""} onChange={(e) => setDrafter((p) => ({ ...p, asesor_solicita: e.target.value }))} className={cls(inputBase, inputOk)}>
                         <option value="">— Selecciona —</option>
-                        {ASESORES.map((n) => (<option key={n} value={n}>
+                        {ASESORES_PISO.map((n) => (<option key={n} value={n}>
                             {n}
                         </option>))}
                     </select>

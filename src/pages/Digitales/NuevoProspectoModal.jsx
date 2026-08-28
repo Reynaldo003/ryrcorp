@@ -7,12 +7,28 @@ import WAP from "/whatsapp.svg";
 import FB from "/facebook.svg";
 import PHONE from "/phone.svg";
 import { api } from "../../lib/apiPruebas";
-import { ASESORES_PISO } from "./asesoresPiso";
+import {
+  ASESORES_DIGITALES,
+  ASESORES_PISO,
+} from "../../config/asesoresGestionComercial";
+
+import {
+  obtenerContextoLinea,
+  obtenerNombreAsesorSesion,
+} from "../../config/lineasWhatsApp";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
-const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez", "Julio Ramirez Lopez"];
+const ESTADOS_PROSPECTO = [
+    "Contactado",
+    "Calificado",
+    "Pendiente de Cotización",
+    "Requiere Asesor",
+    "Financiamiento",
+    "Sin Respuesta",
+    "Descalificado",
+];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [{ value: "", label: "— Selecciona —" }, { value: "bueno", label: "Bueno" }, { value: "regular", label: "Regular" }, { value: "iniciando", label: "Iniciando" }, { value: "desconocido", label: "Desconocido" }];
@@ -21,14 +37,6 @@ const FORMA_PAGO_OPTIONS = [{ value: "", label: "— Selecciona —" }, { value:
 const TIPO_CLIENTE_OPTIONS = [{ value: "", label: "— Selecciona —" }, { value: "persona_fisica", label: "Persona física" }, { value: "persona_moral", label: "Persona moral" }, { value: "desconocido", label: "Desconocido" }];
 const PLAZO_COMPRA_OPTIONS = ["", "Inmediato", "Esta semana", "Este mes", "1 a 3 meses", "3 a 6 meses", "Más de 6 meses", "Sin definir"];
 const PAUTAS_BASE = ["Facebook Ads", "Google Ads", "Instagram Ads", "Orgánico", "Referido", "WhatsApp", "Evento", "Otro"];
-const NUMERO_TUXTEPEC = "522871232641";
-const ASESOR_TUXTEPEC_POR_USUARIO = { adtuxte: "Marelly Tenorio Salinas", juliorl: "Julio Ramirez Lopez" };
-const CONTEXTO_POR_NUMERO = {
-    "522712638803": { asesor_digital: "IA Vagen", agencia: "VW Cordoba" }, "522721111244": { asesor_digital: "Lizbeth Cano Clara", agencia: "VW Orizaba" },
-    "522713133332": { asesor_digital: "Erendira Santos Coyotzi", agencia: "VW Cordoba" }, "522871232641": { asesor_digital: "", agencia: "VW Tuxtepec" },
-    "527831263814": { asesor_digital: "Edgar Omar Noguera Solis", agencia: "VW Tuxpan" }, "527821820706": { asesor_digital: "Dulce Abigail Garcia Olivares", agencia: "VW Poza Rica" },
-    "522712837999": { asesor_digital: "Bianca Isabel Chavez Alarcon", agencia: "VW Cordoba Usados" }, "522721986539": { asesor_digital: "Candy Denisse Marquez", agencia: "VW Orizaba Usados" },
-};
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = { Nuevos: { Icon: Car, label: "Nuevos" }, Usados: { Icon: CarFront, label: "Usados" }, Comerciales: { Icon: Van, label: "Comerciales" } };
 const origenMeta = {
@@ -41,7 +49,22 @@ function normalizeText(value) { return String(value || "").normalize("NFD").repl
 function normalizaTelefonoMx(tel) { const d = String(tel || "").replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("521") && d.length === 13) return `52${d.slice(3)}`; if (d.length === 10) return `52${d}`; return d; }
 function toNullableNumber(value) { const n = Number(String(value ?? "").replace(/[^\d.-]/g, "")); return Number.isFinite(n) && n > 0 ? Math.round(n) : null; }
 function getUsuarioCrm(user) { return normalizeText(user?.usuario || user?.username || user?.user || user?.nombre_usuario || ""); }
-function getContexto(numero, user) { const n = normalizaTelefonoMx(numero), base = CONTEXTO_POR_NUMERO[n] || { asesor_digital: "", agencia: "" }; return n === NUMERO_TUXTEPEC ? { ...base, asesor_digital: ASESOR_TUXTEPEC_POR_USUARIO[getUsuarioCrm(user)] || "" } : base; }
+function getContexto(numero, user) {
+    const contexto = obtenerContextoLinea(numero);
+
+    if (!contexto) {
+        return {
+            asesor_digital: "",
+            agencia: "",
+        };
+    }
+
+    return {
+        ...contexto,
+        asesor_digital:
+            obtenerNombreAsesorSesion(numero, user) || "",
+    };
+}
 function getAgenciasUsuario(user) { return String(user?.agencia || "").split("|").map((a) => a.trim()).filter(Boolean); }
 function fmtDTIntl(value) { if (!value) return "—"; const d = new Date(value); return Number.isNaN(d.getTime()) ? "—" : new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d); }
 function tieneNombreReal(value) { const t = normalizeText(value); return Boolean(t && t !== "sin nombre"); }

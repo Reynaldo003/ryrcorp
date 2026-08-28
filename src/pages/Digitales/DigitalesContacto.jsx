@@ -59,7 +59,17 @@ import { apiCitas } from "../../lib/apiCitas";
 import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
-import { ESTADOS_LABELS, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
+import {
+  ESTADOS_LABELS,
+  estadoAutomaticoBandeja,
+  tieneCalificacionRapida,
+  citaEsNoAsistio,
+  citaEsAsistida,
+} from "./estadosProspecto";
+
+import {
+  ASESORES_VISUALES,
+} from "../../config/asesoresGestionComercial";
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -214,20 +224,6 @@ function getStatusDotColor(estado) {
     if (v === "sin respuesta" || v === "sin_respuesta" || v === "") return "#EF4444";
     return "#22C55E";
 }
-
-const ASESORES_VISUALES = {
-    "marelly tenorio salinas": {
-        nombreCorto: "Marelly",
-        color: "#7C3AED",
-        className: "border-violet-200 bg-violet-50 text-violet-700",
-    },
-    "julio ramirez lopez": {
-        nombreCorto: "Julio",
-        color: "#0891B2",
-        className: "border-cyan-200 bg-cyan-50 text-cyan-700",
-    },
-};
-
 
 function getAsesorVisual(nombre, usuario = "") {
     const nombreLimpio = String(nombre || "").trim();

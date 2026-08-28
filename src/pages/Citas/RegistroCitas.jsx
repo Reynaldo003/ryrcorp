@@ -37,8 +37,15 @@ import {
 import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
 import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
-import { ASESORES_PISO, AGENCIAS_DIGITALES } from "../Digitales/asesoresPiso";
-import { estadoAutomaticoBandeja, tieneCalificacionRapida } from "../Digitales/estadosProspecto";
+import {
+  ASESORES_DIGITALES,
+  ASESORES_PISO,
+  AGENCIAS_DIGITALES,
+} from "../../config/asesoresGestionComercial";
+import {
+  estadoAutomaticoBandeja,
+  tieneCalificacionRapida,
+} from "../Digitales/estadosProspecto";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { FileDown } from "lucide-react";
@@ -46,8 +53,6 @@ import { FileDown } from "lucide-react";
 const BRAND_BLUE = "#131E5C";
 
 const BASE_DEALERS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
-
-const ASESORES_DIGITALES = ["Lizbeth Cano Clara", "Erendira Santos Coyotzi", "Marelly Tenorio Salinas", "IA Vagen", "Edgar Omar Noguera Solis", "Dulce Abigail Garcia Olivares", "Bianca Isabel Chavez Alarcon", "Candy Denisse Marquez Cortes", "JULIO RAMIREZ LOPEZ",];
 
 
 function normalizeStr(v) { return String(v ?? "").trim(); }

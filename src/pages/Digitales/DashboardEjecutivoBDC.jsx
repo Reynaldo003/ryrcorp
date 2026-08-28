@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { apiCitas } from "../../lib/apiCitas";
+import {
+  canonicalAsesorDigital,
+} from "../../config/asesoresGestionComercial";
 
 const AZUL = "#131E5C";
 
@@ -153,25 +156,7 @@ function lineaMatchesBDC(row, filtro) {
     return tipo === filtro;
 }
 
-const ASESOR_DIGITAL_CANONICO_BDC = new Map([
-    ["lizbeth cano clara", "Lizbeth Cano Clara"],
-    ["erendira santos coyotzi", "Erendira Santos Coyotzi"],
-    ["marelly tenorio salinas", "Marelly Tenorio Salinas"],
-    ["ia vagen", "IA Vagen"],
-    ["edgar omar noguera solis", "Edgar Omar Noguera Solis"],
-    ["dulce abigail garcia olivares", "Dulce Abigail Garcia Olivares"],
-    ["bianca chavez alarcon", "Bianca Chavez Alarcon"],
-    ["bianca isabel chavez alarcon", "Bianca Chavez Alarcon"],
-    ["candy denisse marquez", "Candy Denisse Marquez"],
-    ["candy denisse marquez cortes", "Candy Denisse Marquez"],
-    ["julio ramirez lopez", "Julio Ramirez Lopez"],
-]);
-
-function canonicalAsesorDigitalBDC(value) {
-    const normalized = normalizeText(value);
-    if (!normalized) return "";
-    return ASESOR_DIGITAL_CANONICO_BDC.get(normalized) || String(value || "").trim();
-}
+const canonicalAsesorDigitalBDC = canonicalAsesorDigital;
 
 function esAsesorDigitalValidoBDC(value) {
     return Boolean(canonicalAsesorDigitalBDC(value));
