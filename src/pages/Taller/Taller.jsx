@@ -67,6 +67,7 @@ const TECNICOS_POR_DEALER = {
         "MISSAEL HERNANDEZ",
         "BLADIMIR CASTILLO",
         "VICTOR VAZQUEZ",
+        "CARLOS GERMAN VIVAR LLANOS",
     ],
     "VW Orizaba": [
         "JOSE IGNACIO FIGUEROA",
@@ -1416,7 +1417,7 @@ function FlujoTrabajoSection({
                                         {String(stage.numero).padStart(2, "0")}
                                     </span>
 
-            <span className="mt-px line-clamp-3 min-h-[40px] text-[10px] font-bold leading-tight text-slate-700">
+                                    <span className="mt-px line-clamp-3 min-h-[40px] text-[10px] font-bold leading-tight text-slate-700">
                                         {stage.nombre}
                                     </span>
 
@@ -3703,100 +3704,100 @@ export default function Taller() {
                 <div className="min-h-0 flex-1 overflow-auto p-3">
                     <div className="overflow-hidden rounded-xl bg-white shadow-lg">
                         <div className="overflow-x-auto">
-                        <table className="min-w-[1450px] text-left text-sm">
-                            <thead className="bg-[#001E50] text-xs text-white">
-                                <tr>
-                                    {[
-                                        "Fecha",
-                                        "Horario",
-                                        "Cliente / actividad",
-                                        "Orden",
-                                        "Dealer",
-                                        "Técnico",
-                                        "Estatus",
-                                        "Tipo",
-                                        "Trabajos",
-                                        "Duración",
-                                    ].map((heading) => (
-                                        <th key={heading} className="px-4 py-3 font-bold">
-                                            {heading}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-black/10">
-                                {filtered.length === 0 ? (
+                            <table className="min-w-[1450px] text-left text-sm">
+                                <thead className="bg-[#001E50] text-xs text-white">
                                     <tr>
-                                        <td
-                                            colSpan={10}
-                                            className="px-4 py-10 text-center text-[#001E50]"
-                                        >
-                                            No hay actividades para esta fecha y filtros.
-                                        </td>
+                                        {[
+                                            "Fecha",
+                                            "Horario",
+                                            "Cliente / actividad",
+                                            "Orden",
+                                            "Dealer",
+                                            "Técnico",
+                                            "Estatus",
+                                            "Tipo",
+                                            "Trabajos",
+                                            "Duración",
+                                        ].map((heading) => (
+                                            <th key={heading} className="px-4 py-3 font-bold">
+                                                {heading}
+                                            </th>
+                                        ))}
                                     </tr>
-                                ) : (
-                                    [...filtered]
-                                        .sort((a, b) =>
-                                            `${a.tecnico}-${a.hora_inicio}`.localeCompare(
-                                                `${b.tecnico}-${b.hora_inicio}`,
-                                            ),
-                                        )
-                                        .map((order) => (
-                                            <tr
-                                                key={order.id}
-                                                onDoubleClick={() => openEdit(order)}
-                                                className="cursor-pointer hover:bg-blue-50/50"
+                                </thead>
+                                <tbody className="divide-y divide-black/10">
+                                    {filtered.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={10}
+                                                className="px-4 py-10 text-center text-[#001E50]"
                                             >
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
-                                                    {order.fecha_programada}
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-bold text-[#001E50]">
-                                                    {order.hora_inicio} - {order.hora_fin}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="font-extrabold text-[#001E50]">
-                                                        {getActivityLabel(order)}
-                                                    </div>
-                                                    {order.tipo_bloque === "trabajo" ? (
-                                                        <div className="text-xs text-slate-500">
-                                                            {order.telefono}
+                                                No hay actividades para esta fecha y filtros.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        [...filtered]
+                                            .sort((a, b) =>
+                                                `${a.tecnico}-${a.hora_inicio}`.localeCompare(
+                                                    `${b.tecnico}-${b.hora_inicio}`,
+                                                ),
+                                            )
+                                            .map((order) => (
+                                                <tr
+                                                    key={order.id}
+                                                    onDoubleClick={() => openEdit(order)}
+                                                    className="cursor-pointer hover:bg-blue-50/50"
+                                                >
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                        {order.fecha_programada}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 font-bold text-[#001E50]">
+                                                        {order.hora_inicio} - {order.hora_fin}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-extrabold text-[#001E50]">
+                                                            {getActivityLabel(order)}
                                                         </div>
-                                                    ) : null}
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
-                                                    {order.no_orden || "—"}
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
-                                                    {order.agencia || "—"}
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
-                                                    {order.tecnico || "Sin técnico"}
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3">
-                                                    <StatusBadge status={order.estatus_agenda} />
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-bold capitalize text-[#001E50]">
-                                                    {order.tipo_bloque === "trabajo"
-                                                        ? getWorkTypeMeta(order).label
-                                                        : order.tipo_bloque === "capacitacion"
-                                                            ? "Capacitación"
-                                                            : order.tipo_bloque}
-                                                </td>
-                                                <td className="px-4 py-3 text-[#001E50]">
-                                                    {order.subtrabajos
-                                                        .map((work) => work.nombre)
-                                                        .join(" + ")}
-                                                </td>
-                                                <td className="whitespace-nowrap px-4 py-3 font-extrabold text-[#001E50]">
-                                                    {order.horasAgenda.toFixed(2)} h
-                                                </td>
-                                            </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
+                                                        {order.tipo_bloque === "trabajo" ? (
+                                                            <div className="text-xs text-slate-500">
+                                                                {order.telefono}
+                                                            </div>
+                                                        ) : null}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                        {order.no_orden || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                        {order.agencia || "—"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-[#001E50]">
+                                                        {order.tecnico || "Sin técnico"}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3">
+                                                        <StatusBadge status={order.estatus_agenda} />
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 font-bold capitalize text-[#001E50]">
+                                                        {order.tipo_bloque === "trabajo"
+                                                            ? getWorkTypeMeta(order).label
+                                                            : order.tipo_bloque === "capacitacion"
+                                                                ? "Capacitación"
+                                                                : order.tipo_bloque}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-[#001E50]">
+                                                        {order.subtrabajos
+                                                            .map((work) => work.nombre)
+                                                            .join(" + ")}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 font-extrabold text-[#001E50]">
+                                                        {order.horasAgenda.toFixed(2)} h
+                                                    </td>
+                                                </tr>
+                                            ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
                 </div>
             )}
 

@@ -51,7 +51,25 @@ const FORMATOS_SOLICITUD = [
     },
 ];
 
-const obtenerFormatoSolicitud = (value) => FORMATOS_SOLICITUD.find((item) => item.value === value) || null;
+const PLANTILLA_POR_COMBINACION = {
+    fisica_asalariada: {
+        leasing: "persona_fisica_asalariada",
+    },
+    fisica_profesionista: {
+        credit: "credito_personas_fisicas",
+        leasing: "arrendamiento_personas_fisicas",
+    },
+    moral: {
+        credit: "credito_personas_morales",
+        leasing: "arrendamiento_personas_morales",
+    },
+};
+
+const obtenerPlantillaAutomatica = (tipoPersona, financiamiento) =>
+    PLANTILLA_POR_COMBINACION?.[tipoPersona]?.[financiamiento] || "";
+
+const obtenerFormatoSolicitud = (value) =>
+    FORMATOS_SOLICITUD.find((item) => item.value === value) || null;
 
 const limpiar = (value) => String(value ?? "").trim();
 const normalizar = (value) => limpiar(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -357,9 +375,9 @@ function ExpedienteCard({
             {abierto ? (
                 <tr>
                     <td colSpan={9} className="border-b border-[#131E5C]/20 bg-slate-50/80 p-0">
-                        <div className="p-4 sm:p-5">
+                        <div className="pt-4 sm:pt-5">
                             {/* DOCUMENTOS */}
-                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                            <div className="overflow-hidden border border-slate-200 bg-white shadow-sm">
                                 <div className="overflow-auto">
                                     <table className="min-w-full text-left text-sm">
                                         <thead className="border border-black bg-[#131E5C] text-xs text-white">
@@ -402,14 +420,12 @@ function ExpedienteCard({
                                     <div className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
                                         Formato asignado
                                     </div>
-
                                     <select
                                         value={formatoSeleccionado || ""}
-                                        disabled={!editable}
-                                        onChange={(event) => onFormatoChange(event.target.value)}
-                                        className="h-10 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-xs font-bold text-[#131E5C] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                        disabled
+                                        className="h-10 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-xs font-bold text-[#131E5C] outline-none disabled:cursor-default disabled:opacity-80"
                                     >
-                                        <option value="">Selecciona un formato...</option>
+                                        <option value="">Sin formato asignado</option>
 
                                         {FORMATOS_SOLICITUD.map((formato) => (
                                             <option key={formato.value} value={formato.value}>
@@ -431,8 +447,8 @@ function ExpedienteCard({
                                         {tienePdfGuardado && formatoGuardado === formatoSeleccionado ? "Editar formato" : "Llenar formato"}
                                     </button>
                                 ) : null}
-                                <div className="inline-flex h-10 items-center justify-center  gap-2 rounded-lg bg-[#131E5C] px-4 text-xs font-black text-white hover:bg-[#1d2d86] disabled:cursor-not-allowed disabled:opacity-50">
-                                    {tienePdfGuardado ? <div className="bg-green-500">PDF guardado</div> : <div>Sin generar</div>}
+                                <div className="inline-flex h-10 items-center justify-center  gap-2 rounded-lg border border-[#131E5C] px-4 text-xs font-black text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-50">
+                                    {tienePdfGuardado ? <div className="text-green-500">PDF guardado</div> : <div className="text-yellow-300">Sin generar</div>}
                                 </div>
                                 {tienePdfGuardado ? (
                                     <button
@@ -518,7 +534,15 @@ export default function Documentacion() {
         agencia: "",
         asesor_nombre: "",
     });
-
+    const cambiarTipoPersonaNuevo = (tipoPersona) => {
+        setNuevo((prev) => ({
+            ...prev,
+            tipo_persona: tipoPersona,
+            financiamiento: tipoPersona === "fisica_asalariada"
+                ? "leasing"
+                : "",
+        }));
+    };
     const mostrarMensaje = (type, text) => {
         setMensaje({ type, text });
         if (timerRef.current) window.clearTimeout(timerRef.current);
@@ -673,12 +697,38 @@ export default function Documentacion() {
     const crearExpediente = async () => {
         if (creando) return;
 
-        if (!nuevo.tipo_persona) return mostrarMensaje("error", "Selecciona el tipo de persona.");
-        if (!nuevo.financiamiento) return mostrarMensaje("error", "Selecciona el tipo de financiamiento.");
-        if (!combinacionDisponible) return mostrarMensaje("error", "Esta combinación todavía no tiene requisitos configurados.");
-        if (!limpiar(nuevo.cliente)) return mostrarMensaje("error", "Captura el nombre del cliente.");
-        if (!limpiar(nuevo.agencia)) return mostrarMensaje("error", "Selecciona el Dealer.");
-        if (!limpiar(nuevo.asesor_nombre)) return mostrarMensaje("error", "Selecciona el asesor responsable.");
+        if (!nuevo.tipo_persona)
+            return mostrarMensaje("error", "Selecciona el tipo de persona.");
+
+        if (!nuevo.financiamiento)
+            return mostrarMensaje("error", "Selecciona el tipo de financiamiento.");
+
+        const plantillaAutomatica = obtenerPlantillaAutomatica(
+            nuevo.tipo_persona,
+            nuevo.financiamiento
+        );
+
+        if (!plantillaAutomatica) {
+            return mostrarMensaje(
+                "error",
+                "La combinación seleccionada no tiene un formato PDF configurado."
+            );
+        }
+
+        if (!combinacionDisponible)
+            return mostrarMensaje(
+                "error",
+                "Esta combinación no tiene requisitos configurados."
+            );
+
+        if (!limpiar(nuevo.cliente))
+            return mostrarMensaje("error", "Captura el nombre del cliente.");
+
+        if (!limpiar(nuevo.agencia))
+            return mostrarMensaje("error", "Selecciona el Dealer.");
+
+        if (!limpiar(nuevo.asesor_nombre))
+            return mostrarMensaje("error", "Selecciona el asesor responsable.");
 
         setCreando(true);
 
@@ -691,14 +741,38 @@ export default function Documentacion() {
                 financiamiento: nuevo.financiamiento,
             });
 
-            setExpedientes((prev) => [creado, ...prev]);
+            /*
+             * Preferimos el valor regresado por Django.
+             * El fallback sirve mientras actualizas el backend.
+             */
+            const plantillaAsignada =
+                creado.solicitud_pdf_plantilla ||
+                plantillaAutomatica;
+
+            setExpedientes((prev) => [
+                creado,
+                ...prev,
+            ]);
+
+            setFormatosSeleccionados((prev) => ({
+                ...prev,
+                [creado.id_expediente]: plantillaAsignada,
+            }));
+
             setAbiertoId(creado.id_expediente);
             setOpenCrear(false);
 
-            mostrarMensaje("success", `Expediente ${creado.folio} creado correctamente.`);
+            mostrarMensaje(
+                "success",
+                `Expediente ${creado.folio} creado correctamente.`
+            );
         } catch (error) {
             console.error("Error creando expediente:", error);
-            mostrarMensaje("error", error?.message || "No se pudo crear el expediente.");
+
+            mostrarMensaje(
+                "error",
+                error?.message || "No se pudo crear el expediente."
+            );
         } finally {
             setCreando(false);
         }
@@ -774,20 +848,47 @@ export default function Documentacion() {
         }));
     };
 
-    const abrirEditorFormato = (expediente, plantilla) => {
-        const formato = obtenerFormatoSolicitud(plantilla);
+    const abrirEditorFormato = (expediente) => {
+        const faltantes = Number(
+            expediente?.avance?.faltantes || 0
+        );
 
-        if (!formato) {
-            mostrarMensaje("error", "Selecciona un formato de solicitud.");
+        if (faltantes > 0) {
+            mostrarMensaje(
+                "error",
+                `Debes completar primero los documentos obligatorios. Faltan ${faltantes}.`
+            );
+
             return;
         }
 
-        /*
-         * Solamente recuperamos los campos guardados cuando el formato
-         * almacenado en backend coincide con la plantilla seleccionada.
-         *
-         * Si el usuario cambia de plantilla comenzamos con el PDF limpio.
-         */
+        const plantilla = obtenerPlantillaAutomatica(
+            expediente.tipo_persona,
+            expediente.financiamiento,
+        );
+
+        if (!plantilla) {
+            mostrarMensaje(
+                "error",
+                "Este expediente no tiene una plantilla de solicitud configurada."
+            );
+
+            return;
+        }
+
+        const formato = obtenerFormatoSolicitud(
+            plantilla
+        );
+
+        if (!formato) {
+            mostrarMensaje(
+                "error",
+                "No se encontró el archivo PDF configurado."
+            );
+
+            return;
+        }
+
         const camposIniciales =
             expediente.solicitud_pdf_plantilla === plantilla
                 ? expediente.solicitud_pdf_campos || {}
@@ -972,8 +1073,8 @@ export default function Documentacion() {
                                         onFormatoChange={(plantilla) =>
                                             cambiarFormatoExpediente(expediente, plantilla)
                                         }
-                                        onEditarFormato={(plantilla) =>
-                                            abrirEditorFormato(expediente, plantilla)
+                                        onEditarFormato={() =>
+                                            abrirEditorFormato(expediente)
                                         }
                                         onVerFormato={() => verFormatoGuardado(expediente)}
                                         onToggle={() =>
@@ -1040,11 +1141,16 @@ export default function Documentacion() {
 
                             <select
                                 value={nuevo.tipo_persona}
-                                onChange={(event) => setNuevo((prev) => ({ ...prev, tipo_persona: event.target.value, financiamiento: "" }))}
+                                onChange={(event) => cambiarTipoPersonaNuevo(event.target.value)}
                                 className={inputClass}
                             >
                                 <option value="">Selecciona...</option>
-                                {TIPOS_PERSONA.map((tipo) => <option key={tipo.value} value={tipo.value}>{tipo.label}</option>)}
+
+                                {TIPOS_PERSONA.map((tipo) => (
+                                    <option key={tipo.value} value={tipo.value}>
+                                        {tipo.label}
+                                    </option>
+                                ))}
                             </select>
                         </label>
 
@@ -1056,12 +1162,23 @@ export default function Documentacion() {
 
                             <select
                                 value={nuevo.financiamiento}
-                                disabled={!nuevo.tipo_persona}
-                                onChange={(event) => setNuevo((prev) => ({ ...prev, financiamiento: event.target.value }))}
-                                className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                                disabled={!nuevo.tipo_persona || nuevo.tipo_persona === "fisica_asalariada"}
+                                onChange={(event) => setNuevo((prev) => ({ ...prev, financiamiento: event.target.value, }))}
+                                className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                             >
                                 <option value="">Selecciona...</option>
-                                {FINANCIAMIENTOS.map((tipo) => <option key={tipo.value} value={tipo.value}>{tipo.label}</option>)}
+
+                                {nuevo.tipo_persona === "fisica_asalariada" ? (
+                                    <option value="leasing">
+                                        Leasing
+                                    </option>
+                                ) : (
+                                    FINANCIAMIENTOS.map((tipo) => (
+                                        <option key={tipo.value} value={tipo.value}>
+                                            {tipo.label}
+                                        </option>
+                                    ))
+                                )}
                             </select>
                         </label>
 

@@ -94,4 +94,35 @@ export const apiDocumentacion = {
       method: "DELETE",
     });
   },
+
+  guardarFormatoPdf: async (expedienteId, { archivo, plantilla, campos }) => {
+    requireId(expedienteId, "Falta el ID del expediente.");
+
+    if (!(archivo instanceof File)) {
+      throw new Error("No se recibió un PDF válido.");
+    }
+
+    if (!plantilla) {
+      throw new Error("No se recibió la plantilla.");
+    }
+
+    const formData = new FormData();
+
+    formData.set("archivo", archivo);
+
+    formData.set("plantilla", plantilla);
+
+    formData.set("campos", JSON.stringify(campos || {}));
+
+    const response = await http(
+      `${BASE_URL}/expedientes/${encodeURIComponent(expedienteId)}/formato-pdf/`,
+      {
+        ...authOptions,
+        method: "POST",
+        body: formData,
+      },
+    );
+
+    return unwrapData(response);
+  },
 };
