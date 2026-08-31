@@ -701,8 +701,8 @@ function EstadoDropdown({ value, onChange }) {
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 className={cls(
-                    "flex h-9 w-full items-center justify-between gap-2 rounded-xl border bg-white pl-3 pr-2.5 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#1746D1]/10",
-                    open ? "border-[#1746D1]/50" : "border-[#131E5C]/15"
+                    "flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white pl-3 pr-2.5 text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#1746D1]/10",
+                    open ? "border-[#1746D1]/50" : ""
                 )}
                 style={{ borderColor: seleccionado ? `${seleccionado.color}66` : undefined }}
             >
@@ -5645,14 +5645,14 @@ export default function DigitalesContacto() {
                                     </div>
 
                                     {numerosDisponibles.length > 0 ? (
-                                        <div className="mb-2 p-2">
+                                        <div className="mt-2">
                                             <select
                                                 value={numeroAsesorActivo}
                                                 onChange={(event) =>
                                                     cambiarNumeroAsesor(event.target.value)
                                                 }
                                                 disabled={!ready || numerosDisponibles.length === 0}
-                                                className="h-9 w-full rounded-xl border border-[#131E5C]/15 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] shadow-sm transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
                                             >
                                                 {numerosDisponibles.map((numero) => (
                                                     <option key={numero} value={numero}>
@@ -5668,7 +5668,7 @@ export default function DigitalesContacto() {
                                     )}
 
                                     {/* Filtro por estatus (dropdown) arriba de los botones */}
-                                    <div className="mt-2 px-2">
+                                    <div className="mt-2">
                                         <EstadoDropdown
                                             value={chatFilter}
                                             onChange={setChatFilter}
