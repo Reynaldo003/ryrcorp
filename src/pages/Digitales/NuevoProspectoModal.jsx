@@ -8,9 +8,8 @@ import FB from "/facebook.svg";
 import PHONE from "/phone.svg";
 import { api } from "../../lib/apiPruebas";
 import {
-  ASESORES_DIGITALES,
-  ASESORES_PISO,
-} from "../../config/asesoresGestionComercial";
+  useAsesoresGestionComercial,
+} from "../../hooks/useAsesoresGestionComercial";
 
 import {
   obtenerContextoLinea,
@@ -124,7 +123,40 @@ function ModalSkeleton() { return <div className="grid gap-3 md:grid-cols-2">{Ar
 
 export default function NuevoProspectoModal({ open, mode = "create", prospectoId = null, estadoInicial = "", onClose, onCreado, onActualizado, onGuardado, onPlantillaEnviada, numeroAsesor = "", user = null, isAdmin = false, requestContext = {}, tieneChatInicial = false }) {
     const navigate = useNavigate(), esEdicion = mode === "edit", fileInputRef = useRef(null), ultimaFirmaGuardadaRef = useRef(""), ultimoProspectoRef = useRef(null);
+    const {
+        nombresAsesoresActivos,
+        nombresAsesoresDigitales,
+    } = useAsesoresGestionComercial();
     const [draft, setDraft] = useState(() => crearDraftInicial(numeroAsesor, user, isAdmin));
+    const opcionesAsesoresDigitales = useMemo(() => {
+        const actual = String(draft?.asesor_digital || "").trim();
+
+        if (
+            actual &&
+            !nombresAsesoresDigitales.some(
+                (nombre) => normalizeText(nombre) === normalizeText(actual)
+            )
+        ) {
+            return [actual, ...nombresAsesoresDigitales];
+        }
+
+        return nombresAsesoresDigitales;
+    }, [draft?.asesor_digital, nombresAsesoresDigitales]);
+
+    const opcionesAsesoresActivos = useMemo(() => {
+        const actual = String(draft?.asesor_solicita || "").trim();
+
+        if (
+            actual &&
+            !nombresAsesoresActivos.some(
+                (nombre) => normalizeText(nombre) === normalizeText(actual)
+            )
+        ) {
+            return [actual, ...nombresAsesoresActivos];
+        }
+
+        return nombresAsesoresActivos;
+    }, [draft?.asesor_solicita, nombresAsesoresActivos]);
     const [loadingDetail, setLoadingDetail] = useState(false), [saving, setSaving] = useState(false), [touched, setTouched] = useState(false), [error, setError] = useState("");
     const [pautas, setPautas] = useState(PAUTAS_BASE), [loadingPautas, setLoadingPautas] = useState(false), [chatDisponible, setChatDisponible] = useState(tieneChatInicial);
     const [showTemplates, setShowTemplates] = useState(false), [tplSelected, setTplSelected] = useState(null), [tplDraft, setTplDraft] = useState({}), [templates, setTemplates] = useState([]), [loadingTemplates, setLoadingTemplates] = useState(false), [templatesError, setTemplatesError] = useState(""), [sendingTemplate, setSendingTemplate] = useState(false);
@@ -252,8 +284,8 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             {error ? <div className="md:col-span-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div> : null}
             <div className="md:col-span-4 grid gap-3 md:grid-cols-3">
                 <Field label="Dealer" icon={Building2}><select value={draft.agencia || ""} onChange={(e) => setDraft((p) => ({ ...p, agencia: e.target.value }))} disabled={!isAdmin && (contexto.agencia || agenciasUsuario.length <= 1)} className={cls(inputBase, touched && !draft.agencia ? inputBad : inputOk, !isAdmin && (contexto.agencia || agenciasUsuario.length <= 1) ? "cursor-not-allowed opacity-70" : "")}><option value="">Selecciona un dealer...</option>{agencias.map((a) => <option key={a} value={a}>{a}</option>)}</select></Field>
-                <Field label="Asesor Digital" icon={User}><select value={draft.asesor_digital || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_digital: e.target.value }))} disabled={esEdicion ? !isAdmin : Boolean(contexto.asesor_digital)} className={cls(inputBase, inputOk, (esEdicion ? !isAdmin : Boolean(contexto.asesor_digital)) ? "cursor-not-allowed opacity-70" : "")}><option value="">— Selecciona —</option>{ASESORES_DIGITALES.map((a) => <option key={a} value={a}>{a}</option>)}</select></Field>
-                <Field label="Asignado a" icon={User}><select value={draft.asesor_solicita || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_solicita: e.target.value }))} className={cls(inputBase, inputOk)}><option value="">— Selecciona —</option>{ASESORES_PISO.map((a) => <option key={a} value={a}>{a}</option>)}</select></Field>
+                <Field label="Asesor Digital" icon={User}><select value={draft.asesor_digital || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_digital: e.target.value }))} disabled={esEdicion ? !isAdmin : Boolean(contexto.asesor_digital)} className={cls(inputBase, inputOk, (esEdicion ? !isAdmin : Boolean(contexto.asesor_digital)) ? "cursor-not-allowed opacity-70" : "")}><option value="">— Selecciona —</option>{opcionesAsesoresDigitales.map((a) => (<option key={a} value={a}>{a}</option>))}</select></Field>
+                <Field label="Asignado a" icon={User}><select value={draft.asesor_solicita || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_solicita: e.target.value }))} className={cls(inputBase, inputOk)}><option value="">— Selecciona —</option>{opcionesAsesoresActivos.map((a) => (<option key={a} value={a}>{a}</option>))}</select></Field>
             </div>
             <div className="md:col-span-4 grid gap-3 md:grid-cols-2"><Field label="VW de sus sueños"><select value={draft.cliente_interes || ""} onChange={(e) => setDraft((p) => ({ ...p, cliente_interes: e.target.value }))} className={cls(inputBase, inputOk)}><option value="">Selecciona un modelo...</option>{VEHICULOS.map((m) => <option key={m} value={m}>{m}</option>)}</select></Field><Field label="Año del vehículo" icon={CalendarDays}><select value={draft.anio_auto || ""} onChange={(e) => setDraft((p) => ({ ...p, anio_auto: e.target.value }))} className={cls(inputBase, inputOk)}><option value="">— Selecciona —</option>{ANIOS_VEHICULO.map((a) => <option key={a} value={a}>{a}</option>)}</select></Field></div>
             <div className="md:col-span-4"><Field label="Cliente" icon={User}><div className="grid gap-3 md:grid-cols-4">

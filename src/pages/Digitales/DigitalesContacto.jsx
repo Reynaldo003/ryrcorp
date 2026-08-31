@@ -56,7 +56,9 @@ import {
 import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
-import { ASESORES_PISO, AGENCIAS_DIGITALES } from "./asesoresPiso";
+import {
+  AGENCIAS_DIGITALES,
+} from "../../config/asesoresGestionComercial";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 import {
@@ -73,6 +75,10 @@ import {
 import {
   ASESORES_VISUALES,
 } from "../../config/asesoresGestionComercial";
+
+import {
+  useAsesoresGestionComercial,
+} from "../../hooks/useAsesoresGestionComercial";
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -2212,7 +2218,7 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
                         <div>
                             <label className={etiqueta}><UserRound className="h-3.5 w-3.5 text-[#1746D1]" /> Asesor que atenderá</label>
                             <BusquedaFiltrable
-                                opciones={ASESORES_PISO}
+                                opciones={nombresAsesoresActivos}
                                 value={asesor}
                                 onChange={setAsesor}
                                 placeholder="Busca al asesor…"
@@ -2422,6 +2428,9 @@ export default function DigitalesContacto() {
     const location = useLocation();
     const [params] = useSearchParams();
     const { user, ready } = useAuth();
+        const {
+        nombresAsesoresActivos,
+    } = useAsesoresGestionComercial();
 
     const rolUsuario = useMemo(
         () => normalizeText(obtenerRolUsuario(user)),
@@ -6856,7 +6865,7 @@ export default function DigitalesContacto() {
                                                             Asignar asesor
                                                         </span>
                                                         <BusquedaFiltrable
-                                                            opciones={ASESORES_PISO}
+                                                            opciones={nombresAsesoresActivos}
                                                             value={asesorAsignado || prospecto?.asesor_ventas || ""}
                                                             onChange={(asesor) => guardarAsignacionAsesor({ asesor })}
                                                             disabled={savingAsignacion}

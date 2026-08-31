@@ -19,10 +19,12 @@ import DashboardEjecutivoBDC from "./DashboardEjecutivoBDC";
 import { ETIQUETAS_ESTADO } from "./estadosProspecto";
 
 import {
-    ASESORES_DIGITALES,
-    ASESORES_PISO,
     canonicalAsesorDigital,
 } from "../../config/asesoresGestionComercial";
+
+import {
+    useAsesoresGestionComercial,
+} from "../../hooks/useAsesoresGestionComercial";
 
 import {
     LINEAS_WHATSAPP,
@@ -1231,6 +1233,9 @@ function ContextMenu({ ctxMenu, onDelete, onClose }) {
 export default function DigitalesProspectos() {
     const navigate = useNavigate();
     const { user, ready } = useAuth();
+        const {
+        nombresAsesoresActivos,
+    } = useAsesoresGestionComercial();
     const [cases, setCases] = useState([]);
     const [viewMode, setViewMode] = useState("tabla");
     const [highlightedRow, setHighlightedRow] = useState(null);
@@ -2451,9 +2456,11 @@ export default function DigitalesProspectos() {
                 <Field label="Asesor Asignado" icon={UserStar}>
                     <select value={drafter.asesor_solicita || ""} onChange={(e) => setDrafter((p) => ({ ...p, asesor_solicita: e.target.value }))} className={cls(inputBase, inputOk)}>
                         <option value="">— Selecciona —</option>
-                        {ASESORES_PISO.map((n) => (<option key={n} value={n}>
-                            {n}
-                        </option>))}
+                        {nombresAsesoresActivos.map((n) => (
+                            <option key={n} value={n}>
+                                {n}
+                            </option>
+                        ))}
                     </select>
                 </Field>
                 <Field label="Tipo de cita" icon={LayoutList}>

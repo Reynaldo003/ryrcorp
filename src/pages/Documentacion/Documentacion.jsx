@@ -5,7 +5,12 @@ import { Building2, CheckCircle2, ChevronDown, CircleAlert, Eye, FileCheck2, Fil
 import EditorFormatoPdf from "./EditorFormatoPDF";
 import { useAuth } from "../../auth/AuthContext";
 import { apiDocumentacion } from "../../lib/apiDocumentacion";
-import { ASESORES_PISO, AGENCIAS_DIGITALES } from "../Digitales/asesoresPiso";
+import {
+    AGENCIAS_DIGITALES,
+} from "../../config/asesoresGestionComercial";
+import {
+    useAsesoresGestionComercial,
+} from "../../hooks/useAsesoresGestionComercial";
 
 const TIPOS_PERSONA = [
     { value: "fisica_asalariada", label: "Persona Física Asalariada" },
@@ -486,6 +491,9 @@ function ExpedienteCard({
 
 export default function Documentacion() {
     const { user } = useAuth();
+    const {
+        nombresAsesoresActivos,
+    } = useAsesoresGestionComercial();
     const timerRef = useRef(null);
 
     const rol = normalizar(user?.rol);
@@ -1212,7 +1220,7 @@ export default function Documentacion() {
                                 </div>
 
                                 <span className="text-[9px] font-bold text-slate-400">
-                                    {ASESORES_PISO.length} asesores disponibles
+                                    {nombresAsesoresActivos.length} asesores disponibles
                                 </span>
                             </div>
 
@@ -1226,7 +1234,7 @@ export default function Documentacion() {
                                 >
                                     <option value="">Selecciona un asesor...</option>
 
-                                    {ASESORES_PISO.map((asesor) => (
+                                    {nombresAsesoresActivos.map((asesor) => (
                                         <option key={asesor} value={asesor}>
                                             {asesor}
                                         </option>
