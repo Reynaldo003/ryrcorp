@@ -61,6 +61,8 @@ import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 import {
   ESTADOS_LABELS,
+  ESTADOS_PROSPECTO,
+  resolverEstado,
   estadoAutomaticoBandeja,
   tieneCalificacionRapida,
   citaEsNoAsistio,
@@ -173,6 +175,8 @@ const CHAT_FILTERS = [
     { key: "seguimiento", label: "Seguimiento", estados: ["seguimiento"] },
     { key: "calificado", label: "Calificado", estados: ["calificado"] },
 ];
+
+//
 
 const ESTADOS_HEADER = ESTADOS_LABELS;
 
@@ -665,6 +669,78 @@ function ChatListSkeleton({ rows = 8 }) {
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+function EstadoDropdown({ value, onChange }) {
+    const [open, setOpen] = useState(false);
+    const containerRef = useRef(null);
+
+    const opciones = ESTADOS_PROSPECTO.filter(
+        (e) => e.key !== "sin_contactar" && !["pendiente_cotizacion", "seguimiento", "calificado"].includes(e.key)
+    );
+
+    useEffect(() => {
+        function handler(e) {
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    const seleccionado = value?.startsWith("estado:")
+        ? opciones.find((e) => `estado:${e.key}` === value) || null
+        : null;
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className={cls(
+                    "flex h-9 w-full items-center justify-between gap-2 rounded-xl border bg-white pl-3 pr-2.5 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#1746D1]/10",
+                    open ? "border-[#1746D1]/50" : "border-[#131E5C]/15"
+                )}
+                style={{ borderColor: seleccionado ? `${seleccionado.color}66` : undefined }}
+            >
+                <span className="flex min-w-0 items-center gap-2">
+                    {seleccionado ? (
+                        <>
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: seleccionado.color }} />
+                            <span className="truncate text-[#131E5C]">{seleccionado.label}</span>
+                        </>
+                    ) : (
+                        <span className="truncate text-slate-400 font-semibold">Selecciona un estatus…</span>
+                    )}
+                </span>
+                <ChevronDown className={cls("h-4 w-4 shrink-0 text-slate-400 transition", open && "rotate-180")} />
+            </button>
+
+            {open ? (
+                <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                    {opciones.map((e) => {
+                        const activo = value === `estado:${e.key}`;
+                        return (
+                            <button
+                                key={e.key}
+                                type="button"
+                                onClick={() => { onChange(`estado:${e.key}`); setOpen(false); }}
+                                className={cls(
+                                    "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold transition",
+                                    activo ? "bg-[#1746D1]/10 text-[#131E5C]" : "text-slate-600 hover:bg-slate-50"
+                                )}
+                            >
+                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
+                                <span className="truncate">{e.label}</span>
+                                <span className={cls("ml-auto h-1.5 w-1.5 rounded-full", activo ? "bg-[#1746D1]" : "bg-transparent")} />
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -2634,8 +2710,9 @@ export default function DigitalesContacto() {
     }, [prospecto, activeChat]);
 
     const filteredChats = useMemo(() => {
+        const filterKey = chatFilter?.startsWith("estado:") ? "estado" : chatFilter;
         const filterDef = CHAT_FILTERS.find(
-            (item) => item.key === chatFilter
+            (item) => item.key === filterKey
         );
 
         const busqueda = normalizeText(q);
@@ -2649,7 +2726,13 @@ export default function DigitalesContacto() {
                 return false;
             }
 
-            if (filterDef?.estados) {
+            if (chatFilter?.startsWith("estado:")) {
+                const estadoKey = chatFilter.slice("estado:".length);
+                const estadoKeyActual = resolverEstado(chat.estado).key;
+                if (estadoKeyActual !== estadoKey) {
+                    return false;
+                }
+            } else if (filterDef?.estados) {
                 const estado = normalizeText(chat.estado);
 
                 const coincideEstado =
@@ -5579,7 +5662,15 @@ export default function DigitalesContacto() {
                                         </div>
                                     )}
 
-                                    {/* Filtros con scroll horizontal */}
+                                    {/* Filtro por estatus (dropdown) arriba de los botones */}
+                                    <div className="mt-2 px-2">
+                                        <EstadoDropdown
+                                            value={chatFilter}
+                                            onChange={setChatFilter}
+                                        />
+                                    </div>
+
+                                    {/* Filtros rápidos con scroll horizontal */}
                                     <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                                         {CHAT_FILTERS.map((f) => (
                                             <button key={f.key} onClick={() => setChatFilter(f.key)}
