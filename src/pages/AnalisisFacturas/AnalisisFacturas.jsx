@@ -783,9 +783,6 @@ export default function AnalisisFacturas() {
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                                 <h2 className="text-lg font-bold text-[#1A1F3C]">Facturas analizadas</h2>
-                                <p className="mt-0.5 text-xs text-[#8891AD]">
-                                    Información detectada del PDF y preparación de la clasificación del gasto.
-                                </p>
                             </div>
 
                             <div className="relative w-full sm:w-72">
@@ -825,23 +822,6 @@ export default function AnalisisFacturas() {
                                 />
                             ))
                         )}
-
-                        <div className="rounded-2xl border border-[#131E5C]/10 bg-[#131E5C]/[0.035] px-5 py-4">
-                            <div className="flex items-start gap-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#131E5C] shadow-sm">
-                                    <CalendarDays className="h-4 w-4" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-[#1A1F3C]">Siguiente etapa preparada</p>
-                                    <p className="mt-1 text-xs leading-relaxed text-[#515778]">
-                                        Cada concepto ya mantiene en el estado del frontend los campos
-                                        <b> cargo</b> y <b>motivo</b>. Cuando se conecte el backend, esos valores
-                                        podrán guardarse junto con la factura y utilizarse después para reportes,
-                                        presupuestos, centros de costo o validaciones de Gerencia.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </section>
             </main>

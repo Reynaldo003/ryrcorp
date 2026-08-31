@@ -4,7 +4,7 @@ const API =
   import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
 //import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-const LOGIN_PATH = "/login";
+const LOGIN_PATH = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/login`;
 const ACCESS_REFRESH_MARGIN_SECONDS = 60;
 
 let refreshTokenPromise = null;
@@ -306,7 +306,7 @@ function clearFullSession() {
 
 function redirectToLogin() {
   if (window.location.pathname !== LOGIN_PATH) {
-    window.location.href = LOGIN_PATH;
+    window.location.replace(LOGIN_PATH);
   }
 }
 
