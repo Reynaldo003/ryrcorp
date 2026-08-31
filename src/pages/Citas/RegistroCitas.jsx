@@ -38,10 +38,11 @@ import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
 import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
 import {
-  ASESORES_DIGITALES,
-  ASESORES_PISO,
   AGENCIAS_DIGITALES,
 } from "../../config/asesoresGestionComercial";
+import {
+  useAsesoresGestionComercial,
+} from "../../hooks/useAsesoresGestionComercial";
 import {
   estadoAutomaticoBandeja,
   tieneCalificacionRapida,
@@ -1175,6 +1176,11 @@ function GraficosView({ rows }) {
 
 export default function RegistroCitas() {
     const { user } = useAuth();
+    
+    const {
+        nombresAsesoresActivos,
+        nombresAsesoresDigitales,
+    } = useAsesoresGestionComercial();
 
     const permisos = user?.permisos || [];
     const rol = String(user?.rol || "").trim().toLowerCase();
@@ -1370,17 +1376,22 @@ export default function RegistroCitas() {
     }, [citas, isAdmin, userAgencias]);
 
     const asesoresDigitalesFiltro = useMemo(() => {
-        const set = new Set([...ASESORES_DIGITALES.map((a) => normalizeStr(a)), ...(citas || []).map((c) => normalizeStr(c.asesor_digital))].filter(Boolean));
+        const set = new Set([
+            ...nombresAsesoresDigitales.map((a) => normalizeStr(a)),
+            ...(citas || []).map((c) => normalizeStr(c.asesor_digital)),
+        ].filter(Boolean));
+
         return ["Todos", ...Array.from(set)];
-    }, [citas]);
+    }, [citas, nombresAsesoresDigitales]);
 
     const asesoresPisoFiltro = useMemo(() => {
         const set = new Set([
-            ...ASESORES_PISO.map((a) => normalizeStr(a)),
+            ...nombresAsesoresActivos.map((a) => normalizeStr(a)),
             ...(citas || []).map((c) => normalizeStr(c.asesor_piso)),
         ].filter(Boolean));
+
         return ["Todos", ...Array.from(set)];
-    }, [citas]);
+    }, [citas, nombresAsesoresActivos]);
 
     const filtered = useMemo(() => {
         return (citas || []).filter((c) => {
@@ -2238,13 +2249,17 @@ export default function RegistroCitas() {
                         <Field label="Asesor Digital" icon={UserMinus} className="md:col-span-2">
                             <select value={draft.asesor_digital || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_digital: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un asesor ...</option>
-                                {opcionesConValorActual(ASESORES_DIGITALES, draft.asesor_digital).map((d) => <option key={d} value={d}>{d}</option>)}
+                                {opcionesConValorActual(nombresAsesoresDigitales, draft.asesor_digital).map((d) => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
                             </select>
                         </Field>
                         <Field label="Asesor Piso" icon={UserStar} className="md:col-span-2">
                             <select value={draft.asesor_piso || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_piso: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
                                 <option value="" disabled>Selecciona un asesor ...</option>
-                                {opcionesConValorActual(ASESORES_PISO, draft.asesor_piso).map((d) => <option key={d} value={d}>{d}</option>)}
+                                {opcionesConValorActual(nombresAsesoresActivos, draft.asesor_piso).map((d) => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
                             </select>
                         </Field>
                         <Field label="Fuente de Prospección" icon={UserSearch} className="md:col-span-2">
