@@ -112,6 +112,7 @@ import BitacoraMantenimiento from "./pages/Inventario/BitacoraMantenimiento";
 import NoConformidad from "./pages/Calidad/NoConformidad";
 import DigitalesRendimiento from "./pages/Digitales/DigitalesRendimiento";
 import DirectorioWeb from "./pages/DirectorioWeb/DirectorioWeb";
+import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -1025,6 +1026,14 @@ export const router = createBrowserRouter(
                             element: (
                                 <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]}>
                                     <DirectorioWeb />
+                                </RequirePermission>
+                            ),
+                        },
+                        {
+                            path: "facturas",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]}>
+                                    <AnalisisFacturas />
                                 </RequirePermission>
                             ),
                         },

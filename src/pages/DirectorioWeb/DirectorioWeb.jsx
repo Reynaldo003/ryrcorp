@@ -14,8 +14,32 @@ const SITIOS_INICIALES = [
     { id: 4, nombre: "graficos-entrega-oba", url: "https://graficos-entrega-oba.vercel.app", agencia: "OBA", categoria: "Entregas", descripcion: "Dashboard de gráficas de entrega", plataforma: "Vercel", activo: true },
     { id: 5, nombre: "graficos-entrega-cba", url: "https://graficos-entrega-cba.vercel.app", agencia: "CBA", categoria: "Entregas", descripcion: "Dashboard de gráficas de entrega", plataforma: "Vercel", activo: true },
     { id: 6, nombre: "bitacora-mantenimiento-showroom", url: "https://bitacora-mantenimiento-showroom.vercel.app", agencia: "General", categoria: "Mantenimiento", descripcion: "Bitácora de mantenimiento de showroom", plataforma: "Vercel", activo: true },
-    { id: 7, nombre: "encuesta-automotriz-ryr-cba", url: "https://encuesta-automotriz-ryr-cba.vercel.app", agencia: "CBA", categoria: "Encuestas", descripcion: "Encuesta de satisfacción automotriz", plataforma: "Vercel", activo: true },
-    { id: 8, nombre: "concertacion-citas", url: "https://concertacion-citas.vercel.app", agencia: "General", categoria: "Citas", descripcion: "Herramienta de concertación de citas", plataforma: "Vercel", activo: true },
+    { id: 7, nombre: "concertacion-citas", url: "https://concertacion-citas.vercel.app", agencia: "VW", categoria: "Citas", descripcion: "Herramienta de concertación de citas Volkswagen", plataforma: "Vercel", activo: true },
+    { id: 8, nombre: "concertacion-citas-volvo", url: "https://concertacion-citas-volvo.vercel.app", agencia: "Volvo", categoria: "Citas", descripcion: "Herramienta de concertación de citas Volvo", plataforma: "Vercel", activo: true },
+    { id: 9, nombre: "trafico-piso", url: "https://trafico-piso.vercel.app", agencia: "VW", categoria: "Tráfico", descripcion: "Control y seguimiento de tráfico de piso", plataforma: "Vercel", activo: true },
+    { id: 10, nombre: "trafico-piso-volvo", url: "https://trafico-piso-volvo.vercel.app", agencia: "Volvo", categoria: "Tráfico", descripcion: "Control y seguimiento de tráfico de piso Volvo", plataforma: "Vercel", activo: true },
+    { id: 11, nombre: "visualiza-citas-vw", url: "https://visualiza-citas-vw.vercel.app", agencia: "VW", categoria: "Citas", descripcion: "Visualización y seguimiento de citas Volkswagen", plataforma: "Vercel", activo: true },
+    { id: 12, nombre: "visualiza-citas-volvo", url: "https://visualiza-citas-volvo.vercel.app", agencia: "Volvo", categoria: "Citas", descripcion: "Visualización y seguimiento de citas Volvo", plataforma: "Vercel", activo: true },
+    { id: 13, nombre: "hoja-ingresos-oba", url: "https://hoja-ingresos-oba.vercel.app", agencia: "OBA", categoria: "Ingresos", descripcion: "Hoja de control de ingresos", plataforma: "Vercel", activo: true },
+    { id: 14, nombre: "hoja-ingresos-cba", url: "https://hoja-ingresos-cba.vercel.app", agencia: "CBA", categoria: "Ingresos", descripcion: "Hoja de control de ingresos", plataforma: "Vercel", activo: true },
+    { id: 15, nombre: "dianaldo", url: "https://dianaldo.vercel.app", agencia: "General", categoria: "Herramientas", descripcion: "Herramienta web interna", plataforma: "Vercel", activo: true },
+    { id: 16, nombre: "crm-diautos", url: "https://crm-diautos.vercel.app", agencia: "DIAUTOS", categoria: "CRM", descripcion: "CRM de DIAUTOS", plataforma: "Vercel", activo: true },
+    { id: 17, nombre: "checklist-entrega-volvo", url: "https://checklist-entrega-volvo.vercel.app", agencia: "Volvo", categoria: "Checklist", descripcion: "Checklist para entrega de vehículos Volvo", plataforma: "Vercel", activo: true },
+    { id: 18, nombre: "checklist-recepcion-volvo", url: "https://checklist-recepcion-volvo.vercel.app", agencia: "Volvo", categoria: "Checklist", descripcion: "Checklist para recepción de vehículos Volvo", plataforma: "Vercel", activo: true },
+    { id: 19, nombre: "checklist-calidad-general", url: "https://checklist-calidad-general.vercel.app", agencia: "General", categoria: "Calidad", descripcion: "Checklist general de control de calidad", plataforma: "Vercel", activo: true },
+    { id: 20, nombre: "entregas-vw", url: "https://entregas-vw.vercel.app", agencia: "VW", categoria: "Entregas", descripcion: "Gestión y seguimiento de entregas Volkswagen", plataforma: "Vercel", activo: true },
+    { id: 21, nombre: "encuesta-servicio-ryr-cba", url: "https://encuesta-servicio-ryr-cba.vercel.app", agencia: "CBA", categoria: "Encuestas", descripcion: "Encuesta de satisfacción de servicio", plataforma: "Vercel", activo: true },
+    { id: 22, nombre: "encuesta-servicio-ryr-oba", url: "https://encuesta-servicio-ryr-oba.vercel.app", agencia: "OBA", categoria: "Encuestas", descripcion: "Encuesta de satisfacción de servicio", plataforma: "Vercel", activo: true },
+    { id: 23, nombre: "encuesta-servicio-ryr-txt", url: "https://encuesta-servicio-ryr-txt.vercel.app", agencia: "TXT", categoria: "Encuestas", descripcion: "Encuesta de satisfacción de servicio", plataforma: "Vercel", activo: true },
+    { id: 24, nombre: "encuesta-servicio-ryr-txp", url: "https://encuesta-servicio-ryr-txp.vercel.app", agencia: "TXP", categoria: "Encuestas", descripcion: "Encuesta de satisfacción de servicio", plataforma: "Vercel", activo: true },
+    { id: 25, nombre: "encuesta-servicio-ryr-pz", url: "https://encuesta-servicio-ryr-pz.vercel.app", agencia: "PZR", categoria: "Encuestas", descripcion: "Encuesta de satisfacción de servicio", plataforma: "Vercel", activo: true },
+    { id: 26, nombre: "encuesta-automotriz-ryr-cba", url: "https://encuesta-automotriz-ryr-cba.vercel.app", agencia: "CBA", categoria: "Encuestas", descripcion: "Encuesta de satisfacción automotriz", plataforma: "Vercel", activo: true },
+    { id: 27, nombre: "encuesta-automotriz-ryr-oba", url: "https://encuesta-automotriz-ryr-oba.vercel.app", agencia: "OBA", categoria: "Encuestas", descripcion: "Encuesta de satisfacción automotriz", plataforma: "Vercel", activo: true },
+    { id: 28, nombre: "encuesta-automotriz-ryr-txt", url: "https://encuesta-automotriz-ryr-txt.vercel.app", agencia: "TXT", categoria: "Encuestas", descripcion: "Encuesta de satisfacción automotriz", plataforma: "Vercel", activo: true },
+    { id: 29, nombre: "encuesta-automotriz-ryr-txp", url: "https://encuesta-automotriz-ryr-txp.vercel.app", agencia: "TXP", categoria: "Encuestas", descripcion: "Encuesta de satisfacción automotriz", plataforma: "Vercel", activo: true },
+    { id: 30, nombre: "encuesta-automotriz-ryr-pz", url: "https://encuesta-automotriz-ryr-pz.vercel.app", agencia: "PZR", categoria: "Encuestas", descripcion: "Encuesta de satisfacción automotriz", plataforma: "Vercel", activo: true },
+    { id: 31, nombre: "encuesta-satisfaccion-postventa-diautos", url: "https://encuesta-satisfaccion-postventa-diautos.vercel.app", agencia: "DIAUTOS", categoria: "Encuestas", descripcion: "Encuesta de satisfacción de postventa DIAUTOS", plataforma: "Vercel", activo: true },
+    { id: 32, nombre: "reporte-control-calidad", url: "https://reporte-control-calidad.vercel.app", agencia: "General", categoria: "Calidad", descripcion: "Reporte y control general de calidad", plataforma: "Vercel", activo: true },
 ];
 
 const FORM_VACIO = {
@@ -512,14 +536,6 @@ export default function DirectorioWeb() {
                     </div>
 
                     <div className="hidden h-[2px] flex-1 rounded-full bg-[#131E5C] lg:block" />
-
-                    <button
-                        onClick={abrirNuevo}
-                        className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#131E5C] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#0a1340]"
-                    >
-                        <Plus className="h-4 w-4" />
-                        <span className="hidden sm:inline">Nueva URL</span>
-                    </button>
                 </div>
             </header>
 

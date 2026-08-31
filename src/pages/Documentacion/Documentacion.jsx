@@ -849,19 +849,6 @@ export default function Documentacion() {
     };
 
     const abrirEditorFormato = (expediente) => {
-        const faltantes = Number(
-            expediente?.avance?.faltantes || 0
-        );
-
-        if (faltantes > 0) {
-            mostrarMensaje(
-                "error",
-                `Debes completar primero los documentos obligatorios. Faltan ${faltantes}.`
-            );
-
-            return;
-        }
-
         const plantilla = obtenerPlantillaAutomatica(
             expediente.tipo_persona,
             expediente.financiamiento,

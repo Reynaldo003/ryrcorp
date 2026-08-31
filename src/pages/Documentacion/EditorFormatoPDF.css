@@ -1,0 +1,23 @@
+.editor-pdf .annotationLayer .textWidgetAnnotation input,
+.editor-pdf .annotationLayer .textWidgetAnnotation textarea {
+  font-size: 14px !important;
+  font-weight: 200 !important;
+  line-height: 1 !important;
+  padding: 0px 3px !important;
+  height: 20px;
+  background-color: #ffffff !important;
+}
+
+/* Selects del PDF */
+.editor-pdf .annotationLayer .choiceWidgetAnnotation select {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+/* Mejor contraste al editar */
+.editor-pdf .annotationLayer input:focus,
+.editor-pdf .annotationLayer textarea:focus,
+.editor-pdf .annotationLayer select:focus {
+  outline: 2px solid #2563eb !important;
+  outline-offset: 0 !important;
+}
