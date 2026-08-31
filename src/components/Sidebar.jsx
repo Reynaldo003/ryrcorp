@@ -28,6 +28,7 @@ import {
     Workflow,
     Globe,
     FileSearchCorner,
+    UsersRound,
 } from "lucide-react";
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
@@ -263,6 +264,13 @@ export default function Sidebar() {
                 label: "Panel de Inteligencias Artificiales",
                 icon: BrainCircuit,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]),
+            },
+            {
+                section: "Herramientas",
+                to: "/administracion_asesores",
+                label: "Administración de Asesores",
+                icon: UsersRound,
+                show: hasAnyPermission(["USUARIOS_ADMIN"]),
             },
             {
                 section: "Herramientas",
