@@ -2778,6 +2778,11 @@ export default function DigitalesContacto() {
             }
 
             return true;
+        })
+        .sort((a, b) => {
+            const ta = new Date(a.last?.timestamp || 0).getTime();
+            const tb = new Date(b.last?.timestamp || 0).getTime();
+            return tb - ta;
         });
     }, [
         chats,
