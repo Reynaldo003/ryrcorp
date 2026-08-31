@@ -13,6 +13,9 @@ import {
 
 import { http } from "../../lib/apiClient";
 
+import {
+    AGENCIAS_DIGITALES,
+} from "../../config/asesoresGestionComercial";
 
 const FORM_INICIAL = {
     nombre: "",
@@ -23,6 +26,26 @@ const FORM_INICIAL = {
     activo: true,
 };
 
+const TIPOS_ASESOR = [
+    {
+        value: "Piso",
+        label: "Piso",
+    },
+    {
+        value: "Digital",
+        label: "Digitales",
+    },
+];
+
+const BUSINESS_OPTIONS = [
+    "Nuevo",
+    "Usado",
+    "Comerciales",
+];
+
+const AGENCIAS_ASESORES = AGENCIAS_DIGITALES.filter(
+    (agencia) => agencia !== "Automotriz R&R"
+);
 
 function texto(value) {
     return String(value || "").trim();
@@ -70,7 +93,13 @@ export default function AdministracionAsesores() {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [asesorEditando, setAsesorEditando] = useState(null);
     const [form, setForm] = useState(FORM_INICIAL);
+    const [confirmacionEstado, setConfirmacionEstado] = useState({
+        abierto: false,
+        asesor: null,
+        nuevoEstado: false,
+    });
 
+    const [procesandoEstado, setProcesandoEstado] = useState(false);
 
     const cargarAsesores = async () => {
         setCargando(true);
@@ -95,40 +124,6 @@ export default function AdministracionAsesores() {
     useEffect(() => {
         cargarAsesores();
     }, []);
-
-
-    const tipos = useMemo(() => {
-        return [
-            ...new Set(
-                asesores
-                    .map((item) => texto(item.tipo_asesor))
-                    .filter(Boolean)
-            ),
-        ].sort((a, b) => a.localeCompare(b));
-    }, [asesores]);
-
-
-    const areas = useMemo(() => {
-        return [
-            ...new Set(
-                asesores
-                    .map((item) => texto(item.area))
-                    .filter(Boolean)
-            ),
-        ].sort((a, b) => a.localeCompare(b));
-    }, [asesores]);
-
-
-    const agencias = useMemo(() => {
-        return [
-            ...new Set(
-                asesores
-                    .map((item) => texto(item.agencia))
-                    .filter(Boolean)
-            ),
-        ].sort((a, b) => a.localeCompare(b));
-    }, [asesores]);
-
 
     const asesoresFiltrados = useMemo(() => {
         const query = texto(busqueda).toLowerCase();
@@ -306,39 +301,54 @@ export default function AdministracionAsesores() {
         }
     };
 
+    const cambiarEstado = (asesor) => {
+        setConfirmacionEstado({
+            abierto: true,
+            asesor,
+            nuevoEstado: !asesor.activo,
+        });
+    };
 
-    const cambiarEstado = async (asesor) => {
-        const nuevoEstado = !asesor.activo;
+    const cerrarConfirmacionEstado = () => {
+        if (procesandoEstado) return;
 
-        const accion = nuevoEstado
-            ? "activar"
-            : "desactivar";
+        setConfirmacionEstado({
+            abierto: false,
+            asesor: null,
+            nuevoEstado: false,
+        });
+    };
 
-        const confirmado = window.confirm(
-            `¿Deseas ${accion} a ${asesor.nombre}?`
-        );
+    const confirmarCambioEstado = async () => {
+        const asesor = confirmacionEstado.asesor;
+        const nuevoEstado = confirmacionEstado.nuevoEstado;
 
-        if (!confirmado) return;
+        if (!asesor) return;
 
+        setProcesandoEstado(true);
         setError("");
 
         try {
-            await http(
-                `/digitales/asesores/admin/${asesor.id}/`,
-                {
-                    method: "PATCH",
-                    data: {
-                        activo: nuevoEstado,
-                    },
-                }
-            );
+            await http(`/digitales/asesores/admin/${asesor.id}/`, {
+                method: "PATCH",
+                data: {
+                    activo: nuevoEstado,
+                },
+            });
+
+            setConfirmacionEstado({
+                abierto: false,
+                asesor: null,
+                nuevoEstado: false,
+            });
 
             await cargarAsesores();
         } catch (err) {
             setError(mensajeError(err));
+        } finally {
+            setProcesandoEstado(false);
         }
     };
-
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -454,17 +464,19 @@ export default function AdministracionAsesores() {
                             }
                             className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
                         >
-                            <option>Todos</option>
+                            <option value="Todos">
+                                Todos los tipos
+                            </option>
 
-                            {tipos.map((tipo) => (
+                            {TIPOS_ASESOR.map((tipo) => (
                                 <option
-                                    key={tipo}
-                                    value={tipo}
+                                    key={tipo.value}
+                                    value={tipo.value}
                                 >
-                                    {tipo}
+                                    {tipo.label}
                                 </option>
                             ))}
-                        </select>
+                            </select>
 
                         <select
                             value={filtroArea}
@@ -475,14 +487,16 @@ export default function AdministracionAsesores() {
                             }
                             className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
                         >
-                            <option>Todas</option>
+                            <option value="Todas">
+                                Todos los business
+                            </option>
 
-                            {areas.map((area) => (
+                            {BUSINESS_OPTIONS.map((business) => (
                                 <option
-                                    key={area}
-                                    value={area}
+                                    key={business}
+                                    value={business}
                                 >
-                                    {area}
+                                    {business}
                                 </option>
                             ))}
                         </select>
@@ -496,9 +510,11 @@ export default function AdministracionAsesores() {
                             }
                             className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
                         >
-                            <option>Todas</option>
+                            <option value="Todas">
+                                Todas las agencias
+                            </option>
 
-                            {agencias.map((agencia) => (
+                            {AGENCIAS_ASESORES.map((agencia) => (
                                 <option
                                     key={agencia}
                                     value={agencia}
@@ -517,9 +533,15 @@ export default function AdministracionAsesores() {
                             }
                             className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
                         >
-                            <option>Todos</option>
-                            <option>Activos</option>
-                            <option>Inactivos</option>
+                            <option value="Todos">
+                                Todos los estados
+                            </option>
+                            <option value="Activos">
+                                Activos
+                            </option>
+                            <option value="Inactivos">
+                                Inactivos
+                            </option>
                         </select>
                     </div>
                 </div>
@@ -558,7 +580,7 @@ export default function AdministracionAsesores() {
                                             Tipo de asesor
                                         </th>
                                         <th className="px-4 py-3 font-semibold text-slate-600">
-                                            Área
+                                            Business
                                         </th>
                                         <th className="px-4 py-3 font-semibold text-slate-600">
                                             Agencia
@@ -609,7 +631,9 @@ export default function AdministracionAsesores() {
                                                     </td>
 
                                                     <td className="px-4 py-3.5 text-slate-600">
-                                                        {asesor.tipo_asesor || "—"}
+                                                        {asesor.tipo_asesor === "Digital"
+                                                            ? "Digitales"
+                                                            : asesor.tipo_asesor || "—"}
                                                     </td>
 
                                                     <td className="px-4 py-3.5 text-slate-600">
@@ -752,54 +776,82 @@ export default function AdministracionAsesores() {
                                     />
                                 </label>
 
-
                                 <label>
                                     <span className="mb-1.5 block text-sm font-medium text-slate-700">
                                         Tipo de asesor
                                     </span>
 
-                                    <input
+                                    <select
                                         name="tipo_asesor"
                                         value={form.tipo_asesor}
                                         onChange={actualizarCampo}
-                                        placeholder="Ej. Digital, Piso"
-                                        maxLength={80}
-                                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                                    />
+                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                                    >
+                                        <option value="">
+                                            Selecciona un tipo
+                                        </option>
+
+                                        {TIPOS_ASESOR.map((tipo) => (
+                                            <option
+                                                key={tipo.value}
+                                                value={tipo.value}
+                                            >
+                                                {tipo.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </label>
-
-
                                 <label>
                                     <span className="mb-1.5 block text-sm font-medium text-slate-700">
-                                        Área
+                                        Business
                                     </span>
 
-                                    <input
+                                    <select
                                         name="area"
                                         value={form.area}
                                         onChange={actualizarCampo}
-                                        placeholder="Ej. Ventas"
-                                        maxLength={100}
-                                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                                    />
-                                </label>
+                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                                    >
+                                        <option value="">
+                                            Selecciona un business
+                                        </option>
 
+                                        {BUSINESS_OPTIONS.map((business) => (
+                                            <option
+                                                key={business}
+                                                value={business}
+                                            >
+                                                {business}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
 
                                 <label>
                                     <span className="mb-1.5 block text-sm font-medium text-slate-700">
                                         Agencia
                                     </span>
 
-                                    <input
+                                    <select
                                         name="agencia"
                                         value={form.agencia}
                                         onChange={actualizarCampo}
-                                        placeholder="Ej. VW Córdoba"
-                                        maxLength={150}
-                                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                                    />
-                                </label>
+                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                                    >
+                                        <option value="">
+                                            Selecciona una agencia
+                                        </option>
 
+                                        {AGENCIAS_ASESORES.map((agencia) => (
+                                            <option
+                                                key={agencia}
+                                                value={agencia}
+                                            >
+                                                {agencia}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
 
                                 <label className="md:col-span-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                                     <input
@@ -863,10 +915,96 @@ export default function AdministracionAsesores() {
                                         : "Guardar"}
                                 </button>
                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
+
+                                               </form>
+                                        </div>
+                                    </div>
+                                )}
+                                {confirmacionEstado.abierto && (
+                                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4">
+                                        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+                                            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                                                <div>
+                                                    <h3 className="text-lg font-semibold text-slate-900">
+                                                        Confirmar acción
+                                                    </h3>
+
+                                                    <p className="mt-1 text-xs text-slate-500">
+                                                        Confirma el cambio de estado del asesor.
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={cerrarConfirmacionEstado}
+                                                    disabled={procesandoEstado}
+                                                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                                                >
+                                                    <X size={20} />
+                                                </button>
+                                            </div>
+
+
+                                            <div className="px-6 py-5">
+                                                <div
+                                                    className={
+                                                        confirmacionEstado.nuevoEstado
+                                                            ? "rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4"
+                                                            : "rounded-xl border border-red-100 bg-red-50 px-4 py-4"
+                                                    }
+                                                >
+                                                    <p className="text-sm text-slate-700">
+                                                        {confirmacionEstado.nuevoEstado
+                                                            ? "¿Deseas activar a "
+                                                            : "¿Deseas desactivar a "}
+
+                                                        <span className="font-semibold text-slate-900">
+                                                            {confirmacionEstado.asesor?.nombre}
+                                                        </span>
+                                                        ?
+                                                    </p>
+                                                </div>
+                                            </div>
+
+
+                                            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={cerrarConfirmacionEstado}
+                                                    disabled={procesandoEstado}
+                                                    className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                                                >
+                                                    Cancelar
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={confirmarCambioEstado}
+                                                    disabled={procesandoEstado}
+                                                    className={
+                                                        confirmacionEstado.nuevoEstado
+                                                            ? "inline-flex min-w-[120px] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                                                            : "inline-flex min-w-[120px] items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
+                                                    }
+                                                >
+                                                    {procesandoEstado && (
+                                                        <LoaderCircle
+                                                            size={17}
+                                                            className="animate-spin"
+                                                        />
+                                                    )}
+
+                                                    {procesandoEstado
+                                                        ? "Procesando..."
+                                                        : confirmacionEstado.nuevoEstado
+                                                        ? "Activar"
+                                                        : "Desactivar"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    }
