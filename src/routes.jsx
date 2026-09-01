@@ -113,6 +113,8 @@ import NoConformidad from "./pages/Calidad/NoConformidad";
 import DigitalesRendimiento from "./pages/Digitales/DigitalesRendimiento";
 import DirectorioWeb from "./pages/DirectorioWeb/DirectorioWeb";
 import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
+import AdministracionAsesores from "./pages/AdministracionAsesores/AdministracionAsesores";
+import VentasVN from "./pages/VentasVN/VentasVN";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -370,8 +372,9 @@ export const router = createBrowserRouter(
                                 },
                             ],
                         },
+                        
                         {
-                            path: "comercial",
+                            path: "gestion_negocio",
                             element: (
                                 <RequirePermission
                                     anyOf={[
@@ -384,7 +387,7 @@ export const router = createBrowserRouter(
                                         "CRM_COORDINADOR_DIGITAL",
                                     ]}
                                 >
-                                    <ComercialLayout />
+                                    <VentasVN />
                                 </RequirePermission>
                             ),
                             children: [
@@ -408,48 +411,7 @@ export const router = createBrowserRouter(
                                         </RequirePermission>
                                     ),
                                 },
-                                {
-                                    path: "prospectos",
-                                    element: (
-                                        <RequirePermission
-                                            anyOf={[
-                                                "CRM_DIGITALES",
-                                                "USUARIOS_ADMIN",
-                                                "CRM_CALIDAD",
-                                                "CRM_VENTAS",
-                                                "CRM_COORDINADOR_DIGITAL",
-                                            ]}
-                                        >
-                                            <DigitalesLayout />
-                                        </RequirePermission>
-                                    ),
-                                    children: [
-                                        {
-                                            index: true,
-                                            element: <DigitalesProspectos />,
-                                        },
-                                        {
-                                            path: "resumen",
-                                            element: <DigitalesOverView />,
-                                        },
-                                        {
-                                            path: "plantillas",
-                                            element: <DigitalesPlantillas />,
-                                        },
-                                        {
-                                            path: "rendimiento_digitales",
-                                            element: <DigitalesRendimiento />,
-                                        },
-                                        {
-                                            path: "contacto",
-                                            element: <DigitalesContacto />,
-                                        },
-                                        {
-                                            path: "bandeja",
-                                            element: <DigitalesBandeja />,
-                                        },
-                                    ],
-                                },
+                                
                                 {
                                     path: "citas",
                                     element: (
@@ -1018,6 +980,14 @@ export const router = createBrowserRouter(
                             element: (
                                 <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]}>
                                     <ConfigIA />
+                                </RequirePermission>
+                            ),
+                        },
+                        {
+                            path: "administracion_asesores",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                    <AdministracionAsesores />
                                 </RequirePermission>
                             ),
                         },

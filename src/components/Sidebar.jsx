@@ -208,6 +208,13 @@ export default function Sidebar() {
 
     const links = useMemo(() => {
         const items = [
+            {
+                section: "Gestión de Negocio",
+                to: "/gestion_negocio",
+                label: "Autos Nuevos",
+                icon: BadgeCheck,
+                show: hasAnyPermission(["CRM_RECLAMACIONES", "USUARIOS_ADMIN", "CRM_CALIDAD"]),
+            },
             { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
             {
                 section: "Comercial",
@@ -315,7 +322,7 @@ export default function Sidebar() {
     }, [hasAnyPermission]);
 
     const sections = useMemo(() => {
-        const order = ["Comercial", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
+        const order = ["Gestión de Negocio", "Comercial", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
         return order
             .map((section) => ({ section, items: links.filter((item) => item.section === section) }))
             .filter((group) => group.items.length > 0);
