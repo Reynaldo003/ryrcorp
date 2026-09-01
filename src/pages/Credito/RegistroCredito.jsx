@@ -3,6 +3,7 @@ import {
     Plus, Search, X, Save, User, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp,
     Trash2, Loader2, Phone, Mail, MessageSquareText, Building2, UserSearch, UserStar,
     CreditCard, Wallet, BadgeDollarSign, Check, TableProperties, BarChart3, FileDown,
+    CalendarClock,
 } from "lucide-react";
 import { apiCredito } from "../../lib/apiCredito";
 import { createPortal } from "react-dom";
@@ -131,7 +132,13 @@ function toDTLocal(isoOrNull) {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+function fechaActualDTLocal() {
+    const ahora = new Date();
 
+    const pad = (valor) => String(valor).padStart(2, "0");
+
+    return `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
+}
 function fromDTLocalToISO(dtLocalOrEmpty) {
     const v = String(dtLocalOrEmpty || "").trim();
     return v ? v : null;
@@ -1325,11 +1332,15 @@ export default function RegistroCredito() {
         setTouchedSave(false);
         setMode("create");
 
-        const agenciaDefault = isAdmin ? "" : userAgencias[0] || "";
+        const agenciaDefault = isAdmin
+            ? ""
+            : userAgencias[0] || "";
 
         setDraft({
             id: null,
             cliente_id: null,
+
+            creado: fechaActualDTLocal(),
 
             agencia: agenciaDefault,
             cliente_nombre: "",
@@ -1348,11 +1359,12 @@ export default function RegistroCredito() {
             fecha_respuesta: "",
             comentarios: "",
         });
+
         setOpenModal(true);
     };
-
     const openEdit = async (row) => {
         if (!row?.id) return;
+
         try {
             setTouchedSave(false);
             setMode("edit");
@@ -1361,7 +1373,11 @@ export default function RegistroCredito() {
 
             const c = await apiCredito.get(row.id);
 
-            if (!isAdmin && userAgencias.length > 0 && !userTieneAgencia(c.agencia)) {
+            if (
+                !isAdmin &&
+                userAgencias.length > 0 &&
+                !userTieneAgencia(c.agencia)
+            ) {
                 alert("No tienes permisos para ver registros de otra agencia.");
                 setOpenModal(false);
                 return;
@@ -1371,7 +1387,10 @@ export default function RegistroCredito() {
                 id: c.id,
                 cliente_id: c?.cliente?.id_cliente ?? null,
 
+                creado: toDTLocal(c.creado),
+
                 agencia: c.agencia || (isAdmin ? "" : userAgencia),
+
                 cliente_nombre: c?.cliente?.nombre || "",
                 cliente_telefono: c?.cliente?.telefono || "",
                 cliente_correo: c?.cliente?.correo || "",
@@ -1385,17 +1404,22 @@ export default function RegistroCredito() {
                 asesor_ventas: c.asesor_ventas || "",
                 estado_financiamiento: c.estado_financiamiento || "",
                 estado_compra: c.estado_compra || "",
+
                 fecha_respuesta: toDTLocal(c.fecha_respuesta),
+
                 comentarios: c.comentarios || "",
             });
         } catch (e) {
-            manejarErrorCredito(e, "No se pudo abrir la solicitud.");
+            manejarErrorCredito(
+                e,
+                "No se pudo abrir la solicitud."
+            );
+
             setOpenModal(false);
         } finally {
             setLoadingDetail(false);
         }
     };
-
     const closeModal = () => {
         if (saving) return;
         setOpenModal(false);
@@ -1432,15 +1456,24 @@ export default function RegistroCredito() {
         if (!telDigits || !telIsOk) return;
 
         setSaving(true);
+
         try {
-            const agenciaFinal = isAdmin ? normalizeStr(draft.agencia || "") : normalizeStr(draft.agencia || userAgencia);
+            const agenciaFinal = isAdmin
+                ? normalizeStr(draft.agencia || "")
+                : normalizeStr(draft.agencia || userAgencia);
 
             const payload = {
                 agencia: agenciaFinal,
-                ...(draft.cliente_id ? { cliente_id: draft.cliente_id } : {}),
+
+                ...(draft.cliente_id
+                    ? { cliente_id: draft.cliente_id }
+                    : {}),
+
                 nombre: draft.cliente_nombre || "",
                 telefono: normalizeStr(draft.cliente_telefono),
                 correo: draft.cliente_correo || "",
+
+                creado: fromDTLocalToISO(draft.creado),
 
                 id_soli_cred: draft.id_soli_cred || "",
                 producto_financiero: draft.producto_financiero || "",
@@ -1451,17 +1484,32 @@ export default function RegistroCredito() {
                 asesor_ventas: draft.asesor_ventas || null,
                 estado_financiamiento: draft.estado_financiamiento || "",
                 estado_compra: draft.estado_compra || "",
-                fecha_respuesta: fromDTLocalToISO(draft.fecha_respuesta),
+
+                fecha_respuesta: fromDTLocalToISO(
+                    draft.fecha_respuesta
+                ),
+
                 comentarios: draft.comentarios || null,
             };
 
-            if (mode === "create") await apiCredito.create(payload);
-            else await apiCredito.update(draft.id, payload);
+            if (mode === "create") {
+                await apiCredito.create(payload);
+            } else {
+                await apiCredito.update(
+                    draft.id,
+                    payload
+                );
+            }
 
             await refreshList();
-            closeModal();
+
+            setOpenModal(false);
+            setDraft(null);
         } catch (e) {
-            manejarErrorCredito(e, "Error guardando la solicitud.");
+            manejarErrorCredito(
+                e,
+                "Error guardando la solicitud."
+            );
         } finally {
             setSaving(false);
         }
@@ -2056,6 +2104,15 @@ export default function RegistroCredito() {
                                 {!isInvalid("cliente_telefono") && telError ? (
                                     <div className="mt-2 text-xs font-bold text-red-600">{telError}</div>
                                 ) : null}
+                            </Field>
+
+                            <Field label="Fecha de Ingreso" icon={CalendarClock}>
+                                <input
+                                    type="datetime-local"
+                                    value={draft.creado || ""}
+                                    onChange={(e) => setDraft((p) => ({ ...p, creado: e.target.value }))}
+                                    className={[inputBase, inputOk].join(" ")}
+                                />
                             </Field>
 
                             <Field label="Correo" icon={Mail}>
