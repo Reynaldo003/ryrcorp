@@ -424,7 +424,48 @@ export const router = createBrowserRouter(
                                         </RequirePermission>
                                     ),
                                 },
-                                
+                                {
+                                    path: "prospectos",
+                                    element: (
+                                        <RequirePermission
+                                            anyOf={[
+                                                "CRM_DIGITALES",
+                                                "USUARIOS_ADMIN",
+                                                "CRM_CALIDAD",
+                                                "CRM_VENTAS",
+                                                "CRM_COORDINADOR_DIGITAL",
+                                            ]}
+                                        >
+                                            <DigitalesLayout />
+                                        </RequirePermission>
+                                    ),
+                                    children: [
+                                        {
+                                            index: true,
+                                            element: <DigitalesProspectos />,
+                                        },
+                                        {
+                                            path: "resumen",
+                                            element: <DigitalesOverView />,
+                                        },
+                                        {
+                                            path: "plantillas",
+                                            element: <DigitalesPlantillas />,
+                                        },
+                                        {
+                                            path: "rendimiento_digitales",
+                                            element: <DigitalesRendimiento />,
+                                        },
+                                        {
+                                            path: "contacto",
+                                            element: <DigitalesContacto />,
+                                        },
+                                        {
+                                            path: "bandeja",
+                                            element: <DigitalesBandeja />,
+                                        },
+                                    ],
+                                },
                                 {
                                     path: "citas",
                                     element: (
