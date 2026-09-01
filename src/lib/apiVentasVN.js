@@ -2,7 +2,6 @@
 
 import { http, buildQuery } from "./apiClient";
 
-
 // ==========================================================
 // DASHBOARD AUTOS NUEVOS
 // ==========================================================
@@ -23,11 +22,8 @@ import { http, buildQuery } from "./apiClient";
 // ==========================================================
 
 export function getVentasVNDashboard(params = {}) {
-  return http(
-    `/ventas-vn/api/dashboard/${buildQuery(params)}`
-  );
+  return http(`/ventas-vn/api/dashboard/${buildQuery(params)}`);
 }
-
 
 // ==========================================================
 // DETALLE VW_VN
@@ -36,7 +32,5 @@ export function getVentasVNDashboard(params = {}) {
 // ==========================================================
 
 export function getVentasVNDetalle(params = {}) {
-  return http(
-    `/ventas-vn/api/${buildQuery(params)}`
-  );
+  return http(`/ventas-vn/api/${buildQuery(params)}`);
 }
