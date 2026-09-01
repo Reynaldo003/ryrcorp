@@ -372,9 +372,22 @@ export const router = createBrowserRouter(
                                 },
                             ],
                         },
-                        
                         {
                             path: "gestion_negocio",
+                            element: (
+                                <RequirePermission
+                                    anyOf={[
+                                        "CRM_RECLAMACIONES",
+                                        "USUARIOS_ADMIN",
+                                        "CRM_CALIDAD",
+                                    ]}
+                                >
+                                    <VentasVN />
+                                </RequirePermission>
+                            ),
+                        },
+                        {
+                            path: "comercial",
                             element: (
                                 <RequirePermission
                                     anyOf={[
@@ -387,7 +400,7 @@ export const router = createBrowserRouter(
                                         "CRM_COORDINADOR_DIGITAL",
                                     ]}
                                 >
-                                    <VentasVN />
+                                    <ComercialLayout />
                                 </RequirePermission>
                             ),
                             children: [
