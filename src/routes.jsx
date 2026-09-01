@@ -113,7 +113,6 @@ import NoConformidad from "./pages/Calidad/NoConformidad";
 import DigitalesRendimiento from "./pages/Digitales/DigitalesRendimiento";
 import DirectorioWeb from "./pages/DirectorioWeb/DirectorioWeb";
 import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
-import AdministracionAsesores from "./pages/AdministracionAsesores/AdministracionAsesores";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -1019,14 +1018,6 @@ export const router = createBrowserRouter(
                             element: (
                                 <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]}>
                                     <ConfigIA />
-                                </RequirePermission>
-                            ),
-                        },
-                        {
-                            path: "administracion_asesores",
-                            element: (
-                                <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
-                                    <AdministracionAsesores />
                                 </RequirePermission>
                             ),
                         },

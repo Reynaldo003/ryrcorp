@@ -252,6 +252,13 @@ export default function Sidebar() {
                 show: hasAnyPermission(["CRM_RECLAMACIONES", "CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN"]),
             },
             {
+                section: "Marketing",
+                to: "/facturas",
+                label: "Facturas",
+                icon: FileSearchCorner,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
+            },
+            {
                 section: "Financiero",
                 to: "/financieros",
                 label: "Servicios Financieros",
@@ -291,13 +298,6 @@ export default function Sidebar() {
                 to: "/webs",
                 label: "Interfacez Web",
                 icon: Globe,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Herramientas",
-                to: "/facturas",
-                label: "Facturas",
-                icon: FileSearchCorner,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
             },
             {

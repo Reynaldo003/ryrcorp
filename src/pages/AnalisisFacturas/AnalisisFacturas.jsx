@@ -52,6 +52,21 @@ const CLASIFICACIONES = [
     "Eventos y Prospección",
 ];
 
+const DEALERS = [
+    "VW Cordoba",
+    "VW Orizaba",
+    "VW Tuxpan",
+    "VW Poza Rica",
+    "VW Tuxtepec",
+];
+
+const DEPARTAMENTOS = [
+    "Nuevos",
+    "Usados",
+    "Comerciales",
+    "Servicio",
+    "HyP"
+];
 
 const OPCIONES_POR_CLASIFICACION = {
     "Social Media": [
@@ -2300,15 +2315,11 @@ export default function AnalisisFacturas() {
                                 </div>
 
                                 <div>
-                                    <p
-                                        className="text-sm font-bold text-[#1A1F3C]"
-                                    >
+                                    <p className="text-sm font-bold text-[#1A1F3C]">
                                         Filtros
                                     </p>
 
-                                    <p
-                                        className="text-[11px] text-[#8891AD]"
-                                    >
+                                    <p className="text-[11px] text-[#8891AD]">
                                         Filtra facturas por sus conceptos
                                     </p>
                                 </div>
@@ -2318,96 +2329,90 @@ export default function AnalisisFacturas() {
                                 className="space-y-3"
                             >
                                 <div>
-                                    <label
-                                        className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]"
-                                    >
+                                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">
                                         Clasificación
                                     </label>
 
                                     <select
-                                        value={
-                                            filtroClasificacion
-                                        }
-                                        onChange={(
-                                            event,
-                                        ) =>
-                                            cambiarFiltroClasificacion(
-                                                event
-                                                    .target
-                                                    .value,
-                                            )
-                                        }
+                                        value={filtroClasificacion}
+                                        onChange={(event,) => cambiarFiltroClasificacion(event.target.value,)}
                                         className="h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm font-semibold text-[#1A1F3C] outline-none transition focus:border-[#131E5C]/30 focus:ring-2 focus:ring-[#131E5C]/10"
                                     >
                                         <option value="">
                                             Todas las clasificaciones
                                         </option>
 
-                                        {CLASIFICACIONES.map(
-                                            (
-                                                item,
-                                            ) => (
-                                                <option
-                                                    key={
-                                                        item
-                                                    }
-                                                    value={
-                                                        item
-                                                    }
-                                                >
-                                                    {
-                                                        item
-                                                    }
-                                                </option>
-                                            ),
-                                        )}
+                                        {CLASIFICACIONES.map((item,) => (
+                                            <option key={item} value={item}>
+                                                {item}
+                                            </option>
+                                        ),)}
                                     </select>
                                 </div>
 
                                 <div>
-                                    <label
-                                        className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]"
-                                    >
+                                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">
                                         Sitio / rubro
                                     </label>
 
                                     <select
-                                        value={
-                                            filtroSitio
-                                        }
-                                        onChange={(
-                                            event,
-                                        ) =>
-                                            setFiltroSitio(
-                                                event
-                                                    .target
-                                                    .value,
-                                            )
-                                        }
+                                        value={filtroSitio}
+                                        onChange={(event,) => setFiltroSitio(event.target.value,)}
                                         className="h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm font-semibold text-[#1A1F3C] outline-none transition focus:border-[#131E5C]/30 focus:ring-2 focus:ring-[#131E5C]/10"
                                     >
                                         <option value="">
                                             Todos los sitios / rubros
                                         </option>
 
-                                        {sitiosFiltro.map(
-                                            (
-                                                item,
-                                            ) => (
-                                                <option
-                                                    key={
-                                                        item
-                                                    }
-                                                    value={
-                                                        item
-                                                    }
-                                                >
-                                                    {
-                                                        item
-                                                    }
-                                                </option>
-                                            ),
-                                        )}
+                                        {sitiosFiltro.map((item,) => (
+                                            <option key={item} value={item}>
+                                                {item}
+                                            </option>
+                                        ),)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">
+                                        Dealers
+                                    </label>
+
+                                    <select
+                                        value={filtroClasificacion}
+                                        onChange={(event,) => cambiarFiltroClasificacion(event.target.value,)}
+                                        className="h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm font-semibold text-[#1A1F3C] outline-none transition focus:border-[#131E5C]/30 focus:ring-2 focus:ring-[#131E5C]/10"
+                                    >
+                                        <option value="">
+                                            Todas los dealers
+                                        </option>
+
+                                        {DEALERS.map((item,) => (
+                                            <option key={item} value={item}>
+                                                {item}
+                                            </option>
+                                        ),)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">
+                                        Clasificación
+                                    </label>
+
+                                    <select
+                                        value={filtroClasificacion}
+                                        onChange={(event,) => cambiarFiltroClasificacion(event.target.value,)}
+                                        className="h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm font-semibold text-[#1A1F3C] outline-none transition focus:border-[#131E5C]/30 focus:ring-2 focus:ring-[#131E5C]/10"
+                                    >
+                                        <option value="">
+                                            Todas las clasificaciones
+                                        </option>
+
+                                        {DEPARTAMENTOS.map((item,) => (
+                                            <option key={item} value={item}>
+                                                {item}
+                                            </option>
+                                        ),)}
                                     </select>
                                 </div>
 
