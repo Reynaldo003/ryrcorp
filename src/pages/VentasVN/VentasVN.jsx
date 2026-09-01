@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
@@ -10,9 +11,25 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
+
 import { http, buildQuery } from "../../lib/apiClient";
 import vwDark from "../../assets/vw_dark.png";
-
+import {getVentasVNDashboard,} from "../../lib/apiVentasVN";
 
 const C = {
   navy: "#131E5C",
@@ -133,6 +150,8 @@ const FILTROS_INICIALES = {
   q: "",
   agencia: "",
   asesor: "",
+  familia: "",
+  condicion_pago: "",
   fecha_desde: "",
   fecha_hasta: "",
 };
@@ -201,12 +220,100 @@ function formatCell(value, tipo) {
   return String(value);
 }
 
+// ==========================================================
+// HELPERS DEL DASHBOARD
+// ==========================================================
+
+const MESES_CORTOS = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
+
+const PIE_COLORS = [
+  "#131E5C",
+  "#2445A2",
+  "#3D63C8",
+  "#6681D4",
+  "#8B9DDE",
+  "#AEB9E8",
+  "#42526E",
+  "#7A869A",
+];
+
+function numero(value) {
+  return Number(value || 0);
+}
+
+function formatoNumero(value) {
+  return numero(value).toLocaleString("es-MX");
+}
+
+function formatoCompacto(value) {
+  return new Intl.NumberFormat("es-MX", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(numero(value));
+}
+
+function etiquetaMes(item) {
+  const mes = Number(item?.mes || 0);
+  const anio = item?.anio || "";
+
+  if (mes < 1 || mes > 12) {
+    return item?.periodo || "";
+  }
+
+  return `${MESES_CORTOS[mes - 1]} ${anio}`;
+}
 
 // ==========================================================
 // COMPONENTE PRINCIPAL
 // ==========================================================
 
 export default function VentasVN() {
+
+  // ========================================================
+  // DASHBOARD
+  // ========================================================
+
+  const [dashboard, setDashboard] = useState({
+    totales: {
+      productos: 0,
+      unidades_vendidas: 0,
+      ingresos: 0,
+      costo: 0,
+    },
+
+    graficas: {
+      por_mes: [],
+      por_asesor: [],
+      por_familia: [],
+      por_condicion_pago: [],
+    },
+
+    opciones: {
+      agencias: [],
+      asesores: [],
+      familias: [],
+      condiciones_pago: [],
+    },
+  });
+
+  const [loadingDashboard, setLoadingDashboard] =
+    useState(false);
+
+  const [errorDashboard, setErrorDashboard] =
+    useState("");
 
   // Registros recibidos desde el backend.
   const [registros, setRegistros] = useState([]);
@@ -226,6 +333,8 @@ export default function VentasVN() {
   // Mensaje en caso de error.
   const [error, setError] = useState("");
 
+  const [vistaActiva, setVistaActiva] =
+  useState("dashboard");
 
   // ----------------------------------------------------------
   // Usamos filtrosDraft para que escribir en un campo
@@ -239,6 +348,86 @@ export default function VentasVN() {
   const [filtros, setFiltros] =
     useState(FILTROS_INICIALES);
 
+
+  // ========================================================
+  // CARGAR DASHBOARD
+  // ========================================================
+
+  async function cargarDashboard() {
+    setLoadingDashboard(true);
+    setErrorDashboard("");
+
+    try {
+      const response = await getVentasVNDashboard({
+        fecha_desde: filtros.fecha_desde,
+        fecha_hasta: filtros.fecha_hasta,
+        agencia: filtros.agencia,
+        asesor: filtros.asesor,
+        familia: filtros.familia,
+        condicion_pago: filtros.condicion_pago,
+      });
+
+      setDashboard({
+        totales: {
+          productos:
+            Number(response?.totales?.productos || 0),
+
+          unidades_vendidas:
+            Number(
+              response?.totales?.unidades_vendidas || 0
+            ),
+
+          ingresos:
+            Number(response?.totales?.ingresos || 0),
+
+          costo:
+            Number(response?.totales?.costo || 0),
+        },
+
+        graficas: {
+          por_mes:
+            response?.graficas?.por_mes || [],
+
+          por_asesor:
+            response?.graficas?.por_asesor || [],
+
+          por_familia:
+            response?.graficas?.por_familia || [],
+
+          por_condicion_pago:
+            response?.graficas?.por_condicion_pago || [],
+        },
+
+        opciones: {
+          agencias:
+            response?.opciones?.agencias || [],
+
+          asesores:
+            response?.opciones?.asesores || [],
+
+          familias:
+            response?.opciones?.familias || [],
+
+          condiciones_pago:
+            response?.opciones?.condiciones_pago || [],
+        },
+      });
+
+    } catch (err) {
+      console.error(
+        "Error cargando dashboard VW_VN:",
+        err,
+      );
+
+      setErrorDashboard(
+        err?.message ||
+          "No se pudo cargar el dashboard de Autos Nuevos."
+      );
+
+    } finally {
+      setLoadingDashboard(false);
+    }
+  }
 
   // ==========================================================
   // CARGA DE DATOS
@@ -259,12 +448,15 @@ export default function VentasVN() {
         page_size: pageSize,
 
         q: filtros.q,
+
         agencia: filtros.agencia,
         asesor: filtros.asesor,
+        familia: filtros.familia,
+        condicion_pago: filtros.condicion_pago,
 
         fecha_desde: filtros.fecha_desde,
         fecha_hasta: filtros.fecha_hasta,
-      });
+        });
 
 
       // Consultamos el endpoint Django.
@@ -337,6 +529,9 @@ export default function VentasVN() {
     filtros,
   ]);
 
+  useEffect(() => {
+    cargarDashboard();
+  }, [filtros]);
 
   // ==========================================================
   // PAGINACIÓN
@@ -348,7 +543,6 @@ export default function VentasVN() {
       Math.ceil(total / pageSize),
     );
   }, [total, pageSize]);
-
 
   // ==========================================================
   // FILTROS
@@ -384,6 +578,94 @@ export default function VentasVN() {
     (value) => String(value || "").trim(),
   );
 
+  // ========================================================
+  // DATOS PREPARADOS PARA RECHARTS
+  // ========================================================
+
+  const datosMes = useMemo(() => {
+    return (dashboard.graficas.por_mes || []).map((item) => ({
+      ...item,
+
+      etiqueta: etiquetaMes(item),
+
+      productos: numero(item.productos),
+
+      unidades_vendidas:
+        numero(item.unidades_vendidas),
+
+      ingresos:
+        numero(item.ingresos),
+
+      costo:
+        numero(item.costo),
+    }));
+  }, [dashboard.graficas.por_mes]);
+
+
+  // Mostramos los 10 asesores con más unidades vendidas.
+  const topAsesores = useMemo(() => {
+    return [...(dashboard.graficas.por_asesor || [])]
+      .map((item) => ({
+        ...item,
+        unidades_vendidas:
+          numero(item.unidades_vendidas),
+        ingresos:
+          numero(item.ingresos),
+        costo:
+          numero(item.costo),
+      }))
+      .sort(
+        (a, b) =>
+          b.unidades_vendidas -
+          a.unidades_vendidas
+      )
+      .slice(0, 10);
+  }, [dashboard.graficas.por_asesor]);
+
+
+  // Familias/modelos con más unidades vendidas.
+  const topFamilias = useMemo(() => {
+    return [...(dashboard.graficas.por_familia || [])]
+      .map((item) => ({
+        ...item,
+        unidades_vendidas:
+          numero(item.unidades_vendidas),
+        ingresos:
+          numero(item.ingresos),
+        costo:
+          numero(item.costo),
+      }))
+      .sort(
+        (a, b) =>
+          b.unidades_vendidas -
+          a.unidades_vendidas
+      )
+      .slice(0, 10);
+  }, [dashboard.graficas.por_familia]);
+
+
+  const condicionesPago = useMemo(() => {
+    return [...(dashboard.graficas.por_condicion_pago || [])]
+      .map((item) => ({
+        ...item,
+        unidades_vendidas:
+          numero(item.unidades_vendidas),
+      }))
+      .sort(
+        (a, b) =>
+          b.unidades_vendidas -
+          a.unidades_vendidas
+      )
+      .slice(0, 8);
+  }, [dashboard.graficas.por_condicion_pago]);
+
+  const totalCondicionesPago = useMemo(() => {
+  return condicionesPago.reduce(
+    (total, item) =>
+      total + numero(item.unidades_vendidas),
+    0
+  );
+}, [condicionesPago]);
 
   // ==========================================================
   // RENDER
@@ -424,7 +706,7 @@ export default function VentasVN() {
                   color: C.navy,
                 }}
               >
-                Ventas VN
+                Autos Nuevos
               </h1>
 
               <p
@@ -433,7 +715,7 @@ export default function VentasVN() {
                   color: C.muted,
                 }}
               >
-                Consulta de información VW_VN
+                Dashboard comercial Volkswagen
               </p>
             </div>
 
@@ -450,8 +732,11 @@ export default function VentasVN() {
 
           <button
             type="button"
-            onClick={cargarDatos}
-            disabled={loading}
+            onClick={() => {
+            cargarDatos();
+            cargarDashboard();
+            }}
+            disabled={loading || loadingDashboard}
             className="
               inline-flex
               items-center
@@ -473,10 +758,10 @@ export default function VentasVN() {
             }}
           >
 
-            {loading ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" />
+            {loading || loadingDashboard ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" />
             ) : (
-              <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" />
             )}
 
             Actualizar
@@ -489,37 +774,291 @@ export default function VentasVN() {
 
       <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
 
+{/* ==================================================
+    VISTAS
+================================================== */}
+
+<div
+  className="
+    flex
+    items-center
+    justify-between
+    rounded-2xl
+    border
+    bg-white
+    px-4
+    py-3
+    shadow-sm
+  "
+  style={{
+    borderColor: C.border,
+  }}
+>
+  <div className="flex items-center gap-2">
+
+    <button
+      type="button"
+      onClick={() =>
+        setVistaActiva("dashboard")
+      }
+      className="
+        rounded-xl
+        border
+        px-5
+        py-2
+        text-sm
+        font-bold
+        transition
+      "
+      style={{
+        borderColor: C.navy,
+        backgroundColor:
+          vistaActiva === "dashboard"
+            ? C.navy
+            : "#FFFFFF",
+        color:
+          vistaActiva === "dashboard"
+            ? "#FFFFFF"
+            : C.navy,
+      }}
+    >
+      Dashboard
+    </button>
+
+
+    <button
+      type="button"
+      onClick={() =>
+        setVistaActiva("detalle")
+      }
+      className="
+        rounded-xl
+        border
+        px-5
+        py-2
+        text-sm
+        font-bold
+        transition
+      "
+      style={{
+        borderColor: C.navy,
+        backgroundColor:
+          vistaActiva === "detalle"
+            ? C.navy
+            : "#FFFFFF",
+        color:
+          vistaActiva === "detalle"
+            ? "#FFFFFF"
+            : C.navy,
+      }}
+    >
+      Detalle
+    </button>
+
+  </div>
+
+  <p className="hidden text-xs text-slate-400 md:block">
+    Información comercial de Autos Nuevos
+  </p>
+
+</div>
+
 
         {/* ==================================================
             TARJETAS
         ================================================== */}
 
-        <div className="grid gap-4 md:grid-cols-4">
+        {vistaActiva === "dashboard" && (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
-          <StatCard
-            label="Registros encontrados"
-            value={total.toLocaleString("es-MX")}
-            icon={Database}
-          />
+                <StatCard
+                label="Unidades vendidas"
+                value={
+                    loadingDashboard
+                    ? "..."
+                    : dashboard.totales.unidades_vendidas.toLocaleString(
+                        "es-MX"
+                        )
+                }
+                icon={Database}
+                />
 
-          <StatCard
-            label="Página actual"
-            value={`${pagina} / ${totalPaginas}`}
-          />
+                <StatCard
+                label="Ingresos"
+                value={
+                    loadingDashboard
+                    ? "..."
+                    : money(dashboard.totales.ingresos)
+                }
+                />
 
-          <StatCard
-            label="Registros visibles"
-            value={registros.length}
-          />
+                <StatCard
+                label="Costo"
+                value={
+                    loadingDashboard
+                    ? "..."
+                    : money(dashboard.totales.costo)
+                }
+                />
 
-          <StatCard
-            label="Registros por página"
-            value={pageSize}
-          />
+                <StatCard
+                label="Productos / operaciones"
+                value={
+                    loadingDashboard
+                    ? "..."
+                    : dashboard.totales.productos.toLocaleString(
+                        "es-MX"
+                        )
+                }
+                />
 
-        </div>
+            </div>
+            )}
+
+{/* =====================================================
+    SELECTOR DE AGENCIA
+===================================================== */}
+
+<div
+  className="
+    rounded-2xl
+    border
+    bg-white
+    px-4
+    py-4
+    shadow-sm
+  "
+  style={{
+    borderColor: C.border,
+  }}
+>
+  <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+
+    <div className="shrink-0">
+      <p
+        className="text-[11px] font-semibold uppercase tracking-widest"
+        style={{
+          color: C.muted,
+        }}
+      >
+        Agencia
+      </p>
+
+      <p
+        className="text-sm font-bold"
+        style={{
+          color: C.text,
+        }}
+      >
+        Filtrar resultados
+      </p>
+    </div>
 
 
+    <div className="flex flex-1 flex-wrap gap-2 lg:justify-end">
+
+      {/* TODAS LAS AGENCIAS */}
+
+      <button
+        type="button"
+        onClick={() => {
+          setPagina(1);
+
+          setFiltrosDraft((prev) => ({
+            ...prev,
+            agencia: "",
+          }));
+
+          setFiltros((prev) => ({
+            ...prev,
+            agencia: "",
+          }));
+        }}
+        className="
+          rounded-xl
+          border
+          px-4
+          py-2
+          text-xs
+          font-bold
+          transition
+        "
+        style={{
+          borderColor: C.navy,
+
+          backgroundColor:
+            !filtros.agencia
+              ? C.navy
+              : "#FFFFFF",
+
+          color:
+            !filtros.agencia
+              ? "#FFFFFF"
+              : C.navy,
+        }}
+      >
+        Todas
+      </button>
+
+
+      {/* AGENCIAS TRAÍDAS DIRECTAMENTE DE VW_VN */}
+
+      {dashboard.opciones.agencias.map(
+        (agencia) => {
+
+          const activa =
+            filtros.agencia === agencia;
+
+          return (
+            <button
+              key={agencia}
+              type="button"
+              onClick={() => {
+                setPagina(1);
+
+                setFiltrosDraft((prev) => ({
+                  ...prev,
+                  agencia,
+                }));
+
+                setFiltros((prev) => ({
+                  ...prev,
+                  agencia,
+                }));
+              }}
+              className="
+                rounded-xl
+                border
+                px-4
+                py-2
+                text-xs
+                font-bold
+                transition
+              "
+              style={{
+                borderColor: C.navy,
+
+                backgroundColor:
+                  activa
+                    ? C.navy
+                    : "#FFFFFF",
+
+                color:
+                  activa
+                    ? "#FFFFFF"
+                    : C.navy,
+              }}
+            >
+              {agencia}
+            </button>
+          );
+        }
+      )}
+
+    </div>
+
+  </div>
+</div>
         {/* ==================================================
             FILTROS
         ================================================== */}
@@ -559,7 +1098,7 @@ export default function VentasVN() {
           </div>
 
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
 
 
             {/* BÚSQUEDA GENERAL */}
@@ -609,38 +1148,93 @@ export default function VentasVN() {
 
             </div>
 
+            {/* FAMILIA / MODELO */}
 
-            {/* AGENCIA */}
-
-            <input
-              type="text"
-              value={filtrosDraft.agencia}
-              onChange={(e) =>
+            <select
+            value={filtrosDraft.familia}
+            onChange={(e) =>
                 cambiarFiltro(
-                  "agencia",
-                  e.target.value,
+                "familia",
+                e.target.value,
                 )
-              }
-              placeholder="Agencia"
-              className={inputClass}
-            />
+            }
+            className={inputClass}
+            >
+            <option value="">
+                Todas las familias
+            </option>
 
+            {dashboard.opciones.familias.map(
+                (familia) => (
+                <option
+                    key={familia}
+                    value={familia}
+                >
+                    {familia}
+                </option>
+                )
+            )}
+
+            </select>
+
+
+            {/* CONDICIÓN DE PAGO */}
+
+            <select
+            value={filtrosDraft.condicion_pago}
+            onChange={(e) =>
+                cambiarFiltro(
+                "condicion_pago",
+                e.target.value,
+                )
+            }
+            className={inputClass}
+            >
+            <option value="">
+                Todas las condiciones de pago
+            </option>
+
+            {dashboard.opciones.condiciones_pago.map(
+                (condicion) => (
+                <option
+                    key={condicion}
+                    value={condicion}
+                >
+                    {condicion}
+                </option>
+                )
+            )}
+
+            </select>
 
             {/* ASESOR */}
 
-            <input
-              type="text"
-              value={filtrosDraft.asesor}
-              onChange={(e) =>
+                <select
+            value={filtrosDraft.asesor}
+            onChange={(e) =>
                 cambiarFiltro(
-                  "asesor",
-                  e.target.value,
+                "asesor",
+                e.target.value,
                 )
-              }
-              placeholder="Asesor"
-              className={inputClass}
-            />
+            }
+            className={inputClass}
+            >
+            <option value="">
+                Todos los asesores
+            </option>
 
+            {dashboard.opciones.asesores.map(
+                (asesor) => (
+                <option
+                    key={asesor}
+                    value={asesor}
+                >
+                    {asesor}
+                </option>
+                )
+            )}
+
+            </select>
 
             {/* FECHA DESDE */}
 
@@ -727,11 +1321,367 @@ export default function VentasVN() {
 
         </form>
 
+{/* =====================================================
+    DASHBOARD DE GRÁFICAS
+===================================================== */}
+{vistaActiva === "dashboard" && (
+    <div className="grid gap-5 xl:grid-cols-2">
 
+  {/* ===================================================
+      1. INGRESOS Y COSTO POR MES
+  =================================================== */}
+
+  <ChartCard
+    title="Ingresos y costo por mes"
+    subtitle="Evolución mensual según DtEmissao"
+  >
+    <div className="h-[340px]">
+
+      {loadingDashboard ? (
+        <ChartLoading />
+      ) : datosMes.length === 0 ? (
+        <ChartEmpty />
+      ) : (
+        <ResponsiveContainer
+          width="100%"
+          height="100%"
+        >
+          <LineChart
+            data={datosMes}
+            margin={{
+              top: 10,
+              right: 20,
+              bottom: 10,
+              left: 10,
+            }}
+          >
+
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#E4E7F0"
+            />
+
+            <XAxis
+              dataKey="etiqueta"
+              tick={{
+                fontSize: 11,
+                fill: "#8891AD",
+              }}
+            />
+
+            <YAxis
+              tickFormatter={formatoCompacto}
+              tick={{
+                fontSize: 11,
+                fill: "#8891AD",
+              }}
+              width={65}
+            />
+            <Tooltip
+            formatter={(value, name) => [
+                money(value),
+                name,
+            ]}
+            />
+
+            <Legend />
+
+            <Line
+              type="monotone"
+              dataKey="ingresos"
+              name="Ingresos"
+              stroke="#131E5C"
+              strokeWidth={3}
+              dot={{
+                r: 3,
+              }}
+              activeDot={{
+                r: 5,
+              }}
+            />
+
+            <Line
+              type="monotone"
+              dataKey="costo"
+              name="Costo"
+              stroke="#6681D4"
+              strokeWidth={3}
+              dot={{
+                r: 3,
+              }}
+            />
+
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+
+    </div>
+  </ChartCard>
+
+
+  {/* ===================================================
+      2. UNIDADES POR ASESOR
+  =================================================== */}
+
+  <ChartCard
+    title="Unidades vendidas por asesor"
+    subtitle="Top 10 asesores por unidades"
+  >
+    <div className="h-[340px]">
+
+      {loadingDashboard ? (
+        <ChartLoading />
+      ) : topAsesores.length === 0 ? (
+        <ChartEmpty />
+      ) : (
+        <ResponsiveContainer
+          width="100%"
+          height="100%"
+        >
+          <BarChart
+            data={topAsesores}
+            layout="vertical"
+            margin={{
+              top: 5,
+              right: 25,
+              left: 20,
+              bottom: 5,
+            }}
+          >
+
+            <CartesianGrid
+              strokeDasharray="3 3"
+              horizontal={false}
+              stroke="#E4E7F0"
+            />
+
+            <XAxis
+              type="number"
+              allowDecimals={false}
+              tick={{
+                fontSize: 11,
+                fill: "#8891AD",
+              }}
+            />
+
+            <YAxis
+              type="category"
+              dataKey="asesor"
+              width={130}
+              tick={{
+                fontSize: 10,
+                fill: "#515778",
+              }}
+            />
+
+            <Tooltip
+              formatter={(value) => [
+                formatoNumero(value),
+                "Unidades vendidas",
+              ]}
+            />
+
+            <Bar
+              dataKey="unidades_vendidas"
+              name="Unidades vendidas"
+              fill="#131E5C"
+              radius={[0, 6, 6, 0]}
+            />
+
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+
+    </div>
+  </ChartCard>
+
+
+  {/* ===================================================
+      3. UNIDADES POR FAMILIA / MODELO
+  =================================================== */}
+
+  <ChartCard
+    title="Unidades por familia"
+    subtitle="Modelos con mayor número de unidades vendidas"
+  >
+    <div className="h-[340px]">
+
+      {loadingDashboard ? (
+        <ChartLoading />
+      ) : topFamilias.length === 0 ? (
+        <ChartEmpty />
+      ) : (
+        <ResponsiveContainer
+          width="100%"
+          height="100%"
+        >
+        <BarChart
+        data={topFamilias}
+        layout="vertical"
+        margin={{
+            top: 5,
+            right: 25,
+            left: 35,
+            bottom: 5,
+        }}
+        >
+
+        <CartesianGrid
+            strokeDasharray="3 3"
+            horizontal={false}
+            stroke="#E4E7F0"
+        />
+
+        <XAxis
+            type="number"
+            allowDecimals={false}
+            tick={{
+            fontSize: 11,
+            fill: "#8891AD",
+            }}
+        />
+
+        <YAxis
+            type="category"
+            dataKey="familia"
+            width={155}
+            tick={{
+            fontSize: 10,
+            fill: "#515778",
+            }}
+        />
+
+        <Tooltip
+            formatter={(value) => [
+            formatoNumero(value),
+            "Unidades vendidas",
+            ]}
+        />
+
+        <Bar
+            dataKey="unidades_vendidas"
+            name="Unidades vendidas"
+            fill="#2445A2"
+            radius={[0, 6, 6, 0]}
+        />
+
+        </BarChart>
+        </ResponsiveContainer>
+      )}
+
+    </div>
+  </ChartCard>
+
+
+  {/* ===================================================
+      4. CONDICIÓN DE PAGO
+  =================================================== */}
+
+  <ChartCard
+    title="Condición de pago"
+    subtitle="Distribución de unidades vendidas por NmCondPgto"
+  >
+    <div className="relative h-[340px]">
+
+      {loadingDashboard ? (
+        <ChartLoading />
+      ) : condicionesPago.length === 0 ? (
+        <ChartEmpty />
+      ) : (
+        <ResponsiveContainer
+          width="100%"
+          height="100%"
+        >
+          <PieChart>
+
+            <Pie
+              data={condicionesPago}
+              dataKey="unidades_vendidas"
+              nameKey="condicion_pago"
+              cx="50%"
+              cy="43%"
+              innerRadius={72}
+              outerRadius={110}
+              paddingAngle={2}
+            >
+
+              {condicionesPago.map(
+                (item, index) => (
+                  <Cell
+                    key={`${item.condicion_pago}-${index}`}
+                    fill={
+                      PIE_COLORS[
+                        index %
+                          PIE_COLORS.length
+                      ]
+                    }
+                  />
+                )
+              )}
+
+            </Pie>
+
+            <Tooltip
+              formatter={(value, name) => [
+                `${formatoNumero(value)} unidades`,
+                name,
+              ]}
+            />
+
+            <Legend
+              verticalAlign="bottom"
+              wrapperStyle={{
+                fontSize: 11,
+              }}
+            />
+
+          </PieChart>
+        </ResponsiveContainer>
+      )}
+    {!loadingDashboard && condicionesPago.length > 0 && (
+    <div
+        className="
+        pointer-events-none
+        absolute
+        left-1/2
+        top-[43%]
+        -translate-x-1/2
+        -translate-y-1/2
+        text-center
+        "
+    >
+        <p className="text-2xl font-bold text-[#131E5C]">
+        {formatoNumero(totalCondicionesPago)}
+        </p>
+
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8891AD]">
+        Unidades
+        </p>
+    </div>
+    )}
+    </div>
+  </ChartCard>
+
+</div>
+)}
         {/* ==================================================
             ERROR
         ================================================== */}
-
+        {errorDashboard && (
+        <div className="
+            rounded-xl
+            border
+            border-red-200
+            bg-red-50
+            px-4
+            py-3
+            text-sm
+            font-medium
+            text-red-700
+        ">
+            {errorDashboard}
+        </div>
+        )}
         {error && (
           <div className="
             rounded-xl
@@ -752,7 +1702,7 @@ export default function VentasVN() {
         {/* ==================================================
             TABLA
         ================================================== */}
-
+        {vistaActiva === "detalle" && (
         <div
           className="
             overflow-hidden
@@ -959,8 +1909,6 @@ export default function VentasVN() {
             </table>
 
           </div>
-
-
           {/* ==================================================
               PAGINACIÓN
           ================================================== */}
@@ -1095,15 +2043,13 @@ export default function VentasVN() {
             </div>
 
           </div>
-
         </div>
+      )}
 
       </main>
     </div>
   );
 }
-
-
 // ==========================================================
 // COMPONENTES PEQUEÑOS
 // ==========================================================
@@ -1178,6 +2124,133 @@ function StatCard({
   );
 }
 
+// ==========================================================
+// TARJETA PARA GRÁFICAS
+// ==========================================================
+
+function ChartCard({
+  title,
+  subtitle,
+  children,
+}) {
+  return (
+    <section
+      className="
+        overflow-hidden
+        rounded-2xl
+        border
+        border-[#E4E7F0]
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div className="
+        border-b
+        border-[#E4E7F0]
+        px-5
+        py-4
+      ">
+
+        <h3 className="
+          text-sm
+          font-bold
+          text-[#1A1F3C]
+        ">
+          {title}
+        </h3>
+
+        {subtitle && (
+          <p className="
+            mt-1
+            text-xs
+            text-[#8891AD]
+          ">
+            {subtitle}
+          </p>
+        )}
+
+      </div>
+
+      <div className="p-4">
+        {children}
+      </div>
+
+    </section>
+  );
+}
+
+
+// ==========================================================
+// CARGANDO GRÁFICA
+// ==========================================================
+
+function ChartLoading() {
+  return (
+    <div className="
+      flex
+      h-full
+      items-center
+      justify-center
+    ">
+      <div className="
+        flex
+        items-center
+        gap-2
+        text-sm
+        font-medium
+        text-[#8891AD]
+      ">
+        <LoaderCircle className="h-4 w-4 animate-spin" />
+
+        Cargando información...
+      </div>
+    </div>
+  );
+}
+
+
+// ==========================================================
+// SIN DATOS
+// ==========================================================
+
+function ChartEmpty() {
+  return (
+    <div className="
+      flex
+      h-full
+      flex-col
+      items-center
+      justify-center
+      text-center
+    ">
+
+      <Database className="
+        h-7
+        w-7
+        text-[#C8CEDF]
+      " />
+
+      <p className="
+        mt-2
+        text-sm
+        font-semibold
+        text-[#515778]
+      ">
+        Sin información
+      </p>
+
+      <p className="
+        mt-1
+        text-xs
+        text-[#8891AD]
+      ">
+        No existen datos para los filtros seleccionados.
+      </p>
+
+    </div>
+  );
+}
 
 const inputClass = `
   h-10
