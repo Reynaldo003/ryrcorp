@@ -1,3 +1,4 @@
+// src/lib/apiGestionInversion.js
 import { buildQuery, http } from "./apiClient";
 
 const BASE_URL = "/gestion_inversion/api";
@@ -11,10 +12,7 @@ function unwrapData(response) {
 }
 
 function requireId(id, mensaje = "Falta el ID solicitado.") {
-  if (id !== undefined && id !== null && String(id).trim() !== "") {
-    return;
-  }
-
+  if (id !== undefined && id !== null && String(id).trim() !== "") return;
   throw new Error(mensaje);
 }
 
@@ -27,6 +25,8 @@ export const apiAnalisisFacturas = {
     q = "",
     clasificacion = "",
     sitio = "",
+    dealer = "",
+    departamento = "",
     estado = "",
   } = {}) => {
     const response = await http(
@@ -34,6 +34,8 @@ export const apiAnalisisFacturas = {
         q,
         clasificacion,
         sitio,
+        dealer,
+        departamento,
         estado,
       })}`,
       authOptions,
@@ -53,7 +55,22 @@ export const apiAnalisisFacturas = {
     return unwrapData(response);
   },
 
-  analizar: async (archivo) => {
+  updateAsignacion: async (facturaId, payload = {}) => {
+    requireId(facturaId, "Falta el ID de la factura.");
+
+    const response = await http(
+      `${BASE_URL}/facturas/${encodeURIComponent(facturaId)}/asignacion/`,
+      {
+        ...authOptions,
+        method: "PATCH",
+        data: payload,
+      },
+    );
+
+    return unwrapData(response);
+  },
+
+  analizar: async (archivo, dealer = "", departamento = "") => {
     if (!(archivo instanceof File)) {
       throw new Error("Selecciona un archivo PDF válido.");
     }
@@ -62,6 +79,13 @@ export const apiAnalisisFacturas = {
 
     formData.set("archivo", archivo);
 
+    if (dealer) {
+      formData.set("dealer", dealer);
+    }
+
+    if (departamento) {
+      formData.set("departamento", departamento);
+    }
     const response = await http(`${BASE_URL}/facturas/analizar/`, {
       ...authOptions,
       method: "POST",
@@ -75,7 +99,7 @@ export const apiAnalisisFacturas = {
     requireId(facturaId, "Falta el ID de la factura.");
 
     const response = await http(
-      `${BASE_URL}/facturas/${encodeURIComponent(facturaId)}/reanalisar/`,
+      `${BASE_URL}/facturas/${encodeURIComponent(facturaId)}/reanalizar/`,
       {
         ...authOptions,
         method: "POST",
