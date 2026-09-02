@@ -1,8 +1,8 @@
-// src/pages/VentasVN/VentasVN.jsx
+﻿// src/pages/VentasVN/VentasVN.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
-  BarChart3, Car, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  CircleDollarSign, Database, Filter, LoaderCircle, RefreshCw, Search,
+  ArrowDown, ArrowUp, BarChart3, CalendarDays, Car, CreditCard, Eraser,
+  CircleDollarSign, Database, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Tags, User,
   Table2, TrendingUp, WalletCards, X,
 } from "lucide-react";
 import {
@@ -11,12 +11,15 @@ import {
 } from "recharts";
 import { http, buildQuery } from "../../lib/apiClient";
 import { getVentasVNDashboard } from "../../lib/apiVentasVN";
+import InteractiveTable from "../VentasVN/InteractiveTable";
 
 const C = {
   navy: "#131E5C", navyDark: "#0A1340", navyMid: "#2445A2", navyLight: "#6681D4",
   surface: "#F7F8FC", border: "#E4E7F0", borderMd: "#C8CEDF", muted: "#8891AD",
   text: "#1A1F3C", textSub: "#515778", success: "#059669", successBg: "#ECFDF5",
 };
+
+function cn(...parts) { return parts.filter(Boolean).join(" "); }
 
 const COLUMNAS = [
   { key: "serie", label: "Serie" },
@@ -65,7 +68,6 @@ const PRESETS_FECHA = [
 ];
 const TOOLTIP_STYLE = { border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 12px 30px rgba(19,30,92,.12)", fontSize: 12 };
 const inputClass = "h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10";
-const paginationButton = "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E4E7F0] bg-white text-[#515778] transition hover:bg-[#F7F8FC] disabled:cursor-not-allowed disabled:opacity-40";
 
 function numero(value) { return Number(value || 0); }
 function formatoNumero(value) { return numero(value).toLocaleString("es-MX"); }
@@ -75,19 +77,6 @@ function money(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return value;
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
-}
-function formatDate(value) {
-  if (!value) return "—";
-  const partes = String(value).split("-");
-  if (partes.length !== 3) return value;
-  const [year, month, day] = partes;
-  return `${day}/${month}/${year}`;
-}
-function formatCell(value, tipo) {
-  if (value === null || value === undefined || value === "") return "—";
-  if (tipo === "moneda") return money(value);
-  if (tipo === "fecha") return formatDate(value);
-  return String(value);
 }
 function etiquetaMes(item) {
   const mes = Number(item?.mes || 0);
@@ -156,8 +145,6 @@ export default function VentasVN() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [vistaActiva, setVistaActiva] = useState("detalle");
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [filtrosDraft, setFiltrosDraft] = useState(FILTROS_INICIALES);
   const [filtros, setFiltros] = useState(FILTROS_INICIALES);
 
   async function cargarDashboard() {
@@ -214,7 +201,6 @@ export default function VentasVN() {
 
   const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
   const hayFiltros = Object.values(filtros).some((value) => String(value || "").trim());
-  const cantidadFiltrosActivos = useMemo(() => Object.entries(filtros).filter(([, value]) => String(value || "").trim()).length, [filtros]);
   const rangoActual = useMemo(() => formatoRango(filtros.fecha_desde, filtros.fecha_hasta), [filtros.fecha_desde, filtros.fecha_hasta]);
   const presetFechaActivo = useMemo(() => {
     const match = PRESETS_FECHA.find((preset) => {
@@ -246,26 +232,21 @@ export default function VentasVN() {
 
   const totalCondicionesPago = useMemo(() => condicionesPago.reduce((acc, item) => acc + numero(item.unidades_vendidas), 0), [condicionesPago]);
 
-  function cambiarFiltro(campo, value) { setFiltrosDraft((prev) => ({ ...prev, [campo]: value })); }
-  function aplicarFiltros(event) {
-    event?.preventDefault();
+  function cambiarFiltro(campo, value) {
     setPagina(1);
-    setFiltros({ ...filtrosDraft });
+    setFiltros((prev) => ({ ...prev, [campo]: value }));
   }
   function limpiarFiltros() {
-    setFiltrosDraft(FILTROS_INICIALES);
     setFiltros(FILTROS_INICIALES);
     setPagina(1);
   }
   function aplicarAgencia(agencia) {
     setPagina(1);
-    setFiltrosDraft((prev) => ({ ...prev, agencia }));
     setFiltros((prev) => ({ ...prev, agencia }));
   }
   function aplicarRangoRapido(id) {
     const rango = obtenerRangoPreset(id);
     setPagina(1);
-    setFiltrosDraft((prev) => ({ ...prev, ...rango }));
     setFiltros((prev) => ({ ...prev, ...rango }));
   }
   function actualizarTodo() { cargarDatos(); cargarDashboard(); }
@@ -292,91 +273,132 @@ export default function VentasVN() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5">
-            <KPICard icon={Car} label="Unidades vendidas" value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.unidades_vendidas)} sub={`${formatoNumero(dashboard.totales.productos)} operaciones`} />
-            <KPICard icon={CircleDollarSign} label="Ingresos" value={loadingDashboard ? "—" : money(dashboard.totales.ingresos)} sub={rangoActual} iconColor="text-emerald-700" subColor="text-emerald-600" />
-            <KPICard icon={WalletCards} label="Costo" value={loadingDashboard ? "—" : money(dashboard.totales.costo)} sub="Costo acumulado" iconColor="text-amber-700" />
-            <KPICard icon={TrendingUp} label="Utilidad estimada" value={loadingDashboard ? "—" : money(utilidad)} sub={`Margen ${margen.toFixed(1)}%`} iconColor={utilidad >= 0 ? "text-sky-700" : "text-red-600"} subColor={utilidad >= 0 ? "text-sky-600" : "text-red-500"} />
-            <KPICard icon={Database} label="Operaciones" value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.productos)} sub={filtros.agencia || "Todas las agencias"} iconColor="text-violet-700" subColor="text-violet-600" />
-          </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <KPICard
+            icon={Car}
+            label="Unidades vendidas"
+            value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.unidades_vendidas)}
+            sub={`${formatoNumero(dashboard.totales.productos)} operaciones`}
+            accent="#059669"
+            spark={datosMes.map((d) => d.unidades_vendidas)}
+          />
+          <KPICard
+            icon={CircleDollarSign}
+            label="Ingresos"
+            value={loadingDashboard ? "—" : money(dashboard.totales.ingresos)}
+            sub={rangoActual}
+            accent="#0EA5E9"
+            spark={datosMes.map((d) => d.ingresos)}
+          />
+          <KPICard
+            icon={WalletCards}
+            label="Costo"
+            value={loadingDashboard ? "—" : money(dashboard.totales.costo)}
+            sub="Costo acumulado"
+            accent="#F59E0B"
+            spark={datosMes.map((d) => d.costo)}
+          />
+          <KPICard
+            icon={TrendingUp}
+            label="Utilidad estimada"
+            value={loadingDashboard ? "—" : money(utilidad)}
+            sub={`Margen ${margen.toFixed(1)}%`}
+            accent={utilidad >= 0 ? "#0EA5E9" : "#EF4444"}
+            spark={datosMes.map((d) => d.utilidad)}
+          />
+          <KPICard
+            icon={Database}
+            label="Operaciones"
+            value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.productos)}
+            sub={filtros.agencia || "Todas las agencias"}
+            accent="#8B5CF6"
+            spark={datosMes.map((d) => d.productos)}
+          />
         </div>
 
         <div className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-md">
           <FilterButtonGroup label="Dealer" value={filtros.agencia || "Todos"} options={["Todos", ...dashboard.opciones.agencias]} onChange={(value) => aplicarAgencia(value === "Todos" ? "" : value)} />
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm">
-          <div className="p-3">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
+        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: "#E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.06)" }}>
+          {/* Header */}
+          <div className="relative flex items-center justify-between gap-3 px-4 py-3.5 text-white" style={{ background: "linear-gradient(135deg, #131E5C 0%, #0A1340 100%)" }}>
+            <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/5" />
+            <div className="relative flex items-center gap-2.5">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
+                <SlidersHorizontal className="h-[18px] w-[18px]" />
+              </span>
+              <div>
+                <h2 className="text-sm font-black tracking-wide">Filtros</h2>
+                <p className="text-[11px] font-medium text-white/60">Se aplican al instante al elegir una opción</p>
+              </div>
+            </div>
+            <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="relative inline-flex h-9 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-[11px] font-bold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10">
+              <Eraser className="h-3.5 w-3.5" />Limpiar
+            </button>
+          </div>
+
+          <div className="space-y-4 p-4">
+            {/* Búsqueda + rango rápido */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
               <div className="relative min-w-0 flex-1">
-                <label className="mb-1 block text-[11px] font-black uppercase tracking-wide text-[#131E5C]/50">Búsqueda</label>
-                <Search className="pointer-events-none absolute left-3 top-[31px] h-4 w-4 text-[#131E5C]/60" />
-                <input type="text" value={filtrosDraft.q} onChange={(e) => cambiarFiltro("q", e.target.value)} placeholder="Serie, cliente, modelo..." className="h-10 w-full rounded-xl border border-[#131E5C]/15 bg-slate-50 pl-10 pr-9 text-sm font-semibold text-[#131E5C] outline-none transition placeholder:text-slate-400 focus:border-[#131E5C]/40 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10" />
-                {filtrosDraft.q ? <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-[29px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button> : null}
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Buscar</label>
+                <Search className="pointer-events-none absolute left-3 top-[37px] h-4 w-4 text-[#8891AD]" />
+                <input type="text" value={filtros.q} onChange={(e) => cambiarFiltro("q", e.target.value)} placeholder="Serie, cliente, modelo..." className="h-11 w-full rounded-xl border border-[#E4E7F0] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10" />
+                {filtros.q ? <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button> : null}
               </div>
 
               <div className="flex flex-wrap items-end gap-1.5">
                 {[
-                  { id: "hoy", label: "Hoy", inactive: "border-emerald-200 bg-emerald-100 text-emerald-700 hover:bg-emerald-200", active: "bg-emerald-600 text-white ring-4 ring-emerald-100" },
-                  { id: "ayer", label: "Ayer", inactive: "border-amber-200 bg-amber-100 text-amber-700 hover:bg-amber-200", active: "bg-amber-500 text-white ring-4 ring-amber-100" },
-                  { id: "esta_semana", label: "Semana", inactive: "border-sky-200 bg-sky-100 text-sky-700 hover:bg-sky-200", active: "bg-sky-600 text-white ring-4 ring-sky-100" },
-                  { id: "ultimos_7", label: "7 días", inactive: "border-violet-200 bg-violet-100 text-violet-700 hover:bg-violet-200", active: "bg-violet-600 text-white ring-4 ring-violet-100" },
-                  { id: "ultimos_30", label: "30 días", inactive: "border-indigo-200 bg-indigo-100 text-indigo-700 hover:bg-indigo-200", active: "bg-indigo-600 text-white ring-4 ring-indigo-100" },
-                  { id: "mes_actual", label: "Este mes", inactive: "border-[#131E5C]/20 bg-blue-100 text-[#131E5C] hover:bg-blue-200", active: "bg-[#131E5C] text-white ring-4 ring-[#131E5C]/10" },
-                  { id: "mes_anterior", label: "Mes anterior", inactive: "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200", active: "bg-slate-700 text-white ring-4 ring-slate-100" },
+                  { id: "hoy", label: "Hoy", inactive: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100", active: "bg-emerald-600 text-white ring-4 ring-emerald-100" },
+                  { id: "ayer", label: "Ayer", inactive: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100", active: "bg-amber-500 text-white ring-4 ring-amber-100" },
+                  { id: "esta_semana", label: "Semana", inactive: "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100", active: "bg-sky-600 text-white ring-4 ring-sky-100" },
+                  { id: "ultimos_7", label: "7 días", inactive: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100", active: "bg-violet-600 text-white ring-4 ring-violet-100" },
+                  { id: "ultimos_30", label: "30 días", inactive: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100", active: "bg-indigo-600 text-white ring-4 ring-indigo-100" },
+                  { id: "mes_actual", label: "Este mes", inactive: "border-[#131E5C]/20 bg-blue-50 text-[#131E5C] hover:bg-blue-100", active: "bg-[#131E5C] text-white ring-4 ring-[#131E5C]/10" },
+                  { id: "mes_anterior", label: "Mes anterior", inactive: "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100", active: "bg-slate-700 text-white ring-4 ring-slate-100" },
                 ].map(({ id, label, inactive, active }) => (
-                  <button key={id} type="button" onClick={() => aplicarRangoRapido(id)} className={`h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 text-xs font-black shadow-sm transition active:scale-[0.98] ${presetFechaActivo === id ? active : inactive}`}>{label}</button>
+                  <button key={id} type="button" onClick={() => aplicarRangoRapido(id)} className={`h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 text-xs font-bold shadow-sm transition active:scale-[0.97] ${presetFechaActivo === id ? active : inactive}`}>{label}</button>
                 ))}
-                <button type="button" onClick={() => setShowAdvancedFilters((prev) => !prev)} className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-black shadow-sm transition ${showAdvancedFilters || cantidadFiltrosActivos > 2 ? "bg-[#131E5C] text-white" : "border border-[#131E5C]/15 bg-white text-[#131E5C] hover:bg-[#131E5C]/5"}`}>
-                  Más filtros
-                  {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
               </div>
             </div>
 
-            {showAdvancedFilters && (
-              <form onSubmit={aplicarFiltros} className="mt-3 border-t border-black/[0.06] pt-3">
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <FilterField label="Familia / modelo">
-                    <select value={filtrosDraft.familia} onChange={(e) => cambiarFiltro("familia", e.target.value)} className={inputClass}>
-                      <option value="">Todas las familias</option>
-                      {dashboard.opciones.familias.map((familia) => <option key={familia} value={familia}>{familia}</option>)}
-                    </select>
-                  </FilterField>
-                  <FilterField label="Condición de pago">
-                    <select value={filtrosDraft.condicion_pago} onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)} className={inputClass}>
-                      <option value="">Todas las condiciones</option>
-                      {dashboard.opciones.condiciones_pago.map((condicion) => <option key={condicion} value={condicion}>{condicion}</option>)}
-                    </select>
-                  </FilterField>
-                  <FilterField label="Asesor">
-                    <select value={filtrosDraft.asesor} onChange={(e) => cambiarFiltro("asesor", e.target.value)} className={inputClass}>
-                      <option value="">Todos los asesores</option>
-                      {dashboard.opciones.asesores.map((asesor) => <option key={asesor} value={asesor}>{asesor}</option>)}
-                    </select>
-                  </FilterField>
-                  <FilterField label="Desde">
-                    <input type="date" value={filtrosDraft.fecha_desde} onChange={(e) => cambiarFiltro("fecha_desde", e.target.value)} className={inputClass} />
-                  </FilterField>
-                  <FilterField label="Hasta">
-                    <input type="date" value={filtrosDraft.fecha_hasta} onChange={(e) => cambiarFiltro("fecha_hasta", e.target.value)} className={inputClass} />
-                  </FilterField>
-                </div>
-                <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  {hayFiltros && <button type="button" onClick={limpiarFiltros} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"><X className="h-3.5 w-3.5" />Limpiar</button>}
-                  <button type="submit" className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#131E5C] px-4 text-xs font-bold text-white hover:bg-[#0A1340]"><Filter className="h-3.5 w-3.5" />Aplicar filtros</button>
-                </div>
-              </form>
-            )}
+            {/* Campos de filtro */}
+            <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
+              <FilterField label="Familia / modelo" icon={Tags}>
+                <select value={filtros.familia} onChange={(e) => cambiarFiltro("familia", e.target.value)} className={inputClass}>
+                  <option value="">Todas las familias</option>
+                  {dashboard.opciones.familias.map((familia) => <option key={familia} value={familia}>{familia}</option>)}
+                </select>
+              </FilterField>
+              <FilterField label="Condición de pago" icon={CreditCard}>
+                <select value={filtros.condicion_pago} onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)} className={inputClass}>
+                  <option value="">Todas las condiciones</option>
+                  {dashboard.opciones.condiciones_pago.map((condicion) => <option key={condicion} value={condicion}>{condicion}</option>)}
+                </select>
+              </FilterField>
+              <FilterField label="Asesor" icon={User}>
+                <select value={filtros.asesor} onChange={(e) => cambiarFiltro("asesor", e.target.value)} className={inputClass}>
+                  <option value="">Todos los asesores</option>
+                  {dashboard.opciones.asesores.map((asesor) => <option key={asesor} value={asesor}>{asesor}</option>)}
+                </select>
+              </FilterField>
+              <FilterField label="Desde" icon={CalendarDays}>
+                <input type="date" value={filtros.fecha_desde} onChange={(e) => cambiarFiltro("fecha_desde", e.target.value)} className={inputClass} />
+              </FilterField>
+              <FilterField label="Hasta" icon={CalendarDays}>
+                <input type="date" value={filtros.fecha_hasta} onChange={(e) => cambiarFiltro("fecha_hasta", e.target.value)} className={inputClass} />
+              </FilterField>
+            </div>
 
-            {!showAdvancedFilters && (filtros.fecha_desde || filtros.fecha_hasta || filtros.asesor || filtros.familia || filtros.condicion_pago) ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/[0.06] pt-3 text-[11px] font-semibold text-slate-500">
-                <span className="font-black uppercase tracking-wide text-[#131E5C]/50">Aplicados:</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1">{rangoActual}</span>
-                {filtros.asesor && <span className="rounded-full bg-slate-100 px-2.5 py-1">Asesor: {filtros.asesor}</span>}
-                {filtros.familia && <span className="rounded-full bg-slate-100 px-2.5 py-1">Modelo: {filtros.familia}</span>}
-                {filtros.condicion_pago && <span className="rounded-full bg-slate-100 px-2.5 py-1">Pago: {filtros.condicion_pago}</span>}
+            {/* Aplicados */}
+            {(filtros.fecha_desde || filtros.fecha_hasta || filtros.asesor || filtros.familia || filtros.condicion_pago) ? (
+              <div className="flex flex-wrap items-center gap-2 border-t border-[#E4E7F0] pt-3 text-[11px] font-semibold text-slate-500">
+                <span className="font-black uppercase tracking-wide text-[#131E5C]/60">Aplicados:</span>
+                <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]">{rangoActual}</span>
+                {filtros.asesor && <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]"><User className="mr-1 inline h-3 w-3" />{filtros.asesor}</span>}
+                {filtros.familia && <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]"><Tags className="mr-1 inline h-3 w-3" />{filtros.familia}</span>}
+                {filtros.condicion_pago && <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]"><CreditCard className="mr-1 inline h-3 w-3" />{filtros.condicion_pago}</span>}
               </div>
             ) : null}
           </div>
@@ -488,62 +510,19 @@ export default function VentasVN() {
         )}
 
         {vistaActiva === "detalle" && (
-          <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: C.border, boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
-            <div className="flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: C.border }}>
-              <div>
-                <h2 className="text-sm font-bold text-[#1A1F3C]">Detalle de operaciones</h2>
-                <p className="mt-0.5 text-xs text-[#8891AD]">{rangoActual} · {filtros.agencia || "Todas las agencias"}</p>
-              </div>
-              <Badge>{total.toLocaleString("es-MX")} registros</Badge>
-            </div>
-
-            <div className="max-h-[65vh] overflow-auto">
-              <table className="min-w-max border-collapse">
-                <thead className="sticky top-0 z-20">
-                  <tr style={{ backgroundColor: C.surface }}>
-                    {COLUMNAS.map((columna) => (
-                      <th key={columna.key} className="whitespace-nowrap bg-[#131E5C] px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-white">{columna.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    Array.from({ length: 10 }).map((_, index) => (
-                      <tr key={index}>{COLUMNAS.map((columna) => <td key={columna.key} className="border-b border-r border-slate-100 px-4 py-3"><div className="h-4 w-24 animate-pulse rounded bg-slate-200" /></td>)}</tr>
-                    ))
-                  ) : registros.length === 0 ? (
-                    <tr>
-                      <td colSpan={COLUMNAS.length} className="px-6 py-16 text-center">
-                        <Database className="mx-auto h-8 w-8 text-slate-300" />
-                        <p className="mt-3 text-sm font-semibold text-slate-700">No se encontraron registros</p>
-                        <p className="mt-1 text-xs text-slate-400">Modifica los filtros o actualiza la consulta.</p>
-                      </td>
-                    </tr>
-                  ) : registros.map((registro, index) => (
-                    <tr key={`${registro.nr_mov || ""}-${registro.nr_nota || ""}-${registro.serie || ""}-${index}`} className="transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-blue-50/40">
-                      {COLUMNAS.map((columna) => {
-                        const value = formatCell(registro[columna.key], columna.tipo);
-                        return <td key={columna.key} title={value} className="max-w-[300px] whitespace-nowrap border-b border-r border-slate-100 px-4 py-3 text-xs text-slate-700"><div className="max-w-[280px] truncate">{value}</div></td>;
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: C.border, backgroundColor: C.surface }}>
-              <div className="flex items-center gap-3">
-                <p className="text-xs text-slate-500">Mostrando <span className="font-bold text-slate-700">{registros.length}</span> de <span className="font-bold text-slate-700">{total.toLocaleString("es-MX")}</span> registros</p>
-                <select value={pageSize} onChange={(e) => { setPagina(1); setPageSize(Number(e.target.value)); }} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 outline-none">
-                  <option value={25}>25 por página</option><option value={50}>50 por página</option><option value={100}>100 por página</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" disabled={loading || pagina <= 1} onClick={() => setPagina((prev) => Math.max(1, prev - 1))} className={paginationButton}><ChevronLeft className="h-4 w-4" /></button>
-                <span className="min-w-[100px] text-center text-xs font-semibold text-slate-600">Página {pagina} de {totalPaginas}</span>
-                <button type="button" disabled={loading || pagina >= totalPaginas} onClick={() => setPagina((prev) => Math.min(totalPaginas, prev + 1))} className={paginationButton}><ChevronRight className="h-4 w-4" /></button>
-              </div>
-            </div>
+          <div className="space-y-3">
+            <InteractiveTable
+              rows={registros}
+              columns={COLUMNAS}
+              total={total}
+              loading={loading}
+              pageSize={pageSize}
+              onPageSizeChange={(size) => { setPagina(1); setPageSize(size); }}
+              page={pagina}
+              totalPages={totalPaginas}
+              onPrev={() => setPagina((prev) => Math.max(1, prev - 1))}
+              onNext={() => setPagina((prev) => Math.min(totalPaginas, prev + 1))}
+            />
           </div>
         )}
       </main>
@@ -551,14 +530,50 @@ export default function VentasVN() {
   );
 }
 
-function KPICard({ icon: Icon, label, value, sub, subColor = "text-slate-400", iconColor = "text-[#131E5C]" }) {
+function KPICard({ icon, label, value, sub, accent, spark = [] }) {
+  const Icon = icon;
+  const sparkData = spark.map((v, i) => ({ i, v: numero(v) }));
+  const pct = sparkData.length > 1
+    ? (sparkData[sparkData.length - 1].v - sparkData[0].v) / Math.max(Math.abs(sparkData[0].v), 1)
+    : 0;
+  const tendencia = sparkData.length > 1 ? (pct >= 0 ? "up" : "down") : null;
+
   return (
-    <div className="flex items-start gap-3 border-r border-slate-200 px-6 py-4 last:border-r-0">
-      <Icon className={`mt-1 h-6 w-6 shrink-0 ${iconColor}`} />
-      <div className="min-w-0">
-        <div className="truncate text-2xl font-black leading-tight text-[#131E5C]" title={String(value)}>{value}</div>
-        <div className="mt-0.5 text-xs font-semibold text-slate-500">{label}</div>
-        {sub && <div className={`mt-1 truncate text-[11px] font-semibold ${subColor}`} title={sub}>{sub}</div>}
+    <div className="relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md" style={{ borderColor: "#E7EAF3" }}>
+      <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 translate-x-6 -translate-y-6 rounded-full opacity-[0.12]" style={{ backgroundColor: accent }} />
+      <div className="relative flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${accent}1A`, color: accent }}>
+              <Icon className="h-[18px] w-[18px]" />
+            </span>
+            <span className="truncate text-xs font-bold uppercase tracking-wide text-[#8891AD]">{label}</span>
+          </div>
+          <div className="mt-3 truncate text-[26px] font-black leading-none tracking-tight text-[#131E5C]" title={String(value)}>{value}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {sub && <span className="truncate text-[11px] font-semibold" style={{ color: accent }}>{sub}</span>}
+            {tendencia && (
+              <span className={cn(`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tendencia === "up" ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`)}>
+                {tendencia === "up" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                {Math.abs(pct * 100).toFixed(1)}%
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="relative mt-3 border-t border-black/[0.06] pt-2">
+        {sparkData.length === 0 ? (
+          <div className="flex h-12 items-center text-[11px] font-semibold text-slate-300">Sin datos</div>
+        ) : (
+          <div className="h-12">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={sparkData} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
+                <Bar dataKey="v" fill={accent} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -583,10 +598,11 @@ function FilterButtonGroup({ label, value, options, onChange }) {
   );
 }
 
-function FilterField({ label, hint, children }) {
+function FilterField({ label, hint, icon: Icon = null, children }) {
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-1.5">
+        {Icon && <Icon className="h-3.5 w-3.5 text-[#131E5C]/60" />}
         <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">{label}</label>
         {hint && <span className="rounded bg-[#F7F8FC] px-1.5 py-0.5 text-[9px] font-semibold text-[#8891AD]">{hint}</span>}
       </div>

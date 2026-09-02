@@ -2855,7 +2855,7 @@ export default function DigitalesBandeja() {
     const [drawerTel, setDrawerTel] = useState("");
     const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
     const [filtroActivo, setFiltroActivo] = useState("todos");
-    const [periodo, setPeriodo] = useState("mensual");
+    const [periodo, setPeriodo] = useState("recientes");
     const [orden, setOrden] = useState("reciente");
 
     const requestRef = useRef(0);
