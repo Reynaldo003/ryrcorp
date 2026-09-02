@@ -21,7 +21,9 @@ import {
     Truck,
     AlertTriangle,
 } from "lucide-react";
+
 import { apiPedidosPiezas } from "../../lib/apiPedidosPiezas";
+import { http } from "../../lib/apiClient";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -1096,6 +1098,46 @@ export default function AdministradorPedidosPiezas() {
     const [loadingPieces, setLoadingPieces] = useState(false);
     const [tableError, setTableError] = useState("");
     const [mostrarIndicadores, setMostrarIndicadores] = useState(false);
+    const [refaccionesTuxtepec, setRefaccionesTuxtepec] = useState([]);
+
+    useEffect(() => {
+        let activo = true;
+
+        async function cargarRefaccionesTuxtepec() {
+            try {
+                const data = await http(
+                    "/digitales/tecnicos/?agencia=VW%20Tuxtepec&tipo_personal=Refacciones"
+                );
+
+                if (!activo) return;
+
+                const nombres = Array.isArray(data)
+                    ? data
+                        .map((item) =>
+                            String(item?.nombre || "").trim()
+                        )
+                        .filter(Boolean)
+                    : [];
+
+                setRefaccionesTuxtepec(nombres);
+            } catch (error) {
+                console.error(
+                    "No se pudo cargar el personal de Refacciones de VW Tuxtepec:",
+                    error
+                );
+
+                if (activo) {
+                    setRefaccionesTuxtepec([]);
+                }
+            }
+        }
+
+        cargarRefaccionesTuxtepec();
+
+        return () => {
+            activo = false;
+        };
+    }, []);
 
     const [filters, setFilters] = useState({
         q: "",
@@ -1106,6 +1148,47 @@ export default function AdministradorPedidosPiezas() {
     const [modalOpen, setModalOpen] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
+
+        const asesoresDisponibles = useMemo(() => {
+        if (
+            normalizeText(draft?.dealer) ===
+            normalizeText("VW Tuxtepec")
+        ) {
+            return refaccionesTuxtepec;
+        }
+
+        return ASESORES;
+    }, [
+        draft?.dealer,
+        refaccionesTuxtepec,
+    ]);
+
+    useEffect(() => {
+        if (!draft) return;
+        if (asesoresDisponibles.length === 0) return;
+
+        const asesorActualValido = asesoresDisponibles.some(
+            (nombre) =>
+                normalizeText(nombre) ===
+                normalizeText(draft.asesor)
+        );
+
+        if (asesorActualValido) return;
+
+        setDraft((prev) =>
+            prev
+                ? {
+                    ...prev,
+                    asesor: asesoresDisponibles[0],
+                }
+                : prev
+        );
+    }, [
+        draft?.dealer,
+        draft?.asesor,
+        asesoresDisponibles,
+    ]);
+
     const [pieceSearch, setPieceSearch] = useState("");
     const [pieceSearchResults, setPieceSearchResults] = useState([]);
     const [errors, setErrors] = useState({});
@@ -1821,17 +1904,35 @@ const userTieneAgencia = useCallback((agenciaRegistro) => {
                                     </select>
                                 </Field>
 
-                                <Field label="Asesor" error={errors.asesor}>
+                                <Field
+                                    label={
+                                        normalizeText(draft.dealer) === normalizeText("VW Tuxtepec")
+                                            ? "Refacciones"
+                                            : "Asesor"
+                                    }
+                                    error={errors.asesor}
+                                >
                                     <select
                                         value={draft.asesor}
-                                        onChange={(e) => updateDraftField("asesor", e.target.value)}
+                                        onChange={(e) =>
+                                            updateDraftField("asesor", e.target.value)
+                                        }
                                         className={inputBase}
                                     >
-                                        {ASESORES.map((asesor) => (
-                                            <option key={asesor} value={asesor}>
-                                                {asesor}
+                                        {asesoresDisponibles.length === 0 ? (
+                                            <option value="">
+                                                Sin personal disponible
                                             </option>
-                                        ))}
+                                        ) : (
+                                            asesoresDisponibles.map((asesor) => (
+                                                <option
+                                                    key={asesor}
+                                                    value={asesor}
+                                                >
+                                                    {asesor}
+                                                </option>
+                                            ))
+                                        )}
                                     </select>
                                 </Field>
 

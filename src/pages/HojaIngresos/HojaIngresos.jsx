@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
+import { http } from "../../lib/apiClient";
 import { useAuth } from "../../auth/AuthContext";
 import AgendaView from "./AgendaView";
 
@@ -149,15 +150,26 @@ function normalizeKey(value) {
 
 function getDealerCanonical(agencia) {
     const key = normalizeKey(agencia);
+
     if (key.includes("cordoba")) return "VW Cordoba";
     if (key.includes("orizaba")) return "VW Orizaba";
+    if (key.includes("tuxtepec")) return "VW Tuxtepec";
+
     return normalizeStr(agencia);
 }
 
-function getAsesoresPorAgencia(agencia, incluirTodos = false) {
+function getAsesoresPorAgencia(
+    agencia,
+    incluirTodos = false,
+    asesoresPorDealer = ASESORES_POR_DEALER,
+) {
     const dealer = getDealerCanonical(agencia);
-    if (incluirTodos && !dealer) return Object.values(ASESORES_POR_DEALER).flat();
-    return ASESORES_POR_DEALER[dealer] || [];
+
+    if (incluirTodos && !dealer) {
+        return Object.values(asesoresPorDealer).flat();
+    }
+
+    return asesoresPorDealer[dealer] || [];
 }
 
 function AsesorBadge({ asesor }) {
@@ -542,6 +554,7 @@ export default function HojaRegistros() {
     const [viewMode, setViewMode] = useState("agenda");
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
     const [agenciaSeleccionada, setAgenciaSeleccionada] = useState("VW Cordoba");
+    const [asesoresTuxtepec, setAsesoresTuxtepec] = useState([]);
 
     const changeDate = (days) => {
         const fecha = new Date(selectedDate);
@@ -614,6 +627,51 @@ export default function HojaRegistros() {
     }, [openModal, draft, telDigits]);
 
     useEffect(() => {
+        let activo = true;
+
+        async function cargarAsesoresTuxtepec() {
+            try {
+                const data = await http(
+                    "/digitales/asesores/?agencia=VW%20Tuxtepec&tipo_asesor=Servicio"
+                );
+
+                if (!activo) return;
+
+                const nombres = Array.isArray(data)
+                    ? data
+                        .map((item) => normalizeStr(item?.nombre))
+                        .filter(Boolean)
+                    : [];
+
+                setAsesoresTuxtepec(nombres);
+            } catch (error) {
+                console.error(
+                    "No se pudieron cargar los asesores de VW Tuxtepec:",
+                    error
+                );
+
+                if (activo) {
+                    setAsesoresTuxtepec([]);
+                }
+            }
+        }
+
+        cargarAsesoresTuxtepec();
+
+        return () => {
+            activo = false;
+        };
+    }, []);
+
+    const asesoresPorDealer = useMemo(
+        () => ({
+            ...ASESORES_POR_DEALER,
+            "VW Tuxtepec": asesoresTuxtepec,
+        }),
+        [asesoresTuxtepec],
+    );
+
+    useEffect(() => {
         const close = () => setCtxMenu((prev) => ({ ...prev, open: false, row: null }));
         window.addEventListener("click", close);
         window.addEventListener("scroll", close, true);
@@ -651,9 +709,22 @@ export default function HojaRegistros() {
 
     const availableAsesores = useMemo(() => {
         if (!draft) return [];
-        const agenciaActual = isAdmin ? normalizeStr(draft.agencia) : normalizeStr(userAgencia);
-        return getAsesoresPorAgencia(agenciaActual, isAdmin);
-    }, [draft, isAdmin, userAgencia]);
+
+        const agenciaActual = isAdmin
+            ? normalizeStr(draft.agencia)
+            : normalizeStr(userAgencia);
+
+        return getAsesoresPorAgencia(
+            agenciaActual,
+            isAdmin,
+            asesoresPorDealer,
+        );
+    }, [
+        draft,
+        isAdmin,
+        userAgencia,
+        asesoresPorDealer,
+    ]);
 
     const filtered = useMemo(() => {
         const q = filters.q.trim().toLowerCase();
@@ -1172,7 +1243,7 @@ export default function HojaRegistros() {
                             </div>
 
                             <div className="flex items-center gap-1.5">
-                                {["VW Cordoba", "VW Orizaba"].map((dealer) => (
+                                {["VW Cordoba", "VW Orizaba", "VW Tuxtepec"].map((dealer) => (
                                     <button
                                         key={dealer}
                                         type="button"
@@ -1461,6 +1532,7 @@ export default function HojaRegistros() {
                     onSlotClick={onAgendaSlotClick}
                     onSetAsistencia={setAsistenciaDesdeAgenda}
                     updatingInline={updatingInline}
+                    asesoresTuxtepec={asesoresTuxtepec}
                 />
             )}
 
@@ -1628,7 +1700,11 @@ export default function HojaRegistros() {
                                 style={inputStyle(false)}
                             >
                                 <option value="" disabled>Selecciona un asesor...</option>
-                                {availableAsesores.length === 0 && <option value="" disabled>Selecciona primero VW Cordoba o VW Orizaba...</option>}
+                                {availableAsesores.length === 0 && (
+                                    <option value="" disabled>
+                                        Selecciona una agencia con asesores disponibles...
+                                    </option>
+                                )}
                                 {availableAsesores.map((a) => <option key={a} value={a}>{a}</option>)}
                             </select>
                             {draft.asesor && <div className="mt-2"><AsesorBadge asesor={draft.asesor} /></div>}

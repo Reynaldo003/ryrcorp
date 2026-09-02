@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 
 import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
+import { http } from "../../lib/apiClient";
 import { useAuth } from "../../auth/AuthContext";
 import TallerLegacy from "./TallerLegacy";
 
@@ -399,18 +400,21 @@ function uniqueStrings(values) {
     });
 }
 
-function getOfficialTechniciansByDealer(dealer) {
+function getOfficialTechniciansByDealer(
+    dealer,
+    tecnicosPorDealer = TECNICOS_POR_DEALER,
+) {
     if (!dealer || dealer === "Todos") {
-        return TODOS_TECNICOS_OFICIALES;
+        return Object.values(tecnicosPorDealer).flat();
     }
 
-    const matchingDealer = Object.keys(TECNICOS_POR_DEALER).find(
+    const matchingDealer = Object.keys(tecnicosPorDealer).find(
         (configuredDealer) =>
             normalizeKey(configuredDealer) === normalizeKey(dealer),
     );
 
     return matchingDealer
-        ? TECNICOS_POR_DEALER[matchingDealer]
+        ? tecnicosPorDealer[matchingDealer]
         : [];
 }
 
@@ -2401,6 +2405,7 @@ export default function Taller() {
 
     const [remoteRows, setRemoteRows] = useState([]);
     const [loadingList, setLoadingList] = useState(false);
+    const [tecnicosTuxtepec, setTecnicosTuxtepec] = useState([]);
     const [vista, setVista] = useState("agenda");
     const [highlightType, setHighlightType] = useState(null);
     const [showFilters, setShowFilters] = useState(true);
@@ -2419,6 +2424,61 @@ export default function Taller() {
         "w-full rounded-lg border px-3 py-2 text-sm font-semibold text-[#001E50] outline-none transition";
     const inputOk =
         "border-black/10 bg-neutral-100 focus:border-[#001E50] focus:ring-2 focus:ring-[#001E50]/10";
+    const tecnicosPorDealer = useMemo(
+        () => ({
+            ...TECNICOS_POR_DEALER,
+            "VW Tuxtepec": tecnicosTuxtepec,
+        }),
+        [tecnicosTuxtepec],
+    );
+
+    const todosTecnicosOficiales = useMemo(
+        () =>
+            uniqueStrings(
+                Object.values(tecnicosPorDealer).flat(),
+            ),
+        [tecnicosPorDealer],
+    );
+    useEffect(() => {
+        let activo = true;
+
+        async function cargarTecnicosTuxtepec() {
+            try {
+                const data = await http(
+                    "/digitales/tecnicos/?agencia=VW%20Tuxtepec&tipo_personal=Tecnico"
+                );
+
+                if (!activo) return;
+
+                const nombres = Array.isArray(data)
+                    ? data
+                        .map((item) =>
+                            normalizeStr(item?.nombre)
+                        )
+                        .filter(Boolean)
+                    : [];
+
+                setTecnicosTuxtepec(
+                    uniqueStrings(nombres)
+                );
+            } catch (error) {
+                console.error(
+                    "No se pudieron cargar los técnicos de VW Tuxtepec:",
+                    error
+                );
+
+                if (activo) {
+                    setTecnicosTuxtepec([]);
+                }
+            }
+        }
+
+        cargarTecnicosTuxtepec();
+
+        return () => {
+            activo = false;
+        };
+    }, []);
 
     const refreshList = useCallback(async () => {
         setLoadingList(true);
@@ -2624,7 +2684,10 @@ export default function Taller() {
 
     const techniciansFilter = useMemo(() => {
         const officialTechnicians =
-            getOfficialTechniciansByDealer(filters.agencia);
+            getOfficialTechniciansByDealer(
+                filters.agencia,
+                tecnicosPorDealer,
+            );
         if (filters.agencia !== "Todos") {
             return [
                 "Todos",
@@ -2638,11 +2701,16 @@ export default function Taller() {
         return [
             "Todos",
             ...uniqueStrings([
-                ...TODOS_TECNICOS_OFICIALES,
+                ...todosTecnicosOficiales,
                 ...extraTechnicians,
             ]),
         ];
-    }, [ordenes, filters.agencia]);
+    }, [
+        ordenes,
+        filters.agencia,
+        tecnicosPorDealer,
+        todosTecnicosOficiales,
+    ]);
 
     const filtered = useMemo(() => {
         const query = normalizeKey(filters.q);
@@ -2770,15 +2838,20 @@ export default function Taller() {
                 : "");
 
         if (!draftDealer) {
-            return uniqueStrings(TODOS_TECNICOS_OFICIALES);
+            return uniqueStrings(todosTecnicosOficiales);
         }
 
         return uniqueStrings(
-            getOfficialTechniciansByDealer(draftDealer),
+            getOfficialTechniciansByDealer(
+                draftDealer,
+                tecnicosPorDealer,
+            ),
         );
     }, [
         draft?.agencia,
         filters.agencia,
+        tecnicosPorDealer,
+        todosTecnicosOficiales,
     ]);
 
     async function unassignOrder(orderId) {
@@ -3967,6 +4040,7 @@ export default function Taller() {
                                         uniqueStrings([
                                             ...getOfficialTechniciansByDealer(
                                                 nextDealer,
+                                                tecnicosPorDealer,
                                             ),
                                             ...ordenes
                                                 .filter(
