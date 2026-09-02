@@ -116,6 +116,8 @@ import DirectorioWeb from "./pages/DirectorioWeb/DirectorioWeb";
 import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
 import AdministracionAsesores from "./pages/AdministracionAsesores/AdministracionAsesores";
 import VentasVN from "./pages/VentasVN/VentasVN";
+import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
+import Piezas from "./pages/GestionNegocio/Piezas";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -381,8 +383,22 @@ export const router = createBrowserRouter(
                                 </RequirePermission>
                             ),
                             children: [
-                                { index: true, element: <Navigate to="autos_nuevos" replace /> },
-                                { path: "autos_nuevos", element: <VentasVN /> },
+                                {
+                                    index: true,
+                                    element: <Navigate to="autos_nuevos" replace />,
+                                },
+                                {
+                                    path: "autos_nuevos",
+                                    element: <VentasVN />,
+                                },
+                                {
+                                    path: "productos",
+                                    element: <ProductosEstoque />,
+                                },
+                                {
+                                    path: "piezas",
+                                    element: <Piezas />,
+                                },
                             ],
                         },
                         {

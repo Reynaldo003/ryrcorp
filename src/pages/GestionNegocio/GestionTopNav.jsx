@@ -1,12 +1,26 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { Car, CarFront } from "lucide-react";
+import { CarFront, Package, Wrench } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 
 const BRAND_BLUE = "#131E5C";
 
 const TABS = [
-    { label: "Autos Nuevos", to: "/gestion_negocio/autos_nuevos", icon: CarFront },
+    {
+        label: "Autos Nuevos",
+        to: "/gestion_negocio/autos_nuevos",
+        icon: CarFront,
+    },
+    {
+        label: "Productos",
+        to: "/gestion_negocio/productos",
+        icon: Package,
+    },
+    {
+        label: "Piezas",
+        to: "/gestion_negocio/piezas",
+        icon: Wrench,
+    },
 ];
 
 export default function GestionTopNav() {
