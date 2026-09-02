@@ -87,8 +87,11 @@ function normalizar(value) {
 
 function agenciaCanonical(value) {
   const key = normalizar(value);
+
   if (key.includes("cordoba")) return "VW Cordoba";
   if (key.includes("orizaba")) return "VW Orizaba";
+  if (key.includes("tuxtepec")) return "VW Tuxtepec";
+
   return String(value ?? "").trim();
 }
 
@@ -895,6 +898,7 @@ export default function AgendaView({
   updatingInline = {},
   selectedDate = new Date().toISOString().split("T")[0],
   agenciaSeleccionada = "VW Cordoba",
+  asesoresTuxtepec = [],
 }) {
   const [reloj, setReloj] = useState(new Date());
 
@@ -905,9 +909,21 @@ export default function AgendaView({
 
   const agenciaActual = agenciaCanonical(agenciaSeleccionada);
 
+  const asesoresPorAgencia = useMemo(
+    () => ({
+      ...ASESORES_POR_AGENCIA,
+
+      "VW Tuxtepec": asesoresTuxtepec.map((nombre, index) => ({
+        id: `tuxtepec-${index}`,
+        nombre,
+      })),
+    }),
+    [asesoresTuxtepec],
+  );
+
   const asesores = useMemo(
-    () => ASESORES_POR_AGENCIA[agenciaActual] || [],
-    [agenciaActual],
+    () => asesoresPorAgencia[agenciaActual] || [],
+    [agenciaActual, asesoresPorAgencia],
   );
 
   const citasDeLaFecha = useMemo(() => {
