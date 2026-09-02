@@ -55,6 +55,7 @@ import CalidadIndex from "./pages/Calidad/CalidadIndex";
 
 import ComercialLayout from "./pages/Comercial/ComercialLayout";
 import ComercialIndex from "./pages/Comercial/ComercialIndex";
+import GestionLayout from "./pages/GestionNegocio/GestionLayout";
 
 import UsadosIndex from "./pages/Usados/UsadosIndex";
 import UsadosLayout from "./pages/Usados/UsadosLayout";
@@ -375,16 +376,14 @@ export const router = createBrowserRouter(
                         {
                             path: "gestion_negocio",
                             element: (
-                                <RequirePermission
-                                    anyOf={[
-                                        "CRM_RECLAMACIONES",
-                                        "USUARIOS_ADMIN",
-                                        "CRM_CALIDAD",
-                                    ]}
-                                >
-                                    <VentasVN />
+                                <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                    <GestionLayout />
                                 </RequirePermission>
                             ),
+                            children: [
+                                { index: true, element: <Navigate to="autos_nuevos" replace /> },
+                                { path: "autos_nuevos", element: <VentasVN /> },
+                            ],
                         },
                         {
                             path: "comercial",

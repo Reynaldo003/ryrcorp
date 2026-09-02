@@ -29,6 +29,8 @@ import {
     Globe,
     FileSearchCorner,
     UsersRound,
+    CarFront,
+    BanknoteArrowUp,
 } from "lucide-react";
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
@@ -209,11 +211,11 @@ export default function Sidebar() {
     const links = useMemo(() => {
         const items = [
             {
-                section: "Gestión de Negocio",
+                section: "Negocio",
                 to: "/gestion_negocio",
-                label: "Autos Nuevos",
-                icon: BadgeCheck,
-                show: hasAnyPermission(["CRM_RECLAMACIONES", "USUARIOS_ADMIN", "CRM_CALIDAD"]),
+                label: "Gestión de Negocio",
+                icon: BanknoteArrowUp,
+                show: hasAnyPermission(["USUARIOS_ADMIN",]),
             },
             { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
             {
@@ -322,7 +324,7 @@ export default function Sidebar() {
     }, [hasAnyPermission]);
 
     const sections = useMemo(() => {
-        const order = ["Gestión de Negocio", "Comercial", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
+        const order = ["Negocio", "Comercial", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
         return order
             .map((section) => ({ section, items: links.filter((item) => item.section === section) }))
             .filter((group) => group.items.length > 0);
