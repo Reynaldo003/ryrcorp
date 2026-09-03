@@ -382,9 +382,9 @@ function PillSelect({ value, onChange, children, icon: Icon }) {
 }
 
 // ---- Tabla ----
-function TablaClientes({ datos, onAbrirDetalle, onAbrirChat }) {
-    const datosTabla = [...datos]
-        .sort((a, b) => {
+function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, onCambiarPagina, onAbrirDetalle, onAbrirChat }) {
+    const datosTabla = useMemo(() => {
+        return [...datos].sort((a, b) => {
             const diasA = diasParaCumpleanos(a.cumpleanos);
             const diasB = diasParaCumpleanos(b.cumpleanos);
 
@@ -402,15 +402,39 @@ function TablaClientes({ datos, onAbrirDetalle, onAbrirChat }) {
             }
 
             return 0;
-        })
-        .slice(0, 1000);
+        });
+    }, [datos]);
 
     return (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
                 <div className="text-sm font-extrabold text-slate-700">
-                    {numero(datos.length)} vehículos
+                    {numero(totalRegistros)} vehículos
                 </div>
+
+                {totalPaginas > 1 ? (
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            disabled={cargando || pagina <= 1}
+                            onClick={() => onCambiarPagina(pagina - 1)}
+                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            Anterior
+                        </button>
+                        <span className="px-2 text-xs font-bold text-slate-500">
+                            {pagina} / {totalPaginas}
+                        </span>
+                        <button
+                            type="button"
+                            disabled={cargando || pagina >= totalPaginas}
+                            onClick={() => onCambiarPagina(pagina + 1)}
+                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            Siguiente
+                        </button>
+                    </div>
+                ) : null}
             </div>
 
             <div className="overflow-x-auto">
@@ -566,6 +590,53 @@ function TablaClientes({ datos, onAbrirDetalle, onAbrirChat }) {
                     </tbody>
                 </table>
             </div>
+
+            {cargando ? (
+                <div className="flex items-center justify-center gap-2 border-t border-slate-100 px-5 py-3 text-xs font-semibold text-slate-400">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+                    Cargando página {pagina}…
+                </div>
+            ) : totalPaginas > 1 ? (
+                <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+                    <div className="text-xs font-semibold text-slate-400">
+                        Página {pagina} de {totalPaginas} · {numero(totalRegistros)} vehículos
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            disabled={pagina <= 1}
+                            onClick={() => onCambiarPagina(1)}
+                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            «
+                        </button>
+                        <button
+                            type="button"
+                            disabled={pagina <= 1}
+                            onClick={() => onCambiarPagina(pagina - 1)}
+                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            ‹
+                        </button>
+                        <button
+                            type="button"
+                            disabled={pagina >= totalPaginas}
+                            onClick={() => onCambiarPagina(pagina + 1)}
+                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            ›
+                        </button>
+                        <button
+                            type="button"
+                            disabled={pagina >= totalPaginas}
+                            onClick={() => onCambiarPagina(totalPaginas)}
+                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            »
+                        </button>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -1590,8 +1661,7 @@ export default function RetencionNoVentas() {
 
         return () => controller.abort();
     }, []);
-    const MAX_REGISTROS = 1000;
-    const PAGE_SIZE = 500;
+    const PAGE_SIZE = 100;
 
     const cargarOrdenes = useCallback(async (filtros, signal) => {
         if (!cacheRef.current.has("paginado")) cacheRef.current.set("paginado", new Map());
@@ -1599,21 +1669,33 @@ export default function RetencionNoVentas() {
         const cacheKey = JSON.stringify(filtros);
         if (pageCache.has(cacheKey)) return pageCache.get(cacheKey);
 
-        const acumulado = [];
         const base = { ...filtros, limit: PAGE_SIZE };
+        let total = 0;
 
-        for (let page = 1; page <= Math.ceil(MAX_REGISTROS / PAGE_SIZE); page++) {
-            const data = await obtenerOrdenesRetencion({ ...base, page }, { signal });
-            const lista = Array.isArray(data) ? data : data.results ?? [];
-            if (lista.length === 0) break;
-            acumulado.push(...lista.map(mapearOrden));
-            const next = data?.next;
-            if (next == null) break;
-        }
+        const dealersConsulta = normalizarTexto(filtros.agencia) === "todos" || !filtros.agencia
+            ? DEALERS_RETENCION
+            : [filtros.agencia];
 
-        pageCache.set(cacheKey, acumulado);
-        return acumulado;
+        const porDealer = await Promise.all(
+            dealersConsulta.map(async (dealer) => {
+                const data = await apiRetencion.list(
+                    { ...base, agencia_venta: dealer, page: filtros.pagina || 1 },
+                    { signal }
+                );
+                const lista = Array.isArray(data) ? data : data.results ?? [];
+                total += Number(data?.count) || 0;
+                return lista.map(mapearOrden);
+            })
+        );
+
+        const datos = porDealer.flat();
+        pageCache.set(cacheKey, { datos, total });
+        return { datos, total };
     }, []);
+
+    const [pagina, setPagina] = useState(1);
+    const [totalRegistros, setTotalRegistros] = useState(0);
+    const [cargandoPagina, setCargandoPagina] = useState(false);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -1623,7 +1705,7 @@ export default function RetencionNoVentas() {
                 setLoading(true);
                 setError(null);
 
-                const datos = await cargarOrdenes(
+                const { datos, total } = await cargarOrdenes(
                     {
                         anio,
                         mes,
@@ -1633,11 +1715,14 @@ export default function RetencionNoVentas() {
                         marca,
                         sin_venta: true,
                         ordering: "-fecha_ultima_os",
+                        pagina: 1,
                     },
                     controller.signal
                 );
 
                 setDatosRaw(datos);
+                setTotalRegistros(total);
+                setPagina(1);
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
             } finally {
@@ -1649,6 +1734,39 @@ export default function RetencionNoVentas() {
 
         return () => controller.abort();
     }, [anio, mes, segmento, agencia, estado, marca, cargarOrdenes, refreshKey,]);
+
+    const irPagina = useCallback(
+        async (nuevaPagina) => {
+            if (!nuevaPagina || nuevaPagina < 1) return;
+            if (nuevaPagina === pagina) return;
+
+            setCargandoPagina(true);
+            setError(null);
+            try {
+                const { datos } = await cargarOrdenes(
+                    {
+                        anio,
+                        mes,
+                        segmento,
+                        agencia,
+                        estado,
+                        marca,
+                        sin_venta: true,
+                        ordering: "-fecha_ultima_os",
+                        pagina: nuevaPagina,
+                    },
+                    new AbortController().signal
+                );
+                setDatosRaw(datos);
+                setPagina(nuevaPagina);
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setCargandoPagina(false);
+            }
+        },
+        [pagina, anio, mes, segmento, agencia, estado, marca, cargarOrdenes]
+    );
 
     const aniosDisponibles = useMemo(() => {
         if (opciones.anios.length > 0) return opciones.anios;
@@ -2200,7 +2318,16 @@ export default function RetencionNoVentas() {
 
 
             {vista === "tabla" ? (
-                <TablaClientes datos={datosFiltrados} onAbrirDetalle={abrirDetalle} onAbrirChat={abrirChatCliente} />
+                <TablaClientes
+                    datos={datosFiltrados}
+                    totalRegistros={totalRegistros}
+                    pagina={pagina}
+                    totalPaginas={Math.max(1, Math.ceil(totalRegistros / PAGE_SIZE))}
+                    cargando={cargandoPagina}
+                    onCambiarPagina={irPagina}
+                    onAbrirDetalle={abrirDetalle}
+                    onAbrirChat={abrirChatCliente}
+                />
             ) : (
                 <VistaGraficas datos={datosFiltrados} segmento={segmento} />
             )}

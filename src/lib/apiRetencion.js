@@ -22,6 +22,8 @@ function construirQuery(filtros = {}) {
   if (!esFiltroVacio(filtros.marca)) params.set("marca", filtros.marca);
   if (!esFiltroVacio(filtros.modelo)) params.set("modelo", filtros.modelo);
   if (!esFiltroVacio(filtros.agencia)) params.set("agencia", filtros.agencia);
+  if (!esFiltroVacio(filtros.agencia_venta))
+    params.set("agencia_venta", filtros.agencia_venta);
   if (!esFiltroVacio(filtros.condicion))
     params.set("condicion", filtros.condicion);
   if (!esFiltroVacio(filtros.search)) params.set("search", filtros.search);
