@@ -34,3 +34,13 @@ body,
 body {
   @apply bg-slate-50 text-slate-900;
 }
+
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus,
+svg:focus,
+svg *:focus,
+.recharts-sector:focus,
+.recharts-rectangle:focus {
+  outline: none !important;
+}

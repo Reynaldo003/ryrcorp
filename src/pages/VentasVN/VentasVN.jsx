@@ -1,14 +1,15 @@
 ﻿// src/pages/VentasVN/VentasVN.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, BarChart3, CalendarDays, Car, CreditCard, Eraser,
-  CircleDollarSign, Database, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Tags, User,
+  CircleDollarSign, Database, ImageDown, LoaderCircle, RefreshCw, RotateCcw, Search, SlidersHorizontal, Tags, User,
   Table2, TrendingUp, WalletCards, X,
 } from "lucide-react";
 import {
-  ResponsiveContainer, BarChart, Bar, ComposedChart, Line, PieChart, Pie, Cell,
+  ResponsiveContainer, BarChart, Bar, ComposedChart, Line, PieChart, Pie, Cell, Sector,
   XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from "recharts";
+import html2canvas from "html2canvas-pro";
 import { http, buildQuery } from "../../lib/apiClient";
 import { getVentasVNDashboard } from "../../lib/apiVentasVN";
 import InteractiveTable from "../VentasVN/InteractiveTable";
@@ -118,8 +119,15 @@ function obtenerRangoPreset(id, base = new Date()) {
   if (id === "ayer") desde = hasta = moverDias(hoy, -1);
   return { fecha_desde: fechaInput(desde), fecha_hasta: fechaInput(hasta) };
 }
-function formatoRango(desde, hasta) {
-  if (!desde && !hasta) return "Todo el historial";
+function obtenerRangoMes(mes, anio) {
+  const anioN = Number(anio) || 2000;
+  const mesN = Number(mes);
+  if (mesN < 1 || mesN > 12) return {};
+  const desde = new Date(anioN, mesN - 1, 1);
+  const hasta = new Date(anioN, mesN, 0);
+  return { fecha_desde: fechaInput(desde), fecha_hasta: fechaInput(hasta) };
+}
+function formatoRango(desde, hasta) {  if (!desde && !hasta) return "Todo el historial";
   const fmt = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" });
   const d = fechaLocal(desde);
   const h = fechaLocal(hasta);
@@ -146,6 +154,12 @@ export default function VentasVN() {
   const [error, setError] = useState("");
   const [vistaActiva, setVistaActiva] = useState("detalle");
   const [filtros, setFiltros] = useState(FILTROS_INICIALES);
+  const [qBuscado, setQBuscado] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setQBuscado(filtros.q), 400);
+    return () => clearTimeout(t);
+  }, [filtros.q]);
 
   async function cargarDashboard() {
     setLoadingDashboard(true);
@@ -182,7 +196,7 @@ export default function VentasVN() {
     setError("");
     try {
       const query = buildQuery({
-        page: pagina, page_size: pageSize, q: filtros.q, agencia: filtros.agencia, asesor: filtros.asesor,
+        page: pagina, page_size: pageSize, q: qBuscado, agencia: filtros.agencia, asesor: filtros.asesor,
         familia: filtros.familia, condicion_pago: filtros.condicion_pago, fecha_desde: filtros.fecha_desde, fecha_hasta: filtros.fecha_hasta,
       });
       const response = await http(`/ventas-vn/api/${query}`);
@@ -196,8 +210,8 @@ export default function VentasVN() {
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { cargarDatos(); }, [pagina, pageSize, filtros]);
-  useEffect(() => { cargarDashboard(); }, [filtros]);
+  useEffect(() => { cargarDatos(); }, [pagina, pageSize, qBuscado, filtros.agencia, filtros.asesor, filtros.familia, filtros.condicion_pago, filtros.fecha_desde, filtros.fecha_hasta]);
+  useEffect(() => { cargarDashboard(); }, [filtros.agencia, filtros.asesor, filtros.familia, filtros.condicion_pago, filtros.fecha_desde, filtros.fecha_hasta]);
 
   const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
   const hayFiltros = Object.values(filtros).some((value) => String(value || "").trim());
@@ -232,6 +246,8 @@ export default function VentasVN() {
 
   const totalCondicionesPago = useMemo(() => condicionesPago.reduce((acc, item) => acc + numero(item.unidades_vendidas), 0), [condicionesPago]);
 
+  const idxCondicionActivo = useMemo(() => condicionesPago.findIndex((item) => filtros.condicion_pago && item.condicion_pago === filtros.condicion_pago), [condicionesPago, filtros.condicion_pago]);
+
   function cambiarFiltro(campo, value) {
     setPagina(1);
     setFiltros((prev) => ({ ...prev, [campo]: value }));
@@ -250,6 +266,54 @@ export default function VentasVN() {
     setFiltros((prev) => ({ ...prev, ...rango }));
   }
   function actualizarTodo() { cargarDatos(); cargarDashboard(); }
+
+  const chartRefs = useRef({});
+  const [exportandoKey, setExportandoKey] = useState(null);
+
+  function alternarFiltro(campo, valor) {
+    setPagina(1);
+    setFiltros((prev) => ({ ...prev, [campo]: prev[campo] === valor ? FILTROS_INICIALES[campo] : valor }));
+  }
+
+  function restaurarGrafica(patch) {
+    setPagina(1);
+    setFiltros((prev) => ({ ...prev, ...patch }));
+  }
+
+  function esMesActivo(item) {
+    const rango = obtenerRangoMes(item?.mes, item?.anio);
+    return !!(rango.fecha_desde && filtros.fecha_desde === rango.fecha_desde && filtros.fecha_hasta === rango.fecha_hasta);
+  }
+
+  function clicMes(entry) {
+    const rango = obtenerRangoMes(entry?.mes, entry?.anio);
+    if (!rango.fecha_desde) return;
+    setPagina(1);
+    setFiltros((prev) => {
+      const activo = prev.fecha_desde === rango.fecha_desde && prev.fecha_hasta === rango.fecha_hasta;
+      return activo ? { ...prev, fecha_desde: "", fecha_hasta: "" } : { ...prev, ...rango };
+    });
+  }
+
+  async function exportarGrafica(key, nombre) {
+    const nodo = chartRefs.current[key];
+    if (!nodo) return;
+    setExportandoKey(key);
+    try {
+      if (document.fonts?.ready) await document.fonts.ready;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await new Promise((r) => setTimeout(r, 200));
+      const canvas = await html2canvas(nodo, { scale: 1.6, useCORS: true, backgroundColor: "#ffffff", logging: false });
+      const enlace = document.createElement("a");
+      enlace.download = `${nombre}_${new Date().toISOString().slice(0, 10)}.png`;
+      enlace.href = canvas.toDataURL("image/png");
+      enlace.click();
+    } catch (err) {
+      console.error("Error exportando gráfica:", err);
+    } finally {
+      setExportandoKey(null);
+    }
+  }
 
   return (
     <div className="min-h-screen">
@@ -410,103 +474,141 @@ export default function VentasVN() {
         {vistaActiva === "dashboard" && (
           <div className="grid gap-5 xl:grid-cols-12">
             <div className="xl:col-span-7">
-              <ChartCard title="Tendencia comercial" subtitle="Ingresos, costo y unidades vendidas por mes" icon={TrendingUp} badge={rangoActual}>
-                <div className="h-[360px]">
-                  {loadingDashboard ? <ChartLoading /> : datosMes.length === 0 ? <ChartEmpty /> : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={datosMes} margin={{ top: 12, right: 12, bottom: 6, left: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
-                        <XAxis dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="money" tickFormatter={formatoCompacto} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={65} />
-                        <YAxis yAxisId="units" orientation="right" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={35} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: C.text, fontWeight: 700 }} formatter={(value, name) => [name === "Unidades" ? `${formatoNumero(value)} unidades` : money(value), name]} />
-                        <Bar yAxisId="units" dataKey="unidades_vendidas" name="Unidades" fill="#DDE4F6" radius={[6, 6, 0, 0]} barSize={22} />
-                        <Line yAxisId="money" type="monotone" dataKey="ingresos" name="Ingresos" stroke={C.navy} strokeWidth={3} dot={{ r: 3, fill: C.navy }} activeDot={{ r: 5 }} />
-                        <Line yAxisId="money" type="monotone" dataKey="costo" name="Costo" stroke={C.navyLight} strokeWidth={2.5} dot={false} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-                <ChartLegend items={[{ color: C.navy, label: "Ingresos" }, { color: C.navyLight, label: "Costo" }, { color: "#DDE4F6", label: "Unidades" }]} />
-              </ChartCard>
-            </div>
-
-            <div className="xl:col-span-5">
-              <ChartCard title="Condición de pago" subtitle="Distribución de unidades vendidas" icon={WalletCards}>
-                <div className="grid min-h-[390px] items-center gap-3 md:grid-cols-[1fr_220px] xl:grid-cols-1 2xl:grid-cols-[1fr_220px]">
-                  <div className="relative h-[280px]">
-                    {loadingDashboard ? <ChartLoading /> : condicionesPago.length === 0 ? <ChartEmpty /> : (
-                      <>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={condicionesPago} dataKey="unidades_vendidas" nameKey="condicion_pago" cx="50%" cy="50%" innerRadius={72} outerRadius={105} paddingAngle={2}>
-                              {condicionesPago.map((item, index) => <Cell key={`${item.condicion_pago}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${formatoNumero(value)} unidades`, name]} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-                          <p className="text-2xl font-extrabold text-[#131E5C]">{formatoNumero(totalCondicionesPago)}</p>
-                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">Unidades</p>
-                        </div>
-                      </>
+              <ChartCard title="Tendencia comercial" subtitle="Ingresos, costo y unidades vendidas por mes" icon={TrendingUp} badge={rangoActual}
+                action={
+                  <div className="flex items-center gap-2">
+                    {filtros.fecha_desde && <GraficoRestaurar onClick={() => restaurarGrafica({ fecha_desde: "", fecha_hasta: "" })} />}
+                    <GraficoExportar onClick={() => exportarGrafica("tendencia", "tendencia_comercial")} busy={exportandoKey === "tendencia"} />
+                  </div>
+                }>
+                <div className="h-[360px]" ref={(n) => { chartRefs.current["tendencia"] = n; }}>
+                    {loadingDashboard ? <ChartLoading /> : datosMes.length === 0 ? <ChartEmpty /> : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={datosMes} margin={{ top: 12, right: 12, bottom: 6, left: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                          <XAxis dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
+                          <YAxis yAxisId="money" tickFormatter={formatoCompacto} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={65} />
+                          <YAxis yAxisId="units" orientation="right" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={35} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: C.text, fontWeight: 700 }} formatter={(value, name) => [name === "Unidades" ? `${formatoNumero(value)} unidades` : money(value), name]} />
+                          <Bar yAxisId="units" dataKey="unidades_vendidas" name="Unidades" radius={[6, 6, 0, 0]} barSize={22} className="cursor-pointer" onClick={(entry) => clicMes(entry)}>
+                            {datosMes.map((item, i) => {
+                              const activo = esMesActivo(item);
+                              return <Cell key={i} fill={activo ? C.navy : "#DDE4F6"} />;
+                            })}
+                          </Bar>
+                          <Line yAxisId="money" type="monotone" dataKey="ingresos" name="Ingresos" stroke={C.navy} strokeWidth={3} dot={{ r: 3, fill: C.navy }} activeDot={{ r: 5 }} />
+                          <Line yAxisId="money" type="monotone" dataKey="costo" name="Costo" stroke={C.navyLight} strokeWidth={2.5} dot={false} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
                     )}
                   </div>
-                  {!loadingDashboard && condicionesPago.length > 0 && (
-                    <div className="space-y-2">
-                      {condicionesPago.map((item, index) => (
-                        <div key={`${item.condicion_pago}-${index}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[#F7F8FC]">
-                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
-                          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#515778]" title={item.condicion_pago}>{item.condicion_pago || "Sin condición"}</span>
-                          <span className="text-[11px] font-bold text-[#1A1F3C]">{porcentaje(item.unidades_vendidas, totalCondicionesPago)}%</span>
-                        </div>
-                      ))}
+                  <ChartLegend items={[{ color: C.navy, label: "Ingresos" }, { color: C.navyLight, label: "Costo" }, { color: "#DDE4F6", label: "Unidades" }]} />
+                </ChartCard>
+              </div>
+
+              <div className="xl:col-span-5">
+                <ChartCard title="Condición de pago" subtitle="Distribución de unidades vendidas" icon={WalletCards}
+                  action={
+                    <div className="flex items-center gap-2">
+                      {filtros.condicion_pago && <GraficoRestaurar onClick={() => restaurarGrafica({ condicion_pago: "" })} />}
+                      <GraficoExportar onClick={() => exportarGrafica("condicion", "condicion_pago")} busy={exportandoKey === "condicion"} />
                     </div>
-                  )}
-                </div>
-              </ChartCard>
-            </div>
+                  }>
+                  <div className="grid min-h-[390px] items-center gap-3 md:grid-cols-[1fr_220px] xl:grid-cols-1 2xl:grid-cols-[1fr_220px]" ref={(n) => { chartRefs.current["condicion"] = n; }}>
+                    <div className="relative h-[280px]">
+                      {loadingDashboard ? <ChartLoading /> : condicionesPago.length === 0 ? <ChartEmpty /> : (
+                        <>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={condicionesPago} dataKey="unidades_vendidas" nameKey="condicion_pago" cx="50%" cy="50%" innerRadius={72} outerRadius={105} paddingAngle={2} className="cursor-pointer" activeIndex={idxCondicionActivo >= 0 ? idxCondicionActivo : undefined} activeShape={<SectorResaltado />} onClick={(data) => alternarFiltro("condicion_pago", data? data?.condicion_pago : "")}>
+                                {condicionesPago.map((item, index) => {
+                                  return <Cell key={`${item.condicion_pago}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />;
+                                })}
+                              </Pie>
+                              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${formatoNumero(value)} unidades`, name]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+                            <p className="text-2xl font-extrabold text-[#131E5C]">{formatoNumero(totalCondicionesPago)}</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">Unidades</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {!loadingDashboard && condicionesPago.length > 0 && (
+                      <div className="space-y-2">
+                        {condicionesPago.map((item, index) => (
+                          <button key={`${item.condicion_pago}-${index}`} type="button" onClick={() => alternarFiltro("condicion_pago", item.condicion_pago)}
+                            className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition", filtros.condicion_pago === item.condicion_pago ? "bg-[#131E5C]/[0.08]" : "hover:bg-[#F7F8FC]")}>
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
+                            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#515778]" title={item.condicion_pago}>{item.condicion_pago || "Sin condición"}</span>
+                            <span className="text-[11px] font-bold text-[#1A1F3C]">{porcentaje(item.unidades_vendidas, totalCondicionesPago)}%</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </ChartCard>
+              </div>
 
-            <div className="xl:col-span-6">
-              <ChartCard title="Rendimiento por asesor" subtitle="Top 10 por unidades vendidas" icon={BarChart3}>
-                <div className="h-[390px]">
-                  {loadingDashboard ? <ChartLoading /> : topAsesores.length === 0 ? <ChartEmpty /> : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={topAsesores} layout="vertical" margin={{ top: 4, right: 38, left: 18, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="asesor" width={145} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
-                        <Bar dataKey="unidades_vendidas" name="Unidades vendidas" fill={C.navy} radius={[0, 7, 7, 0]} barSize={20}>
-                          <LabelList dataKey="unidades_vendidas" position="right" fill={C.textSub} fontSize={10} fontWeight={700} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </ChartCard>
-            </div>
+              <div className="xl:col-span-6">
+                <ChartCard title="Rendimiento por asesor" subtitle="Top 10 por unidades vendidas" icon={BarChart3}
+                  action={
+                    <div className="flex items-center gap-2">
+                      {filtros.asesor && <GraficoRestaurar onClick={() => restaurarGrafica({ asesor: "" })} />}
+                      <GraficoExportar onClick={() => exportarGrafica("asesores", "rendimiento_asesores")} busy={exportandoKey === "asesores"} />
+                    </div>
+                  }>
+                  <div className="h-[390px]" ref={(n) => { chartRefs.current["asesores"] = n; }}>
+                    {loadingDashboard ? <ChartLoading /> : topAsesores.length === 0 ? <ChartEmpty /> : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={topAsesores} layout="vertical" margin={{ top: 4, right: 38, left: 18, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
+                          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="asesor" width={145} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
+                          <Bar dataKey="unidades_vendidas" name="Unidades vendidas" fill={C.navy} radius={[0, 7, 7, 0]} barSize={20} className="cursor-pointer" onClick={(entry) => alternarFiltro("asesor", entry? entry?.asesor : "")}>
+                            {topAsesores.map((item, i) => {
+                              return <Cell key={i} fill={C.navy} />;
+                            })}
+                            <LabelList dataKey="unidades_vendidas" position="right" fill={C.textSub} fontSize={10} fontWeight={700} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </ChartCard>
+              </div>
 
-            <div className="xl:col-span-6">
-              <ChartCard title="Modelos con mayor movimiento" subtitle="Top 10 familias por unidades vendidas" icon={Car}>
-                <div className="h-[390px]">
-                  {loadingDashboard ? <ChartLoading /> : topFamilias.length === 0 ? <ChartEmpty /> : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={topFamilias} layout="vertical" margin={{ top: 4, right: 38, left: 22, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="familia" width={150} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
-                        <Bar dataKey="unidades_vendidas" name="Unidades vendidas" fill={C.navyMid} radius={[0, 7, 7, 0]} barSize={20}>
-                          <LabelList dataKey="unidades_vendidas" position="right" fill={C.textSub} fontSize={10} fontWeight={700} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </ChartCard>
+              <div className="xl:col-span-6">
+                <ChartCard title="Modelos con mayor movimiento" subtitle="Top 10 familias por unidades vendidas" icon={Car}
+                  action={
+                    <div className="flex items-center gap-2">
+                      {filtros.familia && <GraficoRestaurar onClick={() => restaurarGrafica({ familia: "" })} />}
+                      <GraficoExportar onClick={() => exportarGrafica("familias", "modelos_mayor_movimiento")} busy={exportandoKey === "familias"} />
+                    </div>
+                  }>
+                  <div className="h-[390px]" ref={(n) => { chartRefs.current["familias"] = n; }}>
+                    {loadingDashboard ? <ChartLoading /> : topFamilias.length === 0 ? <ChartEmpty /> : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={topFamilias} layout="vertical" margin={{ top: 4, right: 38, left: 22, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
+                          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="familia" width={150} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
+                          <Bar dataKey="unidades_vendidas" name="Unidades vendidas" fill={C.navyMid} radius={[0, 7, 7, 0]} barSize={20} className="cursor-pointer" onClick={(entry) => alternarFiltro("familia", entry? entry?.familia : "")}>
+                            {topFamilias.map((item, i) => {
+                              return <Cell key={i} fill={C.navyMid} />;
+                            })}
+                            <LabelList dataKey="unidades_vendidas" position="right" fill={C.textSub} fontSize={10} fontWeight={700} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </ChartCard>
+              </div>
             </div>
-          </div>
         )}
 
         {vistaActiva === "detalle" && (
@@ -611,7 +713,7 @@ function FilterField({ label, hint, icon: Icon = null, children }) {
   );
 }
 
-function ChartCard({ title, subtitle, icon: Icon, badge, children }) {
+function ChartCard({ title, subtitle, icon: Icon, badge, action, children }) {
   return (
     <section className="h-full overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
       <div className="flex items-start justify-between gap-3 border-b border-[#E4E7F0] px-5 py-4">
@@ -622,10 +724,49 @@ function ChartCard({ title, subtitle, icon: Icon, badge, children }) {
             {subtitle && <p className="mt-0.5 text-xs text-[#8891AD]">{subtitle}</p>}
           </div>
         </div>
-        {badge && <Badge>{badge}</Badge>}
+        <div className="flex shrink-0 items-center gap-2">
+          {badge && <Badge>{badge}</Badge>}
+          {action}
+        </div>
       </div>
       <div className="p-4">{children}</div>
     </section>
+  );
+}
+
+function GraficoExportar({ onClick, busy }) {
+  return (
+    <button type="button" onClick={onClick} disabled={busy} title="Descargar gráfica como imagen"
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E4E7F0] bg-white px-2.5 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-50">
+      <ImageDown className="h-3.5 w-3.5" />{busy ? "Generando…" : "PNG"}
+    </button>
+  );
+}
+
+function GraficoRestaurar({ onClick }) {
+  return (
+    <button type="button" onClick={onClick} title="Restaurar / quitar el filtro de esta gráfica"
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E4E7F0] bg-white px-2.5 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5">
+      <RotateCcw className="h-3.5 w-3.5" />Restaurar
+    </button>
+  );
+}
+
+function SectorResaltado(props) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius + 7}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+      cornerRadius={4}
+      stroke="#FFFFFF"
+      strokeWidth={2}
+    />
   );
 }
 
