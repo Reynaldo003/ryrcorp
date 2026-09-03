@@ -2218,12 +2218,18 @@ function AgendaBoard({
 }) {
     const rowsByTechnician = useMemo(() => {
         const grouped = new Map();
+        const keyToTechnician = new Map();
 
-        technicians.forEach((technician) => grouped.set(technician, []));
+        technicians.forEach((technician) => {
+            grouped.set(technician, []);
+            keyToTechnician.set(normalizeKey(technician), technician);
+        });
 
         orders.forEach((order) => {
             const technician =
-                canonicalTechnician(order.tecnico) || "SIN TÉCNICO";
+                keyToTechnician.get(normalizeKey(order.tecnico)) ||
+                canonicalTechnician(order.tecnico) ||
+                "SIN TÉCNICO";
 
             if (!grouped.has(technician)) grouped.set(technician, []);
             grouped.get(technician).push(order);
