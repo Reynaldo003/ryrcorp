@@ -1590,16 +1590,29 @@ export default function RetencionNoVentas() {
 
         return () => controller.abort();
     }, []);
+    const MAX_REGISTROS = 1000;
+    const PAGE_SIZE = 500;
+
     const cargarOrdenes = useCallback(async (filtros, signal) => {
+        if (!cacheRef.current.has("paginado")) cacheRef.current.set("paginado", new Map());
+        const pageCache = cacheRef.current.get("paginado");
         const cacheKey = JSON.stringify(filtros);
-        if (cacheRef.current.has(cacheKey)) return cacheRef.current.get(cacheKey);
+        if (pageCache.has(cacheKey)) return pageCache.get(cacheKey);
 
-        const data = await obtenerOrdenesRetencion(filtros, { signal });
-        const lista = Array.isArray(data) ? data : data.results ?? [];
-        const mapeado = lista.map(mapearOrden);
+        const acumulado = [];
+        const base = { ...filtros, limit: PAGE_SIZE };
 
-        cacheRef.current.set(cacheKey, mapeado);
-        return mapeado;
+        for (let page = 1; page <= Math.ceil(MAX_REGISTROS / PAGE_SIZE); page++) {
+            const data = await obtenerOrdenesRetencion({ ...base, page }, { signal });
+            const lista = Array.isArray(data) ? data : data.results ?? [];
+            if (lista.length === 0) break;
+            acumulado.push(...lista.map(mapearOrden));
+            const next = data?.next;
+            if (next == null) break;
+        }
+
+        pageCache.set(cacheKey, acumulado);
+        return acumulado;
     }, []);
 
     useEffect(() => {
@@ -1620,7 +1633,6 @@ export default function RetencionNoVentas() {
                         marca,
                         sin_venta: true,
                         ordering: "-fecha_ultima_os",
-                        limit: 50000,
                     },
                     controller.signal
                 );

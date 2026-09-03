@@ -262,6 +262,13 @@ export default function Sidebar() {
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
             },
             {
+                section: "Retención",
+                to: "/retencion_no_ventas",
+                label: "Retención No V.",
+                icon: UserCheck,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
+            },
+            {
                 section: "Marketing",
                 to: "/encuesta_whats",
                 label: "Envío Encuestas",

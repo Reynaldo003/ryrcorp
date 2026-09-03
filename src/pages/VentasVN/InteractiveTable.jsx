@@ -292,8 +292,8 @@ function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onCl
   );
 }
 
-const STORAGE_COLUMNAS = "ventasvn_columnas_visibles";
-const STORAGE_FILTROS = "ventasvn_filtros_columnas";
+const STORAGE_COLUMNAS = "columnas_visibles";
+const STORAGE_FILTROS = "filtros_columnas";
 
 export default function InteractiveTable({
   rows,
@@ -306,38 +306,42 @@ export default function InteractiveTable({
   totalPages,
   onPrev,
   onNext,
+  storageKey = "default",
 }) {
+  const keyColumnas = `${storageKey}_${STORAGE_COLUMNAS}`;
+  const keyFiltros = `${storageKey}_${STORAGE_FILTROS}`;
+
   // Columnas visibles persistentes en localStorage (hasta que se limpie)
   const [visibleColumns, setVisibleColumns] = useState(() => {
     const guardadas = (() => {
-      try { return JSON.parse(localStorage.getItem(STORAGE_COLUMNAS)); }
+      try { return JSON.parse(localStorage.getItem(keyColumnas)); }
       catch { return null; }
     })();
-    if (Array.isArray(guardadas) && guardadas.length > 0) {
+    if (Array.isArray(guardadas) && guardadas.length === columns.length) {
       const validas = guardadas.filter((k) => columns.some((c) => c.key === k));
-      if (validas.length > 0) return new Set(validas);
+      if (validas.length === columns.length) return new Set(validas);
     }
     return new Set(columns.map((c) => c.key));
   });
   const [showColumns, setShowColumns] = useState(false);
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [colFilters, setColFilters] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_FILTROS)) || {}; }
+    try { return JSON.parse(localStorage.getItem(keyFiltros)) || {}; }
     catch { return {}; }
   });
   const [seleccionado, setSeleccionado] = useState(null);
   const [openFilter, setOpenFilter] = useState(null);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_FILTROS, JSON.stringify(colFilters)); }
+    try { localStorage.setItem(keyFiltros, JSON.stringify(colFilters)); }
     catch { /* ignore */ }
-  }, [colFilters]);
+  }, [colFilters, keyFiltros]);
 
   const visibleCols = useMemo(() => columns.filter((c) => visibleColumns.has(c.key)), [columns, visibleColumns]);
 
   function cambiarColumnas(next) {
     setVisibleColumns(next);
-    try { localStorage.setItem(STORAGE_COLUMNAS, JSON.stringify(Array.from(next))); }
+    try { localStorage.setItem(keyColumnas, JSON.stringify(Array.from(next))); }
     catch { /* ignore */ }
   }
 

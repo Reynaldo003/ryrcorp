@@ -614,6 +614,7 @@ export default function VentasVN() {
             <InteractiveTable
               rows={registros}
               columns={COLUMNAS}
+              storageKey="autos_nuevos"
               total={total}
               loading={loading}
               pageSize={pageSize}

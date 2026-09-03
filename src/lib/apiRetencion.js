@@ -37,6 +37,8 @@ function construirQuery(filtros = {}) {
   params.set("ordering", filtros.ordering || "-fecha_ultima_os");
   params.set("limit", String(filtros.limit || 50000));
 
+  if (filtros.page) params.set("page", String(filtros.page));
+
   return params.toString();
 }
 

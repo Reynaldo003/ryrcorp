@@ -158,6 +158,7 @@ export default function ProductosEstoque() {
           <InteractiveTable
             rows={datos}
             columns={COLUMNAS}
+            storageKey="productos"
             total={total}
             loading={loading}
             pageSize={pageSize}

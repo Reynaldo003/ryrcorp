@@ -183,6 +183,7 @@ export default function Piezas() {
           <InteractiveTable
             rows={datosFiltrados}
             columns={columnasConfig}
+            storageKey="piezas"
             total={total}
             loading={loading}
             pageSize={pageSize}

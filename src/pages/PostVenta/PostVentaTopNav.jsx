@@ -5,7 +5,6 @@ import {
     DoorOpen,
     Package,
     Wrench,
-    Repeat,
     ShieldCheck
 } from "lucide-react";
 
@@ -52,18 +51,6 @@ export default function Topbar({
                 label: "Panel Taller",
                 href: "/postventa/taller",
                 icon: Wrench,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
-            },
-            {
-                label: "Retención",
-                href: "/postventa/retencion",
-                icon: Repeat,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
-            },
-            {
-                label: "Retención No V.",
-                href: "/postventa/retencion_no_ventas",
-                icon: Repeat,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
             },
             {

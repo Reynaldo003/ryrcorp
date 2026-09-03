@@ -865,34 +865,6 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
-                                    path: "retencion",
-                                    element: (
-                                        <RequirePermission
-                                            anyOf={[
-                                                "USUARIOS_ADMIN",
-                                                "CRM_CALIDAD",
-                                                "CRM_POSTVENTA",
-                                            ]}
-                                        >
-                                            <Retencion />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
-                                    path: "retencion_no_ventas",
-                                    element: (
-                                        <RequirePermission
-                                            anyOf={[
-                                                "USUARIOS_ADMIN",
-                                                "CRM_CALIDAD",
-                                                "CRM_POSTVENTA",
-                                            ]}
-                                        >
-                                            <RetencionNoVentas />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
                                     path: "safety",
                                     element: (
                                         <RequirePermission
@@ -1073,6 +1045,38 @@ export const router = createBrowserRouter(
                             element: (
                                 <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]}>
                                     <AnalisisFacturas />
+                                </RequirePermission>
+                            ),
+                        },
+
+                        {
+                            path: "retencion",
+                            element: (
+                                <RequirePermission
+                                    anyOf={[
+                                        "USUARIOS_ADMIN",
+                                        "CRM_VENTAS",
+                                        "CRM_CALIDAD",
+                                        "CRM_CALL_CENTER",
+                                    ]}
+                                >
+                                    <Retencion />
+                                </RequirePermission>
+                            ),
+                        },
+
+                        {
+                            path: "retencion_no_ventas",
+                            element: (
+                                <RequirePermission
+                                    anyOf={[
+                                        "USUARIOS_ADMIN",
+                                        "CRM_VENTAS",
+                                        "CRM_CALIDAD",
+                                        "CRM_CALL_CENTER",
+                                    ]}
+                                >
+                                    <RetencionNoVentas />
                                 </RequirePermission>
                             ),
                         },
