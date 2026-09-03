@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import {
   ArrowDown, ArrowUp, ArrowUpDown, Car, Check, ChevronLeft, ChevronRight,
-  DollarSign, Eye, FileText, Hash, Layers, Sheet, Store, User, X,
+  DollarSign, Eye, FileText, Filter, Hash, Layers, ListFilter, Search, Sheet, Store, User, X,
 } from "lucide-react";
 
 const C = {
@@ -219,7 +219,81 @@ function ColumnChooser({ columns, visible, onChange, onClose }) {
   );
 }
 
+function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onClose }) {
+  const [query, setQuery] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onDoc(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose]);
+
+  const filteredValues = query
+    ? values.filter(([labelValue]) => labelValue.toLowerCase().includes(query.toLowerCase()))
+    : values;
+
+  const allSelected = values.length > 0 && values.every(([labelValue]) => selected.has(labelValue));
+
+  function toggleAll() {
+    const noSeleccionados = values.filter(([labelValue]) => !selected.has(labelValue));
+    if (noSeleccionados.length === 0) {
+      values.forEach(([labelValue]) => { if (selected.has(labelValue)) onToggle(labelValue); });
+    } else {
+      noSeleccionados.forEach(([labelValue]) => onToggle(labelValue));
+    }
+  }
+
+  return (
+    <div ref={ref} className="absolute left-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-lg border bg-white shadow-2xl" style={{ borderColor: C.border }}>
+      <div className="border-b px-2.5 py-2" style={{ borderColor: C.border, backgroundColor: C.surface }}>
+        <p className="truncate text-[11px] font-bold text-[#1A1F3C]">{label}</p>
+        <div className="relative mt-1.5">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full rounded border border-slate-200 bg-white py-1 pl-7 pr-2 text-[11px] text-slate-700 outline-none transition focus:border-[#131E5C]/40 focus:ring-1 focus:ring-[#131E5C]/20"
+          />
+        </div>
+      </div>
+      <button type="button" onClick={toggleAll} className="flex w-full items-center gap-2 border-b border-slate-100 px-2.5 py-1.5 text-left text-[11px] font-semibold text-[#131E5C] transition hover:bg-slate-50">
+        <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition", allSelected ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-300 bg-white")}>
+          {allSelected && <Check className="h-2.5 w-2.5" />}
+        </span>
+        (Seleccionar todo)
+      </button>
+      <ul className="max-h-52 overflow-y-auto py-1">
+        {filteredValues.length === 0 ? (
+          <li className="px-3 py-4 text-center text-[11px] text-slate-400">Sin resultados</li>
+        ) : filteredValues.map(([labelValue]) => {
+          const check = selected.has(labelValue);
+          return (
+            <li key={labelValue}>
+              <button type="button" onClick={() => onToggle(labelValue)} className="flex w-full items-center gap-2 px-2.5 py-1 text-left transition hover:bg-slate-50">
+                <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition", check ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-300 bg-white")}>
+                  {check && <Check className="h-2.5 w-2.5" />}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-slate-700" title={labelValue}>{labelValue}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex items-center gap-2 border-t px-2.5 py-2" style={{ borderColor: C.border }}>
+        <button type="button" onClick={onClear} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold text-slate-600 transition hover:bg-slate-50">Limpiar</button>
+        <button type="button" onClick={onClose} className="flex-1 rounded-lg bg-[#131E5C] px-2 py-1.5 text-[10px] font-bold text-white transition hover:bg-[#0A1340]">OK</button>
+      </div>
+    </div>
+  );
+}
+
 const STORAGE_COLUMNAS = "ventasvn_columnas_visibles";
+const STORAGE_FILTROS = "ventasvn_filtros_columnas";
 
 export default function InteractiveTable({
   rows,
@@ -247,7 +321,17 @@ export default function InteractiveTable({
   });
   const [showColumns, setShowColumns] = useState(false);
   const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const [colFilters, setColFilters] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_FILTROS)) || {}; }
+    catch { return {}; }
+  });
   const [seleccionado, setSeleccionado] = useState(null);
+  const [openFilter, setOpenFilter] = useState(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_FILTROS, JSON.stringify(colFilters)); }
+    catch { /* ignore */ }
+  }, [colFilters]);
 
   const visibleCols = useMemo(() => columns.filter((c) => visibleColumns.has(c.key)), [columns, visibleColumns]);
 
@@ -259,6 +343,14 @@ export default function InteractiveTable({
 
   const filtered = useMemo(() => {
     let result = rows;
+    const activeFilters = Object.entries(colFilters).filter(([, v]) => Array.isArray(v) && v.length > 0);
+    if (activeFilters.length > 0) {
+      result = result.filter((row) => activeFilters.every(([key, vals]) => {
+        const col = columns.find((c) => c.key === key);
+        const cellVal = formatCell(row[key], col?.tipo).trim().toLowerCase();
+        return vals.some((value) => cellVal === value.toLowerCase());
+      }));
+    }
     if (sort.key) {
       const col = columns.find((c) => c.key === sort.key);
       if (col) {
@@ -273,7 +365,7 @@ export default function InteractiveTable({
       }
     }
     return result;
-  }, [rows, columns, sort]);
+  }, [rows, columns, sort, colFilters]);
 
   function toggleSort(key) {
     setSort((prev) => {
@@ -286,6 +378,42 @@ export default function InteractiveTable({
     if (sort.key === col.key) return sort.dir === "asc" ? <ArrowUp className="h-3 w-3 text-white" /> : <ArrowDown className="h-3 w-3 text-white" />;
     return <ArrowUpDown className="h-3 w-3 text-white/50" />;
   }
+
+  function uniqueValues(col) {
+    const set = new Map();
+    rows.forEach((row) => {
+      const v = formatCell(row[col.key], col.tipo).trim();
+      const label = v || "(Vacío)";
+      if (!set.has(label)) set.set(label, v === "" ? "" : v);
+    });
+    return Array.from(set.entries()).sort((a, b) => a[0].localeCompare(b[0], "es", { numeric: true }));
+  }
+
+  const tol = ((k) => { const v = colFilters[k]; return Array.isArray(v) ? new Set(v) : new Set(); });
+  const activarFilter = (k) => setOpenFilter((prev) => (prev === k ? null : k));
+
+  function toggleFilterValue(colKey, value) {
+    setColFilters((prev) => {
+      const current = Array.isArray(prev[colKey]) ? new Set(prev[colKey]) : new Set();
+      if (current.has(value)) current.delete(value); else current.add(value);
+      return { ...prev, [colKey]: Array.from(current) };
+    });
+  }
+
+  function limpiarColumna(colKey) {
+    setColFilters((prev) => {
+      const next = { ...prev };
+      delete next[colKey];
+      return next;
+    });
+  }
+
+  function limpiarTodosLosFiltros() {
+    setColFilters({});
+    setOpenFilter(null);
+  }
+
+  const hayFiltrosColumna = Object.values(colFilters).some((v) => Array.isArray(v) && v.length > 0);
 
   function exportExcel() {
     if (filtered.length === 0) return;
@@ -308,6 +436,9 @@ export default function InteractiveTable({
         </p>
 
         <div className="relative flex items-center gap-2">
+          <button type="button" onClick={limpiarTodosLosFiltros} disabled={!hayFiltrosColumna} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-[11px] font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40">
+            <ListFilter className="h-3.5 w-3.5" />Limpiar filtros
+          </button>
           <button type="button" onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-bold text-[#131E5C] hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-40">
             <Sheet className="h-3.5 w-3.5" />Exportar Excel
           </button>
@@ -319,18 +450,44 @@ export default function InteractiveTable({
       </div>
 
       {/* Table */}
-      <div className="max-h-[65vh] overflow-auto">
+      <div className="max-h-[65vh] min-h-[360px] overflow-auto">
         <table className="min-w-max border-collapse">
           <thead className="sticky top-0 z-20">
             <tr style={{ backgroundColor: C.navy }}>
-              {visibleCols.map((col) => (
-                <th key={col.key} className="whitespace-nowrap px-3 py-2 text-left" style={{ backgroundColor: C.navy }}>
-                  <button type="button" onClick={() => toggleSort(col.key)} className="flex items-center gap-1 rounded px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-white/10" title={`Ordenar por ${col.label}`}>
-                    {headerSortIcon(col)}
-                    <span>{col.label}</span>
-                  </button>
-                </th>
-              ))}
+              {visibleCols.map((col) => {
+                const activo = tol(col.key).size > 0;
+                return (
+                  <th key={col.key} className="whitespace-nowrap px-3 py-2 text-left" style={{ backgroundColor: C.navy }}>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => toggleSort(col.key)} className="flex items-center gap-1 rounded px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-white/10" title={`Ordenar por ${col.label}`}>
+                        {headerSortIcon(col)}
+                        <span>{col.label}</span>
+                      </button>
+                      <span className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); activarFilter(col.key); }}
+                          title="Filtrar por columna"
+                          className={cn("inline-flex h-5 w-5 items-center justify-center rounded text-white transition",
+                            activo ? "bg-yellow-400 text-[#131E5C]" : "text-white/50 hover:bg-white/15 hover:text-white")}
+                        >
+                          <Filter className="h-3 w-3" />
+                        </button>
+                        {openFilter === col.key && (
+                          <ColumnFilterDropdown
+                            label={col.label}
+                            values={uniqueValues(col)}
+                            selected={tol(col.key)}
+                            onToggle={(value) => toggleFilterValue(col.key, value)}
+                            onClear={() => limpiarColumna(col.key)}
+                            onClose={() => setOpenFilter(null)}
+                          />
+                        )}
+                      </span>
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

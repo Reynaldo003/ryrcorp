@@ -385,19 +385,17 @@ export default function VentasVN() {
         </div>
 
         <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: "#E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.06)" }}>
-          {/* Header */}
-          <div className="relative flex items-center justify-between gap-3 px-4 py-3.5 text-white" style={{ background: "linear-gradient(135deg, #131E5C 0%, #0A1340 100%)" }}>
-            <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/5" />
-            <div className="relative flex items-center gap-2.5">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
-                <SlidersHorizontal className="h-[18px] w-[18px]" />
+          <div className="flex items-center justify-between gap-3 border-b border-[#E4E7F0] px-4 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]">
+                <SlidersHorizontal className="h-[18px] w-[18px] text-[#131E5C]" />
               </span>
               <div>
-                <h2 className="text-sm font-black tracking-wide">Filtros</h2>
-                <p className="text-[11px] font-medium text-white/60">Se aplican al instante al elegir una opción</p>
+                <h2 className="text-sm font-black tracking-wide text-[#1A1F3C]">Filtros</h2>
+                <p className="text-[11px] font-medium text-[#8891AD]">Se aplican al instante al elegir una opción</p>
               </div>
             </div>
-            <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="relative inline-flex h-9 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-[11px] font-bold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10">
+            <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E4E7F0] bg-white px-3 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white">
               <Eraser className="h-3.5 w-3.5" />Limpiar
             </button>
           </div>
