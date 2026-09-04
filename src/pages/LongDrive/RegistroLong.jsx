@@ -342,6 +342,15 @@ export default function RegistroLong() {
     );
 
     const [longs, setLongs] = useState([]);
+    const PAGE_SIZE = 200;
+
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(total / PAGE_SIZE),
+    );
     const [loadingList, setLoadingList] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -381,19 +390,67 @@ export default function RegistroLong() {
         setLoadingList(true);
 
         try {
-            const data = await apiLong.list();
-            setLongs(Array.isArray(data) ? data : []);
+            const concesionario =
+                !isAdmin
+                    ? userConcesionario
+                    : filters.concesionario !== "Todos"
+                        ? filters.concesionario
+                        : "";
+
+            const ordering =
+                `${sort.dir === "desc" ? "-" : ""}${sort.key}`;
+
+            const data = await apiLong.list({
+                page,
+                page_size: PAGE_SIZE,
+                search: normalizeStr(filters.q),
+                concesionario,
+                fecha_desde: filters.rangoDesde,
+                fecha_hasta: filters.rangoHasta,
+                ordering,
+            });
+
+            setLongs(
+                Array.isArray(data?.results)
+                    ? data.results
+                    : Array.isArray(data)
+                        ? data
+                        : [],
+            );
+
+            setTotal(
+                Number.isFinite(Number(data?.count))
+                    ? Number(data.count)
+                    : Array.isArray(data)
+                        ? data.length
+                        : 0,
+            );
         } catch (error) {
             console.error(error);
             setLongs([]);
+            setTotal(0);
         } finally {
             setLoadingList(false);
         }
     };
 
     useEffect(() => {
-        refreshList();
-    }, []);
+        const timer = setTimeout(() => {
+            refreshList();
+        }, filters.q ? 300 : 0);
+
+        return () => clearTimeout(timer);
+    }, [
+        page,
+        sort.key,
+        sort.dir,
+        filters.q,
+        filters.concesionario,
+        filters.rangoDesde,
+        filters.rangoHasta,
+        isAdmin,
+        userConcesionario,
+    ]);
 
     useEffect(() => {
         const closeContext = () => {
@@ -416,20 +473,14 @@ export default function RegistroLong() {
     }, []);
 
     const dealers = useMemo(() => {
-        const values = Array.from(
-            new Set(
-                longs
-                    .map((row) => normalizeStr(row.concesionario))
-                    .filter(Boolean),
-            ),
-        );
-
         if (!isAdmin) {
-            return userConcesionario ? ["Todos", userConcesionario] : ["Todos"];
+            return userConcesionario
+                ? ["Todos", userConcesionario]
+                : ["Todos"];
         }
 
-        return ["Todos", ...values.sort()];
-    }, [longs, isAdmin, userConcesionario]);
+        return ["Todos", "2923", "2924"];
+    }, [isAdmin, userConcesionario]);
 
     const filtered = useMemo(() => {
         const q = normalizeStr(filters.q).toLowerCase();
@@ -491,8 +542,13 @@ export default function RegistroLong() {
     }, [filtered, sort]);
 
     const toggleSort = (key) => {
+        setPage(1);
+
         setSort((previous) => {
-            if (previous.key !== key) return { key, dir: "asc" };
+            if (previous.key !== key) {
+                return { key, dir: "asc" };
+            }
+
             return {
                 key,
                 dir: previous.dir === "asc" ? "desc" : "asc",
@@ -501,6 +557,8 @@ export default function RegistroLong() {
     };
 
     const resetFilters = () => {
+        setPage(1);
+
         setFilters({
             q: "",
             concesionario: "Todos",
@@ -509,12 +567,47 @@ export default function RegistroLong() {
         });
     };
 
-    const setHoy = () => {
-        const hoy = toYMD(new Date());
+    const aplicarRangoRapido = (tipo) => {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        let desde = new Date(hoy);
+        let hasta = new Date(hoy);
+
+        if (tipo === "ayer") {
+            desde.setDate(desde.getDate() - 1);
+            hasta = new Date(desde);
+        }
+
+        if (tipo === "semana") {
+            const diaSemana = hoy.getDay();
+            const diasDesdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
+
+            desde.setDate(hoy.getDate() - diasDesdeLunes);
+        }
+
+        if (tipo === "7dias") {
+            desde.setDate(hoy.getDate() - 6);
+        }
+
+        if (tipo === "30dias") {
+            desde.setDate(hoy.getDate() - 29);
+        }
+
+        if (tipo === "mes") {
+            desde = new Date(
+                hoy.getFullYear(),
+                hoy.getMonth(),
+                1,
+            );
+        }
+
+        setPage(1);
+
         setFilters((previous) => ({
             ...previous,
-            rangoDesde: hoy,
-            rangoHasta: hoy,
+            rangoDesde: toYMD(desde),
+            rangoHasta: toYMD(hasta),
         }));
     };
 
@@ -699,117 +792,167 @@ export default function RegistroLong() {
                 </div>
             ) : null}
 
-            <div className="mb-4 rounded-lg border border-black/10 bg-white p-3">
-                <div className="grid gap-3 md:grid-cols-12">
-                    <div className="md:col-span-6">
+           <div className="rounded-lg border border-black/10 bg-white p-4">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+
+                    {/* BÚSQUEDA */}
+                    <div className="lg:col-span-4">
                         <FilterBlock label="Búsqueda">
-                            <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
-                                <Search className="h-4 w-4 text-[#131E5C]" />
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
                                 <input
+                                    type="text"
                                     value={filters.q}
-                                    onChange={(event) =>
+                                    placeholder="Certificado, cliente, serie, modelo, RFC, cobertura..."
+                                    onChange={(event) => {
+                                        setPage(1);
+
                                         setFilters((previous) => ({
                                             ...previous,
                                             q: event.target.value,
-                                        }))
-                                    }
-                                    placeholder="Certificado, cliente, serie, modelo, RFC, cobertura..."
-                                    className="w-full text-sm text-[#131E5C] outline-none placeholder:text-slate-400"
+                                        }));
+                                    }}
+                                    className="h-11 w-full rounded-lg border border-[#131E5C] bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                                 />
-
-                                {filters.q ? (
-                                    <button
-                                        onClick={() =>
-                                            setFilters((previous) => ({
-                                                ...previous,
-                                                q: "",
-                                            }))
-                                        }
-                                        className="rounded-lg p-1 text-[#131E5C] hover:text-red-500"
-                                        aria-label="Limpiar búsqueda"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                ) : null}
                             </div>
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-3">
+                    {/* CONCESIONARIO */}
+                    <div className="lg:col-span-2">
                         <FilterBlock label="Concesionario">
                             <select
                                 value={filters.concesionario}
-                                onChange={(event) =>
+                                disabled={!isAdmin}
+                                onChange={(event) => {
+                                    setPage(1);
+
                                     setFilters((previous) => ({
                                         ...previous,
                                         concesionario: event.target.value,
-                                    }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                    }));
+                                }}
+                                className="h-11 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-70"
                             >
                                 {dealers.map((dealer) => (
                                     <option key={dealer} value={dealer}>
-                                        {dealer === "Todos" ? "Todos" : nombreConcesionario(dealer)}
+                                        {dealer === "2923"
+                                            ? "2923 · VW Córdoba"
+                                            : dealer === "2924"
+                                                ? "2924 · VW Orizaba"
+                                                : dealer}
                                     </option>
                                 ))}
                             </select>
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-3">
+                    {/* ACCIONES */}
+                    <div className="lg:col-span-6">
                         <FilterBlock label="Acciones">
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+
                                 <button
-                                    onClick={setHoy}
-                                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                    type="button"
+                                    onClick={() => aplicarRangoRapido("hoy")}
+                                    className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white transition hover:bg-emerald-700"
                                 >
                                     <CalendarDays className="h-4 w-4" />
                                     Hoy
                                 </button>
 
                                 <button
+                                    type="button"
+                                    onClick={() => aplicarRangoRapido("ayer")}
+                                    className="h-11 w-full rounded-lg bg-orange-500 px-2 text-xs font-bold text-white transition hover:bg-orange-600"
+                                >
+                                    Ayer
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => aplicarRangoRapido("semana")}
+                                    className="h-11 w-full rounded-lg bg-sky-500 px-2 text-xs font-bold text-white transition hover:bg-sky-600"
+                                >
+                                    Semana
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => aplicarRangoRapido("7dias")}
+                                    className="h-11 w-full rounded-lg bg-violet-500 px-2 text-xs font-bold text-white transition hover:bg-violet-600"
+                                >
+                                    7 días
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => aplicarRangoRapido("30dias")}
+                                    className="h-11 w-full rounded-lg bg-indigo-500 px-2 text-xs font-bold text-white transition hover:bg-indigo-600"
+                                >
+                                    30 días
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => aplicarRangoRapido("mes")}
+                                    className="h-11 w-full rounded-lg bg-blue-500 px-2 text-xs font-bold text-white transition hover:bg-blue-600"
+                                >
+                                    Este mes
+                                </button>
+
+                                <button
+                                    type="button"
                                     onClick={resetFilters}
-                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                    className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-[#131E5C] bg-white px-2 text-xs font-bold text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white"
                                 >
                                     <X className="h-4 w-4" />
                                     Limpiar
                                 </button>
+
                             </div>
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-6">
+                    {/* DESDE */}
+                    <div className="lg:col-span-6">
                         <FilterBlock label="Desde · Fecha de creación">
                             <input
                                 type="date"
                                 value={filters.rangoDesde}
-                                onChange={(event) =>
+                                onChange={(event) => {
+                                    setPage(1);
+
                                     setFilters((previous) => ({
                                         ...previous,
                                         rangoDesde: event.target.value,
-                                    }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                    }));
+                                }}
+                                className="h-11 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                             />
                         </FilterBlock>
                     </div>
 
-                    <div className="md:col-span-6">
+                    {/* HASTA */}
+                    <div className="lg:col-span-6">
                         <FilterBlock label="Hasta · Fecha de creación">
                             <input
                                 type="date"
                                 value={filters.rangoHasta}
-                                onChange={(event) =>
+                                onChange={(event) => {
+                                    setPage(1);
+
                                     setFilters((previous) => ({
                                         ...previous,
                                         rangoHasta: event.target.value,
-                                    }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                    }));
+                                }}
+                                className="h-11 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                             />
                         </FilterBlock>
                     </div>
+
                 </div>
             </div>
 
@@ -914,7 +1057,70 @@ export default function RegistroLong() {
                     />
                 </div>
             </div>
+                {!loadingList && total > 0 ? (
+                    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-black/10 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-xs font-semibold text-slate-500">
+                            <span className="font-bold text-[#131E5C]">
+                                {total.toLocaleString("es-MX")}
+                            </span>{" "}
+                            registros · Página{" "}
+                            <span className="font-bold text-[#131E5C]">
+                                {page}
+                            </span>{" "}
+                            de{" "}
+                            <span className="font-bold text-[#131E5C]">
+                                {totalPages}
+                            </span>
+                        </div>
 
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                            <button
+                                type="button"
+                                disabled={page <= 1}
+                                onClick={() =>
+                                    setPage((previous) =>
+                                        Math.max(1, previous - 1)
+                                    )
+                                }
+                                className="h-9 rounded-lg border border-[#131E5C]/20 bg-white px-3 text-xs font-bold text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-[#131E5C]"
+                            >
+                                Anterior
+                            </button>
+
+                            {Array.from(
+                                { length: totalPages },
+                                (_, index) => index + 1,
+                            ).map((pageNumber) => (
+                                <button
+                                    key={pageNumber}
+                                    type="button"
+                                    onClick={() => setPage(pageNumber)}
+                                    className={[
+                                        "h-9 min-w-9 rounded-lg border px-3 text-xs font-bold transition",
+                                        page === pageNumber
+                                            ? "border-[#131E5C] bg-[#131E5C] text-white"
+                                            : "border-[#131E5C]/20 bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white",
+                                    ].join(" ")}
+                                >
+                                    {pageNumber}
+                                </button>
+                            ))}
+
+                            <button
+                                type="button"
+                                disabled={page >= totalPages}
+                                onClick={() =>
+                                    setPage((previous) =>
+                                        Math.min(totalPages, previous + 1)
+                                    )
+                                }
+                                className="h-9 rounded-lg border border-[#131E5C]/20 bg-white px-3 text-xs font-bold text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-[#131E5C]"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
             <Modal
                 open={openModal}
                 title={

@@ -7,7 +7,26 @@ const optionsProtegidas = {
 };
 
 export const apiLong = {
-  list: () => http("/financieros/api/long-drives/", optionsProtegidas),
+  list: (params = {}) => {
+    const query = new URLSearchParams();
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== ""
+      ) {
+        query.set(key, String(value));
+      }
+    });
+
+    const qs = query.toString();
+
+    return http(
+      `/financieros/api/long-drives/${qs ? `?${qs}` : ""}`,
+      optionsProtegidas,
+    );
+  },
 
   get: (id) =>
     http(
