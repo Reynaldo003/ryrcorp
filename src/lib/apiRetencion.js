@@ -16,6 +16,7 @@ function construirQuery(filtros = {}) {
 
   if (!esFiltroVacio(filtros.anio)) params.set("anio", filtros.anio);
   if (!esFiltroVacio(filtros.mes)) params.set("mes", filtros.mes);
+  if (!esFiltroVacio(filtros.semana)) params.set("semana", filtros.semana);
   if (!esFiltroVacio(filtros.estado)) params.set("estado", filtros.estado);
   if (!esFiltroVacio(filtros.segmento))
     params.set("segmento", filtros.segmento);
@@ -24,26 +25,30 @@ function construirQuery(filtros = {}) {
   if (!esFiltroVacio(filtros.agencia)) params.set("agencia", filtros.agencia);
   if (!esFiltroVacio(filtros.agencia_venta))
     params.set("agencia_venta", filtros.agencia_venta);
+  if (!esFiltroVacio(filtros.agencias_venta))
+    params.set("agencias_venta", filtros.agencias_venta);
   if (!esFiltroVacio(filtros.condicion))
     params.set("condicion", filtros.condicion);
   if (!esFiltroVacio(filtros.search)) params.set("search", filtros.search);
 
-  // NUEVO: vehículos que llegaron a servicio pero no tienen venta registrada
   if (
     filtros.sin_venta === true ||
     filtros.sin_venta === 1 ||
     filtros.sin_venta === "1"
-  )
+  ) {
     params.set("sin_venta", "1");
+  }
 
   params.set("ordering", filtros.ordering || "-fecha_ultima_os");
-  params.set("limit", String(filtros.limit || 50000));
+
+  const pageSize = filtros.page_size || filtros.limit || 100;
+  params.set("page_size", String(pageSize));
+  params.set("limit", String(pageSize));
 
   if (filtros.page) params.set("page", String(filtros.page));
 
   return params.toString();
 }
-
 export function obtenerOpcionesRetencion(options = {}) {
   return http("/retencion/api/ordenes-ventas/opciones/", options);
 }
@@ -72,6 +77,14 @@ export const apiRetencion = {
     const query = construirQuery(filtros);
     return http(
       `/retencion/api/ordenes-ventas/${query ? `?${query}` : ""}`,
+      options,
+    );
+  },
+
+  resumen: (filtros = {}, options = {}) => {
+    const query = construirQuery(filtros);
+    return http(
+      `/retencion/api/ordenes-ventas/resumen/${query ? `?${query}` : ""}`,
       options,
     );
   },

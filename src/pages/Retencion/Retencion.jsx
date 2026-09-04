@@ -485,8 +485,8 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
     }, [datos]);
 
     return (
-            <div className="overflow-hidden rounded-2xl border bg-white"
-                style={{ borderColor: "#E4E7F0", boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+        <div className="overflow-hidden rounded-2xl border bg-white"
+            style={{ borderColor: "#E4E7F0", boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
             <div className="flex items-center justify-between border-b px-5 py-3"
                 style={{ borderColor: "#E4E7F0" }}>
                 <div className="text-sm font-extrabold" style={{ color: NAVY }}>
@@ -1715,7 +1715,13 @@ export default function Retencion() {
     const [busqueda, setBusqueda] = useState("");
 
     const [datosRaw, setDatosRaw] = useState([]);
-
+    const [resumenBackend, setResumenBackend] = useState({
+        total_vehiculos: 0,
+        activos: 0,
+        inactivos: 0,
+        total_servicio: 0,
+        retorno: 0,
+    });
     const [opciones, setOpciones] = useState({
         anios: [],
         anio_mes: [],
@@ -1842,36 +1848,77 @@ export default function Retencion() {
     }, []);
 
     const PAGE_SIZE = 100;
-
-    const cargarOrdenes = useCallback(async (filtros, signal) => {
-        if (!cacheRef.current.has("paginado")) cacheRef.current.set("paginado", new Map());
-        const pageCache = cacheRef.current.get("paginado");
-        const cacheKey = JSON.stringify(filtros);
-        if (pageCache.has(cacheKey)) return pageCache.get(cacheKey);
-
-        const base = { ...filtros, limit: PAGE_SIZE };
-        let total = 0;
-
-        const dealersConsulta = normalizarTexto(filtros.agencia) === "todos" || !filtros.agencia
-            ? DEALERS_RETENCION
-            : [filtros.agencia];
-
-        const porDealer = await Promise.all(
-            dealersConsulta.map(async (dealer) => {
-                const data = await apiRetencion.list(
-                    { ...base, agencia_venta: dealer, page: filtros.pagina || 1 },
-                    { signal }
-                );
-                const lista = Array.isArray(data) ? data : data.results ?? [];
-                total += Number(data?.count) || 0;
-                return lista.map(mapearOrden);
-            })
+    function construirFiltrosRetencion(filtros = {}) {
+        const dealersDisponibles = opciones.agencias.filter((item) =>
+            DEALERS_RETENCION.some(
+                (dealer) => normalizarTexto(item) === normalizarTexto(dealer)
+            )
         );
 
-        const datos = porDealer.flat();
-        pageCache.set(cacheKey, { datos, total });
-        return { datos, total };
-    }, []);
+        const filtrosBackend = { ...filtros };
+
+        if (filtros.agencia && filtros.agencia !== "Todos") {
+            filtrosBackend.agencias_venta = filtros.agencia;
+        } else if (dealersDisponibles.length > 0) {
+            filtrosBackend.agencias_venta = dealersDisponibles.join("|");
+        }
+
+        delete filtrosBackend.agencia;
+
+        return filtrosBackend;
+    }
+
+    const cargarOrdenes = useCallback(async (filtros, signal) => {
+        if (!cacheRef.current.has("paginado")) {
+            cacheRef.current.set("paginado", new Map());
+        }
+
+        const pageCache = cacheRef.current.get("paginado");
+
+        const dealersDisponibles = opciones.agencias.filter((item) =>
+            DEALERS_RETENCION.some(
+                (dealer) => normalizarTexto(item) === normalizarTexto(dealer)
+            )
+        );
+
+        const filtrosBackend = {
+            ...filtros,
+            page_size: PAGE_SIZE,
+        };
+
+        if (filtros.agencia && filtros.agencia !== "Todos") {
+            filtrosBackend.agencias_venta = filtros.agencia;
+        } else if (dealersDisponibles.length > 0) {
+            filtrosBackend.agencias_venta = dealersDisponibles.join("|");
+        }
+
+        delete filtrosBackend.agencia;
+
+        const cacheKey = JSON.stringify(filtrosBackend);
+
+        if (pageCache.has(cacheKey)) {
+            return pageCache.get(cacheKey);
+        }
+
+        const data = await apiRetencion.list(filtrosBackend, { signal });
+
+        const lista = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.results)
+                ? data.results
+                : [];
+
+        const resultado = {
+            datos: lista.map(mapearOrden),
+            total: Array.isArray(data)
+                ? lista.length
+                : Number(data?.count || 0),
+        };
+
+        pageCache.set(cacheKey, resultado);
+
+        return resultado;
+    }, [opciones.agencias]);
 
     const [pagina, setPagina] = useState(1);
     const [totalRegistros, setTotalRegistros] = useState(0);
@@ -1885,47 +1932,102 @@ export default function Retencion() {
                 setLoading(true);
                 setError(null);
 
-                const { datos, total } = await cargarOrdenes(
-                    { anio, mes, segmento, agencia, estado, marca, ordering: "-fecha_ultima_os", pagina: 1 },
-                    controller.signal
-                );
+                const filtros = {
+                    anio,
+                    mes,
+                    semana,
+                    segmento,
+                    agencia,
+                    estado,
+                    marca,
+                    search: busqueda.trim(),
+                    ordering: "-fecha_ultima_os",
+                    page: 1,
+                };
 
-                setDatosRaw(datos);
-                setTotalRegistros(total);
+                const filtrosResumen = construirFiltrosRetencion(filtros);
+
+                const [paginaData, resumenData] = await Promise.all([
+                    cargarOrdenes(filtros, controller.signal),
+                    apiRetencion.resumen(filtrosResumen, {
+                        signal: controller.signal,
+                    }),
+                ]);
+
+                setDatosRaw(paginaData.datos);
+                setTotalRegistros(paginaData.total);
+
+                setResumenBackend({
+                    total_vehiculos: Number(resumenData?.total_vehiculos || 0),
+                    activos: Number(resumenData?.activos || 0),
+                    inactivos: Number(resumenData?.inactivos || 0),
+                    total_servicio: Number(resumenData?.total_servicio || 0),
+                    retorno: Number(resumenData?.retorno || 0),
+                });
+
                 setPagina(1);
             } catch (err) {
-                if (err.name !== "AbortError") setError(err.message);
+                if (err.name !== "AbortError") {
+                    setError(err.message);
+                }
             } finally {
                 setLoading(false);
             }
         }
 
-        cargarDatos();
-        return () => controller.abort();
-    }, [anio, mes, segmento, agencia, estado, marca, cargarOrdenes, refreshKey]);
+        const timer = setTimeout(
+            cargarDatos,
+            busqueda.trim() ? 300 : 0
+        );
 
-    const irPagina = useCallback(
-        async (nuevaPagina) => {
-            if (!nuevaPagina || nuevaPagina < 1) return;
-            if (nuevaPagina === pagina) return;
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [
+        anio,
+        mes,
+        semana,
+        segmento,
+        agencia,
+        estado,
+        marca,
+        busqueda,
+        opciones.agencias,
+        cargarOrdenes,
+        refreshKey,
+    ]);
 
-            setCargandoPagina(true);
-            setError(null);
-            try {
-                const { datos } = await cargarOrdenes(
-                    { anio, mes, segmento, agencia, estado, marca, ordering: "-fecha_ultima_os", pagina: nuevaPagina },
-                    new AbortController().signal
-                );
-                setDatosRaw(datos);
-                setPagina(nuevaPagina);
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setCargandoPagina(false);
-            }
-        },
-        [pagina, anio, mes, segmento, agencia, estado, marca, cargarOrdenes]
-    );
+    const irPagina = useCallback(async (nuevaPagina) => {
+        if (!nuevaPagina || nuevaPagina < 1 || nuevaPagina === pagina) {
+            return;
+        }
+
+        setCargandoPagina(true);
+        setError(null);
+
+        try {
+            const { datos } = await cargarOrdenes({
+                anio,
+                mes,
+                semana,
+                segmento,
+                agencia,
+                estado,
+                marca,
+                search: busqueda.trim(),
+                ordering: "-fecha_ultima_os",
+                page: nuevaPagina,
+            }, new AbortController().signal);
+
+            setDatosRaw(datos);
+            setPagina(nuevaPagina);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setCargandoPagina(false);
+        }
+    }, [pagina, anio, mes, semana, segmento, agencia, estado, marca, busqueda, cargarOrdenes,]);
 
     const aniosDisponibles = useMemo(() => {
         if (opciones.anios.length > 0) return opciones.anios;
@@ -1946,53 +2048,19 @@ export default function Retencion() {
     }, [anio, opciones.anio_mes, datosRaw]);
 
     const datosFiltrados = useMemo(() => {
-        let datos = datosRaw.filter((item) =>
+        return datosRaw.filter((item) =>
             DEALERS_RETENCION.some(
                 (dealer) => normalizarTexto(item.agencia) === normalizarTexto(dealer)
             )
         );
-
-        if (semana !== "Todas") {
-            const semanaNumero = Number(semana);
-            datos = datos.filter((item) => item.semana === semanaNumero);
-        }
-
-        // NOTA: el filtro de "Contacto" es solo visual por ahora; el backend
-        // todavía no expone un campo de estado de contacto para filtrar por él.
-
-        const texto = normalizarTexto(busqueda);
-        if (texto) {
-            datos = datos.filter((item) => {
-                const acumulado = [
-                    item.vin, item.numero_nota, item.ultima_orden_servicio, item.nombre_cliente,
-                    item.telefono_cliente, item.correo_cliente, item.marca, item.agencia, item.modelo_nombre, item.placa_vehiculo,
-                ].map(normalizarTexto).join(" ");
-                return acumulado.includes(texto);
-            });
-        }
-
-        return datos;
-    }, [datosRaw, semana, busqueda]);
-
-    const resumen = useMemo(() => {
-        const totalVehiculos = datosFiltrados.length;
-        const totalServicio = datosFiltrados.reduce((acc, item) => acc + item.total_ultimo_servicio, 0);
-        const totalMeses = datosFiltrados.reduce((acc, item) => acc + item.meses_desde_venta, 0);
-        const activos = datosFiltrados.filter((item) => normalizarTexto(item.estado_actividad) === "activo").length;
-        const inactivos = totalVehiculos - activos;
-        const conTelefono = datosFiltrados.filter((item) => item.telefono_cliente).length;
-
-        return {
-            totalVehiculos,
-            totalServicio,
-            ticketPromedio: promedio(totalServicio, totalVehiculos),
-            mesesPromedio: promedio(totalMeses, totalVehiculos),
-            activos,
-            inactivos,
-            conTelefono,
-            retorno: promedio(activos, totalVehiculos) * 100,
-        };
-    }, [datosFiltrados]);
+    }, [datosRaw]);
+    const resumen = useMemo(() => ({
+        totalVehiculos: resumenBackend.total_vehiculos,
+        totalServicio: resumenBackend.total_servicio,
+        activos: resumenBackend.activos,
+        inactivos: resumenBackend.inactivos,
+        retorno: resumenBackend.retorno,
+    }), [resumenBackend]);
 
     const filtrosActivos = useMemo(() => {
         const filtros = [];
@@ -2411,7 +2479,7 @@ export default function Retencion() {
                                     }`}
                                 style={segmento === item ? { backgroundColor: NAVY } : {}}
                             >
-                                {item.replace("Segmento ", "S")}
+                                {item}
                             </button>
                         ))}
                     </div>
