@@ -115,6 +115,8 @@ import DigitalesRendimiento from "./pages/Digitales/DigitalesRendimiento";
 import DirectorioWeb from "./pages/DirectorioWeb/DirectorioWeb";
 import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
 import AdministracionAsesores from "./pages/AdministracionAsesores/AdministracionAsesores";
+import GestorActividades from "./pages/GestorActividades/GestorActividades";
+import GestorActividadesLayout from "./pages/GestorActividades/GestorActividadesLayout";
 import VentasVN from "./pages/VentasVN/VentasVN";
 import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
 import Piezas from "./pages/GestionNegocio/Piezas";
@@ -1039,6 +1041,20 @@ export const router = createBrowserRouter(
                                     <DirectorioWeb />
                                 </RequirePermission>
                             ),
+                        },
+                        {
+                            path: "gestor_actividades",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_CALIDAD"]}>
+                                    <GestorActividadesLayout />
+                                </RequirePermission>
+                            ),
+                            children: [
+                                {
+                                    index: true,
+                                    element: <GestorActividades />,
+                                },
+                            ],
                         },
                         {
                             path: "facturas",

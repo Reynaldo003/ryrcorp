@@ -3,7 +3,7 @@ import {
   Boxes, Database, LoaderCircle, Package, RefreshCw,
   Search, SlidersHorizontal, Store, TrendingUp, Wrench, X,
 } from "lucide-react";
-import { http, buildQuery } from "../../lib/apiClient";
+import { getPiezasTipificadas } from "../../lib/apiPiezas";
 import InteractiveTable from "../VentasVN/InteractiveTable";
 
 function numero(value) { return Number(value || 0); }
@@ -61,11 +61,11 @@ export default function Piezas() {
     setLoading(true);
     setError("");
     try {
-      const response = await http(`/ventas-vn/api/piezas/${buildQuery({
+      const response = await getPiezasTipificadas({
         agencia: agencia || undefined,
         page: pagina,
         page_size: pageSize,
-      })}`);
+      });
       setDatos(Array.isArray(response?.results) ? response.results : []);
       setColumnas(Array.isArray(response?.columns) ? response.columns : []);
       setTotal(Number(response?.count || 0));

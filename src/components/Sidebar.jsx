@@ -32,6 +32,7 @@ import {
     CarFront,
     BanknoteArrowUp,
     UserCheck,
+    CalendarCheck,
 } from "lucide-react";
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
@@ -322,6 +323,13 @@ export default function Sidebar() {
                 to: "/webs",
                 label: "Interfacez Web",
                 icon: Globe,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
+            },
+            {
+                section: "Herramientas",
+                to: "/gestor_actividades",
+                label: "Gestor de Actividades",
+                icon: CalendarCheck,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
             },
             {
