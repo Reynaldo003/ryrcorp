@@ -12,6 +12,8 @@ import {
     Cake,
     CheckCircle2,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     ClipboardList,
     Gauge,
     Mail,
@@ -406,10 +408,12 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
     }, [datos]);
 
     return (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-                <div className="text-sm font-extrabold text-slate-700">
-                    {numero(totalRegistros)} vehículos
+            <div className="overflow-hidden rounded-2xl border bg-white"
+                style={{ borderColor: "#E4E7F0", boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+            <div className="flex items-center justify-between border-b px-5 py-3"
+                style={{ borderColor: "#E4E7F0" }}>
+                <div className="text-sm font-extrabold" style={{ color: NAVY }}>
+                    {totalRegistros.toLocaleString("es-MX")} vehículos
                 </div>
 
                 {totalPaginas > 1 ? (
@@ -418,20 +422,20 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
                             type="button"
                             disabled={cargando || pagina <= 1}
                             onClick={() => onCambiarPagina(pagina - 1)}
-                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                            Anterior
+                            <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <span className="px-2 text-xs font-bold text-slate-500">
-                            {pagina} / {totalPaginas}
+                        <span className="min-w-[100px] text-center text-xs font-semibold text-slate-600">
+                            Página {pagina} de {totalPaginas}
                         </span>
                         <button
                             type="button"
                             disabled={cargando || pagina >= totalPaginas}
                             onClick={() => onCambiarPagina(pagina + 1)}
-                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                            Siguiente
+                            <ChevronRight className="h-4 w-4" />
                         </button>
                     </div>
                 ) : null}
@@ -451,16 +455,34 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
                         <col className="w-[9%]" />
                     </colgroup>
                     <thead>
-                        <tr className="border-b border-slate-100 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                            <th className="px-4 py-3">Dealer</th>
-                            <th className="px-4 py-3">Cliente</th>
-                            <th className="px-4 py-3">Vehículo</th>
-                            <th className="px-4 py-3">Segmento</th>
-                            <th className="px-4 py-3">Estado</th>
-                            <th className="px-4 py-3 text-right">Meses</th>
-                            <th className="px-4 py-3">Última OS</th>
-                            <th className="px-4 py-3 text-right">Total servicio</th>
-                            <th className="px-4 py-3 text-center">Acciones</th>
+                        <tr className="text-left" style={{ backgroundColor: NAVY }}>
+                            <th className="whitespace-nowrap px-4 py-2.5" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Dealer</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Cliente</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Vehículo</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Segmento</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Estado</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5 text-right" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center justify-end gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Meses</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Última OS</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5 text-right" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center justify-end gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Total servicio</div>
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5 text-center" style={{ backgroundColor: NAVY }}>
+                                <div className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white">Acciones</div>
+                            </th>
                         </tr>
                     </thead>
 
@@ -469,12 +491,13 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
                             <tr
                                 key={`${item.vin}-${index}`}
                                 onDoubleClick={() => onAbrirDetalle(item)}
-                                className="cursor-pointer border-b border-slate-50 transition hover:bg-blue-50/40"
+                                className="cursor-pointer transition-colors odd:bg-white even:bg-[#EAF1FF] hover:bg-blue-50/70 active:bg-blue-100/70"
+                                title="Ver detalle del vehículo"
                             >
-                                <td className="px-4 py-2.5">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5">
                                     <span className="block truncate text-xs font-bold text-slate-600">{item.agencia}</span>
                                 </td>
-                                <td className="px-4 py-2.5">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5">
                                     <div className="flex items-center gap-2.5">
                                         <div
                                             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white"
@@ -535,33 +558,33 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-2.5">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5">
                                     <div className="truncate font-semibold text-slate-700">
                                         {item.marca} {item.modelo_nombre}
                                     </div>
                                     <div className="truncate text-xs text-slate-400">{item.vin || "—"}</div>
                                 </td>
-                                <td className="px-4 py-2.5">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5">
                                     <span className="inline-block whitespace-nowrap rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
                                         {item.segmento}
                                     </span>
                                 </td>
-                                <td className="px-4 py-2.5">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5">
                                     <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${estadoBadgeClass(item.estado_actividad)}`}>
                                         {item.estado_actividad}
                                     </span>
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-semibold text-slate-600">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5 text-right font-semibold text-slate-600">
                                     {numero(item.meses_desde_venta)}
                                 </td>
-                                <td className="px-4 py-2.5 text-slate-600">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5 text-slate-600">
                                     <div className="truncate">{item.ultima_orden_servicio || "—"}</div>
                                     <div className="text-xs text-slate-400">{formatDate(item.fecha_ultima_os)}</div>
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-black text-slate-800">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5 text-right font-black text-slate-800">
                                     {moneda(item.total_ultimo_servicio)}
                                 </td>
-                                <td className="px-4 py-2.5">
+                                <td className="border-b border-r border-slate-100 px-3 py-2.5">
                                     <div className="flex items-center justify-center">
                                         <button
                                             type="button"
@@ -571,7 +594,7 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
                                             }}
 
                                             title="Enviar mensaje"
-                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
                                         >
                                             <MessageCircle className="h-4 w-4" />
                                         </button>
@@ -592,51 +615,69 @@ function TablaClientes({ datos, totalRegistros, pagina, totalPaginas, cargando, 
             </div>
 
             {cargando ? (
-                <div className="flex items-center justify-center gap-2 border-t border-slate-100 px-5 py-3 text-xs font-semibold text-slate-400">
+                <div className="flex items-center justify-center gap-2 border-t px-5 py-3 text-xs font-semibold text-slate-400" style={{ borderColor: "#E4E7F0", backgroundColor: "#F7F8FC" }}>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
                     Cargando página {pagina}…
                 </div>
-            ) : totalPaginas > 1 ? (
-                <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-                    <div className="text-xs font-semibold text-slate-400">
-                        Página {pagina} de {totalPaginas} · {numero(totalRegistros)} vehículos
+            ) : (
+                <div
+                    className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    style={{ borderColor: "#E4E7F0", backgroundColor: "#F7F8FC" }}
+                >
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="text-slate-500">
+                                {totalRegistros.toLocaleString("es-MX")} vehículos
+                            </span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            type="button"
-                            disabled={pagina <= 1}
-                            onClick={() => onCambiarPagina(1)}
-                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            «
-                        </button>
-                        <button
-                            type="button"
-                            disabled={pagina <= 1}
-                            onClick={() => onCambiarPagina(pagina - 1)}
-                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            ‹
-                        </button>
-                        <button
-                            type="button"
-                            disabled={pagina >= totalPaginas}
-                            onClick={() => onCambiarPagina(pagina + 1)}
-                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            ›
-                        </button>
-                        <button
-                            type="button"
-                            disabled={pagina >= totalPaginas}
-                            onClick={() => onCambiarPagina(totalPaginas)}
-                            className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            »
-                        </button>
-                    </div>
+                    {totalPaginas > 1 ? (
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                disabled={cargando || pagina <= 1}
+                                onClick={() => onCambiarPagina(1)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Ir a la primera página"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                <span className="sr-only">Primera</span>
+                            </button>
+                            <button
+                                type="button"
+                                disabled={cargando || pagina <= 1}
+                                onClick={() => onCambiarPagina(pagina - 1)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Página anterior"
+                            >
+                                <ChevronLeft className="h-4 w-4 -ml-1" />
+                            </button>
+                            <span className="min-w-[100px] text-center text-xs font-semibold text-slate-600">
+                                Página {pagina} de {totalPaginas}
+                            </span>
+                            <button
+                                type="button"
+                                disabled={cargando || pagina >= totalPaginas}
+                                onClick={() => onCambiarPagina(pagina + 1)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Página siguiente"
+                            >
+                                <ChevronRight className="h-4 w-4 -mr-1" />
+                            </button>
+                            <button
+                                type="button"
+                                disabled={cargando || pagina >= totalPaginas}
+                                onClick={() => onCambiarPagina(totalPaginas)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Ir a la última página"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                                <span className="sr-only">Última</span>
+                            </button>
+                        </div>
+                    ) : null}
                 </div>
-            ) : null}
+            )}
         </div>
     );
 }
