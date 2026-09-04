@@ -7,3 +7,7 @@ export function getPiezas(params = {}) {
 export function getPiezasTipificadas(params = {}) {
     return http(`/ventas-vn/api/piezas-tipificadas/${buildQuery(params)}`);
 }
+
+export function getPiezasObsolescencia(params = {}) {
+    return http(`/ventas-vn/api/piezas-tipificadas/obsolescencia/${buildQuery(params)}`);
+}
