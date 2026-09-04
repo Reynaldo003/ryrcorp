@@ -196,21 +196,21 @@ function ColumnChooser({ columns, visible, onChange, onClose }) {
   return (
     <div ref={ref} className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border bg-white shadow-2xl" style={{ borderColor: C.border }}>
       <div className="border-b px-3 py-2.5" style={{ borderColor: C.border, backgroundColor: C.surface }}>
-        <p className="text-xs font-bold text-[#1A1F3C]">Columnas visibles</p>
+        <p className="text-xs font-bold text-[#1A1F3C]">Ocultar columnas</p>
         <div className="mt-2 flex items-center gap-2">
-          <button type="button" onClick={() => onChange(new Set(columns.map((c) => c.key)))} className="flex-1 rounded-lg bg-[#131E5C] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#0A1340]">Todas</button>
-          <button type="button" onClick={() => onChange(new Set(columns.map((c) => c.key)))} className="flex-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] font-bold text-red-600 hover:bg-red-100">Limpiar</button>
+          <button type="button" onClick={() => onChange(new Set(columns.map((c) => c.key)))} className="flex-1 rounded-lg bg-[#131E5C] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#0A1340]">Mostrar todas</button>
+          <button type="button" onClick={() => onChange(new Set())} className="flex-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] font-bold text-red-600 hover:bg-red-100">Ocultar todas</button>
         </div>
       </div>
       <div className="max-h-[320px] overflow-y-auto p-1.5">
         {columns.map((col) => {
-          const active = visible.has(col.key);
+          const oculta = !visible.has(col.key);
           return (
             <button key={col.key} type="button" onClick={() => toggle(col.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
-              <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded border transition", active ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-300 bg-white")}>
-                {active && <Check className="h-3 w-3" />}
+              <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded border transition", oculta ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-300 bg-white")}>
+                {oculta && <Check className="h-3 w-3" />}
               </span>
-              <span className={cn("truncate text-[11px] font-semibold", active ? "text-[#1A1F3C]" : "text-slate-400")}>{col.label}</span>
+              <span className={cn("truncate text-[11px] font-semibold", oculta ? "text-[#1A1F3C]" : "text-slate-400")}>{col.label}</span>
             </button>
           );
         })}
