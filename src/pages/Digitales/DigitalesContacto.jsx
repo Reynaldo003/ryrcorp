@@ -57,27 +57,27 @@ import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
 import {
-  AGENCIAS_DIGITALES,
+    AGENCIAS_DIGITALES,
 } from "../../config/asesoresGestionComercial";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 import {
-  ESTADOS_LABELS,
-  ESTADOS_PROSPECTO,
-  resolverEstado,
-  estadoAutomaticoBandeja,
-  tieneCalificacionRapida,
-  citaEsNoAsistio,
-  citaEsAsistida,
-  colorDeEstado,
+    ESTADOS_LABELS,
+    ESTADOS_PROSPECTO,
+    resolverEstado,
+    estadoAutomaticoBandeja,
+    tieneCalificacionRapida,
+    citaEsNoAsistio,
+    citaEsAsistida,
+    colorDeEstado,
 } from "./estadosProspecto";
 
 import {
-  ASESORES_VISUALES,
+    ASESORES_VISUALES,
 } from "../../config/asesoresGestionComercial";
 
 import {
-  useAsesoresGestionComercial,
+    useAsesoresGestionComercial,
 } from "../../hooks/useAsesoresGestionComercial";
 
 const BRAND_BLUE = "#131E5C";
@@ -2135,7 +2135,7 @@ function ComposerDropdown({ open, onClose, dropdownRef, children, title, headerR
 
 // ─── Modal para agendar cita desde el chat ──────────────────────────────────
 
-function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, saving, agenciaInicial = "", asesorInicial = "" }) {
+function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, saving, agenciaInicial = "", asesorInicial = "", asesores = [] }) {
     const [fecha, setFecha] = useState("");
     const [hora, setHora] = useState("10:00");
     const [nota, setNota] = useState("");
@@ -2143,39 +2143,35 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
     const [asesor, setAsesor] = useState("");
 
     useEffect(() => {
-        if (open) {
-            const hoy = new Date();
-            const yyyy = hoy.getFullYear();
-            const mm = String(hoy.getMonth() + 1).padStart(2, "0");
-            const dd = String(hoy.getDate()).padStart(2, "0");
-            setFecha(`${yyyy}-${mm}-${dd}`);
-            setHora("10:00");
-            setNota("");
-            setAgencia(agenciaInicial || "");
-            setAsesor(asesorInicial || "");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open]);
+        if (!open) return;
+
+        const hoy = new Date();
+        const yyyy = hoy.getFullYear();
+        const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+        const dd = String(hoy.getDate()).padStart(2, "0");
+
+        setFecha(`${yyyy}-${mm}-${dd}`);
+        setHora("10:00");
+        setNota("");
+        setAgencia(agenciaInicial || "");
+        setAsesor(asesorInicial || "");
+    }, [open, agenciaInicial, asesorInicial]);
 
     if (!open) return null;
 
     const fechaLegible = fecha ? formatearFechaConDia(`${fecha}T00:00:00`) : "—";
-
-    function handleSubmit(e) {
-        e.preventDefault();
-        if (!fecha || !hora) return;
-        onGuardar({ fecha, hora, nota, agencia, asesor });
-    }
-
     const campo = "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10";
     const etiqueta = "mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60";
 
+    function handleSubmit(e) {
+        e.preventDefault();
+        if (!fecha || !hora || saving) return;
+        onGuardar({ fecha, hora, nota, agencia, asesor });
+    }
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4" onMouseDown={onClose}>
-            <div
-                className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-                onMouseDown={(e) => e.stopPropagation()}
-            >
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
                 <div className="relative px-5 py-4" style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -2187,8 +2183,8 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
                                 <div className="text-[11px] font-semibold text-white/70">Coordina la visita del prospecto al piso</div>
                             </div>
                         </div>
-                        <button type="button" onClick={onClose} aria-label="Cerrar"
-                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20">
+
+                        <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20">
                             <X className="h-4 w-4" />
                         </button>
                     </div>
@@ -2199,15 +2195,23 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
                             <UserRound className="h-4 w-4" />
                         </div>
+
                         <div className="min-w-0">
                             <div className="text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/50">Cliente</div>
-                            <div className="truncate text-sm font-bold text-[#131E5C]">{nombreCliente || "Prospecto"}{telefono ? ` · ${formateaTelUi(telefono)}` : ""}</div>
+                            <div className="truncate text-sm font-bold text-[#131E5C]">
+                                {nombreCliente || "Prospecto"}
+                                {telefono ? ` · ${formateaTelUi(telefono)}` : ""}
+                            </div>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                            <label className={etiqueta}><Building2 className="h-3.5 w-3.5 text-[#1746D1]" /> Agencia</label>
+                            <label className={etiqueta}>
+                                <Building2 className="h-3.5 w-3.5 text-[#1746D1]" />
+                                Agencia
+                            </label>
+
                             <BusquedaFiltrable
                                 opciones={AGENCIAS_DIGITALES}
                                 value={agencia}
@@ -2215,10 +2219,15 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
                                 placeholder="Busca la agencia…"
                             />
                         </div>
+
                         <div>
-                            <label className={etiqueta}><UserRound className="h-3.5 w-3.5 text-[#1746D1]" /> Asesor que atenderá</label>
+                            <label className={etiqueta}>
+                                <UserRound className="h-3.5 w-3.5 text-[#1746D1]" />
+                                Asesor que atenderá
+                            </label>
+
                             <BusquedaFiltrable
-                                opciones={nombresAsesoresActivos}
+                                opciones={asesores}
                                 value={asesor}
                                 onChange={setAsesor}
                                 placeholder="Busca al asesor…"
@@ -2228,40 +2237,69 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className={etiqueta}><CalendarPlus className="h-3.5 w-3.5 text-[#1746D1]" /> Fecha</label>
-                            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} required className={campo} />
+                            <label className={etiqueta}>
+                                <CalendarPlus className="h-3.5 w-3.5 text-[#1746D1]" />
+                                Fecha
+                            </label>
+
+                            <input
+                                type="date"
+                                value={fecha}
+                                onChange={(e) => setFecha(e.target.value)}
+                                required
+                                className={campo}
+                            />
                         </div>
+
                         <div>
-                            <label className={etiqueta}><Clock className="h-3.5 w-3.5 text-[#1746D1]" /> Hora</label>
-                            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required className={campo} />
+                            <label className={etiqueta}>
+                                <Clock className="h-3.5 w-3.5 text-[#1746D1]" />
+                                Hora
+                            </label>
+
+                            <input
+                                type="time"
+                                value={hora}
+                                onChange={(e) => setHora(e.target.value)}
+                                required
+                                className={campo}
+                            />
                         </div>
                     </div>
 
                     <div className="flex items-start gap-2 rounded-xl border border-[#1746D1]/20 bg-[#1746D1]/5 px-3 py-2.5">
                         <CalendarCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#1746D1]" />
+
                         <div className="text-xs font-bold text-[#131E5C]">
-                            {fechaLegible} {hora ? `· ${hora}` : ""}
+                            {fechaLegible}
+                            {hora ? ` · ${hora}` : ""}
                             {agencia ? ` · ${agencia}` : ""}
                             {asesor ? ` · ${asesor}` : ""}
                         </div>
                     </div>
 
                     <div>
-                        <label className={etiqueta}><FileText className="h-3.5 w-3.5 text-[#1746D1]" /> Nota (opcional)</label>
-                        <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
+                        <label className={etiqueta}>
+                            <FileText className="h-3.5 w-3.5 text-[#1746D1]" />
+                            Nota (opcional)
+                        </label>
+
+                        <textarea
+                            value={nota}
+                            onChange={(e) => setNota(e.target.value)}
+                            rows={2}
                             placeholder="Ej. Viene a probar la Tiguan R-Line"
-                            className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-[#131E5C] outline-none transition placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10" />
+                            className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-[#131E5C] outline-none transition placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                        />
                     </div>
 
                     <div className="flex justify-end gap-2 pt-1">
-                        <button type="button" onClick={onClose}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 transition hover:bg-neutral-100">
+                        <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 transition hover:bg-neutral-100 disabled:opacity-50">
                             Cancelar
                         </button>
-                        <button type="submit" disabled={saving || !fecha || !hora}
-                            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                            style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
-                            <CalendarPlus className="h-3.5 w-3.5" />
+
+                        <button type="submit" disabled={saving || !fecha || !hora} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
+                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />}
                             {saving ? "Guardando..." : "Agendar cita"}
                         </button>
                     </div>
@@ -2428,7 +2466,7 @@ export default function DigitalesContacto() {
     const location = useLocation();
     const [params] = useSearchParams();
     const { user, ready } = useAuth();
-        const {
+    const {
         nombresAsesoresActivos,
     } = useAsesoresGestionComercial();
 
@@ -2788,11 +2826,11 @@ export default function DigitalesContacto() {
 
             return true;
         })
-        .sort((a, b) => {
-            const ta = new Date(a.last?.timestamp || 0).getTime();
-            const tb = new Date(b.last?.timestamp || 0).getTime();
-            return tb - ta;
-        });
+            .sort((a, b) => {
+                const ta = new Date(a.last?.timestamp || 0).getTime();
+                const tb = new Date(b.last?.timestamp || 0).getTime();
+                return tb - ta;
+            });
     }, [
         chats,
         chatFilter,
@@ -4657,65 +4695,100 @@ export default function DigitalesContacto() {
 
     async function guardarCita({ fecha, hora, nota, agencia, asesor }) {
         if (!activeTel || savingCita) return;
+
         setSavingCita(true);
+
         try {
-            const fechaHoraIso = `${fecha}T${hora}:00`;
-            const asesorPiso = String(asesor || prospecto?.asesor_ventas || "").trim();
-            await llamarCrearCita({
-                agencia: agencia || prospecto?.agencia || activeChat?.agencia || "",
-                nombre: activeChat?.nombre || prospecto?.nombre || "Prospecto",
+            if (!fecha || !hora) {
+                throw new Error("Selecciona fecha y hora de la cita.");
+            }
+
+            const agenciaFinal = String(agencia || prospecto?.agencia || activeChat?.agencia || "").trim();
+            const asesorPiso = String(asesor || asesorAsignado || prospecto?.asesor_ventas || "").trim();
+            const asesorDigital = String(
+                prospecto?.asesor_digital ||
+                activeChat?.asesor_digital ||
+                obtenerNombreAsesorSesion(numeroAsesorActivo, user) ||
+                ""
+            ).trim();
+
+            if (!asesorDigital) {
+                throw new Error("La cita debe tener un asesor digital.");
+            }
+
+            const fechaHoraCita = `${fecha}T${hora}:00`;
+            const nombre = activeChat?.nombre || prospecto?.nombre || "Prospecto";
+
+            await apiCitas.create({
+                ...(prospecto?.cliente_id ? { cliente_id: prospecto.cliente_id } : {}),
+                nombre,
                 telefono: activeTel,
+                correo: prospecto?.correo || "",
                 auto_interes: prospecto?.auto_interes || "",
-                fecha_hora_cita: fechaHoraIso,
+                agencia: agenciaFinal,
+                fecha_hora_cita: fechaHoraCita,
                 asistencia: false,
                 tipo_cita: "Digital",
-                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || "",
-                asesor_digital: prospecto?.asesor_digital || "",
+                motivo_cita: "Digital",
+                tipo_venta: "",
+                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || prospecto?.canal_contacto || "",
+                asesor_digital: asesorDigital,
                 asesor_piso: asesorPiso,
-                asesor_asignado: asesorPiso,
                 comentarios: nota || "",
             });
 
-            // Mover el prospecto a la bandeja "Cita Programada" automáticamente
             if (prospecto?.id) {
                 try {
                     await api.digitalesPatchProspecto(prospecto.id, {
                         estado: "Cita Programada",
-                        asesor_piso: asesorPiso,
+                        agencia: agenciaFinal,
+                        asesor_digital: asesorDigital,
                         asesor_ventas: asesorPiso,
-                        agencia: agencia || prospecto?.agencia || activeChat?.agencia || "",
                     });
-                } catch (patchErr) {
-                    console.error("No se pudo mover el prospecto a Cita Programada:", patchErr);
+                } catch (errorPatch) {
+                    console.error("La cita se creó, pero no se pudo actualizar el prospecto:", errorPatch);
                 }
-                setProspecto((prev) =>
-                    prev
-                        ? {
-                            ...prev,
-                            estado: "Cita Programada",
-                            asesor_piso: asesorPiso || prev.asesor_piso || "",
-                            asesor_ventas: asesorPiso || prev.asesor_ventas || "",
-                            agencia: agencia || prev.agencia || "",
-                        }
-                        : prev
-                );
-                setAsesorAsignado(asesorPiso);
-                setChats((prev) =>
-                    prev.map((c) =>
-                        c.telefono === activeTel ? { ...c, estado: "Cita Programada" } : c
-                    )
-                );
             }
 
+            setProspecto((prev) => prev ? {
+                ...prev,
+                estado: "Cita Programada",
+                agencia: agenciaFinal || prev.agencia || "",
+                asesor_digital: asesorDigital || prev.asesor_digital || "",
+                asesor_ventas: asesorPiso || prev.asesor_ventas || "",
+                asesor_piso: asesorPiso || prev.asesor_piso || "",
+                ultima_cita_agendada: fechaHoraCita,
+            } : prev);
+
+            setAsesorAsignado(asesorPiso);
+
+            setChats((prev) => prev.map((chat) =>
+                chat.telefono === activeTel
+                    ? {
+                        ...chat,
+                        estado: "Cita Programada",
+                        agencia: agenciaFinal || chat.agencia || "",
+                        asesor_digital: asesorDigital || chat.asesor_digital || "",
+                    }
+                    : chat
+            ));
+
+            mensajesCacheRef.current.delete(activeTel);
+
+            await refreshActiveChat(activeTel).catch(() => { });
+
             setShowCitaModal(false);
-            alert(`Cita agendada para ${formatearFechaConDia(`${fecha}T00:00:00`)} a las ${hora}.`);
+
+            alert(
+                `Cita agendada para ${formatearFechaConDia(`${fecha}T00:00:00`)} a las ${hora}.`
+            );
         } catch (error) {
-            alert(`No se pudo agendar la cita: ${error.message}`);
+            console.error("Error creando cita digital:", error);
+            alert(`No se pudo agendar la cita: ${error?.message || "Error desconocido."}`);
         } finally {
             setSavingCita(false);
         }
     }
-
     async function guardarAsignacionAsesor({ agencia = "", asesor = "" }) {
         const asesorFinal = String(asesor || "").trim();
         if (!activeTel || savingAsignacion || !asesorFinal) return;
@@ -5797,14 +5870,14 @@ export default function DigitalesContacto() {
                                                                         {chat.ia_estado?.puede_responder ? "IA lista" : "IA bloqueada"}
                                                                     </span>
                                                                 ) : null}
-                                                              {chat.ia_estado?.cita?.estado === "agendada" ? (
-                                                                <span
-                                                                    className="inline-flex items-center justify-center text-[#1746D1]"
-                                                                    title="Cita agendada por IA"
-                                                                >
-                                                                    <CalendarClock className="h-3.5 w-3.5" />
-                                                                </span>
-                                                            ) : null}
+                                                                {chat.ia_estado?.cita?.estado === "agendada" ? (
+                                                                    <span
+                                                                        className="inline-flex items-center justify-center text-[#1746D1]"
+                                                                        title="Cita agendada por IA"
+                                                                    >
+                                                                        <CalendarClock className="h-3.5 w-3.5" />
+                                                                    </span>
+                                                                ) : null}
                                                                 {chat.agencia ? (
                                                                     <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-400">
                                                                         <Building2 className="h-2.5 w-2.5" />{chat.agencia}
@@ -7110,23 +7183,23 @@ export default function DigitalesContacto() {
                                                                         key={plazo}
                                                                         type="button"
                                                                         onClick={() => setQuickEditDraft(p => ({
-                                                                ...p,
-                                                                plazo_compra: plazo,
-                                                                    estado: estadoAutomaticoBandeja({
-                                                                        plazo,
-                                                                        vinFacturado: p.vin_facturado,
-                                                                        vinEstatus: p.vin_estatus_entrega,
-                                                                        folioSolicitudCredito: p.folio_solicitud_credito,
-                                                                        evidencias: prospecto?.evidencias,
-                                                                        calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                         citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                          citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                          engancheMonto: p.enganche_monto,
-                                                                          presupuestoMensual: p.presupuesto_mensual,
-                                                                          idCotizacion: p.id_cotizacion,
-                                                                          estadoBase: prospecto?.estado || "",
-                                                                    }),
-                                                            }))}
+                                                                            ...p,
+                                                                            plazo_compra: plazo,
+                                                                            estado: estadoAutomaticoBandeja({
+                                                                                plazo,
+                                                                                vinFacturado: p.vin_facturado,
+                                                                                vinEstatus: p.vin_estatus_entrega,
+                                                                                folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                                evidencias: prospecto?.evidencias,
+                                                                                calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                                citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                                citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                engancheMonto: p.enganche_monto,
+                                                                                presupuestoMensual: p.presupuesto_mensual,
+                                                                                idCotizacion: p.id_cotizacion,
+                                                                                estadoBase: prospecto?.estado || "",
+                                                                            }),
+                                                                        }))}
                                                                         className={cls(
                                                                             "rounded-full border px-3 py-1.5 text-[11px] font-extrabold transition",
                                                                             selected
@@ -7217,12 +7290,12 @@ export default function DigitalesContacto() {
                                                                             folioSolicitudCredito: p.folio_solicitud_credito,
                                                                             evidencias: prospecto?.evidencias,
                                                                             calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                             citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                              citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                              engancheMonto: p.enganche_monto,
-                                                                              presupuestoMensual: p.presupuesto_mensual,
-                                                                              idCotizacion: p.id_cotizacion,
-                                                                              estadoBase: prospecto?.estado || "",
+                                                                            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                            citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                            engancheMonto: p.enganche_monto,
+                                                                            presupuestoMensual: p.presupuesto_mensual,
+                                                                            idCotizacion: p.id_cotizacion,
+                                                                            estadoBase: prospecto?.estado || "",
                                                                         }),
                                                                     };
                                                                 })}
@@ -7251,12 +7324,12 @@ export default function DigitalesContacto() {
                                                                                     folioSolicitudCredito: p.folio_solicitud_credito,
                                                                                     evidencias: prospecto?.evidencias,
                                                                                     calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                                     citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                                      citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                                      engancheMonto: p.enganche_monto,
-                                                                                      presupuestoMensual: p.presupuesto_mensual,
-                                                                                      idCotizacion: p.id_cotizacion,
-                                                                                      estadoBase: prospecto?.estado || "",
+                                                                                    citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                                    citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                    engancheMonto: p.enganche_monto,
+                                                                                    presupuestoMensual: p.presupuesto_mensual,
+                                                                                    idCotizacion: p.id_cotizacion,
+                                                                                    estadoBase: prospecto?.estado || "",
                                                                                 }),
                                                                             };
                                                                         })}
@@ -7438,6 +7511,7 @@ export default function DigitalesContacto() {
                 telefono={activeTel}
                 agenciaInicial={prospecto?.agencia || activeChat?.agencia || ""}
                 asesorInicial={asesorAsignado || prospecto?.asesor_ventas || ""}
+                asesores={nombresAsesoresActivos}
                 onGuardar={guardarCita}
                 saving={savingCita}
             />
