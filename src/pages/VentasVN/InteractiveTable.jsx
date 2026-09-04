@@ -307,12 +307,16 @@ export default function InteractiveTable({
   onPrev,
   onNext,
   storageKey = "default",
+  resetColumnsOnMount = false,
 }) {
   const keyColumnas = `${storageKey}_${STORAGE_COLUMNAS}`;
   const keyFiltros = `${storageKey}_${STORAGE_FILTROS}`;
 
   // Columnas visibles persistentes en localStorage (hasta que se limpie)
   const [visibleColumns, setVisibleColumns] = useState(() => {
+    if (resetColumnsOnMount) {
+      return new Set(columns.map((c) => c.key));
+    }
     const guardadas = (() => {
       try { return JSON.parse(localStorage.getItem(keyColumnas)); }
       catch { return null; }
@@ -341,8 +345,10 @@ export default function InteractiveTable({
 
   function cambiarColumnas(next) {
     setVisibleColumns(next);
-    try { localStorage.setItem(keyColumnas, JSON.stringify(Array.from(next))); }
-    catch { /* ignore */ }
+    if (!resetColumnsOnMount) {
+      try { localStorage.setItem(keyColumnas, JSON.stringify(Array.from(next))); }
+      catch { /* ignore */ }
+    }
   }
 
   const filtered = useMemo(() => {

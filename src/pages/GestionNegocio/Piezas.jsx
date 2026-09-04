@@ -184,6 +184,7 @@ export default function Piezas() {
             rows={datosFiltrados}
             columns={columnasConfig}
             storageKey="piezas"
+            resetColumnsOnMount
             total={total}
             loading={loading}
             pageSize={pageSize}
