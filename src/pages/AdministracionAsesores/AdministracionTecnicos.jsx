@@ -380,23 +380,15 @@ export default function AdministracionTecnicos() {
         <div className="min-h-screen bg-slate-50">
             <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
 
-                <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
-                                <Wrench size={22} />
-                            </div>
+                        <h1 className="text-xl font-extrabold text-[#131E5C]">
+                            Técnicos / Refacciones
+                        </h1>
 
-                            <div>
-                                <h1 className="text-2xl font-semibold text-slate-900">
-                                    Administración de Técnicos
-                                </h1>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                    Administra técnicos y personal de refacciones utilizado por el CRM.
-                                </p>
-                            </div>
-                        </div>
+                        <p className="mt-1 text-sm font-medium text-slate-500">
+                            Administra técnicos y personal de refacciones utilizado por el CRM.
+                        </p>
                     </div>
 
                     <div className="flex gap-2">
@@ -404,7 +396,7 @@ export default function AdministracionTecnicos() {
                             type="button"
                             onClick={cargarPersonal}
                             disabled={cargando}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-4 py-2.5 text-sm font-bold text-[#131E5C] shadow-sm transition hover:bg-[#131E5C] hover:text-white disabled:opacity-50"
                         >
                             <RefreshCw
                                 size={17}
@@ -421,7 +413,7 @@ export default function AdministracionTecnicos() {
                         <button
                             type="button"
                             onClick={abrirNuevo}
-                            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+                            className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0d1645]"
                         >
                             <Plus size={18} />
                             Nuevo personal
@@ -431,49 +423,49 @@ export default function AdministracionTecnicos() {
 
 
                 <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="rounded-lg border border-[#131E5C]/15 bg-white p-4 shadow-sm">
                         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                             Total
                         </p>
 
-                        <p className="mt-1 text-2xl font-semibold text-slate-900">
+                        <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
                             {resumen.total}
                         </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="rounded-lg border border-[#131E5C]/15 bg-white p-4 shadow-sm">
                         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                             Activos
                         </p>
 
-                        <p className="mt-1 text-2xl font-semibold text-emerald-700">
+                        <p className="mt-1 text-2xl font-extrabold text-emerald-600">
                             {resumen.activos}
                         </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="rounded-lg border border-[#131E5C]/15 bg-white p-4 shadow-sm">
                         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                             Técnicos
                         </p>
 
-                        <p className="mt-1 text-2xl font-semibold text-slate-900">
+                        <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
                             {resumen.tecnicos}
                         </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="rounded-lg border border-[#131E5C]/15 bg-white p-4 shadow-sm">
                         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                             Refacciones
                         </p>
 
-                        <p className="mt-1 text-2xl font-semibold text-slate-900">
+                        <p className="mt-1 text-2xl font-extrabold text-[#131E5C]">
                             {resumen.refacciones}
                         </p>
                     </div>
                 </div>
 
 
-                <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-5 rounded-lg border border-[#131E5C]/15 bg-white p-4 shadow-sm">
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 
                         <div className="relative">
@@ -491,7 +483,7 @@ export default function AdministracionTecnicos() {
                                     )
                                 }
                                 placeholder="Buscar personal..."
-                                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                                className="h-11 w-full rounded-lg border border-[#131E5C] bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                             />
                         </div>
 
@@ -502,7 +494,7 @@ export default function AdministracionTecnicos() {
                                     event.target.value
                                 )
                             }
-                            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+                            className="h-11 w-full rounded-lg border border-[#131E5C] bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                         >
                             <option value="Todos">
                                 Todos los tipos
@@ -525,7 +517,7 @@ export default function AdministracionTecnicos() {
                                     event.target.value
                                 )
                             }
-                            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+                            className="h-11 w-full rounded-lg border border-[#131E5C] bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                         >
                             <option value="Todas">
                                 Todas las agencias
@@ -548,7 +540,7 @@ export default function AdministracionTecnicos() {
                                     event.target.value
                                 )
                             }
-                            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+                            className="h-11 w-full rounded-lg border border-[#131E5C] bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:ring-2 focus:ring-[#131E5C]/15"
                         >
                             <option value="Todos">
                                 Todos los estados
@@ -571,7 +563,7 @@ export default function AdministracionTecnicos() {
                 )}
 
 
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-lg border border-[#131E5C]/15 bg-white shadow-sm">
                     {cargando ? (
                         <div className="flex min-h-[300px] items-center justify-center">
                             <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -586,25 +578,25 @@ export default function AdministracionTecnicos() {
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full min-w-[850px] text-left text-sm">
-                                <thead className="border-b border-slate-200 bg-slate-50">
+                                <thead className="bg-[#131E5C] text-white">
                                     <tr>
-                                        <th className="px-4 py-3 font-semibold text-slate-600">
+                                        <th className="px-4 py-3 font-bold text-white">
                                             Nombre
                                         </th>
 
-                                        <th className="px-4 py-3 font-semibold text-slate-600">
+                                        <th className="px-4 py-3 font-bold text-white">
                                             Tipo de personal
                                         </th>
 
-                                        <th className="px-4 py-3 font-semibold text-slate-600">
+                                        <th className="px-4 py-3 font-bold text-white">
                                             Agencia
                                         </th>
 
-                                        <th className="px-4 py-3 font-semibold text-slate-600">
+                                        <th className="px-4 py-3 font-bold text-white">
                                             Estado
                                         </th>
 
-                                        <th className="px-4 py-3 text-right font-semibold text-slate-600">
+                                        <th className="px-4 py-3 text-right font-semibold text-white">
                                             Acciones
                                         </th>
                                     </tr>
@@ -638,7 +630,7 @@ export default function AdministracionTecnicos() {
                                                     key={item.id}
                                                     className="hover:bg-slate-50/70"
                                                 >
-                                                    <td className="px-4 py-3.5 font-medium text-slate-900">
+                                                    <td className="px-4 py-3.5 font-semibold text-[#131E5C]">
                                                         {item.nombre}
                                                     </td>
 
@@ -675,7 +667,7 @@ export default function AdministracionTecnicos() {
                                                                         item
                                                                     )
                                                                 }
-                                                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                                                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#131E5C]/25 bg-white px-3 text-xs font-bold text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white"
                                                             >
                                                                 <Pencil size={14} />
                                                                 Editar
