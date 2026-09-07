@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3, Boxes, Database, GripVertical, ImageDown, LoaderCircle, Package, PackageSearch, RefreshCw,
+  ArrowRight, BarChart3, Boxes, ChevronRight, CircleDollarSign, Database, GripVertical, ImageDown, Layers, LoaderCircle, Network, Package, PackageSearch, RefreshCw,
   Search, SlidersHorizontal, Store, Table2, Timer, TrendingUp, Wrench, X,
 } from "lucide-react";
 import html2canvas from "html2canvas-pro";
 import { Bar, BarChart, Cell, LabelList, Pie, PieChart as RechartsPie, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { getPiezasObsolescencia, getPiezasTipificadas } from "../../lib/apiPiezas";
+import { getPiezasJerarquia, getPiezasObsolescencia, getPiezasTipificadas } from "../../lib/apiPiezas";
 import InteractiveTable from "../VentasVN/InteractiveTable";
 
 function numero(value) { return Number(value || 0); }
@@ -104,6 +104,7 @@ export default function Piezas() {
   const [movimiento, setMovimiento] = useState([]);
   const [distDias, setDistDias] = useState([]);
   const [obsTotales, setObsTotales] = useState({ cantidad: 0, valor: 0, unidades: 0 });
+  const [inventarioObsoleto, setInventarioObsoleto] = useState(null);
   const [cargandoObs, setCargandoObs] = useState(false);
   const [errorObs, setErrorObs] = useState("");
   const chartRefs = useRef({});
@@ -152,12 +153,14 @@ export default function Piezas() {
       setMovimiento(Array.isArray(response?.movimiento) ? response.movimiento : []);
       setDistDias(Array.isArray(response?.distribucion_dias) ? response.distribucion_dias : []);
       setObsTotales(response?.totales || { cantidad: 0, valor: 0, unidades: 0 });
+      setInventarioObsoleto(response?.inventario_obsoleto || null);
     } catch (err) {
       console.error("Error cargando obsolescencia:", err);
       setObsolescencia([]);
       setMovimiento([]);
       setDistDias([]);
       setObsTotales({ cantidad: 0, valor: 0, unidades: 0 });
+      setInventarioObsoleto(null);
       setErrorObs(err?.message || "No fue posible calcular la obsolescencia.");
     } finally {
       setCargandoObs(false);
@@ -322,13 +325,15 @@ export default function Piezas() {
         {vistaActiva === "dashboard" && (
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <KPICard icon={Boxes} label="SKU totales" value={cargandoObs ? "—" : formatoNumero(obsTotales.cantidad)} sub="Piezas únicas de Córdoba" accent="#131E5C" />
+              <KPICard icon={Boxes} label="SKU totales" value={cargandoObs ? "—" : formatoNumero(obsTotales.cantidad)} sub="Piezas únicas con existencia" accent="#131E5C" />
               <KPICard icon={Package} label="Valor en inventario" value={cargandoObs ? "—" : money(obsTotales.valor)} sub="Valor acumulado" accent="#0EA5E9" />
               <KPICard icon={Database} label="Unidades" value={cargandoObs ? "—" : formatoNumero(obsTotales.unidades)} sub="Unidades en existencia" accent="#8B5CF6" />
               <KPICard icon={TrendingUp} label="Capa A · Sano" value={cargandoObs ? "—" : formatoNumero(capasObs.a)} sub={`${capasObs.pctA}% del inventario · < 180 días`} accent="#10B981" />
               <KPICard icon={Timer} label="Capa B" value={cargandoObs ? "—" : formatoNumero(capasObs.b)} sub={`${capasObs.pctB}% · 180 a 365 días`} accent="#F59E0B" />
-              <KPICard icon={Wrench} label="Capa O · Obsoleto" value={cargandoObs ? "—" : formatoNumero(capasObs.o)} sub={`${capasObs.pctO}% · más de 365 días`} accent="#EF4444" />
+              <KPICard icon={CircleDollarSign} label="Inventario obsoleto" value={cargandoObs ? "—" : money(inventarioObsoleto?.valor_obsoleto)} sub={`${inventarioObsoleto?.pct_obsoleto ?? 0}% del valor · ${formatoNumero(capasObs.o)} SKU`} accent="#EF4444" />
             </div>
+
+            <InventarioObsoletoPanel obs={inventarioObsoleto} cargando={cargandoObs} error={errorObs} />
 
             <div className="grid gap-5 xl:grid-cols-2">
               {graficasOrdenadas.map((g, indice) => {
@@ -361,6 +366,8 @@ export default function Piezas() {
                 );
               })}
             </div>
+
+            <AnalisisJerarquico />
           </>
         )}
 
@@ -409,6 +416,342 @@ function KPICard({ icon, label, value, sub, accent }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Inventario obsoleto (por valor monetario) ────────────────────────────────
+
+function InventarioObsoletoPanel({ obs, cargando, error }) {
+  if (cargando) {
+    return (
+      <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+        <div className="flex h-[180px] items-center justify-center text-[#8891AD]">
+          <div className="flex flex-col items-center gap-2">
+            <LoaderCircle className="h-6 w-6 animate-spin" />
+            <span className="text-xs font-semibold">Calculando inventario obsoleto…</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+        <div className="m-4 rounded-xl border border-dashed border-red-200 bg-red-50/60 px-4 py-6 text-center text-xs font-semibold text-red-600">{error}</div>
+      </section>
+    );
+  }
+
+  if (!obs || !Array.isArray(obs.top_skus) || obs.top_skus.length === 0) {
+    return (
+      <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+        <div className="flex h-[180px] items-center justify-center rounded-xl text-xs font-medium text-[#8891AD]">Sin datos para mostrar.</div>
+      </section>
+    );
+  }
+
+  const maxTop = Math.max(...obs.top_skus.map((s) => Number(s.valor || 0)), 1);
+
+  const miniKpi = [
+    { label: "Valor obsoleto", value: money(obs.valor_obsoleto), accent: "#DC2626" },
+    { label: "% del inventario", value: `${obs.pct_obsoleto ?? 0}%`, accent: "#F97316" },
+    { label: "SKU obsoletos", value: formatoNumero(obs.cantidad_sku), accent: "#0EA5E9" },
+    { label: "Unidades obsoletas", value: formatoNumero(obs.unidades), accent: "#8B5CF6" },
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E4E7F0] px-5 py-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#EF4444]/10">
+            <CircleDollarSign className="h-[18px] w-[18px] text-[#DC2626]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#1A1F3C]">Inventario obsoleto</h3>
+            <p className="mt-0.5 text-xs text-[#8891AD]">Piezas sin venta en más de {obs.dias_limite || 365} días · valor monetario en lugar de solo conteo de SKU</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-[#EF4444]/10 px-3 py-1 text-[11px] font-black text-[#DC2626]">
+          {obs.pct_obsoleto ?? 0}% del valor del inventario
+        </span>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {miniKpi.map((k) => (
+            <div key={k.label} className="rounded-xl bg-[#F7F8FC] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">{k.label}</p>
+              <p className="mt-1 text-xl font-black leading-none text-[#131E5C]" style={{ color: k.accent }}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <div className="mb-2.5 flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-widest text-[#8891AD]">Top piezas obsoletas por valor</span>
+            <span className="text-[10px] font-semibold text-[#8891AD]">Mayor valor inmovilizado</span>
+          </div>
+          <div className="space-y-2.5">
+            {obs.top_skus.slice(0, 8).map((sku, i) => {
+              const valor = Number(sku.valor || 0);
+              const pctTop = maxTop ? Math.round((valor / maxTop) * 100) : 0;
+              return (
+                <div key={`${sku.codigo}-${i}`} className="grid grid-cols-[24px_1fr_auto] items-center gap-3">
+                  <span className="text-xs font-black text-[#C4CADD]">{String(i + 1).padStart(2, "0")}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <p className="truncate text-[11px] font-bold text-[#1A1F3C]">{sku.producto || sku.codigo}</p>
+                      {sku.codigo && sku.producto ? <span className="shrink-0 font-mono text-[9px] font-semibold text-[#C4CADD]">{sku.codigo}</span> : null}
+                    </div>
+                    <div className="mt-1 h-1 rounded-full bg-[#EF4444]/10">
+                      <div className="h-1 rounded-full" style={{ width: `${pctTop}%`, backgroundColor: "#EF4444" }} />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] font-black text-[#1A1F3C]">{money(valor)}</p>
+                    <p className="text-[10px] font-bold text-[#8891AD]">
+                      {sku.dias_sin_venta != null ? `${Math.round(sku.dias_sin_venta)} días` : "sin venta registrada"} · {formatoNumero(sku.unidades)} uds
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Análisis jerárquico ──────────────────────────────────────────────────────
+
+const NIVEL_LABEL = {
+  dealer: "Dealer",
+  grupo_principal: "Grupo principal",
+  subgrupo: "Subgrupo",
+  producto: "Producto",
+};
+
+const NIVEL_SIGUIENTE = {
+  dealer: "grupo_principal",
+  grupo_principal: "subgrupo",
+  subgrupo: "producto",
+  producto: null,
+};
+
+function AnalisisJerarquico() {
+  const [nivel, setNivel] = useState("dealer");
+  const [agencia, setAgencia] = useState("");
+  const [grupo, setGrupo] = useState("");
+  const [subgrupo, setSubgrupo] = useState("");
+  const [filas, setFilas] = useState([]);
+  const [totales, setTotales] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let activo = true;
+    getPiezasJerarquia({ nivel, agencia, grupo_principal: grupo, subgrupo })
+      .then((res) => {
+        if (!activo) return;
+        setFilas(Array.isArray(res?.results) ? res.results : []);
+        setTotales(res?.totales || null);
+        setError("");
+      })
+      .catch((err) => {
+        if (!activo) return;
+        console.error("Error cargando jerarquía:", err);
+        setFilas([]);
+        setTotales(null);
+        setError(err?.message || "No fue posible cargar el análisis jerárquico.");
+      })
+      .finally(() => {
+        if (activo) setCargando(false);
+      });
+    return () => { activo = false; };
+  }, [nivel, agencia, grupo, subgrupo]);
+
+  const puedeProfundizar = NIVEL_SIGUIENTE[nivel] != null;
+
+  const profundizar = (fila) => {
+    if (nivel === "dealer") {
+      setAgencia(fila.clave);
+      setGrupo("");
+      setSubgrupo("");
+      setNivel("grupo_principal");
+    } else if (nivel === "grupo_principal") {
+      setGrupo(fila.clave);
+      setSubgrupo("");
+      setNivel("subgrupo");
+    } else if (nivel === "subgrupo") {
+      setSubgrupo(fila.clave);
+      setNivel("producto");
+    }
+  };
+
+  const migas = [];
+  migas.push({
+    titulo: "Dealer",
+    accion: () => { setNivel("dealer"); setAgencia(""); setGrupo(""); setSubgrupo(""); },
+    activa: nivel === "dealer" && !agencia,
+  });
+  if (agencia) {
+    migas.push({
+      titulo: agencia,
+      accion: () => { setAgencia(""); setGrupo(""); setSubgrupo(""); setNivel("dealer"); },
+      activa: nivel === "dealer",
+    });
+  }
+  if (grupo) {
+    migas.push({
+      titulo: grupo,
+      accion: () => { setGrupo(""); setSubgrupo(""); setNivel("grupo_principal"); },
+      activa: nivel === "grupo_principal",
+    });
+  }
+  if (subgrupo) {
+    migas.push({
+      titulo: subgrupo,
+      accion: () => { setSubgrupo(""); setNivel("subgrupo"); },
+      activa: nivel === "subgrupo",
+    });
+  }
+
+  const nombreFila = (fila) => fila.nombre || fila.clave;
+  const diasFila = (fila) => (fila.dias_sin_venta != null ? `${Math.round(fila.dias_sin_venta)} d` : "—");
+
+  const celdas = [
+    { key: "nombre", etiqueta: nivel === "dealer" ? "Dealer" : NIVEL_LABEL[nivel], alineacion: "left", formatear: nombreFila },
+    { key: "cantidad_sku", etiqueta: "SKUs", alineacion: "right", formatear: (f) => formatoNumero(f.cantidad_sku) },
+    { key: "unidades", etiqueta: "Unidades", alineacion: "right", formatear: (f) => formatoNumero(f.unidades) },
+    { key: "valor_inventario", etiqueta: "Valor de inventario", alineacion: "right", formatear: (f) => money(f.valor_inventario) },
+    { key: "valor_obsoleto", etiqueta: "Valor obsoleto", alineacion: "right", formatear: (f) => money(f.valor_obsoleto) },
+    { key: "dias_sin_venta", etiqueta: "Días sin venta", alineacion: "right", formatear: diasFila },
+    { key: "ultima_venta", etiqueta: "Última venta", alineacion: "right", formatear: (f) => f.ultima_venta || "—" },
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E4E7F0] px-5 py-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]">
+            <Network className="h-[18px] w-[18px] text-[#131E5C]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#1A1F3C]">Análisis jerárquico</h3>
+            <p className="mt-0.5 text-xs text-[#8891AD]">Dealer → Grupo principal → Subgrupo → Producto · Valores calculados: Valor de inventario y Días sin venta</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-[#131E5C]/[0.07] px-3 py-1 text-[11px] font-black text-[#131E5C]">
+          {NIVEL_LABEL[nivel]}
+          {agencia ? ` · ${agencia}` : ""}
+        </span>
+      </div>
+
+      <div className="space-y-4 p-5">
+        {/* Pan rallado */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {migas.map((miga, i) => (
+            <div key={`${miga.titulo}-${i}`} className="flex items-center gap-1.5">
+              {i > 0 && <ChevronRight className="h-3 w-3 text-[#C4CADD]" />}
+              <button type="button" onClick={miga.accion}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold transition ${miga.activa ? "bg-[#131E5C] text-white" : "border border-[#E4E7F0] bg-white text-[#515778] hover:bg-[#131E5C]/5"}`}>
+                {i === 0 && <Layers className="h-3 w-3" />}
+                {miga.titulo}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {totales && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-[#F7F8FC] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Valor de inventario</p>
+              <p className="mt-1 text-xl font-black leading-none text-[#131E5C]">{money(totales.valor_inventario)}</p>
+            </div>
+            <div className="rounded-xl bg-[#F7F8FC] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Valor obsoleto</p>
+              <p className="mt-1 text-xl font-black leading-none text-[#DC2626]">{money(totales.valor_obsoleto)} ({totales.pct_obsoleto ?? 0}%)</p>
+            </div>
+            <div className="rounded-xl bg-[#F7F8FC] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">SKUs con existencia</p>
+              <p className="mt-1 text-xl font-black leading-none text-[#0EA5E9]">{formatoNumero(totales.cantidad_sku)}</p>
+            </div>
+            <div className="rounded-xl bg-[#F7F8FC] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Unidades</p>
+              <p className="mt-1 text-xl font-black leading-none text-[#8B5CF6]">{formatoNumero(totales.unidades)}</p>
+            </div>
+          </div>
+        )}
+
+        {cargando && (
+          <div className="flex items-center justify-center gap-2 py-8 text-[#8891AD]">
+            <LoaderCircle className="h-5 w-5 animate-spin" />
+            <span className="text-xs font-semibold">Cargando {NIVEL_LABEL[nivel].toLowerCase()}…</span>
+          </div>
+        )}
+
+        {!cargando && error && (
+          <div className="rounded-xl border border-dashed border-red-200 bg-red-50/60 px-4 py-6 text-center text-xs font-semibold text-red-600">{error}</div>
+        )}
+
+        {!cargando && !error && filas.length === 0 && (
+          <div className="rounded-xl border border-dashed border-[#C8CEDF] bg-[#F7F8FC] px-4 py-8 text-center text-xs font-medium text-[#8891AD]">Sin datos para mostrar.</div>
+        )}
+
+        {!cargando && !error && filas.length > 0 && (
+          <div className="overflow-x-auto rounded-xl border border-[#E4E7F0]">
+            <table className="w-full min-w-[720px] text-xs">
+              <thead>
+                <tr className="border-b border-[#E4E7F0] bg-[#F7F8FC] text-left">
+                  {celdas.map((celda) => (
+                    <th key={celda.key} className={`px-3 py-2.5 font-black uppercase tracking-wide text-[#8891AD] whitespace-nowrap ${celda.alineacion === "right" ? "text-right" : ""}`}>
+                      {celda.etiqueta}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((fila, i) => (
+                  <tr key={`${fila.clave}-${i}`}
+                    onClick={() => puedeProfundizar && profundizar(fila)}
+                    className={`border-b border-[#E4E7F0] transition ${puedeProfundizar ? "cursor-pointer hover:bg-[#131E5C]/[0.03]" : ""} ${i % 2 === 0 ? "bg-white" : "bg-[#FBFBFE]"}`}>
+                    {celdas.map((celda) => (
+                      <td key={celda.key} className={`px-3 py-2.5 whitespace-nowrap ${celda.alineacion === "right" ? "text-right" : ""}`}>
+                        {celda.key === "nombre" ? (
+                          <span className="inline-flex items-center gap-1.5 font-bold text-[#1A1F3C]">
+                            {fila.nombre ? nombreFila(fila) : <span className="font-mono text-[10px]">{fila.clave}</span>}
+                            {puedeProfundizar && <ArrowRight className="h-3 w-3 text-[#C4CADD]" />}
+                          </span>
+                        ) : (
+                          <span className={celda.key === "valor_obsoleto" ? "font-bold text-[#DC2626]" : "text-[#515778] font-semibold"}>
+                            {celda.formatear(fila)}
+                          </span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[#E4E7F0] bg-[#F7F8FC] font-black text-[#1A1F3C]">
+                  {celdas.map((celda) => (
+                    <td key={`t-${celda.key}`} className={`px-3 py-2.5 whitespace-nowrap ${celda.alineacion === "right" ? "text-right" : ""}`}>
+                      {celda.key === "nombre" ? `Total (${formatoNumero(filas.length)})` : celda.key === "valor_inventario" ? money(totales?.valor_inventario) : celda.key === "valor_obsoleto" ? money(totales?.valor_obsoleto) : celda.key === "cantidad_sku" ? formatoNumero(totales?.cantidad_sku) : celda.key === "unidades" ? formatoNumero(totales?.unidades) : "—"}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
+        {!cargando && !error && puedeProfundizar && filas.length > 0 && (
+          <p className="text-[10px] font-semibold text-[#8891AD]">Haz clic en una fila para profundizar al siguiente nivel.</p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -605,7 +948,15 @@ function GraficaMovimiento({ mov, totales, cargando, error }) {
 
 function GraficaObsolescencia({ capas, totales, cargando, error }) {
   const [sliceActiva, setSliceActiva] = useState(null);
-  const total = Number(totales.cantidad || 0);
+  const [metrica, setMetrica] = useState("cantidad");
+  const porValor = metrica === "valor";
+  const total = porValor ? Number(totales.valor || 0) : Number(totales.cantidad || 0);
+
+  const etiquetaMagna = (v) => (porValor ? money(v) : formatoNumero(v));
+  const formateador = (v, name) => [
+    porValor ? money(v) : `${formatoNumero(v)} SKU`,
+    CAPAS_OBSOLESCENCIA[name]?.nombre || name,
+  ];
 
   if (cargando) {
     return (
@@ -632,28 +983,44 @@ function GraficaObsolescencia({ capas, totales, cargando, error }) {
 
   return (
     <div className="space-y-3">
-      <div className="relative h-[240px]">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-[#8891AD]">Distribución</span>
+        <div className="flex items-center rounded-lg border border-[#E4E7F0] bg-[#F7F8FC] p-0.5">
+          {[
+            { id: "cantidad", etiqueta: "SKU" },
+            { id: "valor", etiqueta: "Valor" },
+          ].map((opcion) => (
+            <button key={opcion.id} type="button" onClick={() => setMetrica(opcion.id)}
+              className={`rounded-md px-3 py-1 text-[11px] font-bold transition ${metrica === opcion.id ? "bg-[#131E5C] text-white shadow" : "text-[#8891AD] hover:text-[#131E5C]"}`}>
+              {opcion.etiqueta}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="relative h-[230px]">
         <ResponsiveContainer width="100%" height="100%">
           <RechartsPie>
-            <Pie data={capas} dataKey="cantidad" nameKey="capa" cx="50%" cy="50%" innerRadius={68} outerRadius={100} paddingAngle={3} stroke="#FFFFFF" strokeWidth={3}
+            <Pie data={capas} dataKey={metrica} nameKey="capa" cx="50%" cy="50%" innerRadius={64} outerRadius={94} paddingAngle={3} stroke="#FFFFFF" strokeWidth={3}
               onMouseEnter={(_, index) => setSliceActiva(index)}
               onMouseLeave={() => setSliceActiva(null)}>
               {capas.map((item, index) => (
                 <Cell key={item.capa} fill={CAPAS_OBSOLESCENCIA[item.capa]?.color || "#94A3B8"} opacity={sliceActiva === null || sliceActiva === index ? 1 : 0.35} />
               ))}
             </Pie>
-            <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(19,30,92,0.05)" }} formatter={(value, name) => [`${formatoNumero(value)} SKU`, CAPAS_OBSOLESCENCIA[name]?.nombre || name]} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(19,30,92,0.05)" }} formatter={formateador} />
           </RechartsPie>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-          <p className="text-3xl font-black tracking-tight text-[#131E5C]">{formatoNumero(total)}</p>
-          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">SKU totales</p>
+          <p className="text-3xl font-black tracking-tight text-[#131E5C]">{etiquetaMagna(total)}</p>
+          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">{porValor ? "Del inventario" : "SKU con existencia"}</p>
         </div>
       </div>
       <div className="space-y-2">
         {capas.map((item, index) => {
           const info = CAPAS_OBSOLESCENCIA[item.capa] || { nombre: item.capa, detalle: "", color: "#94A3B8" };
-          const pct = total ? Math.round((Number(item.cantidad) / total) * 100) : 0;
+          const valorFila = porValor ? Number(item.valor || 0) : Number(item.cantidad || 0);
+          const pct = total ? Math.round((valorFila / total) * 100) : 0;
           return (
             <div key={item.capa} onMouseEnter={() => setSliceActiva(index)} onMouseLeave={() => setSliceActiva(null)}
               className={`grid grid-cols-[12px_1fr_auto] items-center gap-2 rounded-xl px-3 py-2 transition ${sliceActiva === index ? "bg-[#131E5C]/[0.06]" : "bg-[#F7F8FC]"}`}>
@@ -663,7 +1030,7 @@ function GraficaObsolescencia({ capas, totales, cargando, error }) {
                 <p className="truncate text-[10px] font-medium text-[#8891AD]" title={info.detalle}>{info.detalle} · {money(item.valor)}</p>
               </div>
               <div className="text-right">
-                <p className="text-[11px] font-bold text-[#1A1F3C]">{formatoNumero(item.cantidad)}</p>
+                <p className="text-[11px] font-bold text-[#1A1F3C]">{etiquetaMagna(valorFila)}</p>
                 <p className="text-[10px] font-bold" style={{ color: info.color }}>{pct}%</p>
               </div>
             </div>

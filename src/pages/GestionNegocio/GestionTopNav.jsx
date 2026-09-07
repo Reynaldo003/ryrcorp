@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Package, Wrench } from "lucide-react";
+import { CarFront, Package, Wrench, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 
@@ -20,6 +20,11 @@ const TABS = [
         label: "Piezas",
         to: "/gestion_negocio/piezas",
         icon: Wrench,
+    },
+    {
+        label: "Prospectos Digitales",
+        to: "/gestion_negocio/prospectos_digitales",
+        icon: Users,
     },
 ];
 

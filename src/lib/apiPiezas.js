@@ -11,3 +11,7 @@ export function getPiezasTipificadas(params = {}) {
 export function getPiezasObsolescencia(params = {}) {
     return http(`/ventas-vn/api/piezas-tipificadas/obsolescencia/${buildQuery(params)}`);
 }
+
+export function getPiezasJerarquia(params = {}) {
+    return http(`/ventas-vn/api/piezas-tipificadas/jerarquia/${buildQuery(params)}`);
+}
