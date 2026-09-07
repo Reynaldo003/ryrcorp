@@ -5521,29 +5521,6 @@ export default function DigitalesContacto() {
 
     useEffect(() => {
         let alive = true, timer = null;
-        if (isDirectChatMode || !numeroAsesorActivo) return () => { alive = false; };
-
-        const tickLista = async () => {
-            if (!alive) return;
-            try {
-                if (document.visibilityState === "visible" && !String(qRef.current || "").trim()) {
-                    await refreshChatsSilencioso({
-                        numeroAsesor: numeroAsesorActivoRef.current,
-                        query: "",
-                    });
-                }
-            } catch (error) {
-                console.error("No se pudo refrescar silenciosamente la lista de chats:", error);
-            }
-            if (alive) timer = window.setTimeout(tickLista, CHAT_LIST_REFRESH_INTERVAL);
-        };
-
-        timer = window.setTimeout(tickLista, CHAT_LIST_REFRESH_INTERVAL);
-        return () => { alive = false; if (timer) window.clearTimeout(timer); };
-    }, [isDirectChatMode, numeroAsesorActivo]);
-
-    useEffect(() => {
-        let alive = true, timer = null;
         const tick = async () => {
             const target = activeTelRef.current;
             const numeroLinea = numeroAsesorActivoRef.current;
