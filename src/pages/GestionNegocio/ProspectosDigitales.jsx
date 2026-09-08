@@ -849,7 +849,6 @@ function PautasOrigen({ pautas, loading, anio, mes }) {
 function PieMotivosDescarte({ motivos, loading }) {
   const datos = [...(motivos || [])]
     .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
-    .slice(0, 5)
     .map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
@@ -867,18 +866,11 @@ function PieMotivosDescarte({ motivos, loading }) {
           Sin descartes en el periodo
         </div>
       ) : (
-        <div className="mt-2 flex min-h-[220px] items-center justify-center gap-4">
-          <div className="h-[212px] w-[214px] shrink-0">
+        <div className="mt-2 flex min-h-[220px] flex-col items-center justify-center gap-5 sm:flex-row sm:items-center sm:gap-8">
+          <div className="h-[150px] w-[150px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={datos} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={46} outerRadius={72} paddingAngle={2}
-                  label={(props) => {
-                    const { name } = props;
-                    const texto = String(name || "");
-                    if (texto.length <= 18) return texto;
-                    return `${texto.slice(0, 17)}…`;
-                  }}
-                  labelLine={{ stroke: "#C4CCDE", strokeWidth: 1 }}>
+                <Pie data={datos} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={34} outerRadius={56} paddingAngle={2} stroke="#FFFFFF" strokeWidth={2}>
                   {datos.map((d) => (
                     <Cell key={d.motivo} fill={d.color} />
                   ))}
@@ -898,12 +890,12 @@ function PieMotivosDescarte({ motivos, loading }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            {datos.slice(0, 5).map((d) => (
+          <div className="flex w-full min-w-0 max-w-[280px] flex-1 flex-col gap-1.5">
+            {datos.map((d) => (
               <div key={d.motivo} className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                <span className="min-w-0 flex-1 truncate text-[9px] font-semibold text-[#5A627B]">{d.motivo}</span>
-                <span className="shrink-0 text-[9px] font-black text-[#152754]">{Number(d.porcentaje ?? 0).toLocaleString("es-MX")}%</span>
+                <span className="min-w-0 flex-1 text-[9px] font-semibold leading-tight text-[#5A627B]">{d.motivo}</span>
+                <span className="shrink-0 text-right text-[9px] font-black text-[#152754]">{Number(d.porcentaje ?? 0).toLocaleString("es-MX")}%</span>
               </div>
             ))}
           </div>
