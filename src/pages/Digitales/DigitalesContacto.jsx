@@ -4666,7 +4666,7 @@ export default function DigitalesContacto() {
         setSavingNombre(true);
         try {
             if (prospecto?.id) {
-                await api.digitalesPatchProspecto(prospecto.id, { nombre: nuevoNombre });
+                await api.digitalesPatchProspecto(prospecto.id, { nombre: nuevoNombre, numero_asesor: numeroAsesorActivo || "" });
             }
             setProspecto(prev => prev ? { ...prev, nombre: nuevoNombre } : prev);
             setChats(prev => prev.map(c => c.telefono === activeTel ? { ...c, nombre: nuevoNombre } : c));
@@ -4744,6 +4744,7 @@ export default function DigitalesContacto() {
                         agencia: agenciaFinal,
                         asesor_digital: asesorDigital,
                         asesor_ventas: asesorPiso,
+                        numero_asesor: numeroAsesorActivo || "",
                     });
                 } catch (errorPatch) {
                     console.error("La cita se creó, pero no se pudo actualizar el prospecto:", errorPatch);
@@ -4803,6 +4804,7 @@ export default function DigitalesContacto() {
             await api.digitalesPatchProspecto(prospecto.id, {
                 agencia: agencia || "",
                 asesor_ventas: asesorFinal,
+                numero_asesor: numeroAsesorActivo || "",
             });
 
             setProspecto((prev) =>
@@ -5022,6 +5024,7 @@ export default function DigitalesContacto() {
                     .toUpperCase(),
                 vin_estatus_entrega:
                     quickEditDraft.vin_estatus_entrega || "",
+                numero_asesor: numeroAsesorActivo || "",
             };
 
             const pautaLimpia = String(
@@ -5039,7 +5042,14 @@ export default function DigitalesContacto() {
 
             await refreshActiveChat(activeTel);
         } catch (error) {
-            alert(`No se pudo guardar: ${error.message}`);
+            const mensaje =
+                error?.status === 404
+                    ? "No se encontró el expediente digital relacionado. Actualiza la página o selecciona nuevamente el registro."
+                    : error?.message || "No se pudo guardar la información.";
+            alert(mensaje);
+
+            refreshActiveChat(activeTel).catch(() => { });
+            refreshChats().catch(() => { });
         } finally {
             setSavingQuickEdit(false);
         }
@@ -5055,7 +5065,7 @@ export default function DigitalesContacto() {
 
         setSavingBuroMalo(true);
         try {
-            await api.digitalesPatchProspecto(prospecto.id, { buro_estado: nuevo });
+            await api.digitalesPatchProspecto(prospecto.id, { buro_estado: nuevo, numero_asesor: numeroAsesorActivo || "" });
             setQuickEditDraft((current) => ({ ...current, buro_estado: nuevo }));
             if (nuevo) {
                 setBuroMaloMarcado(true);
@@ -5095,6 +5105,7 @@ export default function DigitalesContacto() {
                 {
                     estado,
                     motivo_descalificacion: "",
+                    numero_asesor: numeroAsesorActivo || "",
                 }
             );
 
@@ -5128,6 +5139,7 @@ export default function DigitalesContacto() {
                 {
                     estado: "Descalificado",
                     motivo_descalificacion: motivo,
+                    numero_asesor: numeroAsesorActivo || "",
                 }
             );
 

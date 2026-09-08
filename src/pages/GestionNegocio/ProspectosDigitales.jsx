@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, Car, CheckCircle2, Factory, FileText, Landmark, Truck } from "lucide-react";
+import { CalendarDays, CheckCircle2, FileText, Landmark } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { getCitasStats, getCotizacionesStats, getFacturadosStats, getLineasNegocio, getMotivosDescarte, getPautasOrigen, getProductividadAsesores, getProspectosStats, getSolicitudesFinanciamiento } from "../../lib/apiProspectosDigitales";
+import { getCanalDiario, getCitasStats, getCotizacionesStats, getFacturadosStats, getLineasNegocio, getMotivosDescarte, getPautasOrigen, getProductividadAsesores, getProspectosStats, getSolicitudesFinanciamiento } from "../../lib/apiProspectosDigitales";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const AGENCIAS = ["VW Córdoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"];
@@ -15,19 +15,18 @@ const ESTADOS_INICIALES = {
   conversion_total: 0,
 };
 
-const DATOS_CANAL_DIARIO = [
-  { canal: "WhatsApp VW", corto: "WhatsApp", valor: 0 },
-  { canal: "Concesionaria", corto: "Concesionaria", valor: 0 },
-  { canal: "Facebook", corto: "Facebook", valor: 0 },
+const COLOR_CANAL_ID = { whatsapp: "#1555C7", vw_direct: "#131E5C", facebook: "#3B74D4", llamada: "#F59E0B" };
+
+const CANALES_LEYENDA = [
+  { nombre: "WhatsApp", color: COLOR_CANAL_ID.whatsapp },
+  { nombre: "VW Concesionaria/VW", color: COLOR_CANAL_ID.vw_direct },
+  { nombre: "Facebook Ads", color: COLOR_CANAL_ID.facebook },
+  { nombre: "Llamada entrante", color: COLOR_CANAL_ID.llamada },
 ];
 
-const COLOR_CANAL = { "WhatsApp VW": "#25C46A", Concesionaria: "#1555C7", Facebook: "#1877F2" };
+const COLOR_CANAL_NEGOCIO = { whatsapp: "#1555C7", vw_direct: "#131E5C", facebook: "#3B74D4", llamada: "#F59E0B" };
 
-const COLOR_CANAL_ID = { whatsapp: "#25C46A", vw_direct: "#1555C7", facebook: "#1877F2" };
-
-const COLOR_CANAL_NEGOCIO = { whatsapp: "#25D6A8", vw_direct: "#131E5C", facebook: "#3B9DF2" };
-
-const COLORES_MOTIVOS = ["#1555C7", "#EF4444", "#F59E0B", "#25D6A8", "#8B5CF6", "#3B9DF2", "#F97316", "#14B8A6", "#64748B", "#EC4899"];
+const COLORES_MOTIVOS = ["#0B1B45", "#131E5C", "#1555C7", "#2547A0", "#3B74D4", "#5F92DE", "#7CAEEA", "#9CC8F1", "#A9C7F0", "#C9DFF8"];
 
 export default function ProspectosDigitales() {
   const añoActual = new Date().getFullYear();
@@ -42,6 +41,8 @@ export default function ProspectosDigitales() {
   const [error, setError] = useState("");
   const [productividad, setProductividad] = useState({ asesores: [], canales_totales: [] });
   const [loadingProductividad, setLoadingProductividad] = useState(true);
+  const [canalDiario, setCanalDiario] = useState([]);
+  const [loadingCanalDiario, setLoadingCanalDiario] = useState(true);
   const [lineasNegocio, setLineasNegocio] = useState({ demanda_total: 0, canales: [], lineas: [] });
   const [loadingLineas, setLoadingLineas] = useState(true);
   const [pautas, setPautas] = useState([]);
@@ -110,6 +111,29 @@ export default function ProspectosDigitales() {
       })
       .finally(() => {
         if (activo) setLoadingProductividad(false);
+      });
+    return () => { activo = false; };
+  }, [añoSel, mesSel, agenciaSel]);
+
+  useEffect(() => {
+    let activo = true;
+    setLoadingCanalDiario(true);
+    getCanalDiario({
+      anio: añoSel,
+      mes: mesSel + 1,
+      agencia: agenciaSel || undefined,
+    })
+      .then((response) => {
+        if (!activo) return;
+        setCanalDiario(Array.isArray(response?.items) ? response.items : []);
+      })
+      .catch((err) => {
+        if (!activo) return;
+        console.error("Error cargando análisis diario por canal:", err);
+        setCanalDiario([]);
+      })
+      .finally(() => {
+        if (activo) setLoadingCanalDiario(false);
       });
     return () => { activo = false; };
   }, [añoSel, mesSel, agenciaSel]);
@@ -355,13 +379,23 @@ export default function ProspectosDigitales() {
           <span className="absolute -top-[13px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#131E5C] via-[#1E2A6B] to-[#1555C7] px-5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-[#131E5C]/25 ring-2 ring-white">
             Prospectos Digitales
           </span>
-          <div className="mb-4 pt-1 text-center text-[13px] font-semibold text-[#5A627B]">
-            Analisis de registro en plataforma interna
+          <div className="mb-4 flex flex-col items-center pt-1">
+            <div className="text-center text-[13px] font-semibold text-[#5A627B]">
+              Analisis de registro en plataforma interna
+            </div>
+            <div className="mt-2.5 flex items-center justify-center gap-5">
+              {CANALES_LEYENDA.map((c) => (
+                <span key={c.nombre} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#152754]">
+                  <span className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: c.color }} />
+                  {c.nombre}
+                </span>
+              ))}
+            </div>
           </div>
           <div className="flex w-full items-stretch gap-[19px]">
-            <GraficoCanalDiario datos={DATOS_CANAL_DIARIO} />
-            <ProductividadAsesores asesores={productividad?.asesores ?? []} canalesTotales={productividad?.canales_totales ?? []} loading={loadingProductividad} />
-            <LineasNegocio lineas={lineasNegocio.lineas} canales={lineasNegocio.canales} demandaTotal={lineasNegocio.demanda_total} loading={loadingLineas} />
+            <GraficoCanalDiario datos={canalDiario} loading={loadingCanalDiario} />
+            <ProductividadAsesores asesores={productividad?.asesores ?? []} loading={loadingProductividad} />
+            <LineasNegocio lineas={lineasNegocio.lineas} loading={loadingLineas} />
             <PautasOrigen pautas={pautas} loading={loadingPautas} anio={añoSel} mes={mesSel} />
           </div>
         </div>
@@ -593,7 +627,7 @@ function IconoTendencia({ className }) {
   );
 }
 
-function GraficoCanalDiario({ datos }) {
+function GraficoCanalDiario({ datos, loading }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
       <div className="leading-tight">
@@ -602,33 +636,55 @@ function GraficoCanalDiario({ datos }) {
         <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
       </div>
       <div className="mt-3 h-[150px] min-h-[150px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={datos} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
-            <XAxis dataKey="corto" tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} interval={0} />
-            <YAxis tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip
-              cursor={{ fill: "rgba(21,39,84,0.04)" }}
-              contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 12 }}
-              formatter={(value, name, entry) => [Number(value).toLocaleString("es-MX"), entry?.payload?.canal]}
-            />
-            <Bar dataKey="valor" radius={[5, 5, 0, 0]} barSize={28}>
-              {datos.map((d) => (
-                <Cell key={d.canal} fill={COLOR_CANAL[d.canal] || "#1555C7"} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <div className="flex h-[150px] items-center justify-center gap-2">
+            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+          </div>
+        ) : datos.length === 0 ? (
+          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+            Sin datos en el periodo
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={datos} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
+              <XAxis dataKey="rotulo" tick={{ fontSize: 8, fill: "#8891AD" }} axisLine={false} tickLine={false} interval={3} />
+              <YAxis tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: "rgba(21,39,84,0.04)" }}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
+                formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload;
+                  if (!item) return "";
+                  return <span className="font-bold text-[#152754]">Día {item.rotulo}</span>;
+                }}
+              />
+              <Bar dataKey="whatsapp" name="WhatsApp" stackId="canal" fill={COLOR_CANAL_ID.whatsapp} />
+              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="canal" fill={COLOR_CANAL_ID.vw_direct} />
+              <Bar dataKey="facebook" name="Facebook Ads" stackId="canal" fill={COLOR_CANAL_ID.facebook} />
+              <Bar dataKey="llamada" name="Llamada entrante" stackId="canal" fill={COLOR_CANAL_ID.llamada} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
 }
 
-function ProductividadAsesores({ asesores, canalesTotales, loading }) {
-  const canales = [
-    { id: "whatsapp", nombre: "WhatsApp" },
-    { id: "vw_direct", nombre: "VW Directo" },
-    { id: "facebook", nombre: "Facebook" },
-  ];
+function ProductividadAsesores({ asesores, loading }) {
+  const datos = (asesores || []).map((a) => {
+    const porCanal = {};
+    for (const c of a.canales || []) porCanal[c.id] = Number(c.total || 0);
+    return {
+      nombre: a.nombre,
+      total: Number(a.total_leads || 0),
+      whatsapp: porCanal.whatsapp || 0,
+      vw_direct: porCanal.vw_direct || 0,
+      facebook: porCanal.facebook || 0,
+      llamada: porCanal.llamada || 0,
+    };
+  });
 
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
@@ -637,91 +693,58 @@ function ProductividadAsesores({ asesores, canalesTotales, loading }) {
         <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">COMPARADA DE ASESORES</div>
         <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
       </div>
-      {canalesTotales.length > 0 && (
-        <div className="mt-3 flex gap-1.5">
-          {canalesTotales.map((c) => (
-            <span
-              key={c.id}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold"
-              style={{ backgroundColor: `${COLOR_CANAL_ID[c.id] || "#1555C7"}18`, color: COLOR_CANAL_ID[c.id] || "#1555C7" }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLOR_CANAL_ID[c.id] || "#1555C7" }} />
-              {c.nombre} {Number(c.total || 0).toLocaleString("es-MX")}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="mt-3 h-[150px] min-h-[150px] overflow-x-auto overflow-y-hidden">
+      <div className="mt-3">
         {loading ? (
           <div className="flex h-[150px] items-center justify-center gap-2">
             <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
             <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
           </div>
-        ) : asesores.length === 0 ? (
+        ) : datos.length === 0 ? (
           <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
             Sin datos en el periodo
           </div>
         ) : (
-          <div className="flex h-full gap-2">
-            {asesores.map((asesor) => (
-              <TarjetaAsesor key={asesor.nombre} asesor={asesor} canales={canales} />
-            ))}
-          </div>
+          <ResponsiveContainer width="100%" height={Math.max(150, datos.length * 46)}>
+            <BarChart data={datos} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }} barCategoryGap="14%">
+              <CartesianGrid horizontal={false} stroke="#EDF0F7" />
+              <XAxis type="number" tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="nombre" width={92} tick={{ fontSize: 9, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
+              <Tooltip
+                cursor={{ fill: "rgba(21,39,84,0.04)" }}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
+                formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload;
+                  if (!item) return "";
+                  return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads</span>;
+                }}
+              />
+              <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill={COLOR_CANAL_ID.whatsapp} barSize={14} />
+              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="a" fill={COLOR_CANAL_ID.vw_direct} barSize={14} />
+              <Bar dataKey="facebook" name="Facebook Ads" stackId="a" fill={COLOR_CANAL_ID.facebook} barSize={14} />
+              <Bar dataKey="llamada" name="Llamada entrante" stackId="a" fill={COLOR_CANAL_ID.llamada} barSize={14} radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>
   );
 }
 
-function TarjetaAsesor({ asesor, canales }) {
-  const total = Number(asesor.total_leads || 0);
-  return (
-    <div className="flex min-w-[130px] max-w-[130px] flex-col rounded-[10px] border border-[#131E5C]/10 bg-white p-2.5">
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#131E5C] text-[11px] font-black text-white">
-          {asesor.iniciales || "?"}
-        </div>
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-[10px] font-bold text-[#152754]">{asesor.nombre}</div>
-          <div className="truncate text-[9px] font-semibold text-[#8891AD]">{asesor.puesto || asesor.tipo_asesor || "Asesor digital"}</div>
-        </div>
-      </div>
-      <div className="mt-2 flex items-baseline gap-1">
-        <span className="text-[18px] font-black leading-none text-[#152754]">{total.toLocaleString("es-MX")}</span>
-        <span className="text-[9px] font-semibold text-[#8891AD]">leads</span>
-      </div>
-      <div className="mt-2 flex flex-col gap-1.5">
-        {canales.map((canal) => {
-          const dato = asesor.canales?.find((c) => c.id === canal.id) || { total: 0, porcentaje: 0 };
-          const color = COLOR_CANAL_ID[canal.id] || "#1555C7";
-          return (
-            <div key={canal.id}>
-              <div className="flex items-center justify-between text-[8px] font-semibold text-[#8891AD]">
-                <span>{canal.nombre}</span>
-                <span className="font-bold text-[#152754]">{Number(dato.total || 0).toLocaleString("es-MX")} ({dato.porcentaje ?? 0}%)</span>
-              </div>
-              <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF0F7]">
-                <div className="h-full rounded-full" style={{ width: `${Math.min(100, Number(dato.porcentaje || 0))}%`, backgroundColor: color }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function LineasNegocio({ lineas, canales, demandaTotal, loading }) {
-  const iconos = {
-    nuevos: <Factory className="h-5 w-5" />,
-    usados: <Car className="h-5 w-5" />,
-    sin_clasificar: <Truck className="h-5 w-5" />,
-  };
-  const colores = {
-    nuevos: "#131E5C",
-    usados: "#1555C7",
-    sin_clasificar: "#8891AD",
-  };
+function LineasNegocio({ lineas, loading }) {
+  const datos = (lineas || []).map((l) => {
+    const porCanal = {};
+    for (const c of l.canales || []) porCanal[c.id] = Number(c.total || 0);
+    return {
+      nombre: l.nombre,
+      total: Number(l.total || 0),
+      whatsapp: porCanal.whatsapp || 0,
+      vw_direct: porCanal.vw_direct || 0,
+      facebook: porCanal.facebook || 0,
+      llamada: porCanal.llamada || 0,
+    };
+  });
+  const maxTotal = Math.max(1, ...datos.map((d) => d.total));
 
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
@@ -730,75 +753,48 @@ function LineasNegocio({ lineas, canales, demandaTotal, loading }) {
         <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">DE NEGOCIOS</div>
         <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
       </div>
-
-      {loading ? (
-        <div className="mt-3 flex h-[150px] items-center justify-center gap-2">
-          <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-          <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-        </div>
-      ) : lineas.length === 0 ? (
-        <div className="mt-3 flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-          Sin datos en el periodo
-        </div>
-      ) : (
-        <>
-          <div className="mt-3 flex gap-1.5">
-            {canales.map((c) => {
-              const color = COLOR_CANAL_NEGOCIO[c.id] || "#8891AD";
-              const total = Number(c.total ?? 0);
-              return (
-                <div key={c.id} className="flex min-w-0 flex-1 flex-col items-center rounded-[8px] bg-[#F8F7FC] px-1 py-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="mt-1 text-[8px] font-bold leading-none text-[#8891AD] truncate">{c.nombre.split("/")[0]}</span>
-                  <span className="text-[9px] font-black leading-tight text-[#152754]">{total.toLocaleString("es-MX")}</span>
-                </div>
-              );
-            })}
+      <div className="mt-3">
+        {loading ? (
+          <div className="flex h-[150px] items-center justify-center gap-2">
+            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
           </div>
-
-          <div className="mt-2 flex flex-col gap-1.5">
-            {lineas.map((linea) => {
-              const color = colores[linea.id] || "#131E5C";
-              const pct = Number(linea.porcentaje ?? 0);
-              return (
-                <div key={linea.id} className="rounded-[8px] border border-[#131E5C]/10 bg-white p-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white" style={{ backgroundColor: color }}>
-                      {iconos[linea.id]}
-                    </span>
-                    <div className="min-w-0 flex-1 leading-tight">
-                      <div className="truncate text-[9px] font-bold text-[#152754]">{linea.nombre}</div>
-                      <div className="truncate text-[8px] font-semibold text-[#8891AD]">
-                        {Number(linea.total ?? 0).toLocaleString("es-MX")} leads · {pct.toLocaleString("es-MX")}%
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-[10px] font-black text-[#152754]">{pct}%</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF0F7]">
-                    <div className={`h-full rounded-full ${demandaTotal > 0 ? "" : "bg-none"}`} style={{ width: `${pct}%`, backgroundColor: demandaTotal > 0 ? color : "#EDF0F7" }} />
-                  </div>
-                  {linea.items?.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {linea.items.map((item) => (
-                        <span key={item.nombre} className="rounded-full bg-[#F0F2FA] px-2 py-0.5 text-[8px] font-semibold text-[#5A627B]">
-                          {item.nombre}
-                          <b className="ml-1 text-[#152754]">{Number(item.total ?? 0).toLocaleString("es-MX")}</b>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        ) : datos.length === 0 ? (
+          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+            Sin datos en el periodo
           </div>
-        </>
-      )}
+        ) : (
+          <ResponsiveContainer width="100%" height={Math.max(150, datos.length * 52)}>
+            <BarChart data={datos} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }} barCategoryGap="18%">
+              <CartesianGrid horizontal={false} stroke="#EDF0F7" />
+              <XAxis type="number" tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="nombre" width={86} tick={{ fontSize: 9, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
+              <Tooltip
+                cursor={{ fill: "rgba(21,39,84,0.04)" }}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
+                formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload;
+                  if (!item) return "";
+                  const participacion = Math.round((item.total / maxTotal) * 100).toLocaleString("es-MX");
+                  return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads · {participacion}%</span>;
+                }}
+              />
+              <Bar dataKey="whatsapp" name="WhatsApp" stackId="l" fill={COLOR_CANAL_NEGOCIO.whatsapp} barSize={16} />
+              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="l" fill={COLOR_CANAL_NEGOCIO.vw_direct} barSize={16} />
+              <Bar dataKey="facebook" name="Facebook Ads" stackId="l" fill={COLOR_CANAL_NEGOCIO.facebook} barSize={16} />
+              <Bar dataKey="llamada" name="Llamada entrante" stackId="l" fill={COLOR_CANAL_NEGOCIO.llamada} barSize={16} radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   );
 }
 
 function PautasOrigen({ pautas, loading, anio, mes }) {
   const mesNombre = MESES[mes] || "";
+  const topPautas = [...(pautas || [])].sort((a, b) => (b.total ?? 0) - (a.total ?? 0)).slice(0, 3);
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
       <div className="leading-tight">
@@ -818,7 +814,7 @@ function PautasOrigen({ pautas, loading, anio, mes }) {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={pautas} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }} barCategoryGap={3}>
+            <BarChart data={topPautas} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }} barCategoryGap={8}>
               <CartesianGrid horizontal={false} stroke="#EDF0F7" />
               <XAxis type="number" domain={[0, "dataMax"]} tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="nombre" width={86} tick={{ fontSize: 8, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
@@ -826,7 +822,7 @@ function PautasOrigen({ pautas, loading, anio, mes }) {
                 cursor={{ fill: "rgba(21,39,84,0.04)" }}
                 contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
                 formatter={(value, name, entry) => {
-                  const item = pautas[entry?.index] || {};
+                  const item = topPautas[entry?.index] || {};
                   return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}% de participación)`, "Total"];
                 }}
                 labelFormatter={(_, payload) => {
@@ -851,7 +847,10 @@ function PautasOrigen({ pautas, loading, anio, mes }) {
 }
 
 function PieMotivosDescarte({ motivos, loading }) {
-  const datos = motivos.map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
+  const datos = [...(motivos || [])]
+    .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
+    .slice(0, 5)
+    .map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
       <div className="leading-tight">
@@ -869,23 +868,31 @@ function PieMotivosDescarte({ motivos, loading }) {
         </div>
       ) : (
         <div className="mt-2 flex min-h-[220px] items-center justify-center gap-4">
-          <div className="h-[180px] w-[180px] shrink-0">
+          <div className="h-[212px] w-[214px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={datos} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2}>
+                <Pie data={datos} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={46} outerRadius={72} paddingAngle={2}
+                  label={(props) => {
+                    const { name } = props;
+                    const texto = String(name || "");
+                    if (texto.length <= 18) return texto;
+                    return `${texto.slice(0, 17)}…`;
+                  }}
+                  labelLine={{ stroke: "#C4CCDE", strokeWidth: 1 }}>
                   {datos.map((d) => (
                     <Cell key={d.motivo} fill={d.color} />
                   ))}
                 </Pie>
                 <Tooltip
                   contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                  formatter={(value, name, entry) => {
-                    const item = datos[entry?.index] || {};
+                  formatter={(value, _name, entry) => {
+                    const item = entry?.payload || {};
                     return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}%)`, "Total"];
                   }}
                   labelFormatter={(_, payload) => {
                     const item = payload?.[0]?.payload;
-                    return item?.motivo || "";
+                    if (!item?.motivo) return "";
+                    return <span className="font-bold text-[#152754]">{item.motivo}</span>;
                   }}
                 />
               </PieChart>
@@ -955,7 +962,7 @@ function MotivosPrincipales({ motivos, loading }) {
 function BarrasCitas({ citas, loading }) {
   const datos = [
     { nombre: "Concertadas", total: Number(citas.citas_concertadas ?? 0), color: "#1555C7" },
-    { nombre: "Efectivas", total: Number(citas.citas_efectivas ?? 0), color: "#25D6A8" },
+    { nombre: "Efectivas", total: Number(citas.citas_efectivas ?? 0), color: "#3B74D4" },
   ];
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
@@ -1027,7 +1034,7 @@ function DonaAsistencia({ tasa, concertadas, efectivas, loading }) {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={48} outerRadius={66} startAngle={90} endAngle={-270}>
-                  <Cell fill="#25D6A8" />
+                  <Cell fill="#1555C7" />
                   <Cell fill="#EDF0F7" />
                 </Pie>
                 <Tooltip

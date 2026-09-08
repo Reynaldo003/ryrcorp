@@ -12,6 +12,10 @@ export function getProductividadAsesores(params = {}) {
     return http(`/digitales/analitica/productividad-asesores/${buildQuery(params)}`);
 }
 
+export function getCanalDiario(params = {}) {
+    return http(`/digitales/analitica/canal-diario/${buildQuery(params)}`);
+}
+
 export function getLineasNegocio(params = {}) {
     return http(`/digitales/analitica/lineas-negocio/${buildQuery(params)}`);
 }
