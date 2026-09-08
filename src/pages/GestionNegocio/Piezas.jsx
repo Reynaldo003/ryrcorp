@@ -335,7 +335,7 @@ export default function Piezas() {
 
             <InventarioObsoletoPanel obs={inventarioObsoleto} cargando={cargandoObs} error={errorObs} />
 
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="grid gap-4 xl:grid-cols-3">
               {graficasOrdenadas.map((g, indice) => {
                 const arrastrando = dragIndex === indice;
                 const sobre = overIndex === indice && dragIndex !== indice && dragIndex !== null;
@@ -547,7 +547,7 @@ function AnalisisJerarquico() {
   const [subgrupo, setSubgrupo] = useState("");
   const [filas, setFilas] = useState([]);
   const [totales, setTotales] = useState(null);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -574,46 +574,65 @@ function AnalisisJerarquico() {
 
   const puedeProfundizar = NIVEL_SIGUIENTE[nivel] != null;
 
+  const navegar = (siguiente) => {
+    const proximo = {
+      nivel: siguiente.nivel ?? nivel,
+      agencia: siguiente.agencia ?? agencia,
+      grupo: siguiente.grupo ?? grupo,
+      subgrupo: siguiente.subgrupo ?? subgrupo,
+    };
+
+    if (
+      proximo.nivel === nivel &&
+      proximo.agencia === agencia &&
+      proximo.grupo === grupo &&
+      proximo.subgrupo === subgrupo
+    ) {
+      return;
+    }
+
+    setCargando(true);
+    setNivel(proximo.nivel);
+    setAgencia(proximo.agencia);
+    setGrupo(proximo.grupo);
+    setSubgrupo(proximo.subgrupo);
+  };
+
   const profundizar = (fila) => {
     if (nivel === "dealer") {
-      setAgencia(fila.clave);
-      setGrupo("");
-      setSubgrupo("");
-      setNivel("grupo_principal");
+      navegar({ nivel: "grupo_principal", agencia: fila.clave, grupo: "", subgrupo: "" });
     } else if (nivel === "grupo_principal") {
-      setGrupo(fila.clave);
-      setSubgrupo("");
-      setNivel("subgrupo");
+      navegar({ nivel: "subgrupo", agencia, grupo: fila.clave, subgrupo: "" });
     } else if (nivel === "subgrupo") {
-      setSubgrupo(fila.clave);
-      setNivel("producto");
+      navegar({ nivel: "producto", agencia, grupo, subgrupo: fila.clave });
     }
   };
 
-  const migas = [];
-  migas.push({
-    titulo: "Dealer",
-    accion: () => { setNivel("dealer"); setAgencia(""); setGrupo(""); setSubgrupo(""); },
-    activa: nivel === "dealer" && !agencia,
-  });
+  const migas = [
+    {
+      titulo: "Dealer",
+      accion: () => navegar({ nivel: "dealer", agencia: "", grupo: "", subgrupo: "" }),
+      activa: nivel === "dealer" && !agencia,
+    },
+  ];
   if (agencia) {
     migas.push({
       titulo: agencia,
-      accion: () => { setAgencia(""); setGrupo(""); setSubgrupo(""); setNivel("dealer"); },
+      accion: () => navegar({ nivel: "dealer", agencia: "", grupo: "", subgrupo: "" }),
       activa: nivel === "dealer",
     });
   }
   if (grupo) {
     migas.push({
       titulo: grupo,
-      accion: () => { setGrupo(""); setSubgrupo(""); setNivel("grupo_principal"); },
+      accion: () => navegar({ nivel: "grupo_principal", agencia, grupo: "", subgrupo: "" }),
       activa: nivel === "grupo_principal",
     });
   }
   if (subgrupo) {
     migas.push({
       titulo: subgrupo,
-      accion: () => { setSubgrupo(""); setNivel("subgrupo"); },
+      accion: () => navegar({ nivel: "subgrupo", agencia, grupo, subgrupo: "" }),
       activa: nivel === "subgrupo",
     });
   }
@@ -685,23 +704,24 @@ function AnalisisJerarquico() {
           </div>
         )}
 
-        {cargando && (
-          <div className="flex items-center justify-center gap-2 py-8 text-[#8891AD]">
+        {error && (
+          <div className="rounded-xl border border-dashed border-red-200 bg-red-50/60 px-4 py-6 text-center text-xs font-semibold text-red-600">{error}</div>
+        )}
+
+        {!error && filas.length === 0 && cargando && (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-[#C8CEDF] bg-[#F7F8FC] py-10 text-[#8891AD]">
             <LoaderCircle className="h-5 w-5 animate-spin" />
             <span className="text-xs font-semibold">Cargando {NIVEL_LABEL[nivel].toLowerCase()}…</span>
           </div>
         )}
 
-        {!cargando && error && (
-          <div className="rounded-xl border border-dashed border-red-200 bg-red-50/60 px-4 py-6 text-center text-xs font-semibold text-red-600">{error}</div>
-        )}
-
-        {!cargando && !error && filas.length === 0 && (
+        {!error && filas.length === 0 && !cargando && (
           <div className="rounded-xl border border-dashed border-[#C8CEDF] bg-[#F7F8FC] px-4 py-8 text-center text-xs font-medium text-[#8891AD]">Sin datos para mostrar.</div>
         )}
 
-        {!cargando && !error && filas.length > 0 && (
-          <div className="overflow-x-auto rounded-xl border border-[#E4E7F0]">
+        {!error && filas.length > 0 && (
+          <div className="relative">
+            <div className="overflow-x-auto rounded-xl border border-[#E4E7F0]">
             <table className="w-full min-w-[720px] text-xs">
               <thead>
                 <tr className="border-b border-[#E4E7F0] bg-[#F7F8FC] text-left">
@@ -745,6 +765,14 @@ function AnalisisJerarquico() {
               </tfoot>
             </table>
           </div>
+
+          {cargando && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-white/60 text-[#8891AD]" style={{ backdropFilter: "blur(1px)" }}>
+              <LoaderCircle className="h-5 w-5 animate-spin" />
+              <span className="text-xs font-semibold">Recargando {NIVEL_LABEL[nivel].toLowerCase()}…</span>
+            </div>
+          )}
+        </div>
         )}
 
         {!cargando && !error && puedeProfundizar && filas.length > 0 && (
@@ -835,14 +863,14 @@ function GraficaDistribucion({ dias, totales, cargando, error }) {
 
   return (
     <div className="space-y-3">
-      <div className="h-[230px] w-full">
+      <div className="h-[170px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={datos} margin={{ top: 16, right: 8, left: 8, bottom: 4 }} barCategoryGap="24%">
             <XAxis dataKey="info.corto" interval={0} tickLine={false} axisLine={{ stroke: "#E4E7F0" }} height={40}
               tick={{ fontSize: 10, fontWeight: 700, fill: "#515778", angle: -24, textAnchor: "end", dy: 4 }} />
             <YAxis hide />
             <Tooltip cursor={{ fill: "rgba(19,30,92,0.05)" }} contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} SKU`, "Cantidad"]} labelFormatter={(l) => l} />
-            <Bar dataKey="cantidad" radius={[6, 6, 0, 0]} maxBarSize={46}>
+            <Bar dataKey="cantidad" radius={[6, 6, 0, 0]} maxBarSize={34}>
               {datos.map((item) => (
                 <Cell key={item.rango} fill={item.info.color} />
               ))}
@@ -909,13 +937,13 @@ function GraficaMovimiento({ mov, totales, cargando, error }) {
 
   return (
     <div className="space-y-3">
-      <div className="h-[230px] w-full">
+      <div className="h-[170px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={mostrar} layout="vertical" margin={{ top: 6, right: 44, left: 6, bottom: 0 }} barCategoryGap={14}>
             <XAxis type="number" hide domain={[0, maxCantidad]} />
             <YAxis type="category" dataKey="info.nombre" width={92} tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#515778" }} />
             <Tooltip cursor={{ fill: "rgba(19,30,92,0.05)" }} contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${formatoNumero(value)} SKU`, name]} labelFormatter={(l) => l} />
-            <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={26}>
+            <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={18}>
               {mostrar.map((item) => (
                 <Cell key={item.categoria} fill={item.info.color} />
               ))}
@@ -998,10 +1026,10 @@ function GraficaObsolescencia({ capas, totales, cargando, error }) {
         </div>
       </div>
 
-      <div className="relative h-[230px]">
+      <div className="relative h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
           <RechartsPie>
-            <Pie data={capas} dataKey={metrica} nameKey="capa" cx="50%" cy="50%" innerRadius={64} outerRadius={94} paddingAngle={3} stroke="#FFFFFF" strokeWidth={3}
+            <Pie data={capas} dataKey={metrica} nameKey="capa" cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={3} stroke="#FFFFFF" strokeWidth={2}
               onMouseEnter={(_, index) => setSliceActiva(index)}
               onMouseLeave={() => setSliceActiva(null)}>
               {capas.map((item, index) => (
@@ -1012,7 +1040,7 @@ function GraficaObsolescencia({ capas, totales, cargando, error }) {
           </RechartsPie>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-          <p className="text-3xl font-black tracking-tight text-[#131E5C]">{etiquetaMagna(total)}</p>
+          <p className="text-xl font-black tracking-tight text-[#131E5C]">{etiquetaMagna(total)}</p>
           <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">{porValor ? "Del inventario" : "SKU con existencia"}</p>
         </div>
       </div>

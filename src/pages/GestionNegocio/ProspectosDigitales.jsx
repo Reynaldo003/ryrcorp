@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, CheckCircle2 } from "lucide-react";
-import { getProspectosStats } from "../../lib/apiProspectosDigitales";
+import { CalendarDays, Car, CheckCircle2, Factory, Truck } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { getLineasNegocio, getMotivosDescarte, getPautasOrigen, getProductividadAsesores, getProspectosStats } from "../../lib/apiProspectosDigitales";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const AGENCIAS = ["VW Córdoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"];
@@ -14,6 +15,20 @@ const ESTADOS_INICIALES = {
   conversion_total: 0,
 };
 
+const DATOS_CANAL_DIARIO = [
+  { canal: "WhatsApp VW", corto: "WhatsApp", valor: 0 },
+  { canal: "Concesionaria", corto: "Concesionaria", valor: 0 },
+  { canal: "Facebook", corto: "Facebook", valor: 0 },
+];
+
+const COLOR_CANAL = { "WhatsApp VW": "#25C46A", Concesionaria: "#1555C7", Facebook: "#1877F2" };
+
+const COLOR_CANAL_ID = { whatsapp: "#25C46A", vw_direct: "#1555C7", facebook: "#1877F2" };
+
+const COLOR_CANAL_NEGOCIO = { whatsapp: "#25D6A8", vw_direct: "#131E5C", facebook: "#3B9DF2" };
+
+const COLORES_MOTIVOS = ["#1555C7", "#EF4444", "#F59E0B", "#25D6A8", "#8B5CF6", "#3B9DF2", "#F97316", "#14B8A6", "#64748B", "#EC4899"];
+
 export default function ProspectosDigitales() {
   const añoActual = new Date().getFullYear();
   const años = Array.from({ length: 5 }, (_, i) => añoActual - i);
@@ -25,6 +40,14 @@ export default function ProspectosDigitales() {
   const [stats, setStats] = useState(ESTADOS_INICIALES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [productividad, setProductividad] = useState({ asesores: [], canales_totales: [] });
+  const [loadingProductividad, setLoadingProductividad] = useState(true);
+  const [lineasNegocio, setLineasNegocio] = useState({ demanda_total: 0, canales: [], lineas: [] });
+  const [loadingLineas, setLoadingLineas] = useState(true);
+  const [pautas, setPautas] = useState([]);
+  const [loadingPautas, setLoadingPautas] = useState(true);
+  const [motivosDescarte, setMotivosDescarte] = useState([]);
+  const [loadingMotivos, setLoadingMotivos] = useState(true);
 
   useEffect(() => {
     let activo = true;
@@ -57,11 +80,109 @@ export default function ProspectosDigitales() {
     return () => { activo = false; };
   }, [añoSel, mesSel, agenciaSel]);
 
+  useEffect(() => {
+    let activo = true;
+    setLoadingProductividad(true);
+    getProductividadAsesores({
+      anio: añoSel,
+      mes: mesSel + 1,
+      agencia: agenciaSel || undefined,
+    })
+      .then((response) => {
+        if (!activo) return;
+        setProductividad({
+          asesores: Array.isArray(response?.asesores) ? response.asesores : [],
+          canales_totales: Array.isArray(response?.canales_totales) ? response.canales_totales : [],
+        });
+      })
+      .catch((err) => {
+        if (!activo) return;
+        console.error("Error cargando productividad de asesores:", err);
+        setProductividad(null);
+      })
+      .finally(() => {
+        if (activo) setLoadingProductividad(false);
+      });
+    return () => { activo = false; };
+  }, [añoSel, mesSel, agenciaSel]);
+
+  useEffect(() => {
+    let activo = true;
+    setLoadingLineas(true);
+    getLineasNegocio({
+      anio: añoSel,
+      mes: mesSel + 1,
+      agencia: agenciaSel || undefined,
+    })
+      .then((response) => {
+        if (!activo) return;
+        setLineasNegocio({
+          demanda_total: Number(response?.demanda_total ?? 0),
+          canales: Array.isArray(response?.canales) ? response.canales : [],
+          lineas: Array.isArray(response?.lineas) ? response.lineas : [],
+        });
+      })
+      .catch((err) => {
+        if (!activo) return;
+        console.error("Error cargando análisis por línea de negocio:", err);
+        setLineasNegocio({ demanda_total: 0, canales: [], lineas: [] });
+      })
+      .finally(() => {
+        if (activo) setLoadingLineas(false);
+      });
+    return () => { activo = false; };
+  }, [añoSel, mesSel, agenciaSel]);
+
+  useEffect(() => {
+    let activo = true;
+    setLoadingPautas(true);
+    getPautasOrigen({
+      anio: añoSel,
+      mes: mesSel + 1,
+      agencia: agenciaSel || undefined,
+    })
+      .then((response) => {
+        if (!activo) return;
+        setPautas(Array.isArray(response?.pautas) ? response.pautas : []);
+      })
+      .catch((err) => {
+        if (!activo) return;
+        console.error("Error cargando análisis por pauta de origen:", err);
+        setPautas([]);
+      })
+      .finally(() => {
+        if (activo) setLoadingPautas(false);
+      });
+    return () => { activo = false; };
+  }, [añoSel, mesSel, agenciaSel]);
+
+  useEffect(() => {
+    let activo = true;
+    setLoadingMotivos(true);
+    getMotivosDescarte({
+      anio: añoSel,
+      mes: mesSel + 1,
+      agencia: agenciaSel || undefined,
+    })
+      .then((response) => {
+        if (!activo) return;
+        setMotivosDescarte(Array.isArray(response?.motivos) ? response.motivos : []);
+      })
+      .catch((err) => {
+        if (!activo) return;
+        console.error("Error cargando motivos de descarte:", err);
+        setMotivosDescarte([]);
+      })
+      .finally(() => {
+        if (activo) setLoadingMotivos(false);
+      });
+    return () => { activo = false; };
+  }, [añoSel, mesSel, agenciaSel]);
+
   return (
     <div className="min-h-screen">
       <main className="space-y-5 py-4">
-        <div className="flex w-full flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-extrabold text-[#131E5C]">Prospectos Digitales</h1>
+        <div className="flex w-full items-center justify-end">
           <div className="relative shrink-0 rounded-2xl border border-[#131E5C]/20 bg-white px-3 pt-3 pb-2 shadow-sm">
             <span className="absolute -top-[9px] left-1/2 -translate-x-1/2 bg-white px-2 text-[11px] font-black uppercase tracking-wider text-[#131E5C]">
               Agencias
@@ -124,6 +245,31 @@ export default function ProspectosDigitales() {
           <CitasConcertadas total={stats.citas_concertadas} loading={loading} />
           <CitasEfectivas total={stats.citas_efectivas} loading={loading} />
           <ConversionTotal total={`${stats.conversion_total}%`} loading={loading} />
+        </div>
+
+        <div className="relative mt-[18px] w-full rounded-[12px] border border-[#131E5C]/20 bg-white px-4 pt-5 pb-4 shadow-sm">
+          <span className="absolute -top-[10px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-white px-3 text-[12px] font-black uppercase tracking-wider text-[#131E5C]">
+            Prospectos Digitales
+          </span>
+          <div className="mb-4 pt-1 text-center text-[13px] font-semibold text-[#5A627B]">
+            Analisis de registro en plataforma interna
+          </div>
+          <div className="flex w-full items-stretch gap-[19px]">
+            <GraficoCanalDiario datos={DATOS_CANAL_DIARIO} />
+            <ProductividadAsesores asesores={productividad?.asesores ?? []} canalesTotales={productividad?.canales_totales ?? []} loading={loadingProductividad} />
+            <LineasNegocio lineas={lineasNegocio.lineas} canales={lineasNegocio.canales} demandaTotal={lineasNegocio.demanda_total} loading={loadingLineas} />
+            <PautasOrigen pautas={pautas} loading={loadingPautas} anio={añoSel} mes={mesSel} />
+          </div>
+        </div>
+
+        <div className="relative mt-[18px] w-full rounded-[12px] border border-[#131E5C]/20 bg-white px-4 pt-5 pb-4 shadow-sm">
+          <span className="absolute -top-[10px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-white px-3 text-[12px] font-black uppercase tracking-wider text-[#131E5C]">
+            Perfilamiento
+          </span>
+          <div className="flex w-full items-stretch gap-[19px]">
+            <PieMotivosDescarte motivos={motivosDescarte} loading={loadingMotivos} />
+            <MotivosPrincipales motivos={motivosDescarte} loading={loadingMotivos} />
+          </div>
         </div>
       </main>
     </div>
@@ -317,6 +463,355 @@ function IconoTendencia({ className }) {
       <line x1="24" y1="6" x2="18" y2="6" stroke="#CFE0FF" strokeWidth="1.8" strokeLinecap="round" />
       <line x1="24" y1="6" x2="24" y2="12" stroke="#CFE0FF" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function GraficoCanalDiario({ datos }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
+      <div className="leading-tight">
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">ANALISIS DIARIO</div>
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">POR CANAL</div>
+      </div>
+      <div className="mt-3 h-[150px] min-h-[150px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={datos} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
+            <XAxis dataKey="corto" tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} interval={0} />
+            <YAxis tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip
+              cursor={{ fill: "rgba(21,39,84,0.04)" }}
+              contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 12 }}
+              formatter={(value, name, entry) => [Number(value).toLocaleString("es-MX"), entry?.payload?.canal]}
+            />
+            <Bar dataKey="valor" radius={[5, 5, 0, 0]} barSize={28}>
+              {datos.map((d) => (
+                <Cell key={d.canal} fill={COLOR_CANAL[d.canal] || "#1555C7"} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function ProductividadAsesores({ asesores, canalesTotales, loading }) {
+  const canales = [
+    { id: "whatsapp", nombre: "WhatsApp" },
+    { id: "vw_direct", nombre: "VW Directo" },
+    { id: "facebook", nombre: "Facebook" },
+  ];
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
+      <div className="leading-tight">
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">PRODUCTIVIDAD</div>
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">COMPARADA DE ASESORES</div>
+      </div>
+      {canalesTotales.length > 0 && (
+        <div className="mt-3 flex gap-1.5">
+          {canalesTotales.map((c) => (
+            <span
+              key={c.id}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold"
+              style={{ backgroundColor: `${COLOR_CANAL_ID[c.id] || "#1555C7"}18`, color: COLOR_CANAL_ID[c.id] || "#1555C7" }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLOR_CANAL_ID[c.id] || "#1555C7" }} />
+              {c.nombre} {Number(c.total || 0).toLocaleString("es-MX")}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 h-[150px] min-h-[150px] overflow-x-auto overflow-y-hidden">
+        {loading ? (
+          <div className="flex h-[150px] items-center justify-center gap-2">
+            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+          </div>
+        ) : asesores.length === 0 ? (
+          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+            Sin datos en el periodo
+          </div>
+        ) : (
+          <div className="flex h-full gap-2">
+            {asesores.map((asesor) => (
+              <TarjetaAsesor key={asesor.nombre} asesor={asesor} canales={canales} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TarjetaAsesor({ asesor, canales }) {
+  const total = Number(asesor.total_leads || 0);
+  return (
+    <div className="flex min-w-[130px] max-w-[130px] flex-col rounded-[10px] border border-[#131E5C]/10 bg-white p-2.5">
+      <div className="flex items-center gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#131E5C] text-[11px] font-black text-white">
+          {asesor.iniciales || "?"}
+        </div>
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[10px] font-bold text-[#152754]">{asesor.nombre}</div>
+          <div className="truncate text-[9px] font-semibold text-[#8891AD]">{asesor.puesto || asesor.tipo_asesor || "Asesor digital"}</div>
+        </div>
+      </div>
+      <div className="mt-2 flex items-baseline gap-1">
+        <span className="text-[18px] font-black leading-none text-[#152754]">{total.toLocaleString("es-MX")}</span>
+        <span className="text-[9px] font-semibold text-[#8891AD]">leads</span>
+      </div>
+      <div className="mt-2 flex flex-col gap-1.5">
+        {canales.map((canal) => {
+          const dato = asesor.canales?.find((c) => c.id === canal.id) || { total: 0, porcentaje: 0 };
+          const color = COLOR_CANAL_ID[canal.id] || "#1555C7";
+          return (
+            <div key={canal.id}>
+              <div className="flex items-center justify-between text-[8px] font-semibold text-[#8891AD]">
+                <span>{canal.nombre}</span>
+                <span className="font-bold text-[#152754]">{Number(dato.total || 0).toLocaleString("es-MX")} ({dato.porcentaje ?? 0}%)</span>
+              </div>
+              <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF0F7]">
+                <div className="h-full rounded-full" style={{ width: `${Math.min(100, Number(dato.porcentaje || 0))}%`, backgroundColor: color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LineasNegocio({ lineas, canales, demandaTotal, loading }) {
+  const iconos = {
+    nuevos: <Factory className="h-5 w-5" />,
+    usados: <Car className="h-5 w-5" />,
+    sin_clasificar: <Truck className="h-5 w-5" />,
+  };
+  const colores = {
+    nuevos: "#131E5C",
+    usados: "#1555C7",
+    sin_clasificar: "#8891AD",
+  };
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
+      <div className="leading-tight">
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">ANALISIS POR LINEA</div>
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">DE NEGOCIOS</div>
+      </div>
+
+      {loading ? (
+        <div className="mt-3 flex h-[150px] items-center justify-center gap-2">
+          <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+          <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+        </div>
+      ) : lineas.length === 0 ? (
+        <div className="mt-3 flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+          Sin datos en el periodo
+        </div>
+      ) : (
+        <>
+          <div className="mt-3 flex gap-1.5">
+            {canales.map((c) => {
+              const color = COLOR_CANAL_NEGOCIO[c.id] || "#8891AD";
+              const total = Number(c.total ?? 0);
+              return (
+                <div key={c.id} className="flex min-w-0 flex-1 flex-col items-center rounded-[8px] bg-[#F8F7FC] px-1 py-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="mt-1 text-[8px] font-bold leading-none text-[#8891AD] truncate">{c.nombre.split("/")[0]}</span>
+                  <span className="text-[9px] font-black leading-tight text-[#152754]">{total.toLocaleString("es-MX")}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-2 flex flex-col gap-1.5">
+            {lineas.map((linea) => {
+              const color = colores[linea.id] || "#131E5C";
+              const pct = Number(linea.porcentaje ?? 0);
+              return (
+                <div key={linea.id} className="rounded-[8px] border border-[#131E5C]/10 bg-white p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white" style={{ backgroundColor: color }}>
+                      {iconos[linea.id]}
+                    </span>
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className="truncate text-[9px] font-bold text-[#152754]">{linea.nombre}</div>
+                      <div className="truncate text-[8px] font-semibold text-[#8891AD]">
+                        {Number(linea.total ?? 0).toLocaleString("es-MX")} leads · {pct.toLocaleString("es-MX")}%
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-black text-[#152754]">{pct}%</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF0F7]">
+                    <div className={`h-full rounded-full ${demandaTotal > 0 ? "" : "bg-none"}`} style={{ width: `${pct}%`, backgroundColor: demandaTotal > 0 ? color : "#EDF0F7" }} />
+                  </div>
+                  {linea.items?.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {linea.items.map((item) => (
+                        <span key={item.nombre} className="rounded-full bg-[#F0F2FA] px-2 py-0.5 text-[8px] font-semibold text-[#5A627B]">
+                          {item.nombre}
+                          <b className="ml-1 text-[#152754]">{Number(item.total ?? 0).toLocaleString("es-MX")}</b>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PautasOrigen({ pautas, loading, anio, mes }) {
+  const mesNombre = MESES[mes] || "";
+  return (
+    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
+      <div className="leading-tight">
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">POR PAUTA</div>
+        <div className="text-[12px] font-bold tracking-wide text-[#152754]">DE ORIGEN</div>
+      </div>
+      <div className="mt-3 h-[150px] min-h-[150px]">
+        {loading ? (
+          <div className="flex h-[150px] items-center justify-center gap-2">
+            <div className="h-20 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+            <div className="h-20 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
+          </div>
+        ) : pautas.length === 0 ? (
+          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+            Sin datos en el periodo
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={pautas} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }} barCategoryGap={3}>
+              <CartesianGrid horizontal={false} stroke="#EDF0F7" />
+              <XAxis type="number" domain={[0, "dataMax"]} tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="nombre" width={86} tick={{ fontSize: 8, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
+              <Tooltip
+                cursor={{ fill: "rgba(21,39,84,0.04)" }}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
+                formatter={(value, name, entry) => {
+                  const item = pautas[entry?.index] || {};
+                  return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}% de participación)`, "Total"];
+                }}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload;
+                  if (!item) return "";
+                  return (
+                    <div className="flex flex-col gap-0.5 py-0.5">
+                      <span className="font-bold text-[#152754]">{item.nombre}</span>
+                      <span className="text-[#5A627B]">Canal: {item.canal}</span>
+                      <span className="text-[#5A627B]">Periodo: {mesNombre} {anio}</span>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="total" fill="#1555C7" radius={[0, 5, 5, 0]} barSize={22} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PieMotivosDescarte({ motivos, loading }) {
+  const datos = motivos.map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
+  return (
+    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
+      <div className="text-[12px] font-bold tracking-wide text-[#152754]">MOTIVOS DE DESCARTE</div>
+      {loading ? (
+        <div className="flex h-[220px] items-center justify-center gap-4">
+          <div className="h-36 w-36 animate-pulse rounded-full bg-[#131E5C]/10" />
+          <div className="h-20 w-28 animate-pulse rounded-lg bg-[#131E5C]/10" />
+        </div>
+      ) : motivos.length === 0 ? (
+        <div className="flex h-[220px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+          Sin descartes en el periodo
+        </div>
+      ) : (
+        <div className="mt-2 flex min-h-[220px] items-center justify-center gap-4">
+          <div className="h-[180px] w-[180px] shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={datos} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2}>
+                  {datos.map((d) => (
+                    <Cell key={d.motivo} fill={d.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
+                  formatter={(value, name, entry) => {
+                    const item = datos[entry?.index] || {};
+                    return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}%)`, "Total"];
+                  }}
+                  labelFormatter={(_, payload) => {
+                    const item = payload?.[0]?.payload;
+                    return item?.motivo || "";
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            {datos.slice(0, 5).map((d) => (
+              <div key={d.motivo} className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
+                <span className="min-w-0 flex-1 truncate text-[9px] font-semibold text-[#5A627B]">{d.motivo}</span>
+                <span className="shrink-0 text-[9px] font-black text-[#152754]">{Number(d.porcentaje ?? 0).toLocaleString("es-MX")}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MotivosPrincipales({ motivos, loading }) {
+  const principales = [...(motivos || [])].sort((a, b) => (b.total ?? 0) - (a.total ?? 0)).slice(0, 2);
+  return (
+    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
+      <div className="text-[12px] font-bold tracking-wide text-[#152754]">PRINCIPALES MOTIVOS DE DESCARTE</div>
+      {loading ? (
+        <div className="mt-3 flex h-[220px] flex-col gap-2">
+          <div className="h-24 animate-pulse rounded-xl bg-[#131E5C]/10" />
+          <div className="h-24 animate-pulse rounded-xl bg-[#131E5C]/10" />
+        </div>
+      ) : principales.length === 0 ? (
+        <div className="mt-3 flex h-[220px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
+          Sin descartes en el periodo
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2.5">
+          {principales.map((m) => {
+            const color = COLORES_MOTIVOS[(motivos || []).indexOf(m) % COLORES_MOTIVOS.length];
+            return (
+              <div key={m.motivo} className="rounded-[12px] border border-[#131E5C]/10 bg-[#F8F7FC] p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <div className="truncate text-[11px] font-bold text-[#152754]">{m.motivo}</div>
+                    <div className="text-[10px] font-semibold text-[#8891AD]">Leads descartados</div>
+                  </div>
+                  <span className="shrink-0 text-[20px] font-black leading-none text-[#152754]">{Number(m.porcentaje ?? 0).toLocaleString("es-MX")}%</span>
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <div className="text-[26px] font-black leading-none text-[#152754]">{Number(m.total ?? 0).toLocaleString("es-MX")}</div>
+                  <div className="h-2 w-full max-w-[60%] overflow-hidden rounded-full bg-[#EDF0F7]">
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, Number(m.porcentaje ?? 0))}%`, backgroundColor: color }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
