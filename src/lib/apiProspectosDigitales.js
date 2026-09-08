@@ -23,3 +23,19 @@ export function getPautasOrigen(params = {}) {
 export function getMotivosDescarte(params = {}) {
     return http(`/digitales/analitica/motivos-descarte/${buildQuery(params)}`);
 }
+
+export function getCitasStats(params = {}) {
+    return http(`/digitales/analitica/citas-stats/${buildQuery(params)}`);
+}
+
+export function getCotizacionesStats(params = {}) {
+    return http(`/digitales/analitica/cotizaciones-stats/${buildQuery(params)}`);
+}
+
+export function getSolicitudesFinanciamiento(params = {}) {
+    return http(`/digitales/analitica/solicitudes-financiamiento/${buildQuery(params)}`);
+}
+
+export function getFacturadosStats(params = {}) {
+    return http(`/digitales/analitica/facturados-stats/${buildQuery(params)}`);
+}
