@@ -219,6 +219,13 @@ export default function Sidebar() {
                 icon: BanknoteArrowUp,
                 show: hasAnyPermission(["USUARIOS_ADMIN",]),
             },
+            {
+                section: "Negocio",
+                to: "/inventario",
+                label: "Inventario",
+                icon: LayoutList,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            },
             { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
             {
                 section: "Comercial",
@@ -240,13 +247,6 @@ export default function Sidebar() {
                 label: "Postventa",
                 icon: ClipboardCheck,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
-            },
-            {
-                section: "Comercial",
-                to: "/inventario",
-                label: "Inventario",
-                icon: LayoutList,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
             },
             {
                 section: "Comercial",

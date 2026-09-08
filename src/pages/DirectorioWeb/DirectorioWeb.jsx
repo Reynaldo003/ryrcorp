@@ -22,7 +22,6 @@ const SITIOS_INICIALES = [
     { id: 12, nombre: "visualiza-citas-volvo", url: "https://visualiza-citas-volvo.vercel.app", agencia: "Volvo", categoria: "Citas", descripcion: "Visualización y seguimiento de citas Volvo", plataforma: "Vercel", activo: true },
     { id: 13, nombre: "hoja-ingresos-oba", url: "https://hoja-ingresos-oba.vercel.app", agencia: "OBA", categoria: "Ingresos", descripcion: "Hoja de control de ingresos", plataforma: "Vercel", activo: true },
     { id: 14, nombre: "hoja-ingresos-cba", url: "https://hoja-ingresos-cba.vercel.app", agencia: "CBA", categoria: "Ingresos", descripcion: "Hoja de control de ingresos", plataforma: "Vercel", activo: true },
-    { id: 15, nombre: "dianaldo", url: "https://dianaldo.vercel.app", agencia: "General", categoria: "Herramientas", descripcion: "Herramienta web interna", plataforma: "Vercel", activo: true },
     { id: 16, nombre: "crm-diautos", url: "https://crm-diautos.vercel.app", agencia: "DIAUTOS", categoria: "CRM", descripcion: "CRM de DIAUTOS", plataforma: "Vercel", activo: true },
     { id: 17, nombre: "checklist-entrega-volvo", url: "https://checklist-entrega-volvo.vercel.app", agencia: "Volvo", categoria: "Checklist", descripcion: "Checklist para entrega de vehículos Volvo", plataforma: "Vercel", activo: true },
     { id: 18, nombre: "checklist-recepcion-volvo", url: "https://checklist-recepcion-volvo.vercel.app", agencia: "Volvo", categoria: "Checklist", descripcion: "Checklist para recepción de vehículos Volvo", plataforma: "Vercel", activo: true },

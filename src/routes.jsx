@@ -121,6 +121,7 @@ import VentasVN from "./pages/VentasVN/VentasVN";
 import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
 import Piezas from "./pages/GestionNegocio/Piezas";
 import ProspectosDigitales from "./pages/GestionNegocio/ProspectosDigitales";
+import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -393,6 +394,11 @@ export const router = createBrowserRouter(
                                 {
                                     path: "autos_nuevos",
                                     element: <VentasVN />,
+
+                                },
+                                {
+                                    path: "refacciones_obsolescencia",
+                                    element: <RefaccionesObsolescencia />,
                                 },
                                 {
                                     path: "productos",
