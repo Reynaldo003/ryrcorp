@@ -38,14 +38,14 @@ import { apiCitas } from "../../lib/apiCitas";
 import { api } from "../../lib/apiPruebas";
 import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
 import {
-  AGENCIAS_DIGITALES,
+    AGENCIAS_DIGITALES,
 } from "../../config/asesoresGestionComercial";
 import {
-  useAsesoresGestionComercial,
+    useAsesoresGestionComercial,
 } from "../../hooks/useAsesoresGestionComercial";
 import {
-  estadoAutomaticoBandeja,
-  tieneCalificacionRapida,
+    estadoAutomaticoBandeja,
+    tieneCalificacionRapida,
 } from "../Digitales/estadosProspecto";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -1176,7 +1176,7 @@ function GraficosView({ rows }) {
 
 export default function RegistroCitas() {
     const { user } = useAuth();
-    
+
     const {
         nombresAsesoresActivos,
         nombresAsesoresDigitales,
@@ -1235,6 +1235,7 @@ export default function RegistroCitas() {
         "Lanzamiento",
         "Open Day",
         "Información Post-venta",
+        "Noche Mexicana",
     ];
 
     const [ctxMenu, setCtxMenu] = useState({ open: false, x: 0, y: 0, row: null });
