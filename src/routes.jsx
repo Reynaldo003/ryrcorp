@@ -389,7 +389,7 @@ export const router = createBrowserRouter(
                             children: [
                                 {
                                     index: true,
-                                    element: <Navigate to="autos_nuevos" replace />,
+                                    element: <Navigate to="refacciones_obsolescencia" replace />,
                                 },
                                 {
                                     path: "autos_nuevos",
@@ -399,14 +399,6 @@ export const router = createBrowserRouter(
                                 {
                                     path: "refacciones_obsolescencia",
                                     element: <RefaccionesObsolescencia />,
-                                },
-                                {
-                                    path: "productos",
-                                    element: <ProductosEstoque />,
-                                },
-                                {
-                                    path: "piezas",
-                                    element: <Piezas />,
                                 },
                                 {
                                     path: "prospectos_digitales",
