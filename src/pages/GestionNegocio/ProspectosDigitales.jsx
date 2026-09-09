@@ -366,13 +366,15 @@ export default function ProspectosDigitales() {
 
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
 
-        <div className="mx-[14px] mt-[18px] mb-[18px] flex w-full items-stretch gap-[19px] rounded-[12px] bg-[#F8F7FC] p-[18px_14px]">
-          <Card1 total={stats.prospectos.total} pct={stats.prospectos.crecimiento} loading={loading} />
-          <Descalificados total={stats.descalificados.total} motivo={stats.descalificados.motivo_principal} loading={loading} />
-          <ConversionesSmart total={stats.conversiones_inteligentes} loading={loading} />
-          <CitasConcertadas total={stats.citas_concertadas} loading={loading} />
-          <CitasEfectivas total={stats.citas_efectivas} loading={loading} />
-          <ConversionTotal total={`${stats.conversion_total}%`} loading={loading} />
+        <div className="mx-[14px] mt-[18px] mb-[18px] w-full rounded-[12px] bg-[#F8F7FC] p-[18px_14px]">
+          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-[19px] xl:grid-cols-6">
+            <Card1 total={stats.prospectos.total} pct={stats.prospectos.crecimiento} loading={loading} />
+            <Descalificados total={stats.descalificados.total} motivo={stats.descalificados.motivo_principal} loading={loading} />
+            <ConversionesSmart total={stats.conversiones_inteligentes} loading={loading} />
+            <CitasConcertadas total={stats.citas_concertadas} loading={loading} />
+            <CitasEfectivas total={stats.citas_efectivas} loading={loading} />
+            <ConversionTotal total={`${stats.conversion_total}%`} loading={loading} />
+          </div>
         </div>
 
         <div className="relative mt-[18px] w-full rounded-[12px] border border-[#131E5C]/20 bg-white px-4 pt-5 pb-4 shadow-sm">
@@ -465,7 +467,6 @@ function Card1({ total, pct, loading }) {
 }
 
 function Descalificados({ total, motivo, loading }) {
-  const motivoRecortado = motivo ? (motivo.length > 9 ? `${motivo.slice(0, 9)}...` : motivo) : "Sin dato";
   return (
     <TarjetaBlanca>
       <div className="flex items-start justify-between gap-2">
@@ -479,12 +480,9 @@ function Descalificados({ total, motivo, loading }) {
         <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
       </div>
       <div className="mt-auto border-t border-[#EDF0F7] pt-2" />
-      <div className="mt-2 flex items-center justify-between text-[10px]">
-        <div className="leading-tight font-semibold text-[#8891AD]">
-          <div>Principal</div>
-          <div>motivo</div>
-        </div>
-        <span className="font-bold text-red-500">{loading ? "…" : motivoRecortado}</span>
+      <div className="mt-2">
+        <div className="text-[10px] font-semibold text-[#5A627B]">Motivo principal</div>
+        <div className="mt-1 text-[10px] font-bold leading-tight text-red-500">{loading ? "…" : (motivo || "Sin dato")}</div>
       </div>
     </TarjetaBlanca>
   );
@@ -549,7 +547,6 @@ function CitasConcertadas({ total, loading }) {
           <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">CONCERTADAS</div>
           <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
         </div>
-        <span className="inline-flex h-[31px] w-[70px] shrink-0 items-center justify-center rounded-full bg-[#EEF0FF] text-[11px] font-bold text-[#273B74]">Agenda</span>
       </div>
       <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
         <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
@@ -582,10 +579,6 @@ function CitasEfectivas({ total, loading }) {
           <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">EFECTIVAS</div>
           <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
         </div>
-        <span className="flex h-[47px] w-[69px] shrink-0 flex-col items-center justify-center rounded-full bg-[#E7E9FF] text-[11px] font-bold leading-none text-[#66718C]">
-          <span>En</span>
-          <span>espera</span>
-        </span>
       </div>
       <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
         <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
@@ -704,27 +697,39 @@ function ProductividadAsesores({ asesores, loading }) {
             Sin datos en el periodo
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(150, datos.length * 46)}>
-            <BarChart data={datos} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }} barCategoryGap="14%">
-              <CartesianGrid horizontal={false} stroke="#EDF0F7" />
-              <XAxis type="number" tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="nombre" width={92} tick={{ fontSize: 9, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
-              <Tooltip
-                cursor={{ fill: "rgba(21,39,84,0.04)" }}
-                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
-                labelFormatter={(_, payload) => {
-                  const item = payload?.[0]?.payload;
-                  if (!item) return "";
-                  return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads</span>;
-                }}
-              />
-              <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill={COLOR_CANAL_ID.whatsapp} barSize={14} />
-              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="a" fill={COLOR_CANAL_ID.vw_direct} barSize={14} />
-              <Bar dataKey="facebook" name="Facebook Ads" stackId="a" fill={COLOR_CANAL_ID.facebook} barSize={14} />
-              <Bar dataKey="llamada" name="Llamada entrante" stackId="a" fill={COLOR_CANAL_ID.llamada} barSize={14} radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex h-[178px] flex-col">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
+              <div style={{ height: Math.max(160, datos.length * 46) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={datos} layout="vertical" margin={{ top: 2, right: 24, left: 0, bottom: 0 }} barCategoryGap="14%">
+                    <CartesianGrid horizontal={false} stroke="#EDF0F7" />
+                    <YAxis type="category" dataKey="nombre" width={92} tick={{ fontSize: 9, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(21,39,84,0.04)" }}
+                      contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
+                      formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
+                      labelFormatter={(_, payload) => {
+                        const item = payload?.[0]?.payload;
+                        if (!item) return "";
+                        return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads</span>;
+                      }}
+                    />
+                    <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill={COLOR_CANAL_ID.whatsapp} barSize={18} />
+                    <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="a" fill={COLOR_CANAL_ID.vw_direct} barSize={18} />
+                    <Bar dataKey="facebook" name="Facebook Ads" stackId="a" fill={COLOR_CANAL_ID.facebook} barSize={18} />
+                    <Bar dataKey="llamada" name="Llamada entrante" stackId="a" fill={COLOR_CANAL_ID.llamada} barSize={18} radius={[0, 3, 3, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="flex h-[22px] shrink-0 items-end justify-between" style={{ marginLeft: 92, marginRight: 24 }}>
+              {Array.from({ length: 6 }, (_, i) => (
+                <span key={i} className="shrink-0 text-[9px] font-semibold text-[#8891AD]">
+                  {Math.round((Math.max(1, ...datos.map((d) => d.total)) * i) / 5).toLocaleString("es-MX")}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -780,10 +785,10 @@ function LineasNegocio({ lineas, loading }) {
                   return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads · {participacion}%</span>;
                 }}
               />
-              <Bar dataKey="whatsapp" name="WhatsApp" stackId="l" fill={COLOR_CANAL_NEGOCIO.whatsapp} barSize={16} />
-              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="l" fill={COLOR_CANAL_NEGOCIO.vw_direct} barSize={16} />
-              <Bar dataKey="facebook" name="Facebook Ads" stackId="l" fill={COLOR_CANAL_NEGOCIO.facebook} barSize={16} />
-              <Bar dataKey="llamada" name="Llamada entrante" stackId="l" fill={COLOR_CANAL_NEGOCIO.llamada} barSize={16} radius={[0, 3, 3, 0]} />
+              <Bar dataKey="whatsapp" name="WhatsApp" stackId="l" fill={COLOR_CANAL_NEGOCIO.whatsapp} barSize={20} />
+              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="l" fill={COLOR_CANAL_NEGOCIO.vw_direct} barSize={20} />
+              <Bar dataKey="facebook" name="Facebook Ads" stackId="l" fill={COLOR_CANAL_NEGOCIO.facebook} barSize={20} />
+              <Bar dataKey="llamada" name="Llamada entrante" stackId="l" fill={COLOR_CANAL_NEGOCIO.llamada} barSize={20} radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -837,7 +842,7 @@ function PautasOrigen({ pautas, loading, anio, mes }) {
                   );
                 }}
               />
-              <Bar dataKey="total" fill="#1555C7" radius={[0, 5, 5, 0]} barSize={22} />
+              <Bar dataKey="total" fill="#1555C7" radius={[0, 5, 5, 0]} barSize={28} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -850,6 +855,7 @@ function PieMotivosDescarte({ motivos, loading }) {
   const datos = [...(motivos || [])]
     .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
     .map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
+  const datosDona = datos.slice(0, 4);
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
       <div className="leading-tight">
@@ -870,8 +876,8 @@ function PieMotivosDescarte({ motivos, loading }) {
           <div className="h-[150px] w-[150px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={datos} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={34} outerRadius={56} paddingAngle={2} stroke="#FFFFFF" strokeWidth={2}>
-                  {datos.map((d) => (
+                <Pie data={datosDona} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={40} outerRadius={64} paddingAngle={2} stroke="#FFFFFF" strokeWidth={2}>
+                  {datosDona.map((d) => (
                     <Cell key={d.motivo} fill={d.color} />
                   ))}
                 </Pie>
@@ -879,7 +885,7 @@ function PieMotivosDescarte({ motivos, loading }) {
                   contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
                   formatter={(value, _name, entry) => {
                     const item = entry?.payload || {};
-                    return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}%)`, "Total"];
+                    return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}%)`, item?.motivo || "Total"];
                   }}
                   labelFormatter={(_, payload) => {
                     const item = payload?.[0]?.payload;
@@ -891,11 +897,10 @@ function PieMotivosDescarte({ motivos, loading }) {
             </ResponsiveContainer>
           </div>
           <div className="flex w-full min-w-0 max-w-[280px] flex-1 flex-col gap-1.5">
-            {datos.map((d) => (
+            {datosDona.map((d) => (
               <div key={d.motivo} className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
                 <span className="min-w-0 flex-1 text-[9px] font-semibold leading-tight text-[#5A627B]">{d.motivo}</span>
-                <span className="shrink-0 text-right text-[9px] font-black text-[#152754]">{Number(d.porcentaje ?? 0).toLocaleString("es-MX")}%</span>
               </div>
             ))}
           </div>
@@ -984,8 +989,8 @@ function BarrasCitas({ citas, loading }) {
                   contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
                   formatter={(value) => [Number(value).toLocaleString("es-MX"), "Citas"]}
                 />
-                <Bar dataKey="total" radius={[5, 5, 0, 0]} barSize={34}>
-                  {datos.map((d) => (
+                <Bar dataKey="total" radius={[5, 5, 0, 0]} barSize={42}>
+                {datos.map((d) => (
                     <Cell key={d.nombre} fill={d.color} />
                   ))}
                 </Bar>
@@ -1025,7 +1030,7 @@ function DonaAsistencia({ tasa, concertadas, efectivas, loading }) {
           <div className="h-[140px] w-[140px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={48} outerRadius={66} startAngle={90} endAngle={-270}>
+                <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={68} startAngle={90} endAngle={-270}>
                   <Cell fill="#1555C7" />
                   <Cell fill="#EDF0F7" />
                 </Pie>
