@@ -3,12 +3,15 @@ import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import DayColumn from "./DayColumn";
 import {
     getWeekDays,
-    parseTimeMin,
     pad2,
     FIRST_HOUR,
     HOUR_SIZE,
     HOUR_COUNT,
+    LAST_HOUR,
     DEFAULT_DURATION,
+    taskSpan,
+    taskStartMin,
+    taskEndMin,
 } from "./scheduleUtils";
 
 const HOURS = Array.from({ length: HOUR_COUNT }, (_, i) => i + FIRST_HOUR);
@@ -82,24 +85,47 @@ export default function WeeklySchedule({
         return () => { if (ro) ro.disconnect(); };
     }, []);
 
-    function getTasksForDay(dateStr) {
-        return tasks.filter((t) => {
-            const due = t.due_date ? String(t.due_date).slice(0, 10) : null;
-            const scheduled = t.scheduled_date || null;
-            return due === dateStr || scheduled === dateStr;
-        });
-    }
+    const segmentsByDay = useMemo(() => {
+        const result = {};
+        for (const day of weekDays) {
+            const segs = [];
+            const seen = new Set();
+            for (const t of tasks) {
+                const span = taskSpan(t);
+                if (!span || span.startDay > day.date || span.endDay < day.date) continue;
+                const idKey = String(t.id ?? `${t.title}|${t.scheduled_date}|${t.due_date}`);
+                if (seen.has(idKey)) continue;
+                seen.add(idKey);
+                const startMin = taskStartMin(t);
+                const endMin = taskEndMin(t);
+                let s = startMin;
+                let e = endMin;
+                if (span.startDay === span.endDay) {
+                    // misma tarjeta de un solo día
+                } else if (day.date === span.startDay) {
+                    // primer día: del inicio a fin de la franja visible
+                    e = LAST_HOUR * 60;
+                } else if (day.date === span.endDay) {
+                    // último día: de inicio de la franja hasta la hora de término
+                    s = FIRST_HOUR * 60;
+                } else {
+                    // días intermedios: franja completa
+                    s = FIRST_HOUR * 60;
+                    e = LAST_HOUR * 60;
+                }
+                segs.push({ task: t, startMin: s, endMin: e });
+            }
+            result[day.date] = segs;
+        }
+        return result;
+    }, [tasks, weekDays]);
 
     function getDayStats(dateStr) {
-        const dayTasks = getTasksForDay(dateStr);
-        const done = dayTasks.filter((t) => t.list_name === "Hecho").length;
-        const pct = dayTasks.length ? Math.round((done / dayTasks.length) * 100) : 0;
+        const daySegs = segmentsByDay[dateStr] || [];
+        const done = daySegs.filter((s) => s.task.list_name === "Hecho").length;
 
-        const minutes = dayTasks.reduce((acc, t) => {
-            const end = parseTimeMin(t.scheduled_end || t.end_time);
-            const start = parseTimeMin(t.scheduled_start || t.start_time);
-            if (start === null) return acc;
-            const duration = end !== null && end > start ? end - start : DEFAULT_DURATION;
+        const minutes = daySegs.reduce((acc, s) => {
+            const duration = s.endMin > s.startMin ? s.endMin - s.startMin : DEFAULT_DURATION;
             return acc + duration;
         }, 0);
 
@@ -114,7 +140,7 @@ export default function WeeklySchedule({
                         : `${h}h`
                     : `${m}m`;
 
-        return { pct, timeLabel, done, total: dayTasks.length };
+        return { pct: daySegs.length ? Math.round((done / daySegs.length) * 100) : 0, timeLabel, done, total: daySegs.length };
     }
 
     return (
@@ -177,7 +203,7 @@ export default function WeeklySchedule({
                                     dayNumber={day.number}
                                     isCurrent={day.isToday || day.date === selectedDate}
                                     stats={getDayStats(day.date)}
-                                    tasks={getTasksForDay(day.date)}
+                                    segments={segmentsByDay[day.date] || []}
                                     onAddTask={onAddTask}
                                     onEdit={onEdit}
                                     onDelete={onDelete}

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { CalendarClock, X, Save, Trash2, AlertTriangle } from "lucide-react";
-import { CATEGORIES, CATEGORY_KEYS, PRIORITIES, PRIORITY_KEYS } from "./taskConfig";
+import { PRIORITIES, PRIORITY_KEYS } from "./taskConfig";
 import {
     parseTimeMin,
     minutesToTimeLabel,
@@ -29,7 +29,6 @@ export default function AgendaTaskModal({ task, lists, onClose, onSave, onDelete
     const [date, setDate] = useState(currentDate);
     const [startTime, setStartTime] = useState(currentStart);
     const [duration, setDuration] = useState(currentEnd > 0 ? currentEnd : 60);
-    const [category, setCategory] = useState(task?.category || "work");
     const [priority, setPriority] = useState(task?.priority || "MEDIUM");
     const [estado, setEstado] = useState(task?.list_name || listNames[0] || "Por hacer");
     const [error, setError] = useState("");
@@ -55,7 +54,6 @@ export default function AgendaTaskModal({ task, lists, onClose, onSave, onDelete
             scheduled_start: minutesToTimeLabel(clippedStart),
             scheduled_end: minutesToTimeLabel(endMin),
             durationMinutes: endMin - clippedStart,
-            category,
             priority,
             list_name: estado,
             list_id: list?.id,
@@ -122,13 +120,7 @@ export default function AgendaTaskModal({ task, lists, onClose, onSave, onDelete
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                        <div>
-                            <label className="text-[10px] font-extrabold uppercase tracking-wide text-[#8891AD]">Categoría</label>
-                            <select value={category} onChange={(e) => setCategory(e.target.value)} className={cls(inputBase, "mt-1 font-bold")}>
-                                {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
-                            </select>
-                        </div>
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="text-[10px] font-extrabold uppercase tracking-wide text-[#8891AD]">Prioridad</label>
                             <select value={priority} onChange={(e) => setPriority(e.target.value)} className={cls(inputBase, "mt-1 font-bold")}>

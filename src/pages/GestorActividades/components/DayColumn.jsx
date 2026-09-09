@@ -4,8 +4,6 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import TaskCard from "./TaskCard";
 import {
     makeSlotId,
-    taskStartMin,
-    taskEndMin,
     snapEndToClock,
     FIRST_HOUR,
     LAST_HOUR,
@@ -29,26 +27,60 @@ function HourSlot({ date, hour, hourSize }) {
     );
 }
 
+function layoutDayTasks(segments, hourSize, firstHour) {
+    const items = segments.map((seg) => ({
+        task: seg.task,
+        start: seg.startMin,
+        end: seg.endMin,
+    }));
+    items.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+
+    const active = [];
+    for (const it of items) {
+        while (active.length && active[0].end <= it.start) active.shift();
+        const used = new Set(active.map((o) => o.col));
+        let col = 0;
+        while (used.has(col)) col++;
+        it.col = col;
+        active.push(it);
+        active.sort((a, b) => a.end - b.end);
+    }
+
+    return items.map((it) => {
+        const overlap = items.filter((o) => o.start < it.end && o.end > it.start).length;
+        const frac = 1 / Math.max(1, overlap);
+        const slots = Math.max(1, Math.round(1 / frac));
+        const col = Math.min(it.col, slots - 1);
+        return {
+            task: it.task,
+            top: ((it.start - firstHour * 60) / 60) * hourSize,
+            height: ((it.end - it.start) / 60) * hourSize,
+            leftPct: col * frac * 100,
+            widthPct: frac * 100,
+        };
+    });
+}
+
 function ScheduledCard({
     task,
-    firstHour,
+    layout,
+    dayDate,
     hourSize,
     onEdit,
     onDelete,
     onResize,
     suppressClickRef,
 }) {
-    const startMin = taskStartMin(task);
-    const initHeight = ((taskEndMin(task) - startMin) / 60) * hourSize;
+    const startMin = layout.startMin;
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-        id: `task-${task.id}`,
+        id: `task-${task.id}-${dayDate}`,
         data: { task, source: "scheduled" },
     });
 
     const [resizing, setResizing] = useState(false);
     const [resizeHeight, setResizeHeight] = useState(null);
     const startYRef = useRef(0);
-    const endMinRef = useRef(taskEndMin(task));
+    const endMinRef = useRef(layout.endMin);
 
     const handleClick = useCallback((e) => {
         if (suppressClickRef.current && Date.now() < suppressClickRef.current) return;
@@ -61,7 +93,7 @@ function ScheduledCard({
         e.stopPropagation();
         setResizing(true);
         startYRef.current = e.clientY;
-        endMinRef.current = taskEndMin(task);
+        endMinRef.current = layout.endMin;
         e.currentTarget.setPointerCapture?.(e.pointerId);
     }
 
@@ -83,16 +115,16 @@ function ScheduledCard({
         if (finalEnd > startMin) onResize?.(task.id, startMin, finalEnd);
     }
 
-    const height = resizing && resizeHeight !== null ? resizeHeight : initHeight;
+    const height = resizing && resizeHeight !== null ? resizeHeight : layout.height;
 
     return (
         <div
             className={cls("absolute z-10", isDragging && "z-30")}
             style={{
-                top: ((startMin - firstHour * 60) / 60) * hourSize,
+                top: layout.top,
                 height,
-                left: 4,
-                right: 4,
+                left: `calc(${layout.leftPct}% + 4px)`,
+                width: `calc(${layout.widthPct}% - 8px)`,
                 transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
                 transition: isDragging ? "none" : undefined,
             }}
@@ -123,7 +155,7 @@ export default function DayColumn({
     dayNumber,
     isCurrent,
     stats,
-    tasks,
+    segments,
     onAddTask,
     onEdit,
     onDelete,
@@ -187,11 +219,12 @@ export default function DayColumn({
                 {hours.map((h) => (
                     <HourSlot key={h} date={dayDate} hour={h} hourSize={hourSize} />
                 ))}
-                {tasks.map((task) => (
+                {layoutDayTasks(segments, hourSize, firstHour).map((l) => (
                     <ScheduledCard
-                        key={task.id}
-                        task={task}
-                        firstHour={firstHour}
+                        key={`${String(l.task.id)}-${dayDate}`}
+                        task={l.task}
+                        dayDate={dayDate}
+                        layout={l}
                         hourSize={hourSize}
                         onEdit={onEdit}
                         onDelete={onDelete}

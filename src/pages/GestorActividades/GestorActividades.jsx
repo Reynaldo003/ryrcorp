@@ -625,16 +625,6 @@ export default function GestorActividades() {
         });
     }, [tasks, q, filterList, filterPriority, showMyTasksOnly, currentUser]);
 
-    const totals = useMemo(() => {
-        const doneList = lists.find((l) => l.name === "Hecho");
-        const overdue = tasks.filter((t) => t.due_date && new Date(String(t.due_date)) < new Date() && t.list_name !== "Hecho").length;
-        return {
-            total: tasks.length,
-            overdue,
-            done: doneList ? tasks.filter((t) => t.list_id === doneList.id).length : 0,
-        };
-    }, [tasks, lists]);
-
     function openCreate(listIdDefault = null) {
         setEditingTask(listIdDefault ? { list: listIdDefault, id: null } : null);
         setModalOpen(true);
@@ -721,25 +711,6 @@ export default function GestorActividades() {
                         className="rounded-xl border border-black/10 bg-slate-50 px-3 py-1.5 text-sm font-bold outline-none focus:border-[#131E5C]">
                         {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
-                </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-4">
-                <div className="rounded-xl border border-black/10 bg-white p-3">
-                    <div className="text-2xl font-black text-[#131E5C]">{totals.total}</div>
-                    <div className="text-xs font-semibold text-black/50 mt-0.5">Total de actividades</div>
-                </div>
-                <div className="rounded-xl border border-black/10 bg-white p-3">
-                    <div className="text-2xl font-black text-rose-500">{totals.overdue}</div>
-                    <div className="text-xs font-semibold text-black/50 mt-0.5">Vencidas</div>
-                </div>
-                <div className="rounded-xl border border-black/10 bg-white p-3">
-                    <div className="text-2xl font-black text-emerald-600">{totals.done}</div>
-                    <div className="text-xs font-semibold text-black/50 mt-0.5">Completadas</div>
-                </div>
-                <div className="rounded-xl border border-black/10 bg-white p-3">
-                    <div className="text-2xl font-black text-sky-600">{filtered.length}</div>
-                    <div className="text-xs font-semibold text-black/50 mt-0.5">Con filtros</div>
                 </div>
             </div>
 

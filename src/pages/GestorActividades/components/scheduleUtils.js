@@ -73,6 +73,26 @@ export function taskEndMin(task) {
     return start + taskDurationMinutes(task);
 }
 
+export function taskCalendarDay(task) {
+    const scheduled = task?.scheduled_date ? String(task.scheduled_date).slice(0, 10) : null;
+    if (scheduled) return scheduled;
+    const due = task?.due_date ? String(task.due_date).slice(0, 10) : null;
+    return due || null;
+}
+
+function datePart(value) {
+    const s = String(value ?? "");
+    return s.length >= 10 ? s.slice(0, 10) : null;
+}
+
+export function taskSpan(task) {
+    const startDay = taskCalendarDay(task);
+    if (!startDay) return null;
+    const due = datePart(task?.due_date);
+    const endDay = due && due >= startDay ? due : startDay;
+    return { startDay, endDay };
+}
+
 export function taskDurationMinutes(task) {
     const start = parseTimeMin(task?.scheduled_start || task?.start_time);
     const end = parseTimeMin(task?.scheduled_end || task?.end_time);

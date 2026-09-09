@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Inbox, Search, GripVertical, MoreHorizontal, Pencil, Trash2, ArrowRight, X, CheckCircle2 } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
-import { CATEGORIES, PRIORITIES } from "./taskConfig";
+import { PRIORITIES } from "./taskConfig";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -12,7 +12,6 @@ function cls(...a) {
 function TaskRow({ task, onEdit, onDelete, onSchedule }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef(null);
-    const cat = CATEGORIES[task.category] || CATEGORIES.work;
     const pri = PRIORITIES[task.priority] || PRIORITIES.MEDIUM;
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `unscheduled-${task.id}`,
@@ -47,14 +46,11 @@ function TaskRow({ task, onEdit, onDelete, onSchedule }) {
                 </button>
             </div>
 
-            <span className={cls("shrink-0 h-2 w-2 rounded-full", cat.dot)} />
+            <span className={cls("shrink-0 h-2 w-2 rounded-full", pri.dot)} />
 
             <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-[#1A1F3C] leading-snug truncate">{task.title}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={cls("inline-flex items-center rounded-full border px-1.5 py-px text-[8px] font-bold", cat.bg, cat.text, cat.border)}>
-                        {cat.label}
-                    </span>
                     <span className={cls("inline-flex items-center rounded-full border px-1.5 py-px text-[8px] font-bold", pri.bg, pri.text, pri.border)}>
                         {pri.label}
                     </span>
@@ -104,9 +100,8 @@ export default function UnscheduledTasks({ tasks, onEdit, onDelete, onSchedule }
         if (!search.trim()) return tasks;
         const q = search.toLowerCase();
         return tasks.filter((t) => {
-            const catLabel = (CATEGORIES[t.category]?.label || "").toLowerCase();
             const priLabel = (PRIORITIES[t.priority]?.label || "").toLowerCase();
-            return t.title.toLowerCase().includes(q) || catLabel.includes(q) || priLabel.includes(q);
+            return t.title.toLowerCase().includes(q) || priLabel.includes(q);
         });
     }, [tasks, search]);
 

@@ -19,7 +19,6 @@ import UnscheduledTasks from "./UnscheduledTasks";
 import WeeklySchedule from "./WeeklySchedule";
 import TaskCard from "./TaskCard";
 import AgendaTaskModal from "./AgendaTaskModal";
-import { CATEGORIES } from "./taskConfig";
 import {
     toDateStr,
     HOUR_SIZE,
@@ -30,6 +29,7 @@ import {
     resolveDrop,
     minutesToTimeLabel,
     parseSlotId,
+    taskSpan,
 } from "./scheduleUtils";
 
 function cls(...a) {
@@ -74,10 +74,8 @@ function buildApiPatch(base, patch, lists) {
 }
 
 function RowPreview({ task }) {
-    const cat = CATEGORIES[task.category] || CATEGORIES.work;
     return (
         <div className="flex max-w-[260px] items-center gap-2 rounded-[10px] border border-[#131E5C]/30 bg-white px-2.5 py-2 shadow-md rotate-1">
-            <span className={cls("h-2 w-2 shrink-0 rounded-full", cat.dot)} />
             <p className="truncate text-[11px] font-bold text-[#1A1F3C]">{task.title}</p>
         </div>
     );
@@ -159,21 +157,15 @@ export default function WeeklyPlanner({ tasks, lists, onAddTask, onDelete, onMov
 
     const weekTasks = useMemo(() => {
         return mergedTasks.filter((t) => {
-            const due = t.due_date ? String(t.due_date).slice(0, 10) : null;
-            const scheduled = t.scheduled_date || null;
-            if (due && due >= weekStartStr && due <= weekEndStr) return true;
-            if (scheduled && scheduled >= weekStartStr && scheduled <= weekEndStr) return true;
-            return false;
+            const span = taskSpan(t);
+            return span && span.endDay >= weekStartStr && span.startDay <= weekEndStr;
         });
     }, [mergedTasks, weekStartStr, weekEndStr]);
 
     const prevWeekTasks = useMemo(() => {
         return mergedTasks.filter((t) => {
-            const due = t.due_date ? String(t.due_date).slice(0, 10) : null;
-            const scheduled = t.scheduled_date || null;
-            if (due && due >= prevWeekStartStr && due <= prevWeekEndStr) return true;
-            if (scheduled && scheduled >= prevWeekStartStr && scheduled <= prevWeekEndStr) return true;
-            return false;
+            const span = taskSpan(t);
+            return span && span.endDay >= prevWeekStartStr && span.startDay <= prevWeekEndStr;
         });
     }, [mergedTasks, prevWeekStartStr, prevWeekEndStr]);
 
