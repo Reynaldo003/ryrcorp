@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
     Plus,
     X,
@@ -17,8 +17,10 @@ import {
     ChevronDown,
     CalendarCheck,
     Filter,
+    CalendarClock,
 } from "lucide-react";
 import { apiClickup } from "../../lib/apiClickup";
+import WeeklyPlanner from "./components/WeeklyPlanner";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -167,8 +169,8 @@ function ActividadModal({ open, onClose, actividad, lists, teamId, onSaved }) {
                 descripcion: descripcion.trim(),
                 desarrollo_estrategia: estrategia.trim(),
                 prioridad: priority,
-                inicio: start ? `${start}T00:00:00Z` : null,
-                vence: due ? `${due}T00:00:00Z` : null,
+                inicio: start ? `${start}T00:00:00` : null,
+                vence: due ? `${due}T00:00:00` : null,
                 subtareas: subtasks.map((s) => ({ titulo: s.title, done: !!s.done })),
                 asignados_ids: assignedUsers.map((u) => u.id),
             };
@@ -511,6 +513,12 @@ export default function GestorActividades() {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState("tabla");
+    const [agendaTasks, setAgendaTasks] = useState([]);
+    const [agendaLists, setAgendaLists] = useState([]);
+    const [agendaLoading, setAgendaLoading] = useState(false);
+    const [agendaError, setAgendaError] = useState(null);
+    const [agendaRange, setAgendaRange] = useState(null);
+    const agendaFetchRef = useRef(0);
     const [q, setQ] = useState("");
     const [filterList, setFilterList] = useState("Todos");
     const [filterPriority, setFilterPriority] = useState("Todos");
@@ -573,6 +581,39 @@ export default function GestorActividades() {
 
     useEffect(() => { loadBoard(); }, [loadBoard]);
 
+    const loadAgenda = useCallback(async (startStr, endStr) => {
+        if (!teamId || !projectId) return;
+        const seq = ++agendaFetchRef.current;
+        setAgendaLoading(true);
+        setAgendaError(null);
+        try {
+            const res = await apiClickup.getAgenda(Number(teamId), Number(projectId), { start: startStr, end: endStr });
+            if (seq !== agendaFetchRef.current) return;
+            setAgendaLists(res?.lists || []);
+            setAgendaTasks([...(res?.tasks || []), ...(res?.pendientes || [])]);
+        } catch (e) {
+            console.error(e);
+            if (seq !== agendaFetchRef.current) return;
+            setAgendaError(e.message || "No se pudo cargar la agenda");
+        } finally {
+            if (seq === agendaFetchRef.current) setAgendaLoading(false);
+        }
+    }, [teamId, projectId]);
+
+    useEffect(() => {
+        if (!teamId || !projectId || !agendaRange) return;
+        loadAgenda(agendaRange.start, agendaRange.end);
+    }, [teamId, projectId, agendaRange, loadAgenda]);
+
+    const reloadAgenda = useCallback(async () => {
+        if (!agendaRange) return;
+        await loadAgenda(agendaRange.start, agendaRange.end);
+    }, [agendaRange, loadAgenda]);
+
+    const onAgendaRangeChange = useCallback((start, end) => {
+        setAgendaRange((prev) => (prev && prev.start === start && prev.end === end ? prev : { start, end }));
+    }, []);
+
     const filtered = useMemo(() => {
         const qn = q.trim().toLowerCase();
         return tasks.filter((t) => {
@@ -613,6 +654,7 @@ export default function GestorActividades() {
             await apiClickup.deleteTask(Number(teamId), Number(confirmDeleteTask.id));
             setConfirmDeleteTask(null);
             await loadBoard();
+            await reloadAgenda();
         } catch (e) { alert(e.message); }
         finally { setDeletingTask(false); }
     }
@@ -622,6 +664,7 @@ export default function GestorActividades() {
         try {
             await apiClickup.moveTask(Number(teamId), { task_id: Number(tarea.id), to_list_id: Number(newListId), to_order: 0 });
             await loadBoard();
+            await reloadAgenda();
         } catch (e) {
             console.error(e);
             alert(e.message || "Error al cambiar el estado");
@@ -629,6 +672,7 @@ export default function GestorActividades() {
     }
 
     const viewTabs = [
+        { id: "agenda", label: "Agenda", Icon: CalendarClock },
         { id: "tabla", label: "Tabla", Icon: LayoutList },
         { id: "kanban", label: "Kanban", Icon: LayoutGrid },
     ];
@@ -725,11 +769,40 @@ export default function GestorActividades() {
                 </div>
             </div>
 
-            {view === "kanban"
-                ? <KanbanView actividades={filtered} lists={lists} onEdit={openEdit} onDelete={handleDeleteTask} loading={loading} />
-                : <TablaView actividades={filtered} lists={lists} onEdit={openEdit} onDelete={handleDeleteTask} onChangeStatus={handleChangeStatus} loading={loading} />}
+            {view === "agenda"
+                ? <WeeklyPlanner
+                    tasks={agendaTasks}
+                    lists={agendaLists}
+                    loading={agendaLoading}
+                    error={agendaError}
+                    onWeekRange={onAgendaRangeChange}
+                    onRetry={reloadAgenda}
+                    onAddTask={(data) => {
+                        setEditingTask({
+                            id: null,
+                            list: data?.list_id || lists[0]?.id,
+                            title: data?.title || "",
+                            start_date: data?.scheduled_date || "",
+                            due_date: data?.scheduled_date || "",
+                        });
+                        setModalOpen(true);
+                    }}
+                    onEdit={(task) => openEdit(task)}
+                    onDelete={(task) => handleDeleteTask(task)}
+                    onMoveTask={async (task, changes) => {
+                        if (!teamId) return;
+                        try {
+                            await apiClickup.updateTask(Number(teamId), Number(task.id), changes);
+                            await loadBoard();
+                            await reloadAgenda();
+                        } catch (e) { console.error(e); }
+                    }}
+                />
+                : view === "kanban"
+                    ? <KanbanView actividades={filtered} lists={lists} onEdit={openEdit} onDelete={handleDeleteTask} loading={loading} />
+                    : <TablaView actividades={filtered} lists={lists} onEdit={openEdit} onDelete={handleDeleteTask} onChangeStatus={handleChangeStatus} loading={loading} />}
 
-            <ActividadModal open={modalOpen} onClose={() => setModalOpen(false)} actividad={editingTask} lists={lists} teamId={teamId} onSaved={loadBoard} />
+            <ActividadModal open={modalOpen} onClose={() => setModalOpen(false)} actividad={editingTask} lists={lists} teamId={teamId} onSaved={async () => { await loadBoard(); await reloadAgenda(); }} />
             <ConfirmDialog open={!!confirmDeleteTask} title="Eliminar actividad" message={`¿Seguro que deseas eliminar "${confirmDeleteTask?.title}"?`} onConfirm={confirmTaskDelete} onCancel={() => setConfirmDeleteTask(null)} loading={deletingTask} />
         </div>
     );

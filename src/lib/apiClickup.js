@@ -124,6 +124,32 @@ function normalizeEvidence(item) {
 function normalizeTask(task, listsMap = {}) {
   const listId = Number(task.lista);
 
+  const rawInicio = task.inicio ?? task.start_date ?? null;
+  const rawVence = task.vence ?? task.due_date ?? null;
+
+  const isoTime = (v) => {
+    const s = v ? String(v) : "";
+    return s.length >= 16 ? s.slice(11, 16) : null;
+  };
+
+  const schedStart = isoTime(rawInicio);
+  const schedEnd = isoTime(rawVence);
+  const schedDate = rawInicio
+    ? String(rawInicio).slice(0, 10)
+    : rawVence
+      ? String(rawVence).slice(0, 10)
+      : null;
+
+  const toMinutes = (t) => {
+    if (!t) return null;
+    const [h, m] = String(t).split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return h * 60 + m;
+  };
+  const sm = toMinutes(schedStart);
+  const em = toMinutes(schedEnd);
+  const durationMinutes = sm !== null && em !== null && em > sm ? em - sm : 0;
+
   return {
     id: Number(task.id),
     list: listId,
@@ -143,6 +169,11 @@ function normalizeTask(task, listsMap = {}) {
     vence: task.vence ?? null,
     order: Number(task.orden ?? 0),
     created_by: task.creado_por ?? null,
+    scheduled_date: schedDate,
+    scheduled_start: schedStart,
+    scheduled_end: schedEnd,
+    duration_minutes: durationMinutes,
+    durationMinutes,
     bug_evidencias_count: Number(task.bug_evidencias_count ?? 0),
     resolution_evidencias_count: Number(task.resolution_evidencias_count ?? 0),
 
@@ -386,6 +417,32 @@ export const apiClickup = {
       project: data?.proyecto ? normalizeProject(data.proyecto) : null,
       lists,
       tasks_by_list,
+    };
+  },
+
+  async getAgenda(teamId, projectId, { start, end } = {}) {
+    const qs = new URLSearchParams({
+      proyecto_id: String(Number(projectId)),
+      fecha_inicio: start || "",
+      fecha_fin: end || "",
+    });
+
+    const data = await http(
+      `${API_BASE}/equipos/${Number(teamId)}/tablero/agenda/?${qs.toString()}`,
+    );
+
+    const lists = Array.isArray(data?.listas)
+      ? data.listas.map(normalizeList)
+      : [];
+
+    const listsMap = Object.fromEntries(lists.map((l) => [l.id, l]));
+    const normalize = (arr) =>
+      Array.isArray(arr) ? arr.map((t) => normalizeTask(t, listsMap)) : [];
+
+    return {
+      lists,
+      tasks: normalize(data?.tareas),
+      pendientes: normalize(data?.pendientes),
     };
   },
 
