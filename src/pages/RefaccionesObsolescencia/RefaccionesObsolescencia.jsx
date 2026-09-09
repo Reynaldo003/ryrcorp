@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     BarChart3, Boxes, CalendarDays, CircleDollarSign, Clock3, Database, Eraser,
     Layers3, LoaderCircle, MapPin, PackageSearch, RefreshCw, Search,
@@ -16,19 +16,9 @@ import {
 } from "../../lib/apiRefaccionesObsolescencia";
 import InteractiveTable from "./InteractiveTable";
 
-const C = {
-    navy: "#131E5C", navyMid: "#2445A2", navyLight: "#6681D4",
-    border: "#E4E7F0", muted: "#8891AD", textSub: "#515778",
-};
-
+const C = { navy: "#131E5C", navyMid: "#2445A2", navyLight: "#6681D4", border: "#E4E7F0", muted: "#8891AD", textSub: "#515778" };
 const PIE_COLORS = ["#131E5C", "#2445A2", "#3D63C8", "#6681D4", "#8B9DDE", "#AEB9E8", "#42526E", "#7A869A"];
-
-const TOOLTIP_STYLE = {
-    border: "1px solid #E4E7F0",
-    borderRadius: 12,
-    boxShadow: "0 12px 30px rgba(19,30,92,.12)",
-    fontSize: 12,
-};
+const TOOLTIP_STYLE = { border: "1px solid #E4E7F0", borderRadius: 12, boxShadow: "0 12px 30px rgba(19,30,92,.12)", fontSize: 12 };
 
 const COLUMNAS = [
     { key: "agencia", label: "Agencia" },
@@ -42,7 +32,7 @@ const COLUMNAS = [
     { key: "vr_estoque", label: "Valor Inventario", tipo: "moneda" },
     { key: "vr_unitario_medio", label: "Valor Unitario Medio", tipo: "moneda4" },
     { key: "qt_reservada", label: "Reservada", tipo: "numero" },
-    { key: "qt_pedida", label: "Pedida", tipo: "numero" },
+    { key: "qt_pedida", label: "Pendiente", tipo: "numero" },
     { key: "grupo_principal", label: "Grupo Principal" },
     { key: "subgrupo", label: "Subgrupo" },
     { key: "nombre_estandarizado", label: "Nombre Estandarizado" },
@@ -65,42 +55,27 @@ const COLUMNAS = [
 
 const FILTROS_INICIALES = {
     q: "", agencia: "", grupo_principal: "", categoria: "", capa_obsolescencia: "",
-    categoria_movimiento: "", fecha_desde: "", fecha_hasta: "", dias_min: "", dias_max: "",
+    categoria_movimiento: "", reservadas: "", pendientes: "",
+    fecha_desde: "", fecha_hasta: "", dias_min: "", dias_max: "",
 };
 
-const OPCIONES_INICIALES = {
-    agencias: [], grupos_principales: [], categorias: [],
-    capas_obsolescencia: [], categorias_movimiento: [],
-};
+const OPCIONES_INICIALES = { agencias: [], grupos_principales: [], categorias: [], capas_obsolescencia: [], categorias_movimiento: [] };
 
 const DASHBOARD_INICIAL = {
-    totales: {
-        registros: 0, productos: 0, qt_inventario: 0, existencia: 0,
-        valor_estoque: 0, reservada: 0, pedida: 0, promedio_dias_movimiento: 0,
-    },
-    graficas: {
-        por_capa: [], por_categoria_movimiento: [], por_agencia: [],
-        por_grupo: [], por_categoria: [], por_antiguedad: [],
-    },
+    totales: { registros: 0, productos: 0, qt_inventario: 0, existencia: 0, valor_estoque: 0, reservada: 0, pedida: 0, promedio_dias_movimiento: 0 },
+    graficas: { por_capa: [], por_categoria_movimiento: [], por_agencia: [], por_grupo: [], por_categoria: [], por_antiguedad: [] },
 };
 
-const inputClass = "h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10";
+const inputClass = "h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10 disabled:cursor-wait disabled:bg-[#F7F8FC] disabled:text-[#AAB1C7]";
 
 function cn(...parts) { return parts.filter(Boolean).join(" "); }
 function numero(value) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
+function formatoNumero(value, decimales = 0) { return numero(value).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales }); }
+function formatoCompacto(value) { return new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 }).format(numero(value)); }
+function money(value) { return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(numero(value)); }
 
-function formatoNumero(value, decimales = 0) {
-    return numero(value).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
-}
-
-function formatoCompacto(value) {
-    return new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 }).format(numero(value));
-}
-
-function money(value) {
-    return new Intl.NumberFormat("es-MX", {
-        style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(numero(value));
+function convertirGrafica(items) {
+    return (items || []).map((item) => ({ ...item, productos: numero(item.productos), existencia: numero(item.existencia), valor_estoque: numero(item.valor_estoque) }));
 }
 
 export default function RefaccionesObsolescencia() {
@@ -118,6 +93,8 @@ export default function RefaccionesObsolescencia() {
     const [loadingOpciones, setLoadingOpciones] = useState(false);
     const [error, setError] = useState("");
     const [errorDashboard, setErrorDashboard] = useState("");
+    const requestDatosRef = useRef(0);
+    const requestDashboardRef = useRef(0);
 
     useEffect(() => {
         const timeout = setTimeout(() => setQBuscado(filtros.q), 400);
@@ -132,6 +109,8 @@ export default function RefaccionesObsolescencia() {
             categoria: filtros.categoria,
             capa_obsolescencia: filtros.capa_obsolescencia,
             categoria_movimiento: filtros.categoria_movimiento,
+            reservadas: filtros.reservadas,
+            pendientes: filtros.pendientes,
             fecha_desde: filtros.fecha_desde,
             fecha_hasta: filtros.fecha_hasta,
             dias_min: filtros.dias_min,
@@ -158,34 +137,35 @@ export default function RefaccionesObsolescencia() {
     }
 
     async function cargarDatos() {
+        const requestId = ++requestDatosRef.current;
         setLoading(true);
         setError("");
 
         try {
-            const response = await getRefaccionesObsolescencia({
-                ...parametrosFiltros(),
-                page: pagina,
-                page_size: pageSize,
-            });
+            const response = await getRefaccionesObsolescencia({ ...parametrosFiltros(), page: pagina, page_size: pageSize });
+            if (requestId !== requestDatosRef.current) return;
 
             setRegistros(Array.isArray(response?.results) ? response.results : []);
             setTotal(Number(response?.count || 0));
         } catch (err) {
+            if (requestId !== requestDatosRef.current) return;
             console.error("Error cargando refacciones:", err);
             setRegistros([]);
             setTotal(0);
             setError(err?.message || "No fue posible cargar las refacciones.");
         } finally {
-            setLoading(false);
+            if (requestId === requestDatosRef.current) setLoading(false);
         }
     }
 
     async function cargarDashboard() {
+        const requestId = ++requestDashboardRef.current;
         setLoadingDashboard(true);
         setErrorDashboard("");
 
         try {
             const response = await getRefaccionesObsolescenciaDashboard(parametrosFiltros());
+            if (requestId !== requestDashboardRef.current) return;
 
             setDashboard({
                 totales: {
@@ -208,11 +188,12 @@ export default function RefaccionesObsolescencia() {
                 },
             });
         } catch (err) {
+            if (requestId !== requestDashboardRef.current) return;
             console.error("Error cargando dashboard:", err);
             setDashboard(DASHBOARD_INICIAL);
             setErrorDashboard(err?.message || "No fue posible cargar los gráficos.");
         } finally {
-            setLoadingDashboard(false);
+            if (requestId === requestDashboardRef.current) setLoadingDashboard(false);
         }
     }
 
@@ -221,35 +202,28 @@ export default function RefaccionesObsolescencia() {
     useEffect(() => {
         cargarDatos();
     }, [
-        pagina, pageSize, qBuscado, filtros.agencia, filtros.grupo_principal,
-        filtros.categoria, filtros.capa_obsolescencia, filtros.categoria_movimiento,
-        filtros.fecha_desde, filtros.fecha_hasta, filtros.dias_min, filtros.dias_max,
+        pagina, pageSize, qBuscado, filtros.agencia, filtros.grupo_principal, filtros.categoria,
+        filtros.capa_obsolescencia, filtros.categoria_movimiento, filtros.reservadas,
+        filtros.pendientes, filtros.fecha_desde, filtros.fecha_hasta, filtros.dias_min, filtros.dias_max,
     ]);
 
     useEffect(() => {
         cargarDashboard();
     }, [
         qBuscado, filtros.agencia, filtros.grupo_principal, filtros.categoria,
-        filtros.capa_obsolescencia, filtros.categoria_movimiento,
-        filtros.fecha_desde, filtros.fecha_hasta, filtros.dias_min, filtros.dias_max,
+        filtros.capa_obsolescencia, filtros.categoria_movimiento, filtros.reservadas,
+        filtros.pendientes, filtros.fecha_desde, filtros.fecha_hasta, filtros.dias_min, filtros.dias_max,
     ]);
 
     const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
     const hayFiltros = useMemo(() => Object.values(filtros).some((value) => String(value ?? "").trim() !== ""), [filtros]);
-
-    const convertirGrafica = (items) => (items || []).map((item) => ({
-        ...item,
-        productos: numero(item.productos),
-        existencia: numero(item.existencia),
-        valor_estoque: numero(item.valor_estoque),
-    }));
-
     const porCapa = useMemo(() => convertirGrafica(dashboard.graficas.por_capa), [dashboard.graficas.por_capa]);
     const porMovimiento = useMemo(() => convertirGrafica(dashboard.graficas.por_categoria_movimiento), [dashboard.graficas.por_categoria_movimiento]);
     const porAgencia = useMemo(() => convertirGrafica(dashboard.graficas.por_agencia), [dashboard.graficas.por_agencia]);
     const porGrupo = useMemo(() => convertirGrafica(dashboard.graficas.por_grupo), [dashboard.graficas.por_grupo]);
     const porAntiguedad = useMemo(() => convertirGrafica(dashboard.graficas.por_antiguedad), [dashboard.graficas.por_antiguedad]);
     const totalValorCapas = useMemo(() => porCapa.reduce((acc, item) => acc + item.valor_estoque, 0), [porCapa]);
+    const cargandoGeneral = loading || loadingDashboard || loadingOpciones;
 
     function cambiarFiltro(campo, value) {
         setPagina(1);
@@ -270,6 +244,7 @@ export default function RefaccionesObsolescencia() {
     function actualizarTodo() {
         cargarDatos();
         cargarDashboard();
+        cargarOpciones();
     }
 
     function aplicarRangoAntiguedad(rango) {
@@ -285,7 +260,6 @@ export default function RefaccionesObsolescencia() {
         if (!valores) return;
 
         setPagina(1);
-
         setFiltros((prev) => {
             const activo = String(prev.dias_min) === valores.dias_min && String(prev.dias_max) === valores.dias_max;
             return activo ? { ...prev, dias_min: "", dias_max: "" } : { ...prev, ...valores };
@@ -312,29 +286,34 @@ export default function RefaccionesObsolescencia() {
                             </button>
                         </div>
 
-                        <button type="button" onClick={actualizarTodo} disabled={loading || loadingDashboard} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:opacity-50">
-                            {loading || loadingDashboard ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                            Actualizar
+                        <button type="button" onClick={actualizarTodo} disabled={cargandoGeneral} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60">
+                            {cargandoGeneral ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                            {cargandoGeneral ? "Cargando..." : "Actualizar"}
                         </button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <KPICard icon={PackageSearch} label="Referencias" value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.productos)} sub={`${formatoNumero(dashboard.totales.registros)} registros`} />
-                    <KPICard icon={Database} label="Qt. Inventario" value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.qt_inventario, 2)} sub="SUM(QtInventario)" />
-                    <KPICard icon={Boxes} label="Existencia" value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.existencia, 2)} sub="SUM(QtdeEstoque)" />
-                    <KPICard icon={CircleDollarSign} label="Valor inventario" value={loadingDashboard ? "—" : money(dashboard.totales.valor_estoque)} sub="SUM(VrEstoque)" />
-                    <KPICard icon={Boxes} label="Reservadas / Pedidas" value={loadingDashboard ? "—" : `${formatoNumero(dashboard.totales.reservada, 2)} / ${formatoNumero(dashboard.totales.pedida, 2)}`} sub="Reservadas / pendientes" />
-                    <KPICard icon={Clock3} label="Promedio sin movimiento" value={loadingDashboard ? "—" : `${formatoNumero(dashboard.totales.promedio_dias_movimiento)} días`} sub="Antigüedad promedio" />
+                    <KPICard loading={loadingDashboard} icon={PackageSearch} label="Referencias" value={formatoNumero(dashboard.totales.productos)} sub={`${formatoNumero(dashboard.totales.registros)} registros`} />
+                    <KPICard loading={loadingDashboard} icon={Database} label="Qt. Inventario" value={formatoNumero(dashboard.totales.qt_inventario, 2)} sub="Cantidad de inventario" />
+                    <KPICard loading={loadingDashboard} icon={Boxes} label="Existencia" value={formatoNumero(dashboard.totales.existencia, 2)} sub="Existencia disponible" />
+                    <KPICard loading={loadingDashboard} icon={CircleDollarSign} label="Valor inventario" value={money(dashboard.totales.valor_estoque)} sub="SUM(VrEstoque)" />
+                    <KPICard loading={loadingDashboard} icon={Boxes} label="Reservadas / Pendientes" value={`${formatoNumero(dashboard.totales.reservada, 2)} / ${formatoNumero(dashboard.totales.pedida, 2)}`} sub="Reservadas / solicitadas" />
+                    <KPICard loading={loadingDashboard} icon={Clock3} label="Promedio sin movimiento" value={`${formatoNumero(dashboard.totales.promedio_dias_movimiento)} días`} sub="Antigüedad promedio" />
                 </div>
 
-                <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
+                <section className="relative overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
+                    {cargandoGeneral && <div className="absolute inset-x-0 top-0 z-20 h-1 overflow-hidden bg-[#131E5C]/10"><div className="h-full w-full animate-pulse bg-[#131E5C]" /></div>}
+
                     <div className="flex items-center justify-between gap-3 border-b border-[#E4E7F0] px-4 py-3.5">
                         <div className="flex items-center gap-2.5">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]"><SlidersHorizontal className="h-[18px] w-[18px] text-[#131E5C]" /></span>
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]">
+                                {cargandoGeneral ? <LoaderCircle className="h-[18px] w-[18px] animate-spin text-[#131E5C]" /> : <SlidersHorizontal className="h-[18px] w-[18px] text-[#131E5C]" />}
+                            </span>
+
                             <div>
                                 <h2 className="text-sm font-black tracking-wide text-[#1A1F3C]">Filtros</h2>
-                                <p className="text-[11px] font-medium text-[#8891AD]">Se aplican a tabla, KPIs y gráficos</p>
+                                <p className="text-[11px] font-medium text-[#8891AD]">{cargandoGeneral ? "Actualizando resultados..." : "Se aplican a tabla, KPIs y gráficos"}</p>
                             </div>
                         </div>
 
@@ -352,43 +331,45 @@ export default function RefaccionesObsolescencia() {
                         </div>
 
                         <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
-                            <FilterField label="Agencia" icon={MapPin}>
-                                <select value={filtros.agencia} onChange={(e) => cambiarFiltro("agencia", e.target.value)} disabled={loadingOpciones} className={inputClass}>
-                                    <option value="">Todas las agencias</option>
-                                    {opciones.agencias.map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                            </FilterField>
+                            <SelectFilter label="Agencia" icon={MapPin} value={filtros.agencia} onChange={(value) => cambiarFiltro("agencia", value)} loading={loadingOpciones}>
+                                <option value="">Todas las agencias</option>
+                                {opciones.agencias.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </SelectFilter>
 
-                            <FilterField label="Grupo principal" icon={Layers3}>
-                                <select value={filtros.grupo_principal} onChange={(e) => cambiarFiltro("grupo_principal", e.target.value)} disabled={loadingOpciones} className={inputClass}>
-                                    <option value="">Todos los grupos</option>
-                                    {opciones.grupos_principales.map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                            </FilterField>
+                            <SelectFilter label="Grupo principal" icon={Layers3} value={filtros.grupo_principal} onChange={(value) => cambiarFiltro("grupo_principal", value)} loading={loadingOpciones}>
+                                <option value="">Todos los grupos</option>
+                                {opciones.grupos_principales.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </SelectFilter>
 
-                            <FilterField label="Categoría" icon={Tags}>
-                                <select value={filtros.categoria} onChange={(e) => cambiarFiltro("categoria", e.target.value)} disabled={loadingOpciones} className={inputClass}>
-                                    <option value="">Todas las categorías</option>
-                                    {opciones.categorias.map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                            </FilterField>
+                            <SelectFilter label="Categoría" icon={Tags} value={filtros.categoria} onChange={(value) => cambiarFiltro("categoria", value)} loading={loadingOpciones}>
+                                <option value="">Todas las categorías</option>
+                                {opciones.categorias.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </SelectFilter>
 
-                            <FilterField label="Capa obsolescencia" icon={Clock3}>
-                                <select value={filtros.capa_obsolescencia} onChange={(e) => cambiarFiltro("capa_obsolescencia", e.target.value)} disabled={loadingOpciones} className={inputClass}>
-                                    <option value="">Todas las capas</option>
-                                    {opciones.capas_obsolescencia.map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                            </FilterField>
+                            <SelectFilter label="Capa obsolescencia" icon={Clock3} value={filtros.capa_obsolescencia} onChange={(value) => cambiarFiltro("capa_obsolescencia", value)} loading={loadingOpciones}>
+                                <option value="">Todas las capas</option>
+                                {opciones.capas_obsolescencia.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </SelectFilter>
 
-                            <FilterField label="Movimiento" icon={Boxes}>
-                                <select value={filtros.categoria_movimiento} onChange={(e) => cambiarFiltro("categoria_movimiento", e.target.value)} disabled={loadingOpciones} className={inputClass}>
-                                    <option value="">Todos los movimientos</option>
-                                    {opciones.categorias_movimiento.map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                            </FilterField>
+                            <SelectFilter label="Movimiento" icon={Boxes} value={filtros.categoria_movimiento} onChange={(value) => cambiarFiltro("categoria_movimiento", value)} loading={loadingOpciones}>
+                                <option value="">Todos los movimientos</option>
+                                {opciones.categorias_movimiento.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </SelectFilter>
                         </div>
 
-                        <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-6">
+                            <SelectFilter label="Reservadas" icon={Boxes} value={filtros.reservadas} onChange={(value) => cambiarFiltro("reservadas", value)}>
+                                <option value="">Todas</option>
+                                <option value="con">Con reservadas</option>
+                                <option value="sin">Sin reservadas</option>
+                            </SelectFilter>
+
+                            <SelectFilter label="Pendientes" icon={Boxes} value={filtros.pendientes} onChange={(value) => cambiarFiltro("pendientes", value)}>
+                                <option value="">Todas</option>
+                                <option value="con">Con pendientes</option>
+                                <option value="sin">Sin pendientes</option>
+                            </SelectFilter>
+
                             <FilterField label="Fecha referencia desde" icon={CalendarDays}>
                                 <input type="date" value={filtros.fecha_desde} onChange={(e) => cambiarFiltro("fecha_desde", e.target.value)} className={inputClass} />
                             </FilterField>
@@ -416,14 +397,14 @@ export default function RefaccionesObsolescencia() {
                         <div className="xl:col-span-7">
                             <ChartCard title="Antigüedad del inventario" subtitle="Valor según días desde el último movimiento" icon={Clock3}>
                                 <div className="h-[360px]">
-                                    {loadingDashboard ? <ChartLoading /> : porAntiguedad.length === 0 ? <ChartEmpty /> : (
+                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porAntiguedad.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={porAntiguedad} margin={{ top: 20, right: 20, left: 15, bottom: 5 }}>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
                                                 <XAxis dataKey="rango" tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} />
                                                 <YAxis tickFormatter={formatoCompacto} tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} width={65} />
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
-                                                <Bar dataKey="valor_estoque" fill={C.navy} radius={[6, 6, 0, 0]} className="cursor-pointer" onClick={(entry) => aplicarRangoAntiguedad(entry?.rango)}>
+                                                <Bar dataKey="valor_estoque" fill={C.navy} radius={[6, 6, 0, 0]} className="cursor-pointer" isAnimationActive animationDuration={700} onClick={(entry) => aplicarRangoAntiguedad(entry?.rango)}>
                                                     <LabelList dataKey="productos" position="top" fill={C.textSub} fontSize={10} formatter={(value) => `${formatoNumero(value)} ref.`} />
                                                 </Bar>
                                             </BarChart>
@@ -437,11 +418,24 @@ export default function RefaccionesObsolescencia() {
                             <ChartCard title="Capas de obsolescencia" subtitle="Distribución del valor del inventario" icon={Layers3}>
                                 <div className="grid min-h-[360px] items-center md:grid-cols-[1fr_190px] xl:grid-cols-1 2xl:grid-cols-[1fr_190px]">
                                     <div className="relative h-[280px]">
-                                        {loadingDashboard ? <ChartLoading /> : porCapa.length === 0 ? <ChartEmpty /> : (
+                                        {loadingDashboard ? <ChartLoading type="pie" /> : porCapa.length === 0 ? <ChartEmpty /> : (
                                             <>
                                                 <ResponsiveContainer width="100%" height="100%">
                                                     <PieChart>
-                                                        <Pie data={porCapa} dataKey="valor_estoque" nameKey="capa_obsolescencia" cx="50%" cy="50%" innerRadius={70} outerRadius={105} paddingAngle={2} className="cursor-pointer" onClick={(entry) => alternarFiltro("capa_obsolescencia", entry?.capa_obsolescencia)}>
+                                                        <Pie
+                                                            data={porCapa}
+                                                            dataKey="valor_estoque"
+                                                            nameKey="capa_obsolescencia"
+                                                            cx="50%"
+                                                            cy="50%"
+                                                            innerRadius={70}
+                                                            outerRadius={105}
+                                                            paddingAngle={2}
+                                                            className="cursor-pointer"
+                                                            isAnimationActive
+                                                            animationDuration={800}
+                                                            onClick={(entry) => alternarFiltro("capa_obsolescencia", entry?.capa_obsolescencia)}
+                                                        >
                                                             {porCapa.map((item, index) => <Cell key={`${item.capa_obsolescencia}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                                                         </Pie>
                                                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
@@ -456,7 +450,11 @@ export default function RefaccionesObsolescencia() {
                                         )}
                                     </div>
 
-                                    {!loadingDashboard && porCapa.length > 0 && (
+                                    {loadingDashboard ? (
+                                        <div className="space-y-2">
+                                            {[1, 2, 3, 4].map((item) => <div key={item} className="h-7 animate-pulse rounded-lg bg-slate-100" />)}
+                                        </div>
+                                    ) : porCapa.length > 0 && (
                                         <div className="space-y-2">
                                             {porCapa.map((item, index) => (
                                                 <button key={`${item.capa_obsolescencia}-${index}`} type="button" onClick={() => alternarFiltro("capa_obsolescencia", item.capa_obsolescencia)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition", filtros.capa_obsolescencia === item.capa_obsolescencia ? "bg-[#131E5C]/[0.08]" : "hover:bg-[#F7F8FC]")}>
@@ -474,14 +472,14 @@ export default function RefaccionesObsolescencia() {
                         <div className="xl:col-span-6">
                             <ChartCard title="Inventario por agencia" subtitle="Valor económico por dealer" icon={MapPin}>
                                 <div className="h-[390px]">
-                                    {loadingDashboard ? <ChartLoading /> : porAgencia.length === 0 ? <ChartEmpty /> : (
+                                    {loadingDashboard ? <ChartLoading type="horizontal" /> : porAgencia.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={porAgencia} layout="vertical" margin={{ top: 4, right: 50, left: 25, bottom: 4 }}>
                                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
                                                 <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} />
                                                 <YAxis type="category" dataKey="agencia" width={135} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
-                                                <Bar dataKey="valor_estoque" fill={C.navy} radius={[0, 7, 7, 0]} barSize={22} className="cursor-pointer" onClick={(entry) => alternarFiltro("agencia", entry?.agencia)}>
+                                                <Bar dataKey="valor_estoque" fill={C.navy} radius={[0, 7, 7, 0]} barSize={22} className="cursor-pointer" isAnimationActive animationDuration={700} onClick={(entry) => alternarFiltro("agencia", entry?.agencia)}>
                                                     <LabelList dataKey="productos" position="right" fill={C.textSub} fontSize={10} formatter={(value) => `${formatoNumero(value)} ref.`} />
                                                 </Bar>
                                             </BarChart>
@@ -494,14 +492,14 @@ export default function RefaccionesObsolescencia() {
                         <div className="xl:col-span-6">
                             <ChartCard title="Grupos con mayor inventario" subtitle="Top 12 por valor económico" icon={Tags}>
                                 <div className="h-[390px]">
-                                    {loadingDashboard ? <ChartLoading /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                    {loadingDashboard ? <ChartLoading type="horizontal" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={porGrupo} layout="vertical" margin={{ top: 4, right: 35, left: 35, bottom: 4 }}>
                                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
                                                 <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} />
                                                 <YAxis type="category" dataKey="grupo_principal" width={160} tick={{ fontSize: 9, fill: C.textSub }} axisLine={false} tickLine={false} />
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
-                                                <Bar dataKey="valor_estoque" fill={C.navyMid} radius={[0, 7, 7, 0]} barSize={20} className="cursor-pointer" onClick={(entry) => alternarFiltro("grupo_principal", entry?.grupo_principal)} />
+                                                <Bar dataKey="valor_estoque" fill={C.navyMid} radius={[0, 7, 7, 0]} barSize={20} className="cursor-pointer" isAnimationActive animationDuration={700} onClick={(entry) => alternarFiltro("grupo_principal", entry?.grupo_principal)} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     )}
@@ -512,14 +510,14 @@ export default function RefaccionesObsolescencia() {
                         <div className="xl:col-span-12">
                             <ChartCard title="Categoría de movimiento" subtitle="Distribución del valor según movimiento" icon={Boxes}>
                                 <div className="h-[360px]">
-                                    {loadingDashboard ? <ChartLoading /> : porMovimiento.length === 0 ? <ChartEmpty /> : (
+                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porMovimiento.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={porMovimiento} margin={{ top: 20, right: 20, left: 15, bottom: 20 }}>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
                                                 <XAxis dataKey="categoria_movimiento" tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
                                                 <YAxis tickFormatter={formatoCompacto} tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} width={65} />
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
-                                                <Bar dataKey="valor_estoque" fill={C.navyLight} radius={[6, 6, 0, 0]} className="cursor-pointer" onClick={(entry) => alternarFiltro("categoria_movimiento", entry?.categoria_movimiento)}>
+                                                <Bar dataKey="valor_estoque" fill={C.navyLight} radius={[6, 6, 0, 0]} className="cursor-pointer" isAnimationActive animationDuration={700} onClick={(entry) => alternarFiltro("categoria_movimiento", entry?.categoria_movimiento)}>
                                                     <LabelList dataKey="productos" position="top" fill={C.textSub} fontSize={10} formatter={(value) => `${formatoNumero(value)} ref.`} />
                                                 </Bar>
                                             </BarChart>
@@ -535,7 +533,7 @@ export default function RefaccionesObsolescencia() {
                     <InteractiveTable
                         rows={registros}
                         columns={COLUMNAS}
-                        storageKey="refacciones_obsolescencia_v2"
+                        storageKey="refacciones_obsolescencia_v3"
                         total={total}
                         loading={loading}
                         pageSize={pageSize}
@@ -551,17 +549,31 @@ export default function RefaccionesObsolescencia() {
     );
 }
 
-function KPICard({ icon: Icon, label, value, sub }) {
+function KPICard({ icon: Icon, label, value, sub, loading }) {
     return (
-        <div className="relative overflow-hidden rounded-2xl border border-[#E7EAF3] bg-white p-4 shadow-sm transition hover:shadow-md">
+        <div className="relative min-h-[128px] overflow-hidden rounded-2xl border border-[#E7EAF3] bg-white p-4 shadow-sm transition hover:shadow-md">
             <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 translate-x-6 -translate-y-6 rounded-full bg-[#131E5C] opacity-[0.05]" />
+
             <div className="relative">
                 <div className="flex items-center gap-2">
-                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08] text-[#131E5C]"><Icon className="h-[18px] w-[18px]" /></span>
+                    <span className={cn("inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08] text-[#131E5C]", loading && "animate-pulse")}>
+                        {loading ? <LoaderCircle className="h-[18px] w-[18px] animate-spin" /> : <Icon className="h-[18px] w-[18px]" />}
+                    </span>
+
                     <span className="truncate text-xs font-bold uppercase tracking-wide text-[#8891AD]">{label}</span>
                 </div>
-                <div className="mt-3 truncate text-[24px] font-black leading-none tracking-tight text-[#131E5C]" title={String(value)}>{value}</div>
-                <p className="mt-2 truncate text-[11px] font-semibold text-[#8891AD]">{sub}</p>
+
+                {loading ? (
+                    <>
+                        <div className="mt-3 h-7 w-3/4 animate-pulse rounded-lg bg-slate-200" />
+                        <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-slate-100" />
+                    </>
+                ) : (
+                    <>
+                        <div className="mt-3 truncate text-[24px] font-black leading-none tracking-tight text-[#131E5C]" title={String(value)}>{value}</div>
+                        <p className="mt-2 truncate text-[11px] font-semibold text-[#8891AD]">{sub}</p>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -579,27 +591,80 @@ function FilterField({ label, icon: Icon, children }) {
     );
 }
 
+function SelectFilter({ label, icon: Icon, value, onChange, loading = false, children }) {
+    return (
+        <FilterField label={label} icon={Icon}>
+            <div className="relative">
+                <select value={value} onChange={(e) => onChange(e.target.value)} disabled={loading} className={cn(inputClass, loading && "animate-pulse pr-9")}>
+                    {children}
+                </select>
+
+                {loading && (
+                    <span className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2">
+                        <LoaderCircle className="h-4 w-4 animate-spin text-[#131E5C]" />
+                    </span>
+                )}
+            </div>
+        </FilterField>
+    );
+}
+
 function ChartCard({ title, subtitle, icon: Icon, children }) {
     return (
-        <section className="h-full overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
+        <section className="h-full overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white transition-shadow duration-300 hover:shadow-md" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
             <div className="flex items-start gap-3 border-b border-[#E4E7F0] px-5 py-4">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]"><Icon className="h-[18px] w-[18px] text-[#131E5C]" /></div>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]">
+                    <Icon className="h-[18px] w-[18px] text-[#131E5C]" />
+                </div>
+
                 <div>
                     <h3 className="text-sm font-bold text-[#1A1F3C]">{title}</h3>
                     <p className="mt-0.5 text-xs text-[#8891AD]">{subtitle}</p>
                 </div>
             </div>
+
             <div className="p-4">{children}</div>
         </section>
     );
 }
 
-function ErrorBox({ children }) {
-    return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{children}</div>;
+function ChartLoading({ type = "vertical" }) {
+    if (type === "pie") {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <div className="relative h-48 w-48 animate-pulse rounded-full bg-slate-200">
+                    <div className="absolute inset-12 rounded-full bg-white" />
+                </div>
+            </div>
+        );
+    }
+
+    if (type === "horizontal") {
+        return (
+            <div className="flex h-full flex-col justify-center gap-5 px-6">
+                {[75, 58, 88, 42, 68, 52].map((width, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                        <div className="h-3 w-20 animate-pulse rounded bg-slate-100" />
+                        <div className="h-6 animate-pulse rounded-r-lg bg-slate-200" style={{ width: `${width}%`, animationDelay: `${index * 70}ms` }} />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-full items-end justify-around gap-4 px-6 pb-7 pt-10">
+            {[48, 72, 58, 88, 65, 78].map((height, index) => (
+                <div key={index} className="flex h-full flex-1 items-end">
+                    <div className="w-full animate-pulse rounded-t-lg bg-slate-200" style={{ height: `${height}%`, animationDelay: `${index * 70}ms` }} />
+                </div>
+            ))}
+        </div>
+    );
 }
 
-function ChartLoading() {
-    return <div className="flex h-full items-center justify-center"><div className="flex items-center gap-2 text-sm font-medium text-[#8891AD]"><LoaderCircle className="h-4 w-4 animate-spin" />Cargando información...</div></div>;
+function ErrorBox({ children }) {
+    return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{children}</div>;
 }
 
 function ChartEmpty() {
