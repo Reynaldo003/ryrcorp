@@ -1,4 +1,3 @@
-// src/lib/apiHojaIngresos.js
 import { buildQuery, http } from "./apiClient";
 
 const BASE_URL = "/hojaingresos/api/hoja-ingresos";
@@ -28,6 +27,24 @@ export const apiHojaIngresos = {
 
   remove: (id) =>
     http(`${BASE_URL}/${id}/`, {
+      method: "DELETE",
+    }),
+
+  subirEvidencias: (id, archivos = []) => {
+    const formData = new FormData();
+
+    archivos.forEach((archivo) => {
+      formData.append("archivos", archivo);
+    });
+
+    return http(`${BASE_URL}/${id}/evidencias/`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  eliminarEvidencia: (idIngreso, idEvidencia) =>
+    http(`${BASE_URL}/${idIngreso}/evidencias/${idEvidencia}/`, {
       method: "DELETE",
     }),
 };

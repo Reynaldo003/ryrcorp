@@ -272,15 +272,14 @@ function crearDraftBase(userAgencia = "", isAdmin = true) {
         modelo: "",
         medio_concertacion: "",
         pauta_origen: "",
-        // Nuevos campos
-        long_drive: null,           // true | false | null
-        hora_promesa: "",           // datetime-local
-        pre_picking_hecho: false,   // checkbox
-        pre_picking_notas: "",      // textarea
-        evidencias: [],             // array de File objects
+        long_drive: null,
+        hora_promesa: "",
+        pre_picking_hecho: false,
+        pre_picking_notas: "",
+        evidencias: [],
+        evidenciasNuevas: [],
     };
 }
-
 function SkeletonRow({ columns = 10 }) {
     return (
         <tr>
@@ -829,6 +828,7 @@ export default function HojaRegistros() {
 
     async function abrirEditar(row) {
         if (!row?.id) return;
+
         setTouchedSave(false);
         setMode("edit");
         setOpenModal(true);
@@ -845,119 +845,40 @@ export default function HojaRegistros() {
                 }
             }
 
-            // ✅ FIX: ahora getClienteNombre devuelve "—" cuando no hay nombre,
-            // así la condición funciona correctamente
             const nombreCliente = getClienteNombre(data);
 
             setDraft({
                 id: data.id,
-
-                cliente_id:
-                    data?.cliente_id ??
-                    data?.cliente?.id_cliente ??
-                    data?.cliente?.id ??
-                    null,
-
-                agencia:
-                    data.agencia ||
-                    (isAdmin ? "" : userAgencia),
-
-                fecha_ingreso:
-                    toDTLocal(data.fecha_ingreso),
-
-                asistencia:
-                    !!data.asistencia,
-
-                citado:
-                    boolFromAny(data.citado),
-
-                no_orden:
-                    data.no_orden || "",
-
-                diss:
-                    data.diss || "",
-
-                pauta:
-                    data.pauta || "",
-
-                indicador_resultados:
-                    data.indicador_resultados || "",
-
-                alcance:
-                    data.alcance || "",
-
-                torre:
-                    data.torre || "",
-
-                asesor:
-                    data.asesor || "",
-
-                agendado_por:
-                    data.agendado_por || "",
-
-                cliente_nombre:
-                    nombreCliente === "—"
-                        ? ""
-                        : nombreCliente,
-
-                cliente_telefono:
-                    data.cliente_telefono ||
-                    data.telefono ||
-                    data?.cliente?.telefono ||
-                    "",
-
-                cliente_correo_electronico:
-                    data.cliente_correo_electronico ||
-                    data.correo ||
-                    data.correo_electronico ||
-                    data?.cliente?.correo ||
-                    data?.cliente?.correo_electronico ||
-                    "",
-
-                tipo_cita: data.tipo_cita
-                    ? String(data.tipo_cita)
-                        .split(",")
-                        .map((tipo) => tipo.trim())
-                        .filter(Boolean)
-                    : [],
-
-                declaracion_textual_cliente:
-                    data.declaracion_textual_cliente || "",
-
-                comentarios:
-                    data.comentarios || "",
-
-                vin:
-                    data.vin || "",
-
-                anio_vehiculo:
-                    data.anio_vehiculo || "",
-
-                modelo:
-                    data.modelo || "",
-
-                medio_concertacion:
-                    data.medio_concertacion || "",
-
-                pauta_origen:
-                    data.pauta_origen || "",
-
-                long_drive:
-                    data.long_drive === null ||
-                        data.long_drive === undefined
-                        ? null
-                        : boolFromAny(data.long_drive),
-
-                hora_promesa:
-                    toDTLocal(data.hora_promesa),
-
-                pre_picking_hecho:
-                    !!data.pre_picking_hecho,
-
-                pre_picking_notas:
-                    data.pre_picking_notas || "",
-
-                evidencias: [],
+                cliente_id: data?.cliente_id ?? data?.cliente?.id_cliente ?? data?.cliente?.id ?? null,
+                agencia: data.agencia || (isAdmin ? "" : userAgencia),
+                fecha_ingreso: toDTLocal(data.fecha_ingreso),
+                asistencia: !!data.asistencia,
+                citado: boolFromAny(data.citado),
+                no_orden: data.no_orden || "",
+                diss: data.diss || "",
+                pauta: data.pauta || "",
+                indicador_resultados: data.indicador_resultados || "",
+                alcance: data.alcance || "",
+                torre: data.torre || "",
+                asesor: data.asesor || "",
+                agendado_por: data.agendado_por || "",
+                cliente_nombre: nombreCliente === "—" ? "" : nombreCliente,
+                cliente_telefono: data.cliente_telefono || data.telefono || data?.cliente?.telefono || "",
+                cliente_correo_electronico: data.cliente_correo_electronico || data.correo || data.correo_electronico || data?.cliente?.correo || data?.cliente?.correo_electronico || "",
+                tipo_cita: data.tipo_cita ? String(data.tipo_cita).split(",").map((tipo) => tipo.trim()).filter(Boolean) : [],
+                declaracion_textual_cliente: data.declaracion_textual_cliente || "",
+                comentarios: data.comentarios || "",
+                vin: data.vin || "",
+                anio_vehiculo: data.anio_vehiculo || "",
+                modelo: data.modelo || "",
+                medio_concertacion: data.medio_concertacion || "",
+                pauta_origen: data.pauta_origen || "",
+                long_drive: data.long_drive === null || data.long_drive === undefined ? null : boolFromAny(data.long_drive),
+                hora_promesa: toDTLocal(data.hora_promesa),
+                pre_picking_hecho: !!data.pre_picking_hecho,
+                pre_picking_notas: data.pre_picking_notas || "",
+                evidencias: Array.isArray(data.evidencias) ? data.evidencias : [],
+                evidenciasNuevas: [],
             });
         } catch (error) {
             console.error(error);
@@ -1031,12 +952,29 @@ export default function HojaRegistros() {
         try {
             const payload = buildPayload();
 
+            let registro;
+
             if (mode === "create") {
-                await apiHojaIngresos.create(payload);
+                registro = await apiHojaIngresos.create(payload);
             } else {
-                await apiHojaIngresos.patch(
+                registro = await apiHojaIngresos.patch(
                     draft.id,
                     payload,
+                );
+            }
+
+            const idIngreso = registro?.id || draft.id;
+
+            if (!idIngreso) {
+                throw new Error(
+                    "El servidor no devolvió el ID de la hoja de ingresos."
+                );
+            }
+
+            if (draft.evidenciasNuevas?.length > 0) {
+                await apiHojaIngresos.subirEvidencias(
+                    idIngreso,
+                    draft.evidenciasNuevas,
                 );
             }
 
@@ -1051,8 +989,7 @@ export default function HojaRegistros() {
             );
 
             alert(
-                `No se pudo guardar el registro: ${error?.message ||
-                "Error desconocido"
+                `No se pudo guardar el registro: ${error?.message || "Error desconocido"
                 }`,
             );
         } finally {
@@ -1834,11 +1771,13 @@ export default function HojaRegistros() {
                                     style={{ borderColor: COLOR.line }}
                                 >
                                     <div className="text-[13px] font-semibold" style={{ color: COLOR.brand }}>
-                                        Haz clic o arrastra archivos aquí
+                                        Haz clic para seleccionar archivos
                                     </div>
+
                                     <div className="text-[11px]" style={{ color: COLOR.inkFaint }}>
-                                        JPG, PNG, WEBP o PDF · Mínimo: consulta de campaña en ELSA
+                                        JPG, PNG, WEBP o PDF · Máximo 10 MB por archivo
                                     </div>
+
                                     <input
                                         type="file"
                                         multiple
@@ -1846,38 +1785,184 @@ export default function HojaRegistros() {
                                         style={{ display: "none" }}
                                         onChange={(e) => {
                                             const files = Array.from(e.target.files || []);
-                                            setDraft((p) => ({ ...p, evidencias: [...(p.evidencias || []), ...files] }));
+
+                                            setDraft((prev) => ({
+                                                ...prev,
+                                                evidenciasNuevas: [
+                                                    ...(prev.evidenciasNuevas || []),
+                                                    ...files,
+                                                ],
+                                            }));
+
+                                            e.target.value = "";
                                         }}
                                     />
                                 </label>
 
-                                {/* Lista de archivos adjuntos */}
                                 {(draft.evidencias || []).length > 0 && (
-                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                        {draft.evidencias.map((file, idx) => (
-                                            <div key={idx} className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: COLOR.line }}>
-                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold" style={{ background: COLOR.brandSoft, color: COLOR.brand }}>
-                                                    {file.type.includes("pdf") ? "PDF" : "IMG"}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="truncate text-[12px] font-semibold" style={{ color: COLOR.ink }}>{file.name}</div>
-                                                    <div className="text-[11px]" style={{ color: COLOR.inkFaint }}>{(file.size / 1024).toFixed(0)} KB</div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDraft((p) => ({ ...p, evidencias: p.evidencias.filter((_, i) => i !== idx) }))}
-                                                    className="shrink-0"
-                                                    style={{ color: COLOR.danger }}
+                                    <div className="mt-4">
+                                        <div
+                                            className="mb-2 text-[11px] font-semibold uppercase tracking-wide"
+                                            style={{ color: COLOR.inkFaint }}
+                                        >
+                                            Evidencias guardadas
+                                        </div>
+
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            {draft.evidencias.map((evidencia) => (
+                                                <div
+                                                    key={evidencia.id}
+                                                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                                                    style={{ borderColor: COLOR.line }}
                                                 >
-                                                    <X className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                        ))}
+                                                    <div
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold"
+                                                        style={{
+                                                            background: COLOR.brandSoft,
+                                                            color: COLOR.brand,
+                                                        }}
+                                                    >
+                                                        {evidencia.tipo_mime?.includes("pdf") ? "PDF" : "IMG"}
+                                                    </div>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <a
+                                                            href={evidencia.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="block truncate text-[12px] font-semibold hover:underline"
+                                                            style={{ color: COLOR.ink }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            {evidencia.nombre_original || "Archivo"}
+                                                        </a>
+
+                                                        <div
+                                                            className="text-[11px]"
+                                                            style={{ color: COLOR.inkFaint }}
+                                                        >
+                                                            {Math.round((evidencia.tamanio || 0) / 1024)} KB
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        title="Eliminar evidencia"
+                                                        className="shrink-0 rounded-lg p-1.5 transition hover:bg-[#131E5C]/5"
+                                                        style={{ color: COLOR.danger }}
+                                                        onClick={async () => {
+                                                            const confirmar = confirm(
+                                                                `¿Eliminar "${evidencia.nombre_original || "este archivo"}"?`
+                                                            );
+
+                                                            if (!confirmar) return;
+
+                                                            try {
+                                                                await apiHojaIngresos.eliminarEvidencia(
+                                                                    draft.id,
+                                                                    evidencia.id,
+                                                                );
+
+                                                                setDraft((prev) => ({
+                                                                    ...prev,
+                                                                    evidencias: prev.evidencias.filter(
+                                                                        (item) => item.id !== evidencia.id
+                                                                    ),
+                                                                }));
+                                                            } catch (error) {
+                                                                console.error(
+                                                                    "Error eliminando evidencia:",
+                                                                    error,
+                                                                );
+
+                                                                alert("No se pudo eliminar la evidencia.");
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
+
+                                {(draft.evidenciasNuevas || []).length > 0 && (
+                                    <div className="mt-4">
+                                        <div
+                                            className="mb-2 text-[11px] font-semibold uppercase tracking-wide"
+                                            style={{ color: COLOR.inkFaint }}
+                                        >
+                                            Archivos por subir
+                                        </div>
+
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            {draft.evidenciasNuevas.map((file, index) => (
+                                                <div
+                                                    key={`${file.name}-${file.size}-${index}`}
+                                                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                                                    style={{ borderColor: COLOR.line }}
+                                                >
+                                                    <div
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold"
+                                                        style={{
+                                                            background: COLOR.brandSoft,
+                                                            color: COLOR.brand,
+                                                        }}
+                                                    >
+                                                        {file.type?.includes("pdf") ? "PDF" : "IMG"}
+                                                    </div>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <div
+                                                            className="truncate text-[12px] font-semibold"
+                                                            style={{ color: COLOR.ink }}
+                                                        >
+                                                            {file.name}
+                                                        </div>
+
+                                                        <div
+                                                            className="text-[11px]"
+                                                            style={{ color: COLOR.inkFaint }}
+                                                        >
+                                                            {(file.size / 1024).toFixed(0)} KB · Pendiente de guardar
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        title="Quitar archivo"
+                                                        className="shrink-0 rounded-lg p-1.5 transition hover:bg-[#131E5C]/5"
+                                                        style={{ color: COLOR.danger }}
+                                                        onClick={() => {
+                                                            setDraft((prev) => ({
+                                                                ...prev,
+                                                                evidenciasNuevas:
+                                                                    prev.evidenciasNuevas.filter(
+                                                                        (_, i) => i !== index
+                                                                    ),
+                                                            }));
+                                                        }}
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {(draft.evidencias || []).length === 0 &&
+                                    (draft.evidenciasNuevas || []).length === 0 && (
+                                        <div
+                                            className="mt-2 text-[11px]"
+                                            style={{ color: COLOR.inkFaint }}
+                                        >
+                                            Todavía no hay evidencias anexadas.
+                                        </div>
+                                    )}
                             </Field>
                         </div>
-
                         <div className="md:col-span-2">
                             <Field label="Declaración textual del cliente">
                                 <textarea
