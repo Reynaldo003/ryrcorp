@@ -379,8 +379,6 @@ export default function RefaccionesObsolescencia() {
                         icon={Boxes}
                         label="Reservadas / Pendientes"
                         value={`${money(dashboard.totales.valor_reservado)} / ${money(dashboard.totales.valor_pendiente)}`}
-                        sub={`${formatoNumero(dashboard.totales.reservada, 2)} / ${formatoNumero(dashboard.totales.pedida, 2)}`}
-
                     />
 
                     <KPICard

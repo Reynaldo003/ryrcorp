@@ -236,6 +236,27 @@ function PostVentaIndexPorPermisos() {
     return <PostVentaIndex />;
 }
 
+function GestionNegocioIndexPorPermisos() {
+    const { user, ready } = useAuth();
+
+    if (ready === false) return null;
+
+    const permisos = user?.permisos || [];
+
+    // Administradores: Partes es su primera pestaña disponible.
+    if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
+        return <Navigate to="/gestion_negocio/refacciones_obsolescencia" replace />;
+    }
+
+    // Coordinador Digital: su primera pestaña disponible es Autos Nuevos.
+    if (tienePermiso(permisos, ["CRM_COORDINADOR_DIGITAL"])) {
+        return <Navigate to="/gestion_negocio/autos_nuevos" replace />;
+    }
+
+    // Seguridad adicional por si alguien entra sin permisos válidos.
+    return <Navigate to="/" replace />;
+}
+
 export const router = createBrowserRouter(
     [
         {
@@ -382,27 +403,38 @@ export const router = createBrowserRouter(
                         {
                             path: "gestion_negocio",
                             element: (
-                                <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
                                     <GestionLayout />
                                 </RequirePermission>
                             ),
                             children: [
                                 {
                                     index: true,
-                                    element: <Navigate to="refacciones_obsolescencia" replace />,
-                                },
-                                {
-                                    path: "autos_nuevos",
-                                    element: <VentasVN />,
-
+                                    element: <GestionNegocioIndexPorPermisos />,
                                 },
                                 {
                                     path: "refacciones_obsolescencia",
-                                    element: <RefaccionesObsolescencia />,
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <RefaccionesObsolescencia />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "autos_nuevos",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <VentasVN />
+                                        </RequirePermission>
+                                    ),
                                 },
                                 {
                                     path: "prospectos_digitales",
-                                    element: <ProspectosDigitales />,
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <ProspectosDigitales />
+                                        </RequirePermission>
+                                    ),
                                 },
                             ],
                         },

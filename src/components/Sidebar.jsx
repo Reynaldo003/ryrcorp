@@ -217,7 +217,7 @@ export default function Sidebar() {
                 to: "/gestion_negocio",
                 label: "Gestión de Negocio",
                 icon: BanknoteArrowUp,
-                show: hasAnyPermission(["USUARIOS_ADMIN",]),
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
             },
             {
                 section: "Negocio",
