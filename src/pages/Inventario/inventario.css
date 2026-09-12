@@ -1,45 +1,93 @@
 @font-face {
-  font-family: 'VW Head';
-  src: url('../../assets/fonts/VWHead-Light.otf') format('opentype');
+  font-family: "VW Head";
+  src: url("../../assets/fonts/VWHead-Light.otf") format("opentype");
   font-weight: 300;
 }
+
 @font-face {
-  font-family: 'VW Head';
-  src: url('../../assets/fonts/VWHead-Regular.otf') format('opentype');
+  font-family: "VW Head";
+  src: url("../../assets/fonts/VWHead-Regular.otf") format("opentype");
   font-weight: 400;
 }
+
 @font-face {
-  font-family: 'VW Head';
-  src: url('../../assets/fonts/VWHead-Bold.otf') format('opentype');
-  font-weight: 700;
-}
-@font-face {
-  font-family: 'VW Head';
-  src: url('../../assets/fonts/VWHead-ExtraBold.otf') format('opentype');
-  font-weight: 800;
-}
-@font-face {
-  font-family: 'VW Text';
-  src: url('../../assets/fonts/VWText-Light.otf') format('opentype');
-  font-weight: 300;
-}
-@font-face {
-  font-family: 'VW Text';
-  src: url('../../assets/fonts/VWText-Regular.otf') format('opentype');
-  font-weight: 400;
-}
-@font-face {
-  font-family: 'VW Text';
-  src: url('../../assets/fonts/VWText-Bold.otf') format('opentype');
+  font-family: "VW Head";
+  src: url("../../assets/fonts/VWHead-Bold.otf") format("opentype");
   font-weight: 700;
 }
 
+@font-face {
+  font-family: "VW Head";
+  src: url("../../assets/fonts/VWHead-ExtraBold.otf") format("opentype");
+  font-weight: 800;
+}
+
+@font-face {
+  font-family: "VW Text";
+  src: url("../../assets/fonts/VWText-Light.otf") format("opentype");
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "VW Text";
+  src: url("../../assets/fonts/VWText-Regular.otf") format("opentype");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "VW Text";
+  src: url("../../assets/fonts/VWText-Bold.otf") format("opentype");
+  font-weight: 700;
+}
+
+.inventario-page {
+  font-family: "VW Text", Arial, sans-serif;
+  color: #131e5c;
+}
+
+.inventario-page h1,
+.inventario-page h2,
+.inventario-page h3,
+.inventario-page h4,
+.inventario-page .vw-heading {
+  font-family: "VW Head", Arial, sans-serif;
+}
+
+.inventario-page button,
+.inventario-page input,
+.inventario-page select,
+.inventario-page textarea,
+.inventario-page table {
+  font-family: inherit;
+}
+
+.vw-control {
+  border-color: rgba(19, 30, 92, 0.2);
+  color: #131e5c;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.vw-control:hover {
+  border-color: rgba(19, 30, 92, 0.4);
+}
+
+.vw-control:focus {
+  border-color: #131e5c;
+  box-shadow: 0 0 0 3px rgba(19, 30, 92, 0.12);
+}
+
 .kpi-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   cursor: default;
 }
 
 .kpi-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 30, 80, 0.12);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(19, 30, 92, 0.12);
 }

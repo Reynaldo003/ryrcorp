@@ -421,6 +421,14 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
+                                    path: "inventario",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <InventarioIndex />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
                                     path: "autos_nuevos",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
@@ -917,27 +925,6 @@ export const router = createBrowserRouter(
                                 },
                             ],
                         },
-
-                        {
-                            path: "inventario",
-                            element: (
-                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]}>
-                                    <InventarioLayout />
-                                </RequirePermission>
-                            ),
-                            children: [
-                                { index: true, element: <InventarioIndex /> },
-                                {
-                                    path: "bitacora_mantenimiento",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]}>
-                                            <BitacoraMantenimiento />
-                                        </RequirePermission>
-                                    ),
-                                },
-                            ],
-                        },
-
                         {
                             path: "administrativos",
                             element: (

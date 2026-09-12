@@ -1,1356 +1,695 @@
-import { useEffect, useState } from "react";
-import { CalendarDays, CheckCircle2, FileText, Landmark } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Car, CheckCircle2, Clock3, FileText, Gauge, Landmark, Target, TrendingUp, UserCheck, Users } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { getCanalDiario, getCitasStats, getCotizacionesStats, getFacturadosStats, getLineasNegocio, getMotivosDescarte, getPautasOrigen, getProductividadAsesores, getProspectosStats, getSolicitudesFinanciamiento } from "../../lib/apiProspectosDigitales";
+import { getCanalDiario, getCitasStats, getCotizacionesStats, getLineasNegocio, getMotivosDescarte, getPautasOrigen, getSolicitudesFinanciamiento } from "../../lib/apiProspectosDigitales";
+import { http } from "../../lib/apiPruebas";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const AGENCIAS = ["VW Córdoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"];
+const COLOR_CANAL = { whatsapp: "#1D2D8A", vw_direct: "#131E5C", facebook: "#253BB3", llamada: "#0C1238", sin_clasificar: "#94A3B8" };
+const COLORES_MOTIVOS = ["#0B1B45", "#131E5C", "#1555C7", "#2547A0", "#3B74D4", "#5F92DE", "#7CAEEA", "#9CC8F1"];
+const TOOLTIP_STYLE = { borderRadius: 12, border: "1px solid #DCE2EE", boxShadow: "0 8px 24px rgba(19,30,92,.12)", fontSize: 14 };
 
-const ESTADOS_INICIALES = {
-  prospectos: { total: 0, crecimiento: 0 },
-  descalificados: { total: 0, motivo_principal: "", motivo_total: 0 },
-  conversiones_inteligentes: 0,
-  citas_concertadas: 0,
-  citas_efectivas: 0,
-  conversion_total: 0,
+const VACIO = {
+  negocio: null,
+  canalDiario: [],
+  lineasNegocio: { demanda_total: 0, canales: [], lineas: [] },
+  pautas: [],
+  motivos: [],
+  citas: { citas_concertadas: 0, citas_efectivas: 0, tasa_asistencia: 0 },
+  cotizaciones: null,
+  solicitudes: null,
 };
 
-const COLOR_CANAL_ID = { whatsapp: "#1555C7", vw_direct: "#131E5C", facebook: "#3B74D4", llamada: "#F59E0B" };
+function buildQuery(params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  return query.toString();
+}
 
-const CANALES_LEYENDA = [
-  { nombre: "WhatsApp", color: COLOR_CANAL_ID.whatsapp },
-  { nombre: "VW Concesionaria/VW", color: COLOR_CANAL_ID.vw_direct },
-  { nombre: "Facebook Ads", color: COLOR_CANAL_ID.facebook },
-  { nombre: "Llamada entrante", color: COLOR_CANAL_ID.llamada },
-];
+function getNegocioStats(params = {}) {
+  const query = buildQuery(params);
+  return http(`/digitales/analitica/negocio-stats/${query ? `?${query}` : ""}`);
+}
 
-const COLOR_CANAL_NEGOCIO = { whatsapp: "#1555C7", vw_direct: "#131E5C", facebook: "#3B74D4", llamada: "#F59E0B" };
+function numero(value) {
+  return Number(value ?? 0);
+}
 
-const COLORES_MOTIVOS = ["#0B1B45", "#131E5C", "#1555C7", "#2547A0", "#3B74D4", "#5F92DE", "#7CAEEA", "#9CC8F1", "#A9C7F0", "#C9DFF8"];
+function porcentaje(value) {
+  return `${numero(value).toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`;
+}
+
+function entero(value) {
+  return numero(value).toLocaleString("es-MX", { maximumFractionDigits: 0 });
+}
+
+function minutos(value) {
+  const n = numero(value);
+  if (n < 60) return `${n.toLocaleString("es-MX", { maximumFractionDigits: 1 })} min`;
+  return `${(n / 60).toLocaleString("es-MX", { maximumFractionDigits: 1 })} h`;
+}
+
+function badgeVariacion(value, suffix = "%") {
+  const n = numero(value);
+  return `${n > 0 ? "+" : ""}${n.toLocaleString("es-MX", { maximumFractionDigits: 1 })}${suffix}`;
+}
 
 export default function ProspectosDigitales() {
-  const añoActual = new Date().getFullYear();
-  const años = Array.from({ length: 5 }, (_, i) => añoActual - i);
-  const mesActual = new Date().getMonth();
-
+  const hoy = new Date();
+  const añoActual = hoy.getFullYear();
+  const mesActual = hoy.getMonth();
+  const años = useMemo(() => Array.from({ length: 5 }, (_, i) => añoActual - i), [añoActual]);
   const [añoSel, setAñoSel] = useState(añoActual);
   const [mesSel, setMesSel] = useState(mesActual);
   const [agenciaSel, setAgenciaSel] = useState(null);
-  const [stats, setStats] = useState(ESTADOS_INICIALES);
+  const [data, setData] = useState(VACIO);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [productividad, setProductividad] = useState({ asesores: [], canales_totales: [] });
-  const [loadingProductividad, setLoadingProductividad] = useState(true);
-  const [canalDiario, setCanalDiario] = useState([]);
-  const [loadingCanalDiario, setLoadingCanalDiario] = useState(true);
-  const [lineasNegocio, setLineasNegocio] = useState({ demanda_total: 0, canales: [], lineas: [] });
-  const [loadingLineas, setLoadingLineas] = useState(true);
-  const [pautas, setPautas] = useState([]);
-  const [loadingPautas, setLoadingPautas] = useState(true);
-  const [motivosDescarte, setMotivosDescarte] = useState([]);
-  const [loadingMotivos, setLoadingMotivos] = useState(true);
-  const [citasStats, setCitasStats] = useState({ citas_concertadas: 0, citas_efectivas: 0, tasa_asistencia: 0 });
-  const [loadingCitas, setLoadingCitas] = useState(true);
-  const [cotizaciones, setCotizaciones] = useState(null);
-  const [loadingCotizaciones, setLoadingCotizaciones] = useState(true);
-  const [solicitudes, setSolicitudes] = useState(null);
-  const [loadingSolicitudes, setLoadingSolicitudes] = useState(true);
-  const [facturados, setFacturados] = useState(null);
-  const [loadingFacturados, setLoadingFacturados] = useState(true);
 
   useEffect(() => {
     let activo = true;
+    const params = { anio: añoSel, mes: mesSel + 1, agencia: agenciaSel || undefined };
     setLoading(true);
     setError("");
-    getProspectosStats({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setStats({
-          prospectos: response?.prospectos ?? ESTADOS_INICIALES.prospectos,
-          descalificados: response?.descalificados ?? ESTADOS_INICIALES.descalificados,
-          conversiones_inteligentes: Number(response?.conversiones_inteligentes ?? 0),
-          citas_concertadas: Number(response?.citas_concertadas ?? 0),
-          citas_efectivas: Number(response?.citas_efectivas ?? 0),
-          conversion_total: Number(response?.conversion_total ?? 0),
-        });
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando estadísticas de prospectos:", err);
-        setError(err?.message || "No fue posible cargar las estadísticas.");
-      })
-      .finally(() => {
-        if (activo) setLoading(false);
+
+    Promise.allSettled([
+      getNegocioStats(params),
+      getCanalDiario(params),
+      getLineasNegocio(params),
+      getPautasOrigen(params),
+      getMotivosDescarte(params),
+      getCitasStats(params),
+      getCotizacionesStats(params),
+      getSolicitudesFinanciamiento(params),
+    ]).then((resultados) => {
+      if (!activo) return;
+      const valor = (index, fallback) => resultados[index]?.status === "fulfilled" ? resultados[index].value : fallback;
+      const fallos = resultados.filter((r) => r.status === "rejected");
+      const negocio = valor(0, null);
+      const canal = valor(1, {});
+      const lineas = valor(2, {});
+      const pautas = valor(3, {});
+      const motivos = valor(4, {});
+      const citas = valor(5, {});
+      const cotizaciones = valor(6, null);
+      const solicitudes = valor(7, null);
+
+      setData({
+        negocio,
+        canalDiario: Array.isArray(canal?.items) ? canal.items : [],
+        lineasNegocio: { demanda_total: numero(lineas?.demanda_total), canales: Array.isArray(lineas?.canales) ? lineas.canales : [], lineas: Array.isArray(lineas?.lineas) ? lineas.lineas : [] },
+        pautas: Array.isArray(pautas?.pautas) ? pautas.pautas : [],
+        motivos: Array.isArray(motivos?.motivos) ? motivos.motivos : [],
+        citas: { citas_concertadas: numero(citas?.citas_concertadas), citas_efectivas: numero(citas?.citas_efectivas), tasa_asistencia: numero(citas?.tasa_asistencia) },
+        cotizaciones,
+        solicitudes,
       });
+
+      if (fallos.length) {
+        console.error("Errores cargando analítica digital:", fallos.map((r) => r.reason));
+        setError(`Se cargó el tablero con ${fallos.length} bloque${fallos.length === 1 ? "" : "s"} sin datos. Revisa la consola o el backend.`);
+      }
+    }).finally(() => { if (activo) setLoading(false); });
+
     return () => { activo = false; };
   }, [añoSel, mesSel, agenciaSel]);
 
-  useEffect(() => {
-    let activo = true;
-    setLoadingProductividad(true);
-    getProductividadAsesores({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setProductividad({
-          asesores: Array.isArray(response?.asesores) ? response.asesores : [],
-          canales_totales: Array.isArray(response?.canales_totales) ? response.canales_totales : [],
-        });
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando productividad de asesores:", err);
-        setProductividad(null);
-      })
-      .finally(() => {
-        if (activo) setLoadingProductividad(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingCanalDiario(true);
-    getCanalDiario({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setCanalDiario(Array.isArray(response?.items) ? response.items : []);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando análisis diario por canal:", err);
-        setCanalDiario([]);
-      })
-      .finally(() => {
-        if (activo) setLoadingCanalDiario(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingLineas(true);
-    getLineasNegocio({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setLineasNegocio({
-          demanda_total: Number(response?.demanda_total ?? 0),
-          canales: Array.isArray(response?.canales) ? response.canales : [],
-          lineas: Array.isArray(response?.lineas) ? response.lineas : [],
-        });
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando análisis por línea de negocio:", err);
-        setLineasNegocio({ demanda_total: 0, canales: [], lineas: [] });
-      })
-      .finally(() => {
-        if (activo) setLoadingLineas(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingPautas(true);
-    getPautasOrigen({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setPautas(Array.isArray(response?.pautas) ? response.pautas : []);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando análisis por pauta de origen:", err);
-        setPautas([]);
-      })
-      .finally(() => {
-        if (activo) setLoadingPautas(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingMotivos(true);
-    getMotivosDescarte({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setMotivosDescarte(Array.isArray(response?.motivos) ? response.motivos : []);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando motivos de descarte:", err);
-        setMotivosDescarte([]);
-      })
-      .finally(() => {
-        if (activo) setLoadingMotivos(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingCitas(true);
-    getCitasStats({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setCitasStats({
-          citas_concertadas: Number(response?.citas_concertadas ?? 0),
-          citas_efectivas: Number(response?.citas_efectivas ?? 0),
-          tasa_asistencia: Number(response?.tasa_asistencia ?? 0),
-        });
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando estadísticas de citas:", err);
-        setCitasStats({ citas_concertadas: 0, citas_efectivas: 0, tasa_asistencia: 0 });
-      })
-      .finally(() => {
-        if (activo) setLoadingCitas(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingFacturados(true);
-    getFacturadosStats({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setFacturados(response || null);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando facturados:", err);
-        setFacturados(null);
-      })
-      .finally(() => {
-        if (activo) setLoadingFacturados(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingSolicitudes(true);
-    getSolicitudesFinanciamiento({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setSolicitudes(response || null);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando solicitudes de financiamiento:", err);
-        setSolicitudes(null);
-      })
-      .finally(() => {
-        if (activo) setLoadingSolicitudes(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
-
-  useEffect(() => {
-    let activo = true;
-    setLoadingCotizaciones(true);
-    getCotizacionesStats({
-      anio: añoSel,
-      mes: mesSel + 1,
-      agencia: agenciaSel || undefined,
-    })
-      .then((response) => {
-        if (!activo) return;
-        setCotizaciones(response || null);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        console.error("Error cargando estadísticas de cotizaciones:", err);
-        setCotizaciones(null);
-      })
-      .finally(() => {
-        if (activo) setLoadingCotizaciones(false);
-      });
-    return () => { activo = false; };
-  }, [añoSel, mesSel, agenciaSel]);
+  const negocio = data.negocio || {};
+  const metricas = negocio.metricas || {};
+  const respuesta = negocio.respuesta || {};
+  const calidad = negocio.calidad || {};
+  const oportunidades = negocio.oportunidades || {};
+  const comparativo = negocio.comparativo || {};
+  const ritmo = negocio.ritmo || {};
+  const embudo = Array.isArray(negocio.embudo) ? negocio.embudo : [];
+  const canales = Array.isArray(negocio.canales) ? negocio.canales : [];
+  const asesores = Array.isArray(negocio.asesores) ? negocio.asesores : [];
+  const conversacionesIA = numero(negocio?.actividad_periodo?.conversaciones_ia);
+  const topCanal = [...canales].sort((a, b) => numero(b.prospectos) - numero(a.prospectos))[0];
+  const topPauta = [...data.pautas].sort((a, b) => numero(b.total) - numero(a.total))[0];
+  const topLinea = [...data.lineasNegocio.lineas].sort((a, b) => numero(b.total) - numero(a.total))[0];
+  const total = numero(negocio.prospectos);
+  const iaPct = total ? (conversacionesIA / total) * 100 : 0;
 
   return (
-    <div className="min-h-screen">
-      <main className="space-y-5 py-4">
-        <div className="flex w-full items-center justify-end">
-          <div className="relative shrink-0 rounded-2xl border border-[#131E5C]/20 bg-white px-3 pt-3 pb-2 shadow-sm">
-            <span className="absolute -top-[10px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#131E5C] via-[#1E2A6B] to-[#1555C7] px-4 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-md shadow-[#131E5C]/25 ring-2 ring-white">
-              Agencias
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {AGENCIAS.map((agencia) => {
-                const active = agenciaSel === agencia;
-                return (
-                  <button
-                    key={agencia}
-                    type="button"
-                    onClick={() => setAgenciaSel(active ? null : agencia)}
-                    className={`inline-flex h-8 shrink-0 items-center justify-center rounded-full px-3 text-xs font-bold transition active:scale-[0.97] ${active ? "bg-[#131E5C] text-white shadow-md shadow-[#131E5C]/20" : "bg-[#131E5C]/5 text-[#131E5C] hover:bg-[#131E5C]/10"}`}
-                  >
-                    {agencia}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen text-[14px] text-[#1A2344]">
+      <main className="space-y-6 px-2 py-4 lg:px-4">
+        <Filtros añoSel={añoSel} setAñoSel={setAñoSel} mesSel={mesSel} setMesSel={setMesSel} agenciaSel={agenciaSel} setAgenciaSel={setAgenciaSel} años={años} añoActual={añoActual} mesActual={mesActual} />
+        {error && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 font-semibold text-amber-800">{error}</div>}
 
-        <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-black/[0.08] bg-white p-3 shadow-md">
-          <div className="flex shrink-0 items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-[#131E5C]" />
-            <select
-              value={añoSel}
-              onChange={(e) => setAñoSel(Number(e.target.value))}
-              className="h-8 w-[76px] rounded-md border border-[#131E5C]/20 bg-[#F7F8FC] px-2 text-xs font-semibold text-[#1A1F3C] outline-none transition focus:border-[#131E5C]/50 focus:ring-2 focus:ring-[#131E5C]/10"
-            >
-              {años.map((año) => (
-                <option key={año} value={año}>{año}</option>
-              ))}
-            </select>
+        <Seccion titulo="Resumen Ejecutivo">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <KpiCard titulo="Prospectos digitales" valor={entero(negocio.prospectos)} loading={loading} badge={badgeVariacion(comparativo.variacion_prospectos)} badgeTone={numero(comparativo.variacion_prospectos) >= 0 ? "green" : "red"} detalle="vs. mes anterior" icono={<Users className="h-5 w-5" />} />
+            <KpiCard titulo="Contactados" valor={entero(negocio.contactados)} loading={loading} badge={porcentaje(metricas.tasa_contacto)} detalle="de los prospectos" icono={<UserCheck className="h-5 w-5" />} />
+            <KpiCard titulo="Con cita" valor={entero(negocio.citas)} loading={loading} badge={porcentaje(metricas.tasa_cita)} detalle="conversión a cita" icono={<CalendarDays className="h-5 w-5" />} />
+            <KpiCard titulo="Cita efectiva" valor={entero(negocio.citas_efectivas)} loading={loading} badge={porcentaje(metricas.tasa_asistencia)} detalle="asistencia de la cohorte" icono={<CheckCircle2 className="h-5 w-5" />} />
+            <KpiCard titulo="Cotizados" valor={entero(negocio.cotizaciones)} loading={loading} badge={porcentaje(metricas.tasa_cotizacion_sobre_efectivas)} detalle="sobre citas efectivas" icono={<FileText className="h-5 w-5" />} />
+            <KpiCard titulo="Facturados" valor={entero(negocio.facturados)} loading={loading} badge={porcentaje(metricas.tasa_facturacion)} badgeTone="blue" detalle="cierre sobre prospectos" icono={<Car className="h-5 w-5" />} destacado />
           </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <DatoContexto titulo="Conversaciones con IA" valor={`${entero(conversacionesIA)} · ${porcentaje(iaPct)}`} detalle="actividad IA del periodo" />
+            <DatoContexto titulo="Canal con mayor volumen" valor={topCanal?.nombre || "Sin datos"} detalle={topCanal ? `${entero(topCanal.prospectos)} prospectos` : ""} />
+            <DatoContexto titulo="Pauta líder" valor={topPauta?.nombre || "Sin datos"} detalle={topPauta ? `${entero(topPauta.total)} prospectos · ${porcentaje(topPauta.porcentaje)}` : ""} />
+            <DatoContexto titulo="Línea de negocio líder" valor={topLinea?.nombre || "Sin datos"} detalle={topLinea ? `${entero(topLinea.total)} prospectos · ${porcentaje(topLinea.porcentaje)}` : ""} />
+          </div>
+        </Seccion>
 
-          <div className="flex w-full items-center gap-1.5">
-            {MESES.map((mes, i) => {
-              const active = mesSel === i;
-              return (
-                <button
-                  key={mes}
-                  type="button"
-                  onClick={() => setMesSel(i)}
-                  className={`flex-1 items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-bold transition active:scale-[0.97] ${active ? "bg-[#131E5C] text-white shadow-md shadow-[#131E5C]/20" : "bg-[#131E5C]/5 text-[#131E5C] hover:bg-[#131E5C]/10"}`}
-                >
-                  {mes}
-                </button>
-              );
-            })}
+        <Seccion titulo="Embudo Comercial Digital" >
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
+            <EmbudoComercial etapas={embudo} loading={loading} />
+            <Oportunidades data={oportunidades} loading={loading} />
           </div>
-        </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MiniMetrica titulo="Cotización → solicitud" valor={porcentaje(metricas.tasa_solicitud_sobre_cotizacion)} detalle={`${entero(negocio.solicitudes)} solicitudes`} />
+            <MiniMetrica titulo="Aprobación financiera" valor={porcentaje(metricas.tasa_aprobacion)} detalle={`${entero(negocio.aprobadas)} aprobadas`} />
+            <MiniMetrica titulo="Cotización → factura" valor={porcentaje(metricas.tasa_cierre_sobre_cotizacion)} detalle={`${entero(negocio.facturados)} cierres`} />
+            <MiniMetrica titulo="Factura → entrega" valor={porcentaje(metricas.tasa_entrega)} detalle={`${entero(negocio.entregados)} entregas`} />
+          </div>
+        </Seccion>
 
-        {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
+        <Seccion titulo="Velocidad y Atención Comercial">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <KpiCompacto titulo="Mediana 1ª respuesta" valor={minutos(respuesta.mediana_min)} detalle={`P90: ${minutos(respuesta.p90_min)}`} icono={<Clock3 className="h-5 w-5" />} />
+            <KpiCompacto titulo="SLA ≤ 15 min" valor={porcentaje(respuesta?.sla_15?.porcentaje)} detalle={`${entero(respuesta?.sla_15?.total)} respuestas`} icono={<Gauge className="h-5 w-5" />} />
+            <KpiCompacto titulo="Sin respuesta humana" valor={entero(respuesta.sin_respuesta)} detalle={`${porcentaje(respuesta.tasa_respuesta)} tasa de respuesta`} icono={<AlertTriangle className="h-5 w-5" />} tone={numero(respuesta.sin_respuesta) > 0 ? "amber" : "green"} />
+            <KpiCompacto titulo="Prospectos por día" valor={numero(ritmo.prospectos_dia).toLocaleString("es-MX", { maximumFractionDigits: 1 })} detalle={`${entero(ritmo.dias_transcurridos)} días considerados`} icono={<Activity className="h-5 w-5" />} />
+            <KpiCompacto titulo="Proyección de cierre" valor={entero(ritmo.proyeccion_cierre)} detalle={`${MESES[mesSel]} ${añoSel}`} icono={<TrendingUp className="h-5 w-5" />} />
+          </div>
+        </Seccion>
 
-        <div className="mx-[14px] mt-[18px] mb-[18px] w-full rounded-[12px] bg-[#F8F7FC] p-[18px_14px]">
-          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-[19px] xl:grid-cols-6">
-            <Card1 total={stats.prospectos.total} pct={stats.prospectos.crecimiento} loading={loading} />
-            <Descalificados total={stats.descalificados.total} motivo={stats.descalificados.motivo_principal} loading={loading} />
-            <ConversionesSmart total={stats.conversiones_inteligentes} loading={loading} />
-            <CitasConcertadas total={stats.citas_concertadas} loading={loading} />
-            <CitasEfectivas total={stats.citas_efectivas} loading={loading} />
-            <ConversionTotal total={`${stats.conversion_total}%`} loading={loading} />
+        <Seccion titulo="Origen, Demanda y Productividad">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-4">
+            <GraficoCanalDiario datos={data.canalDiario} loading={loading} />
+            <EficienciaCanales canales={canales} loading={loading} />
+            <RendimientoAsesores asesores={asesores} loading={loading} />
+            <DemandaOrigen lineas={data.lineasNegocio.lineas} pautas={data.pautas} loading={loading} />
           </div>
-        </div>
+        </Seccion>
 
-        <div className="relative mt-[18px] w-full rounded-[12px] border border-[#131E5C]/20 bg-white px-4 pt-5 pb-4 shadow-sm">
-          <span className="absolute -top-[13px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#131E5C] via-[#1E2A6B] to-[#1555C7] px-5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-[#131E5C]/25 ring-2 ring-white">
-            Prospectos Digitales
-          </span>
-          <div className="mb-4 flex flex-col items-center pt-1">
-            <div className="text-center text-[13px] font-semibold text-[#5A627B]">
-              Analisis de registro en plataforma interna
-            </div>
-            <div className="mt-2.5 flex items-center justify-center gap-5">
-              {CANALES_LEYENDA.map((c) => (
-                <span key={c.nombre} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#152754]">
-                  <span className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: c.color }} />
-                  {c.nombre}
-                </span>
-              ))}
-            </div>
+        <Seccion titulo="Perfilamiento y Calidad del Dato" subtitulo="Identifica pérdidas de calidad, descarte y consistencia del registro comercial">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <MotivosDescarte motivos={data.motivos} loading={loading} />
+            <CalidadDato calidad={calidad} total={total} loading={loading} />
+            <CitasPeriodo citas={data.citas} loading={loading} />
           </div>
-          <div className="flex w-full items-stretch gap-[19px]">
-            <GraficoCanalDiario datos={canalDiario} loading={loadingCanalDiario} />
-            <ProductividadAsesores asesores={productividad?.asesores ?? []} loading={loadingProductividad} />
-            <LineasNegocio lineas={lineasNegocio.lineas} loading={loadingLineas} />
-            <PautasOrigen pautas={pautas} loading={loadingPautas} anio={añoSel} mes={mesSel} />
-          </div>
-        </div>
+        </Seccion>
 
-        <div className="relative mt-[18px] w-full rounded-[12px] border border-[#131E5C]/20 bg-white px-4 pt-5 pb-4 shadow-sm">
-          <span className="absolute -top-[13px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#131E5C] via-[#1E2A6B] to-[#1555C7] px-5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-[#131E5C]/25 ring-2 ring-white">
-            Perfilamiento
-          </span>
-          <div className="flex w-full items-stretch gap-[19px]">
-            <PieMotivosDescarte motivos={motivosDescarte} loading={loadingMotivos} />
-            <MotivosPrincipales motivos={motivosDescarte} loading={loadingMotivos} />
-            <BarrasCitas citas={citasStats} loading={loadingCitas} />
-            <DonaAsistencia tasa={citasStats.tasa_asistencia} concertadas={citasStats.citas_concertadas} efectivas={citasStats.citas_efectivas} loading={loadingCitas} />
+        <Seccion titulo="Resultado Comercial" subtitulo="Cotización, financiamiento y cierre atribuido a prospectos digitales">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <Cotizaciones data={data.cotizaciones} loading={loading} />
+            <Solicitudes data={data.solicitudes} loading={loading} />
+            <CierreDigital negocio={negocio} loading={loading} />
           </div>
-        </div>
-
-        <div className="relative mt-[18px] w-full rounded-[12px] border border-[#131E5C]/20 bg-white px-4 pt-5 pb-4 shadow-sm">
-          <span className="absolute -top-[13px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#131E5C] via-[#1E2A6B] to-[#1555C7] px-5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-[#131E5C]/25 ring-2 ring-white">
-            Productividad
-          </span>
-          <div className="mb-4 pt-1 text-center text-[13px] font-semibold text-[#5A627B]">
-            Resultados comerciales de la prospección
-          </div>
-          <div className="flex w-full items-stretch gap-[19px]">
-            <CardCotizaciones data={cotizaciones} loading={loadingCotizaciones} />
-            <CardSolicitudes data={solicitudes} loading={loadingSolicitudes} />
-            <AutoFacturadoKpi unidades={facturados?.unidades_facturadas} importe={facturados?.importe_facturado} loading={loadingFacturados} />
-            <AutoEntregadoKpi unidades={facturados?.unidades_entregadas} loading={loadingFacturados} />
-
-          </div>
-        </div>
+        </Seccion>
       </main>
     </div>
   );
 }
 
-function ValorKPI({ valor, loading }) {
-  if (loading) {
-    return <div className="h-8 w-16 animate-pulse rounded-lg bg-[#131E5C]/10" />;
-  }
-  return <span>{valor}</span>;
-}
-
-function Card1({ total, pct, loading }) {
-  const etiqueta = !loading ? `${pct > 0 ? "+" : ""}${pct}%` : "…";
+function Filtros({ añoSel, setAñoSel, mesSel, setMesSel, agenciaSel, setAgenciaSel, años, añoActual, mesActual }) {
   return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">PROSPECTOS</div>
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">DIGITALES</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+    <div className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="h-5 w-5 text-[#131E5C]" />
+          <span className="font-black uppercase tracking-[0.08em] text-[#131E5C]">Periodo</span>
+          <select value={añoSel} onChange={(e) => { const nuevoAño = Number(e.target.value); setAñoSel(nuevoAño); if (nuevoAño === añoActual && mesSel > mesActual) setMesSel(mesActual); }} className="h-10 rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-bold outline-none focus:border-[#1555C7]">
+            {años.map((año) => <option key={año} value={año}>{año}</option>)}
+          </select>
         </div>
-        <span className="inline-flex h-[31px] w-[64px] shrink-0 items-center justify-center rounded-full bg-[#EAF0FF] text-[12px] font-bold text-[#1555C7]">{etiqueta}</span>
-      </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
-        <svg width="72" height="36" viewBox="0 0 72 36" className="shrink-0">
-          <polyline fill="none" stroke="#1555C7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            points="2,32 14,26 26,28 38,18 50,20 62,8 70,5" />
-        </svg>
-      </div>
-      <Linea />
-      <div className="mt-2 text-[10px] font-semibold text-[#8891AD]">Prospectos generados en el periodo</div>
-    </TarjetaBlanca>
-  );
-}
-
-function Descalificados({ total, motivo, loading }) {
-  return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">DESCALIFICADOS</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-        </div>
-        <IconoDescalificado className="h-[35px] w-[35px] shrink-0" />
-      </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
-      </div>
-      <div className="mt-auto border-t border-[#EDF0F7] pt-2" />
-      <div className="mt-2">
-        <div className="text-[10px] font-semibold text-[#5A627B]">Motivo principal</div>
-        <div className="mt-1 text-[10px] font-bold leading-tight text-red-500">{loading ? "…" : (motivo || "Sin dato")}</div>
-      </div>
-    </TarjetaBlanca>
-  );
-}
-
-function IconoDescalificado({ className }) {
-  return (
-    <svg viewBox="0 0 35 35" className={className} fill="none">
-      <circle cx="13.5" cy="10.5" r="5.5" stroke="#7B7F87" strokeWidth="1.8" />
-      <path d="M2.5 29c0-5 5-8 11-8s11 3 11 8" stroke="#7B7F87" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="6" y1="30" x2="30" y2="6" stroke="#7B7F87" strokeWidth="2.2" strokeLinecap="round" />
-      <line x1="6" y1="30" x2="9" y2="33" stroke="#B08968" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ConversionesSmart({ total, loading }) {
-  return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">CONV.</div>
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">INTELIGENTES</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-        </div>
-        <span className="flex h-[47px] w-[52px] shrink-0 flex-col items-center justify-center rounded-full bg-[#EAF0FF] text-[11px] font-bold leading-none text-[#1555C7]">
-          <span>Bot</span>
-          <span>VW</span>
-        </span>
-      </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
-        <IconoRobot className="h-[35px] w-[35px] shrink-0" />
-      </div>
-      <Linea />
-      <div className="mt-2 text-[10px] font-semibold text-[#8891AD]">Conversaciones inteligentes (Bot VW)</div>
-    </TarjetaBlanca>
-  );
-}
-
-function IconoRobot({ className }) {
-  return (
-    <svg viewBox="0 0 35 35" className={className} fill="none">
-      <line x1="15" y1="2" x2="15" y2="6" stroke="#255BC7" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="15" cy="2.2" r="1.8" stroke="#255BC7" strokeWidth="1.6" />
-      <rect x="7" y="8" width="21" height="17" rx="5" stroke="#255BC7" strokeWidth="1.8" />
-      <line x1="4" y1="11" x2="7" y2="13" stroke="#255BC7" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="31" y1="11" x2="28" y2="13" stroke="#255BC7" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="13" cy="16" r="1.4" fill="#255BC7" />
-      <circle cx="22" cy="16" r="1.4" fill="#255BC7" />
-      <path d="M13 22h9" stroke="#255BC7" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CitasConcertadas({ total, loading }) {
-  return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">CITAS</div>
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">CONCERTADAS</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setAgenciaSel(null)} className={`rounded-lg px-4 py-2 font-bold transition ${!agenciaSel ? "bg-[#131E5C] text-white" : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"}`}>Todas</button>
+          {AGENCIAS.map((agencia) => <button key={agencia} type="button" onClick={() => setAgenciaSel(agencia)} className={`rounded-lg px-4 py-2 bg-white border border-[#131E5C] font-bold transition ${agenciaSel === agencia ? "bg-[#131E5C] text-white" : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"}`}>{agencia}</button>)}
         </div>
       </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
-        <IconoCalendarioCheck className="h-[34px] w-[34px] shrink-0" />
-      </div>
-      <Linea />
-      <div className="mt-2 text-[10px] font-semibold text-[#8891AD]">Citas agendadas en el periodo</div>
-    </TarjetaBlanca>
-  );
-}
-
-function IconoCalendarioCheck({ className }) {
-  return (
-    <svg viewBox="0 0 34 34" className={className} fill="none">
-      <rect x="4" y="6" width="26" height="24" rx="3.5" stroke="#255BC7" strokeWidth="1.8" />
-      <line x1="4" y1="12" x2="30" y2="12" stroke="#255BC7" strokeWidth="1.8" />
-      <line x1="11" y1="2.5" x2="11" y2="8" stroke="#255BC7" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="23" y1="2.5" x2="23" y2="8" stroke="#255BC7" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M11 21l4.5 4.5L23 18" stroke="#255BC7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CitasEfectivas({ total, loading }) {
-  return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">CITAS</div>
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">EFECTIVAS</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-        </div>
-      </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[35px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]"><ValorKPI valor={total.toLocaleString("es-MX")} loading={loading} /></div>
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#E7E9FF] text-[#66718C]">
-          <CheckCircle2 className="h-5 w-5" />
-        </span>
-      </div>
-      <Linea />
-      <div className="mt-2 text-[10px] font-semibold text-[#8891AD]">Citas efectivas en el periodo</div>
-    </TarjetaBlanca>
-  );
-}
-
-function ConversionTotal({ total, loading }) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-gradient-to-br from-[#082763] to-[#3868C9] p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[14px] font-bold leading-tight text-white">
-          <div>CONVERSIÓN</div>
-          <div>TOTAL</div>
-        </div>
-        <IconoTendencia className="h-[25px] w-[25px] shrink-0" />
-      </div>
-      <div className="mt-auto flex flex-col items-start pt-[35px]">
-        <div className="text-[55px] font-bold leading-none tracking-tight text-white">{loading ? <span className="inline-block h-12 w-20 animate-pulse rounded-lg bg-white/20" /> : total}</div>
-        <div className="mt-2 text-[15px] font-semibold text-white">Prospectos a Citas</div>
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        {MESES.map((mes, index) => {
+          const futuro = añoSel === añoActual && index > mesActual;
+          const active = mesSel === index;
+          return <button key={mes} type="button" disabled={futuro} onClick={() => setMesSel(index)} className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 font-bold transition ${active ? "bg-[#131E5C] text-white shadow" : futuro ? "cursor-not-allowed text-[#AEB6C5]" : " text-[#152754] hover:bg-[#E3E9F3]"}`}>{mes}</button>;
+        })}
       </div>
     </div>
   );
 }
 
-function IconoTendencia({ className }) {
+function Seccion({ titulo, subtitulo, children }) {
   return (
-    <svg viewBox="0 0 25 25" className={className} fill="none">
-      <polyline points="1,22 7,16 11,19 17,10 21,13 24,6" stroke="#CFE0FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="24" y1="6" x2="18" y2="6" stroke="#CFE0FF" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="24" y1="6" x2="24" y2="12" stroke="#CFE0FF" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
+    <section className="relative rounded-xl border border-[#9EA9BD] px-4 pb-4 pt-7 shadow-sm">
+      <div className="absolute -top-[14px] left-5 flex max-w-[calc(100%_-_40px)] items-center gap-3 bg-white px-2">
+        <h2 className="whitespace-nowrap text-[18px] font-black text-[#07184C]">{titulo}</h2>
+        <div className="hidden h-px w-24 bg-[#748199] sm:block" />
+      </div>
+      {subtitulo && <div className="mb-4 font-medium text-[#67728B]">{subtitulo}</div>}
+      {children}
+    </section>
   );
 }
 
-function GraficoCanalDiario({ datos, loading }) {
+function Tarjeta({ children, className = "" }) {
+  return <div className={`rounded-xl border border-[#B9C4D7] bg-white p-4 shadow-[0_2px_8px_rgba(19,30,92,0.05)] ${className}`}>{children}</div>;
+}
+
+function Skeleton({ className = "h-8 w-20" }) {
+  return <div className={`animate-pulse rounded-lg bg-[#131E5C]/10 ${className}`} />;
+}
+
+function KpiCard({ titulo, valor, badge, badgeTone = "green", detalle, icono, destacado = false, loading }) {
+  const tone = { green: "text-[#0A8F61]", red: "bg-[#FDECEC] text-[#D64242]", blue: "bg-[#EAF0FF] text-[#1555C7]" }[badgeTone] || "bg-[#EAF0FF] text-[#1555C7]";
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">ANALISIS DIARIO</div>
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">POR CANAL</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+    <Tarjeta className={destacado ? "bg-gradient-to-br from-[#131E5C] to-[#131E5C] text-white" : ""}>
+      <div className="flex items-start justify-between gap-2">
+        <div className={`font-black uppercase tracking-[0.08em] ${destacado ? "text-white" : "text-[#1A2344]"}`}>{titulo}</div>
+        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${destacado ? "bg-white/15 text-white" : "bg-[#EAF0FF] text-[#1555C7]"}`}>{icono}</span>
       </div>
-      <div className="mt-3 h-[150px] min-h-[150px]">
-        {loading ? (
-          <div className="flex h-[150px] items-center justify-center gap-2">
-            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-          </div>
-        ) : datos.length === 0 ? (
-          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-            Sin datos en el periodo
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={datos} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
-              <XAxis dataKey="rotulo" tick={{ fontSize: 8, fill: "#8891AD" }} axisLine={false} tickLine={false} interval={3} />
-              <YAxis tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip
-                cursor={{ fill: "rgba(21,39,84,0.04)" }}
-                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
-                labelFormatter={(_, payload) => {
-                  const item = payload?.[0]?.payload;
-                  if (!item) return "";
-                  return <span className="font-bold text-[#152754]">Día {item.rotulo}</span>;
-                }}
-              />
-              <Bar dataKey="whatsapp" name="WhatsApp" stackId="canal" fill={COLOR_CANAL_ID.whatsapp} />
-              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="canal" fill={COLOR_CANAL_ID.vw_direct} />
-              <Bar dataKey="facebook" name="Facebook Ads" stackId="canal" fill={COLOR_CANAL_ID.facebook} />
-              <Bar dataKey="llamada" name="Llamada entrante" stackId="canal" fill={COLOR_CANAL_ID.llamada} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+      <div className={`mt-6 text-[34px] font-black leading-none ${destacado ? "text-white" : "text-[#07184C]"}`}>{loading ? <Skeleton className="h-9 w-20" /> : valor}</div>
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-current/10 pt-3">
+        <span className={`font-semibold ${destacado ? "text-white/80" : "text-[#67728B]"}`}>{detalle}</span>
+        {badge && <span className={`shrink-0 rounded-full px-2.5 py-1 font-black ${destacado ? "bg-white/15 text-white" : tone}`}>{loading ? "…" : badge}</span>}
       </div>
-    </div>
+    </Tarjeta>
   );
 }
 
-function ProductividadAsesores({ asesores, loading }) {
-  const datos = (asesores || []).map((a) => {
-    const porCanal = {};
-    for (const c of a.canales || []) porCanal[c.id] = Number(c.total || 0);
-    return {
-      nombre: a.nombre,
-      total: Number(a.total_leads || 0),
-      whatsapp: porCanal.whatsapp || 0,
-      vw_direct: porCanal.vw_direct || 0,
-      facebook: porCanal.facebook || 0,
-      llamada: porCanal.llamada || 0,
-    };
-  });
-
+function DatoContexto({ titulo, valor, detalle }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">PRODUCTIVIDAD</div>
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">COMPARADA DE ASESORES</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+    <div className="rounded-lg border border-[#D7DEEA] bg-white px-4 py-3">
+      <div className="text-[14px] font-semibold text-[#67728B]">
+        {titulo}
       </div>
-      <div className="mt-3">
-        {loading ? (
-          <div className="flex h-[150px] items-center justify-center gap-2">
-            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-          </div>
-        ) : datos.length === 0 ? (
-          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-            Sin datos en el periodo
-          </div>
-        ) : (
-          <div className="flex h-[178px] flex-col">
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
-              <div style={{ height: Math.max(160, datos.length * 46) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={datos} layout="vertical" margin={{ top: 2, right: 24, left: 0, bottom: 0 }} barCategoryGap="14%">
-                    <CartesianGrid horizontal={false} stroke="#EDF0F7" />
-                    <YAxis type="category" dataKey="nombre" width={92} tick={{ fontSize: 9, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
-                    <Tooltip
-                      cursor={{ fill: "rgba(21,39,84,0.04)" }}
-                      contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                      formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
-                      labelFormatter={(_, payload) => {
-                        const item = payload?.[0]?.payload;
-                        if (!item) return "";
-                        return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads</span>;
-                      }}
-                    />
-                    <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill={COLOR_CANAL_ID.whatsapp} barSize={18} />
-                    <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="a" fill={COLOR_CANAL_ID.vw_direct} barSize={18} />
-                    <Bar dataKey="facebook" name="Facebook Ads" stackId="a" fill={COLOR_CANAL_ID.facebook} barSize={18} />
-                    <Bar dataKey="llamada" name="Llamada entrante" stackId="a" fill={COLOR_CANAL_ID.llamada} barSize={18} radius={[0, 3, 3, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="flex h-[22px] shrink-0 items-end justify-between" style={{ marginLeft: 92, marginRight: 24 }}>
-              {Array.from({ length: 6 }, (_, i) => (
-                <span key={i} className="shrink-0 text-[9px] font-semibold text-[#8891AD]">
-                  {Math.round((Math.max(1, ...datos.map((d) => d.total)) * i) / 5).toLocaleString("es-MX")}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-function LineasNegocio({ lineas, loading }) {
-  const datos = (lineas || []).map((l) => {
-    const porCanal = {};
-    for (const c of l.canales || []) porCanal[c.id] = Number(c.total || 0);
-    return {
-      nombre: l.nombre,
-      total: Number(l.total || 0),
-      whatsapp: porCanal.whatsapp || 0,
-      vw_direct: porCanal.vw_direct || 0,
-      facebook: porCanal.facebook || 0,
-      llamada: porCanal.llamada || 0,
-    };
-  });
-  const maxTotal = Math.max(1, ...datos.map((d) => d.total));
+      <div
+        className="mt-1 truncate text-[16px] font-black text-[#07184C]"
+        title={String(valor || "")}
+      >
+        {valor || "Sin datos"}
+      </div>
 
-  return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">ANALISIS POR LINEA</div>
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">DE NEGOCIOS</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-      </div>
-      <div className="mt-3">
-        {loading ? (
-          <div className="flex h-[150px] items-center justify-center gap-2">
-            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-            <div className="h-24 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-          </div>
-        ) : datos.length === 0 ? (
-          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-            Sin datos en el periodo
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={Math.max(150, datos.length * 52)}>
-            <BarChart data={datos} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }} barCategoryGap="18%">
-              <CartesianGrid horizontal={false} stroke="#EDF0F7" />
-              <XAxis type="number" tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="nombre" width={86} tick={{ fontSize: 9, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
-              <Tooltip
-                cursor={{ fill: "rgba(21,39,84,0.04)" }}
-                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                formatter={(value, name) => [Number(value).toLocaleString("es-MX"), name]}
-                labelFormatter={(_, payload) => {
-                  const item = payload?.[0]?.payload;
-                  if (!item) return "";
-                  const participacion = Math.round((item.total / maxTotal) * 100).toLocaleString("es-MX");
-                  return <span className="font-bold text-[#152754]">{item.nombre} · {item.total.toLocaleString("es-MX")} leads · {participacion}%</span>;
-                }}
-              />
-              <Bar dataKey="whatsapp" name="WhatsApp" stackId="l" fill={COLOR_CANAL_NEGOCIO.whatsapp} barSize={20} />
-              <Bar dataKey="vw_direct" name="VW Concesionaria/VW" stackId="l" fill={COLOR_CANAL_NEGOCIO.vw_direct} barSize={20} />
-              <Bar dataKey="facebook" name="Facebook Ads" stackId="l" fill={COLOR_CANAL_NEGOCIO.facebook} barSize={20} />
-              <Bar dataKey="llamada" name="Llamada entrante" stackId="l" fill={COLOR_CANAL_NEGOCIO.llamada} barSize={20} radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PautasOrigen({ pautas, loading, anio, mes }) {
-  const mesNombre = MESES[mes] || "";
-  const topPautas = [...(pautas || [])].sort((a, b) => (b.total ?? 0) - (a.total ?? 0)).slice(0, 3);
-  return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">POR PAUTA</div>
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">DE ORIGEN</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-      </div>
-      <div className="mt-3 h-[150px] min-h-[150px]">
-        {loading ? (
-          <div className="flex h-[150px] items-center justify-center gap-2">
-            <div className="h-20 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-            <div className="h-20 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-          </div>
-        ) : pautas.length === 0 ? (
-          <div className="flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-            Sin datos en el periodo
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={topPautas} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }} barCategoryGap={8}>
-              <CartesianGrid horizontal={false} stroke="#EDF0F7" />
-              <XAxis type="number" domain={[0, "dataMax"]} tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="nombre" width={86} tick={{ fontSize: 8, fill: "#5A627B" }} axisLine={false} tickLine={false} interval={0} />
-              <Tooltip
-                cursor={{ fill: "rgba(21,39,84,0.04)" }}
-                contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                formatter={(value, name, entry) => {
-                  const item = topPautas[entry?.index] || {};
-                  return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}% de participación)`, "Total"];
-                }}
-                labelFormatter={(_, payload) => {
-                  const item = payload?.[0]?.payload;
-                  if (!item) return "";
-                  return (
-                    <div className="flex flex-col gap-0.5 py-0.5">
-                      <span className="font-bold text-[#152754]">{item.nombre}</span>
-                      <span className="text-[#5A627B]">Canal: {item.canal}</span>
-                      <span className="text-[#5A627B]">Periodo: {mesNombre} {anio}</span>
-                    </div>
-                  );
-                }}
-              />
-              <Bar dataKey="total" fill="#1555C7" radius={[0, 5, 5, 0]} barSize={28} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PieMotivosDescarte({ motivos, loading }) {
-  const datos = [...(motivos || [])]
-    .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
-    .map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
-  const datosDona = datos.slice(0, 4);
-  return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">MOTIVOS DE DESCARTE</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-      </div>
-      {loading ? (
-        <div className="flex h-[220px] items-center justify-center gap-4">
-          <div className="h-36 w-36 animate-pulse rounded-full bg-[#131E5C]/10" />
-          <div className="h-20 w-28 animate-pulse rounded-lg bg-[#131E5C]/10" />
-        </div>
-      ) : motivos.length === 0 ? (
-        <div className="flex h-[220px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-          Sin descartes en el periodo
-        </div>
-      ) : (
-        <div className="mt-2 flex min-h-[220px] flex-col items-center justify-center gap-5 sm:flex-row sm:items-center sm:gap-8">
-          <div className="h-[150px] w-[150px] shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={datosDona} dataKey="total" nameKey="motivo" cx="50%" cy="50%" innerRadius={40} outerRadius={64} paddingAngle={2} stroke="#FFFFFF" strokeWidth={2}>
-                  {datosDona.map((d) => (
-                    <Cell key={d.motivo} fill={d.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                  formatter={(value, _name, entry) => {
-                    const item = entry?.payload || {};
-                    return [`${Number(value).toLocaleString("es-MX")} leads (${Number(item.porcentaje ?? 0).toLocaleString("es-MX")}%)`, item?.motivo || "Total"];
-                  }}
-                  labelFormatter={(_, payload) => {
-                    const item = payload?.[0]?.payload;
-                    if (!item?.motivo) return "";
-                    return <span className="font-bold text-[#152754]">{item.motivo}</span>;
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex w-full min-w-0 max-w-[280px] flex-1 flex-col gap-1.5">
-            {datosDona.map((d) => (
-              <div key={d.motivo} className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                <span className="min-w-0 flex-1 text-[9px] font-semibold leading-tight text-[#5A627B]">{d.motivo}</span>
-              </div>
-            ))}
-          </div>
+      {detalle && (
+        <div className="mt-1 text-[13px] font-medium text-[#8A94A8]">
+          {detalle}
         </div>
       )}
     </div>
   );
 }
+function EmbudoComercial({ etapas = [], loading }) {
+  const datos = Array.isArray(etapas) ? etapas : [];
 
-function MotivosPrincipales({ motivos, loading }) {
-  const principales = [...(motivos || [])].sort((a, b) => (b.total ?? 0) - (a.total ?? 0)).slice(0, 2);
+  const colores = [
+    "#0B143F",
+    "#10205A",
+    "#142D76",
+    "#183B91",
+    "#1C49AC",
+    "#2058C6",
+    "#2868D5",
+    "#3479E0",
+    "#438BE8",
+  ];
+
+  const anchoInicial = 100;
+  const anchoFinal = 36;
+
+  const datosFunnel = datos.map((etapa, index) => {
+    const totalEtapas = Math.max(datos.length - 1, 1);
+
+    // Reducción lineal y progresiva.
+    // No depende de los valores comerciales.
+    const progreso = index / totalEtapas;
+    const ancho =
+      anchoInicial - (anchoInicial - anchoFinal) * progreso;
+
+    return {
+      ...etapa,
+      total: numero(etapa.total),
+      ancho,
+      color: colores[index % colores.length],
+    };
+  });
+
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">PRINCIPALES MOTIVOS DE DESCARTE</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-      </div>
+    <Tarjeta>
+      <TituloCard
+        icono={<Target className="h-5 w-5" />}
+        titulo="Embudo Comercial Digital"
+      />
+
       {loading ? (
-        <div className="mt-3 flex h-[220px] flex-col gap-2">
-          <div className="h-24 animate-pulse rounded-xl bg-[#131E5C]/10" />
-          <div className="h-24 animate-pulse rounded-xl bg-[#131E5C]/10" />
-        </div>
-      ) : principales.length === 0 ? (
-        <div className="mt-3 flex h-[220px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-          Sin descartes en el periodo
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-col gap-2.5">
-          {principales.map((m) => {
-            const color = COLORES_MOTIVOS[(motivos || []).indexOf(m) % COLORES_MOTIVOS.length];
+        <div className="mt-5 flex flex-col items-center gap-1">
+          {Array.from({ length: 8 }, (_, index) => {
+            const ancho =
+              anchoInicial -
+              ((anchoInicial - anchoFinal) * index) / 7;
+
             return (
-              <div key={m.motivo} className="rounded-[12px] border border-[#131E5C]/10 bg-[#F8F7FC] p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-[11px] font-bold text-[#152754]">{m.motivo}</div>
-                    <div className="text-[10px] font-semibold text-[#8891AD]">Leads descartados</div>
-                  </div>
-                  <span className="shrink-0 text-[20px] font-black leading-none text-[#152754]">{Number(m.porcentaje ?? 0).toLocaleString("es-MX")}%</span>
-                </div>
-                <div className="mt-2 flex items-end justify-between gap-2">
-                  <div className="text-[26px] font-black leading-none text-[#152754]">{Number(m.total ?? 0).toLocaleString("es-MX")}</div>
-                  <div className="h-2 w-full max-w-[60%] overflow-hidden rounded-full bg-[#EDF0F7]">
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, Number(m.porcentaje ?? 0))}%`, backgroundColor: color }} />
-                  </div>
-                </div>
+              <div
+                key={index}
+                className="h-[62px]"
+                style={{ width: `${ancho}%` }}
+              >
+                <Skeleton className="h-full w-full" />
               </div>
             );
           })}
         </div>
+      ) : datosFunnel.length === 0 ? (
+        <div className="mt-5">
+          <Vacio texto="Sin datos de embudo" />
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid grid-cols-1 gap-6 2xl:grid-cols-[1.45fr_.75fr]">
+            {/* FUNNEL */}
+            <div className="flex min-h-[500px] items-start justify-center px-2">
+              <div className="flex w-full max-w-[720px] flex-col items-center">
+                {datosFunnel.map((etapa, index) => {
+                  const siguiente = datosFunnel[index + 1];
+
+                  const anchoInferior = siguiente
+                    ? siguiente.ancho
+                    : Math.max(etapa.ancho - 7, 24);
+
+                  const relacionInferior =
+                    anchoInferior / etapa.ancho;
+
+                  const recorte =
+                    ((1 - relacionInferior) / 2) * 100;
+
+                  const conversionOrigen =
+                    index === 0
+                      ? 100
+                      : numero(etapa.conversion_origen);
+
+                  const conversionAnterior =
+                    index === 0
+                      ? 100
+                      : numero(etapa.conversion_anterior);
+
+                  return (
+                    <div
+                      key={etapa.id || `${etapa.nombre}-${index}`}
+                      className="relative -mt-[1px] flex h-[62px] shrink-0 items-center justify-center text-white"
+                      style={{
+                        width: `${etapa.ancho}%`,
+                        backgroundColor: etapa.color,
+                        clipPath: `polygon(
+                          0% 0%,
+                          100% 0%,
+                          ${100 - recorte}% 100%,
+                          ${recorte}% 100%
+                        )`,
+                      }}
+                    >
+                      <div className="flex w-full items-center justify-center gap-5 px-8">
+                        <div className="min-w-0 text-center">
+                          <div className="truncate text-[14px] font-black uppercase tracking-[0.05em]">
+                            {etapa.nombre}
+                          </div>
+
+                          <div className="mt-1 text-[12px] font-semibold text-white/80">
+                            {index === 0
+                              ? "Etapa inicial"
+                              : `${porcentaje(
+                                conversionAnterior,
+                              )} vs. anterior`}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-center">
+                          <div className="text-[24px] font-black leading-none">
+                            {entero(etapa.total)}
+                          </div>
+
+                          <div className="mt-1 text-[12px] font-bold text-white/85">
+                            {porcentaje(conversionOrigen)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 gap-3 border-t border-[#DDE4EE] pt-4">
+            <div className="rounded-lg bg-white px-4 py-3">
+              <div className="text-[13px] font-semibold text-[#568474]">
+                Conversión final
+              </div>
+
+              <div className="mt-1 text-[22px] font-black text-[#07835A]">
+                {porcentaje(
+                  datosFunnel[datosFunnel.length - 1]
+                    ?.conversion_origen,
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
-    </div>
+    </Tarjeta>
   );
 }
-
-function BarrasCitas({ citas, loading }) {
-  const datos = [
-    { nombre: "Concertadas", total: Number(citas.citas_concertadas ?? 0), color: "#1555C7" },
-    { nombre: "Efectivas", total: Number(citas.citas_efectivas ?? 0), color: "#3B74D4" },
+function Oportunidades({ data, loading }) {
+  const items = [
+    ["Sin respuesta humana", data.sin_respuesta, "Responder y reasignar antes de perder intención"],
+    ["Cotización pendiente", data.cotizacion_pendiente, "Prospectos esperando propuesta"],
+    ["Solicitud sin resolver", data.solicitud_sin_resolver, "Seguimiento con financiera"],
+    ["Aprobados sin facturar", data.aprobados_sin_facturar, "Mayor oportunidad de cierre inmediato"],
+    ["Facturados sin entregar", data.facturados_sin_entregar, "Seguimiento de entrega"],
   ];
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">CITAS CONCERTADAS</div>
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">VS EFECTIVAS</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+    <Tarjeta>
+      <TituloCard icono={<AlertTriangle className="h-5 w-5" />} titulo="Oportunidades de acción" />
+      <div className="mt-4 space-y-2.5">
+        {loading ? Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />) : items.map(([titulo, valor, detalle]) => (
+          <div key={titulo} className="flex items-center gap-3 rounded-lg border border-[#E1E6EF] bg-[#FAFBFD] p-3">
+            <div className={`flex h-10 min-w-10 items-center justify-center rounded-lg font-black ${numero(valor) > 0 ? "bg-[#131E5C] text-white" : "bg-[#E5F8EE] text-[#0A8F61]"}`}>{entero(valor)}</div>
+            <div className="min-w-0"><div className="font-black text-[#152754]">{titulo}</div><div className="mt-0.5 text-[13px] font-medium text-[#7A859C]">{detalle}</div></div>
+          </div>
+        ))}
       </div>
-      {loading ? (
-        <div className="mt-3 flex h-[150px] items-center justify-center gap-2">
-          <div className="h-20 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-          <div className="h-20 w-28 animate-pulse rounded-[8px] bg-[#131E5C]/10" />
-        </div>
-      ) : Number(citas.citas_concertadas) === 0 ? (
-        <div className="mt-3 flex h-[150px] items-center justify-center rounded-[8px] border border-dashed border-[#131E5C]/15 text-[10px] font-semibold text-[#8891AD]">
-          Sin citas en el periodo
-        </div>
-      ) : (
-        <>
-          <div className="mt-3 h-[150px] min-h-[150px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={datos} margin={{ top: 5, right: 10, left: -22, bottom: 0 }}>
-                <XAxis dataKey="nombre" tick={{ fontSize: 10, fill: "#8891AD" }} axisLine={false} tickLine={false} interval={0} />
-                <YAxis tick={{ fontSize: 9, fill: "#8891AD" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip
-                  cursor={{ fill: "rgba(21,39,84,0.04)" }}
-                  contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                  formatter={(value) => [Number(value).toLocaleString("es-MX"), "Citas"]}
-                />
-                <Bar dataKey="total" radius={[5, 5, 0, 0]} barSize={42}>
-                {datos.map((d) => (
-                    <Cell key={d.nombre} fill={d.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+    </Tarjeta>
+  );
+}
+
+function MiniMetrica({ titulo, valor, detalle }) {
+  return <div className="rounded-xl border border-[#B9C4D7] bg-white px-4 py-3"><div className="font-semibold text-[#67728B]">{titulo}</div><div className="mt-1 text-[24px] font-black text-[#07184C]">{valor}</div><div className="mt-1 font-medium text-[#8A94A8]">{detalle}</div></div>;
+}
+
+function KpiCompacto({ titulo, valor, detalle, icono, tone = "blue" }) {
+  const estilos = tone === "amber" ? "bg-[#131E5C] text-white" : tone === "green" ? "bg-[#E5F8EE] text-[#0A8F61]" : "bg-[#EAF0FF] text-[#1555C7]";
+  return <Tarjeta><div className="flex items-start justify-between gap-2"><div className="font-black uppercase tracking-[0.06em] text-[#1A2344]">{titulo}</div><span className={`flex h-9 w-9 items-center justify-center rounded-lg ${estilos}`}>{icono}</span></div><div className="mt-5 text-[28px] font-black text-[#07184C]">{valor}</div><div className="mt-2 border-t border-[#E6EAF1] pt-2 font-medium text-[#7A859C]">{detalle}</div></Tarjeta>;
+}
+
+function TituloCard({ icono, titulo, detalle }) {
+  return <div><div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#EAF0FF] text-[#1555C7]">{icono}</span><div className="font-black uppercase tracking-[0.07em] text-[#152754]">{titulo}</div></div>{detalle && <div className="mt-2 font-medium text-[#7A859C]">{detalle}</div>}</div>;
+}
+
+function GraficoCanalDiario({ datos, loading }) {
+  return (
+    <Tarjeta>
+      <TituloCard icono={<Activity className="h-5 w-5" />} titulo="Demanda diaria por canal" detalle="Entrada de prospectos durante el mes" />
+      <div className="mt-4 h-[300px]">
+        {loading ? <Skeleton className="h-full w-full" /> : datos.length === 0 ? <Vacio texto="Sin prospectos en el periodo" /> : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={datos} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="#E7EBF2" />
+              <XAxis dataKey="rotulo" tick={{ fontSize: 13, fill: "#738099" }} axisLine={false} tickLine={false} interval={2} />
+              <YAxis tick={{ fontSize: 13, fill: "#738099" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(21,39,84,0.04)" }} formatter={(value, name) => [entero(value), name]} />
+              <Bar dataKey="whatsapp" name="WhatsApp" stackId="canal" fill={COLOR_CANAL.whatsapp} />
+              <Bar dataKey="vw_direct" name="VW Direct" stackId="canal" fill={COLOR_CANAL.vw_direct} />
+              <Bar dataKey="facebook" name="Facebook Ads" stackId="canal" fill={COLOR_CANAL.facebook} />
+              <Bar dataKey="llamada" name="Llamada" stackId="canal" fill={COLOR_CANAL.llamada} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </Tarjeta>
+  );
+}
+
+function EficienciaCanales({ canales, loading }) {
+  const ordenados = [...(canales || [])].sort((a, b) => numero(b.prospectos) - numero(a.prospectos));
+  return (
+    <Tarjeta>
+      <TituloCard icono={<Gauge className="h-5 w-5" />} titulo="Calidad por canal" detalle="No sólo volumen: cita, descarte y facturación" />
+      <div className="mt-4 space-y-3">
+        {loading ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />) : ordenados.length === 0 ? <Vacio texto="Sin canales" /> : ordenados.map((c) => (
+          <div key={c.nombre} className="rounded-lg border border-[#E1E6EF] p-3">
+            <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: COLOR_CANAL[c.id] || "#94A3B8" }} /><span className="truncate font-black text-[#152754]">{c.nombre}</span></div><span className="font-black text-[#07184C]">{entero(c.prospectos)}</span></div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center"><MetricaLinea label="Cita" value={porcentaje(c.tasa_cita)} /><MetricaLinea label="Descarte" value={porcentaje(c.tasa_descarte)} /><MetricaLinea label="Factura" value={porcentaje(c.tasa_facturacion)} /></div>
           </div>
-          <div className="mt-2 flex gap-1.5">
-            {datos.map((d) => (
-              <span key={d.nombre} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold" style={{ backgroundColor: `${d.color}18`, color: d.color }}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: d.color }} />
-                {d.nombre}: {d.total.toLocaleString("es-MX")}
-              </span>
-            ))}
+        ))}
+      </div>
+    </Tarjeta>
+  );
+}
+
+function RendimientoAsesores({ asesores, loading }) {
+  const top = [...(asesores || [])].slice(0, 6);
+  return (
+    <Tarjeta>
+      <TituloCard icono={<Users className="h-5 w-5" />} titulo="Rendimiento de asesores" detalle="Ordenado por cierres y conversión" />
+      <div className="mt-4 space-y-3">
+        {loading ? Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-14 w-full" />) : top.length === 0 ? <Vacio texto="Sin asesores asignados" /> : top.map((a, index) => (
+          <div key={a.nombre}>
+            <div className="flex items-center justify-between gap-3"><div className="min-w-0"><span className="mr-2 font-black text-[#1555C7]">#{index + 1}</span><span className="font-black text-[#152754]">{a.nombre}</span></div><span className="shrink-0 font-black text-[#07184C]">{entero(a.facturados)} fact.</span></div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#EDF1F7]"><div className="h-full rounded-full bg-[#1555C7]" style={{ width: `${Math.min(100, numero(a.tasa_facturacion))}%` }} /></div>
+            <div className="mt-1 flex justify-between text-[13px] font-medium text-[#7A859C]"><span>{entero(a.prospectos)} leads · {entero(a.cotizaciones)} cotizaciones</span><span>{porcentaje(a.tasa_facturacion)} cierre</span></div>
           </div>
-        </>
+        ))}
+      </div>
+    </Tarjeta>
+  );
+}
+
+function DemandaOrigen({ lineas, pautas, loading }) {
+  const topLineas = [...(lineas || [])].sort((a, b) => numero(b.total) - numero(a.total)).slice(0, 3);
+  const topPautas = [...(pautas || [])].sort((a, b) => numero(b.total) - numero(a.total)).slice(0, 5);
+  return (
+    <Tarjeta>
+      <TituloCard icono={<TrendingUp className="h-5 w-5" />} titulo="Demanda y campañas" detalle="Qué negocio y pauta están generando intención" />
+      <div className="mt-4">
+        <div className="font-black text-[#152754]">Líneas de negocio</div>
+        <div className="mt-2 space-y-2">{loading ? <Skeleton className="h-24 w-full" /> : topLineas.map((l) => <BarraProgreso key={l.id || l.nombre} label={l.nombre} value={numero(l.porcentaje)} right={`${entero(l.total)} · ${porcentaje(l.porcentaje)}`} />)}</div>
+      </div>
+      <div className="mt-5 border-t border-[#E5E9F0] pt-4">
+        <div className="font-black text-[#152754]">Top pautas</div>
+        <div className="mt-2 space-y-2">{loading ? <Skeleton className="h-28 w-full" /> : topPautas.length === 0 ? <Vacio texto="Sin pauta identificada" compact /> : topPautas.map((p) => <BarraProgreso key={`${p.nombre}-${p.canal}`} label={p.nombre} value={numero(p.porcentaje)} right={`${entero(p.total)} · ${porcentaje(p.porcentaje)}`} />)}</div>
+      </div>
+    </Tarjeta>
+  );
+}
+
+function MotivosDescarte({ motivos, loading }) {
+  const datos = [...(motivos || [])].sort((a, b) => numero(b.total) - numero(a.total)).map((m, i) => ({ ...m, color: COLORES_MOTIVOS[i % COLORES_MOTIVOS.length] }));
+  const top = datos.slice(0, 5);
+  return (
+    <Tarjeta>
+      <TituloCard icono={<AlertTriangle className="h-5 w-5" />} titulo="Motivos de descarte" detalle="Dónde se está perdiendo demanda" />
+      {loading ? <Skeleton className="mt-4 h-[270px] w-full" /> : top.length === 0 ? <Vacio texto="Sin descartes en el periodo" /> : (
+        <div className="mt-4 grid grid-cols-1 items-center gap-4 sm:grid-cols-[170px_1fr] xl:grid-cols-1 2xl:grid-cols-[170px_1fr]">
+          <div className="relative mx-auto h-[170px] w-[170px]">
+            <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={top} dataKey="total" nameKey="motivo" innerRadius={52} outerRadius={76} paddingAngle={2} stroke="#fff" strokeWidth={2}>{top.map((d) => <Cell key={d.motivo} fill={d.color} />)}</Pie><Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, _name, item) => [`${entero(value)} · ${porcentaje(item?.payload?.porcentaje)}`, item?.payload?.motivo]} /></PieChart></ResponsiveContainer>
+          </div>
+          <div className="space-y-2">{top.map((m) => <div key={m.motivo} className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: m.color }} /><span className="truncate font-semibold text-[#5F6C84]">{m.motivo}</span></div><span className="shrink-0 font-black text-[#152754]">{porcentaje(m.porcentaje)}</span></div>)}</div>
+        </div>
       )}
-    </div>
+    </Tarjeta>
   );
 }
 
-function DonaAsistencia({ tasa, concertadas, efectivas, loading }) {
-  const pct = Math.min(100, Math.max(0, Number(tasa ?? 0)));
-  const data = pct > 0 ? [{ name: "Asistencia", value: pct }, { name: "Resto", value: 100 - pct }] : [{ name: "Resto", value: 100 }];
+function CalidadDato({ calidad, total, loading }) {
+  const items = [
+    ["Asesor asignado", numero(calidad.asignacion_asesor_pct), numero(calidad.sin_asesor)],
+    ["Canal identificado", numero(calidad.canal_identificado_pct), numero(calidad.sin_canal)],
+    ["Modelo identificado", numero(calidad.modelo_identificado_pct), numero(calidad.sin_modelo)],
+    ["Perfil comercial completo", numero(calidad.perfil_completo_pct), numero(calidad.perfil_incompleto)],
+  ];
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="leading-tight">
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">TASA DE ASISTENCIA</div>
-        <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+    <Tarjeta>
+      <TituloCard icono={<BadgeCheck className="h-5 w-5" />} titulo="Calidad del registro" detalle="Cobertura de campos clave para analizar y vender" />
+      <div className="mt-5 space-y-5">
+        {loading ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-12 w-full" />) : items.map(([label, pct, faltantes]) => <div key={label}><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#152754]">{label}</span><span className="font-black text-[#07184C]">{porcentaje(pct)}</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#EDF1F7]"><div className="h-full rounded-full bg-gradient-to-r from-[#131E5C] to-[#131E5C]" style={{ width: `${Math.min(100, pct)}%` }} /></div><div className="mt-1 text-[13px] font-medium text-[#7A859C]">{entero(faltantes)} de {entero(total)} requieren completar información</div></div>)}
       </div>
-      {loading ? (
-        <div className="mt-3 flex h-[150px] items-center justify-center gap-4">
-          <div className="h-28 w-28 animate-pulse rounded-full bg-[#131E5C]/10" />
-          <div className="h-16 w-24 animate-pulse rounded-lg bg-[#131E5C]/10" />
-        </div>
-      ) : (
-        <div className="relative mt-3 flex h-[150px] min-h-[150px] items-center justify-center">
-          <div className="h-[140px] w-[140px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={68} startAngle={90} endAngle={-270}>
-                  <Cell fill="#1555C7" />
-                  <Cell fill="#EDF0F7" />
-                </Pie>
-                <Tooltip
-                  contentStyle={{ borderRadius: 12, border: "1px solid #E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.10)", fontSize: 11 }}
-                  formatter={(value, name) => (name === "Asistencia" ? [`${value}%`, "Asistencia"] : ["", ""])}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-[28px] font-black leading-none text-[#152754]">{pct.toLocaleString("es-MX")}%</div>
-            <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">con asistencia</div>
-          </div>
+    </Tarjeta>
+  );
+}
+
+function CitasPeriodo({ citas, loading }) {
+  const concertadas = numero(citas.citas_concertadas);
+  const efectivas = numero(citas.citas_efectivas);
+  const tasa = Math.min(100, Math.max(0, numero(citas.tasa_asistencia)));
+  const pie = [{ name: "Asistencia", value: tasa }, { name: "No asistencia", value: Math.max(0, 100 - tasa) }];
+  return (
+    <Tarjeta>
+      <TituloCard icono={<CalendarDays className="h-5 w-5" />} titulo="Citas del periodo" detalle="Actividad operativa por fecha de cita" />
+      {loading ? <Skeleton className="mt-4 h-[270px] w-full" /> : (
+        <div className="mt-4">
+          <div className="relative mx-auto h-[180px] w-[180px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={pie} dataKey="value" innerRadius={58} outerRadius={80} startAngle={90} endAngle={-270}><Cell fill="#1555C7" /><Cell fill="#E8ECF3" /></Pie><Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${value}%`, name]} /></PieChart></ResponsiveContainer><div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><div className="text-[30px] font-black text-[#07184C]">{porcentaje(tasa)}</div><div className="font-semibold text-[#7A859C]">asistencia</div></div></div>
+          <div className="mt-4 grid grid-cols-2 gap-3"><MetricaCaja label="Concertadas" value={entero(concertadas)} /><MetricaCaja label="Efectivas" value={entero(efectivas)} /></div>
         </div>
       )}
-      <div className="mt-2 flex items-center justify-center gap-2 text-[9px] font-semibold text-[#8891AD]">
-        <span><b className="text-[#152754]">{Number(efectivas ?? 0).toLocaleString("es-MX")}</b> efectivas</span>
-        <span>·</span>
-        <span><b className="text-[#152754]">{Number(concertadas ?? 0).toLocaleString("es-MX")}</b> concertadas</span>
-      </div>
-    </div>
+    </Tarjeta>
   );
 }
 
-function CardCotizaciones({ data, loading }) {
-  const total = Number(data?.cotizaciones_activas ?? 0);
-  const variacion = data?.variacion ?? null;
-  const valor = Number(data?.valor_acumulado ?? 0);
-  const efectividad = data?.efectividad ?? { porcentaje: 0, citas_con_cotizacion: 0, citas_realizadas: 0 };
-  const meta = data?.meta ?? { definida: false, valor: null, avance: null };
-  const modelos = Array.isArray(data?.modelos) ? data.modelos : [];
-  const ritmo = Array.isArray(data?.ritmo) ? data.ritmo : [];
-
-  const valorAbreviado = (v) => {
-    const n = Number(v ?? 0);
-    if (n >= 1000000) return `$${(n / 1000000).toLocaleString("es-MX", { maximumFractionDigits: 1 })}M MXN`;
-    if (n >= 1000) return `$${Math.round(n / 1000).toLocaleString("es-MX")}K MXN`;
-    return `$${n.toLocaleString("es-MX")} MXN`;
-  };
-
-  const maxRitmo = ritmo.reduce((m, r) => Math.max(m, Number(r.total ?? 0)), 0);
-
-  const variacionBadge = () => {
-    if (variacion === null) return { texto: "Sin comparación", cls: "bg-[#E7E9FF] text-[#66718C]" };
-    const pos = variacion >= 0;
-    return {
-      texto: `${pos ? "+" : "−"}${Math.abs(variacion).toLocaleString("es-MX")}%`,
-      cls: pos ? "bg-[#E7FBF1] text-[#0E9F6E]" : "bg-[#FDE8E8] text-[#E02424]",
-    };
-  };
-  const badge = variacionBadge();
-
+function Cotizaciones({ data, loading }) {
+  const total = numero(data?.cotizaciones_activas);
+  const efectividad = data?.efectividad || {};
+  const modelos = Array.isArray(data?.modelos) ? data.modelos.slice(0, 4) : [];
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF0FF] text-[#1555C7]">
-            <FileText className="h-4 w-4" />
-          </span>
-          <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">COTIZACIONES</div>
+    <Tarjeta>
+      <TituloCard icono={<FileText className="h-5 w-5" />} titulo="Cotizaciones activas" detalle="Pipeline vigente, sin estados ya terminados" />
+      {loading ? <Skeleton className="mt-4 h-[300px] w-full" /> : (
+        <div className="mt-4">
+          <div className="flex items-end justify-between gap-3"><div><div className="text-[34px] font-black text-[#07184C]">{entero(total)}</div><div className="font-semibold text-[#7A859C]">activas</div></div><div className="text-right"><div className="text-[24px] font-black text-[#1555C7]">{porcentaje(efectividad.porcentaje)}</div><div className="font-semibold text-[#7A859C]">cita efectiva → cotización</div></div></div>
+          <div className="mt-5 border-t border-[#E5E9F0] pt-4"><div className="font-black text-[#152754]">Modelos con mayor intención</div><div className="mt-3 space-y-3">{modelos.length === 0 ? <Vacio texto="Sin modelos cotizados" compact /> : modelos.map((m) => <BarraProgreso key={m.modelo} label={m.modelo} value={numero(m.porcentaje)} right={`${entero(m.total)} · ${porcentaje(m.porcentaje)}`} />)}</div></div>
         </div>
-        {loading ? <span className="h-6 w-16 animate-pulse rounded-full bg-[#131E5C]/10" /> : <span className={`inline-flex h-6 items-center rounded-full px-2 text-[10px] font-bold ${badge.cls}`}>{badge.texto}</span>}
-      </div>
-      <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-
-      {loading ? (
-        <div className="mt-3 flex h-[200px] items-center justify-center">
-          <div className="h-24 w-36 animate-pulse rounded-xl bg-[#131E5C]/10" />
-        </div>
-      ) : (
-        <>
-          <div className="mt-3 flex items-end justify-between gap-2">
-            <div>
-              <div className="text-[26px] font-black leading-none text-[#152754]">{total.toLocaleString("es-MX")}</div>
-              <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">cotizaciones activas</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[14px] font-black leading-none text-[#1555C7]">{valorAbreviado(valor)}</div>
-              <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">valor acumulado</div>
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-[8px] bg-[#F8F7FC] p-2">
-              <div className="text-[9px] font-semibold text-[#8891AD]">Efectividad cita→cotización</div>
-              <div className="mt-1 text-[16px] font-black leading-none text-[#152754]">{Number(efectividad.porcentaje ?? 0).toLocaleString("es-MX")}%</div>
-              <div className="mt-1 text-[8px] font-semibold text-[#8891AD]">({Number(efectividad.citas_con_cotizacion ?? 0).toLocaleString("es-MX")} / {Number(efectividad.citas_realizadas ?? 0).toLocaleString("es-MX")} citas)</div>
-            </div>
-            <div className="rounded-[8px] bg-[#F8F7FC] p-2">
-              <div className="text-[9px] font-semibold text-[#8891AD]">Meta mensual</div>
-              {meta.definida ? (
-                <>
-                  <div className="mt-1 text-[16px] font-black leading-none text-[#152754]">{Number(meta.avance ?? 0).toLocaleString("es-MX")}%</div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF0F7]">
-                    <div className="h-full rounded-full bg-[#1555C7]" style={{ width: `${Math.min(100, Number(meta.avance ?? 0))}%` }} />
-                  </div>
-                </>
-              ) : (
-                <div className="mt-1 text-[11px] font-semibold text-[#8891AD]">Meta no definida</div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <div className="text-[9px] font-semibold text-[#8891AD]">Por modelo</div>
-            {modelos.length === 0 ? (
-              <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">Sin datos</div>
-            ) : (
-              <div className="mt-1 flex flex-col gap-1">
-                {modelos.slice(0, 4).map((m) => (
-                  <div key={m.modelo} className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[8px] font-semibold text-[#5A627B]">{m.modelo}</span>
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#EDF0F7]">
-                      <div className="h-full rounded-full bg-[#1555C7]" style={{ width: `${Math.min(100, Number(m.porcentaje ?? 0))}%` }} />
-                    </div>
-                    <span className="shrink-0 text-[8px] font-bold text-[#152754]">{Number(m.total ?? 0).toLocaleString("es-MX")}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-3">
-            <div className="text-[9px] font-semibold text-[#8891AD]">Ritmo de cotización</div>
-            <div className="mt-1 flex h-8 items-end gap-[2px]">
-              {ritmo.length === 0 ? (
-                <div className="text-[9px] font-semibold text-[#8891AD]">Sin datos</div>
-              ) : (
-                ritmo.map((r) => (
-                  <div
-                    key={r.dia}
-                    className="flex-1 rounded-t-[2px] bg-[#1555C7]/40"
-                    style={{ height: maxRitmo > 0 ? `${Math.max(8, (Number(r.total ?? 0) / maxRitmo) * 100)}%` : "8%" }}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </>
       )}
-    </div>
+    </Tarjeta>
   );
 }
 
-function AutoFacturadoKpi({ unidades, importe, loading }) {
-  const abreviaMXN = (v) => {
-    const n = Number(v ?? 0);
-    if (n >= 1e6) return `$${(n / 1e6).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M MXN`;
-    if (n >= 1e3) return `$${Math.round(n / 1e3).toLocaleString("es-MX")}K MXN`;
-    return `$${n.toLocaleString("es-MX")} MXN`;
-  };
+function Solicitudes({ data, loading }) {
+  const total = numero(data?.total_folios);
+  const aprobadas = numero(data?.solicitudes_aprobadas);
+  const dictamen = numero(data?.solicitudes_dictamen);
+  const declinadas = numero(data?.solicitudes_declinadas);
+  const aprobacion = numero(data?.porcentaje_aprobacion);
+  const promedio = data?.promedio_resolucion || {};
   return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">AUTOS</div>
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">FACTURADOS</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
+    <Tarjeta>
+      <TituloCard icono={<Landmark className="h-5 w-5" />} titulo="Financiamiento" />
+      {loading ? <Skeleton className="mt-4 h-[300px] w-full" /> : (
+        <div className="mt-4">
+          <div className="grid grid-cols-2 gap-3"><MetricaCaja label="Folios" value={entero(total)} /><MetricaCaja label="Aprobados" value={entero(aprobadas)} destacado /></div>
+          <div className="mt-3 grid grid-cols-2 gap-3"><MetricaCaja label="En revision" value={entero(dictamen)} /><MetricaCaja label="Declinados" value={entero(declinadas)} /></div>
+          <div className="mt-4 rounded-lg bg-[#F7F9FC] p-3"><div className="flex items-center justify-between"><span className="font-bold text-[#5F6C84]">Tasa de aprobación</span><span className="text-[22px] font-black text-[#131E5C]">{porcentaje(aprobacion)}</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#E7EBF2]"><div className="h-full rounded-full bg-[#131E5C]" style={{ width: `${Math.min(100, aprobacion)}%` }} /></div></div>
+          <div className="mt-4 border-t border-[#E5E9F0] pt-3"><div className="font-semibold text-[#7A859C]">Tiempo promedio de resolución</div><div className="mt-1 text-[20px] font-black text-[#07184C]">{promedio.texto || "Sin datos"}</div></div>
         </div>
-        <span className="inline-flex h-[31px] shrink-0 items-center justify-center rounded-full bg-[#EAF0FF] px-2 text-[10px] font-bold text-[#1555C7]">
-          {loading ? "…" : abreviaMXN(importe)}
-        </span>
-      </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[42px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]">
-          <ValorKPI valor={(Number(unidades ?? 0)).toLocaleString("es-MX")} loading={loading} />
-        </div>
-      </div>
-      <Linea />
-      <div className="mt-2 text-[10px] font-semibold text-[#8891AD]">Vehiculos con factura valida en el periodo</div>
-    </TarjetaBlanca>
-  );
-}
-
-function AutoEntregadoKpi({ unidades, loading }) {
-  return (
-    <TarjetaBlanca>
-      <div className="flex items-start justify-between gap-2">
-        <div className="leading-tight">
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">AUTOS</div>
-          <div className="text-[11px] font-black uppercase tracking-[0.13em] text-[#1A2344]">ENTREGADOS</div>
-          <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-        </div>
-      </div>
-      <div className="mt-auto flex items-end justify-between gap-2 pt-[42px]">
-        <div className="text-[34px] font-black leading-none tracking-tight text-[#152754]">
-          <ValorKPI valor={(Number(unidades ?? 0)).toLocaleString("es-MX")} loading={loading} />
-        </div>
-      </div>
-      <Linea />
-      <div className="mt-2 text-[10px] font-semibold text-[#8891AD]">Unidades entregadas en el periodo</div>
-    </TarjetaBlanca>
-  );
-}
-
-function CardSolicitudes({ data, loading }) {
-  const total = Number(data?.total_folios ?? 0);
-  const aprobadas = Number(data?.solicitudes_aprobadas ?? 0);
-  const enDictamen = Number(data?.solicitudes_dictamen ?? 0);
-  const declinadas = Number(data?.solicitudes_declinadas ?? 0);
-  const pctAprobacion = Number(data?.porcentaje_aprobacion ?? 0);
-  const tasaRechazo = Number(data?.tasa_rechazo ?? 0);
-  const promedio = data?.promedio_resolucion ?? { texto: "Sin datos" };
-  const estatus = Array.isArray(data?.estatus) ? data.estatus : [];
-  const financieras = Array.isArray(data?.financieras) ? data.financieras : [];
-
-  const datosDona = estatus.map((e) => ({ ...e, value: Number(e.folios ?? 0) }));
-
-  return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF0FF] text-[#1555C7]">
-          <Landmark className="h-4 w-4" />
-        </span>
-        <div className="text-[12px] font-black uppercase tracking-[0.12em] text-[#1A2344]">SOLICITUDES DE CREDITO</div>
-      </div>
-      <span className="mt-1.5 block h-[3px] w-9 rounded-full bg-gradient-to-r from-[#1555C7] to-[#25D6A8]" />
-
-      {loading ? (
-        <div className="mt-3 flex h-[260px] items-center justify-center">
-          <div className="h-32 w-36 animate-pulse rounded-xl bg-[#131E5C]/10" />
-        </div>
-      ) : (
-        <>
-          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
-            <div>
-              <div className="text-[22px] font-black leading-none text-[#152754]">{aprobadas.toLocaleString("es-MX")}</div>
-              <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">aprobadas / preaprobadas</div>
-              <div className="mt-1 inline-flex rounded-full bg-[#E7FBF1] px-2 py-0.5 text-[10px] font-bold text-[#0E9F6E]">{pctAprobacion.toLocaleString("es-MX", { maximumFractionDigits: 1 })}% aprobación</div>
-            </div>
-            <div>
-              <div className="text-[22px] font-black leading-none text-[#152754]">{total.toLocaleString("es-MX")}</div>
-              <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">folios generados</div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center gap-2 rounded-[8px] bg-[#F8F7FC] p-2">
-            <div className="text-[22px] font-black leading-none text-[#E02424]">{tasaRechazo.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%</div>
-            <div className="text-[9px] font-semibold leading-tight text-[#8891AD]">tasa de rechazo ({declinadas.toLocaleString("es-MX")} declinadas)</div>
-          </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <div className="rounded-[8px] bg-[#F8F7FC] p-2">
-              <div className="text-[9px] font-semibold text-[#8891AD]">Tiempo promedio de resolución</div>
-              <div className="mt-1 text-[12px] font-black leading-none text-[#152754]">{promedio.texto ?? "Sin datos"}</div>
-              <div className="mt-1 text-[8px] font-semibold text-[#8891AD]">({Number(promedio.solicitudes_resueltas ?? 0).toLocaleString("es-MX")} resueltas)</div>
-            </div>
-            <div className="rounded-[8px] bg-[#F8F7FC] p-2">
-              <div className="text-[9px] font-semibold text-[#8891AD]">En dictamen</div>
-              <div className="mt-1 text-[12px] font-black leading-none text-[#152754]">{enDictamen.toLocaleString("es-MX")}</div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center gap-2">
-            <div className="relative h-[74px] w-[74px] shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={datosDona} dataKey="value" nameKey="nombre" innerRadius={26} outerRadius={36} paddingAngle={2} strokeWidth={1}>
-                    {datosDona.map((e) => (<Cell key={e.clave} fill={e.color} />))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[13px] font-black leading-none text-[#152754]">{total.toLocaleString("es-MX")}</span>
-                <span className="text-[7px] font-semibold text-[#8891AD]">folios</span>
-              </div>
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              {estatus.map((e) => (
-                <div key={e.clave} className="flex items-center justify-between gap-1 text-[9px] font-semibold text-[#5A627B]">
-                  <span className="flex items-center gap-1 truncate">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
-                    <span className="truncate">{e.nombre}</span>
-                  </span>
-                  <span className="shrink-0 text-[#152754]">{Number(e.folios ?? 0).toLocaleString("es-MX")} · {Number(e.porcentaje ?? 0).toLocaleString("es-MX", { maximumFractionDigits: 1 })}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <div className="text-[9px] font-semibold text-[#8891AD]">Mezcla financiera</div>
-            {financieras.length === 0 ? (
-              <div className="mt-1 text-[9px] font-semibold text-[#8891AD]">Sin datos</div>
-            ) : (
-              <>
-                <div className="mt-1 flex h-2.5 w-full overflow-hidden rounded-full">
-                  {financieras.map((f) => (
-                    <div key={f.nombre} style={{ width: `${Number(f.porcentaje ?? 0)}%`, backgroundColor: f.color }} title={`${f.nombre}: ${Number(f.folios ?? 0).toLocaleString("es-MX")} folios`} />
-                  ))}
-                </div>
-                <div className="mt-1.5 flex flex-col gap-0.5">
-                  {financieras.map((f) => (
-                    <div key={f.nombre} className="flex items-center justify-between text-[8px] font-semibold text-[#5A627B]">
-                      <span className="flex min-w-0 items-center gap-1 truncate">
-                        <span className="h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: f.color }} />
-                        <span className="truncate">{f.nombre}</span>
-                      </span>
-                      <span className="shrink-0 text-[#152754]">{Number(f.folios ?? 0).toLocaleString("es-MX")} folios</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </>
       )}
-    </div>
+    </Tarjeta>
   );
 }
 
-function TarjetaBlanca({ children }) {
+function CierreDigital({ negocio, loading }) {
+  const metricas = negocio.metricas || {};
+  const comparativo = negocio.comparativo || {};
+  const oportunidades = negocio.oportunidades || {};
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-[12px] bg-white p-4 shadow-[0_2px_5px_rgba(21,39,84,0.08)]">
-      {children}
-    </div>
+    <Tarjeta>
+      <TituloCard icono={<Car className="h-5 w-5" />} titulo="Cierre atribuido digital" />
+      {loading ? <Skeleton className="mt-4 h-[300px] w-full" /> : (
+        <div className="mt-4">
+          <div className="grid grid-cols-2 gap-3"><MetricaCaja label="Facturados" value={entero(negocio.facturados)} destacado /><MetricaCaja label="Entregados" value={entero(negocio.entregados)} /></div>
+          <div className="mt-4 rounded-lg bg-gradient-to-r from-[#131E5C] to-[#131E5C] p-4 text-white"><div className="font-semibold text-white/80">Conversión prospecto → factura</div><div className="mt-1 flex items-end justify-between gap-2"><span className="text-[34px] font-black">{porcentaje(metricas.tasa_facturacion)}</span><span className="rounded-full bg-white/15 px-2.5 py-1 font-bold">{badgeVariacion(comparativo.variacion_tasa_facturacion_pp, " pp")}</span></div></div>
+          <div className="mt-4 grid grid-cols-2 gap-3"><MetricaCaja label="Aprobados sin facturar" value={entero(oportunidades.aprobados_sin_facturar)} /><MetricaCaja label="Facturados sin entregar" value={entero(oportunidades.facturados_sin_entregar)} /></div>
+        </div>
+      )}
+    </Tarjeta>
   );
 }
 
-function Linea() {
-  return <div className="mt-auto border-t border-[#EDF0F7] pt-2" />;
+function MetricaLinea({ label, value }) {
+  return <div className="rounded-md bg-[#F5F7FB] px-2 py-1.5"><div className="text-[12px] font-semibold text-[#7A859C]">{label}</div><div className="font-black text-[#152754]">{value}</div></div>;
+}
+
+function MetricaCaja({ label, value, destacado = false }) {
+  return <div className={`rounded-lg border p-3 ${destacado ? "border-[#A9DCCB] bg-white" : "border-[#E1E6EF] bg-white"}`}><div className="font-semibold text-[#6E7A91]">{label}</div><div className={`mt-1 text-[24px] font-black ${destacado ? "text-[#0A8F61]" : "text-[#07184C]"}`}>{value}</div></div>;
+}
+
+function BarraProgreso({ label, value, right }) {
+  return <div><div className="flex items-center justify-between gap-2"><span className="min-w-0 truncate font-semibold text-[#5F6C84]" title={label}>{label}</span><span className="shrink-0 font-black text-[#152754]">{right}</span></div><div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#EDF1F7]"><div className="h-full rounded-full bg-[#1555C7]" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div></div>;
+}
+
+function Vacio({ texto, compact = false }) {
+  return <div className={`flex items-center justify-center rounded-lg border border-dashed border-[#C9D1DF] font-semibold text-[#8A94A8] ${compact ? "h-16" : "h-full min-h-[180px]"}`}>{texto}</div>;
 }

@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Users, ArchiveX } from "lucide-react";
+import { CarFront, Users, ArchiveX, LayoutList } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
@@ -15,6 +15,12 @@ export default function GestionTopNav() {
             to: "/gestion_negocio/refacciones_obsolescencia",
             icon: ArchiveX,
             show: hasAnyPermission(["USUARIOS_ADMIN"]),
+        },
+        {
+            label: "Inventario",
+            to: "/gestion_negocio/inventario",
+            icon: LayoutList,
+            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
         {
             label: "Autos Nuevos",

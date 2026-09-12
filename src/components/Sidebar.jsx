@@ -219,13 +219,6 @@ export default function Sidebar() {
                 icon: BanknoteArrowUp,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
             },
-            {
-                section: "Negocio",
-                to: "/inventario",
-                label: "Inventario",
-                icon: LayoutList,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
-            },
             { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
             {
                 section: "Comercial",
