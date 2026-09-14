@@ -778,19 +778,50 @@ function getListItems(data) {
     return [];
 }
 async function listarProspectosDigitalesCompletos(params = {}) {
-    const primeraPagina = await api.digitalesListProspectos(params);
-    if (Array.isArray(primeraPagina)) return primeraPagina;
+    const primeraPagina =
+        await api.digitalesListProspectos({
+            ...params,
+            page: 1,
+            page_size: 1000,
+        });
 
-    const registros = [...getListItems(primeraPagina)];
-    const visitadas = new Set();
-    let next = primeraPagina?.next ? String(primeraPagina.next).replace(/^https?:\/\/[^/]+/, "") : "";
+    const registros = [
+        ...getListItems(primeraPagina),
+    ];
 
-    while (next && !visitadas.has(next)) {
-        visitadas.add(next);
-        const pagina = await api.get(next);
-        registros.push(...getListItems(pagina));
-        next = pagina?.next ? String(pagina.next).replace(/^https?:\/\/[^/]+/, "") : "";
+    if (Array.isArray(primeraPagina)) {
+        return registros;
     }
+
+    const visitadas = new Set();
+
+    let next = primeraPagina?.next
+        ? String(primeraPagina.next).replace(
+              /^https?:\/\/[^/]+/,
+              ""
+          )
+        : "";
+
+    while (
+        next &&
+        !visitadas.has(next)
+    ) {
+        visitadas.add(next);
+
+        const pagina = await api.get(next);
+
+        registros.push(
+            ...getListItems(pagina)
+        );
+
+        next = pagina?.next
+            ? String(pagina.next).replace(
+                  /^https?:\/\/[^/]+/,
+                  ""
+              )
+            : "";
+    }
+
     return registros;
 }
 
@@ -1309,8 +1340,15 @@ export default function DigitalesProspectos() {
     }, [selectedNumeroAsesor]);
     const deferredQ = useDeferredValue(filters.q);
     const [page, setPage] = useState(1);
+    const [totalProspectos, setTotalProspectos] = useState(0);
+    const [serverKpis, setServerKpis] = useState(null);
     const [prospectoModal, setProspectoModal] = useState({ open: false, mode: "create", prospectoId: null, estadoInicial: "", tieneChatInicial: false });
     const [loadingCases, setLoadingCases] = useState(false);
+    const [fullCases, setFullCases] = useState([]);
+    const [loadingFullCases, setLoadingFullCases] = useState(false);
+    const [fullCasesBDC, setFullCasesBDC] = useState([]);
+    const [loadingFullCasesBDC, setLoadingFullCasesBDC] = useState(false);
+    const [exportandoExcel, setExportandoExcel] = useState(false);
     const [openAgendaModal, setOpenAgendaModal] = useState(false);
     const [agendaInfo, setAgendaInfo] = useState(null);
     const [drafter, setDrafter] = useState({ agencia: "", fecha_cita: "", asesor_digital: "", asesor_solicita: "", tipo_cita: "Digital" });
@@ -1375,100 +1413,221 @@ export default function DigitalesProspectos() {
             setTelefonosConChat(new Set());
         }
     }, [numeroAsesorActivo, numeroUsuarioSesion]);
+
+        const usaPaginacionServidor = !(
+        isCoordinador &&
+        selectedNumeroAsesor === "Todos"
+    );
+
     const cargarProspectosPorLinea = useCallback(async () => {
         if (!ready) return;
 
-        let numerosAConsultar = [];
-
-        if (isAdmin) {
-            if (selectedNumeroAsesor === "Todos") {
-                setLoadingCases(true);
-
-                try {
-                    const data = await listarProspectosDigitalesCompletos({ todos: 1, ligero: 1 });
-                    setCases(getListItems(data).map(normalizeProspecto));
-                    setPage(1);
-                } catch (error) {
-                    console.error("Error cargando todos los prospectos:", error);
-                    setCases([]);
-                } finally {
-                    setLoadingCases(false);
-                }
-
-                return;
-            }
-
-            const numero = normalizaTelefonoMx(selectedNumeroAsesor);
-            if (!numero || !LINEAS_WHATSAPP[numero]) {
-                setCases([]);
-                return;
-            }
-
-            numerosAConsultar = [numero];
-        } else if (isCoordinador) {
+        // Compatibilidad temporal:
+        // el coordinador en "Todos" combina varias líneas.
+        if (!usaPaginacionServidor) {
             if (!numerosPermitidosCoordinador.length) {
                 setCases([]);
+                setTotalProspectos(0);
+                setServerKpis(null);
                 return;
             }
 
-            if (selectedNumeroAsesor === "Todos") {
-                numerosAConsultar = numerosPermitidosCoordinador;
-            } else {
-                const numero = normalizaTelefonoMx(selectedNumeroAsesor);
+            setLoadingCases(true);
 
-                if (!numerosPermitidosCoordinador.includes(numero)) {
-                    setCases([]);
-                    return;
-                }
+            try {
+                const respuestas = await Promise.allSettled(
+                    numerosPermitidosCoordinador.map((numero) =>
+                        listarProspectosDigitalesCompletos({
+                            numero_asesor: numero,
+                            ligero: 1,
+                        })
+                    )
+                );
 
-                numerosAConsultar = [numero];
-            }
-        } else {
-            const numero = numeroAsesorActivo || numeroUsuarioSesion;
+                const registrosPorId = new Map();
 
-            if (!numero || !numerosUsuarioSesion.includes(numero)) {
+                respuestas.forEach((resultado, index) => {
+                    if (resultado.status !== "fulfilled") {
+                        console.error(
+                            "No se pudo cargar la línea:",
+                            numerosPermitidosCoordinador[index],
+                            resultado.reason
+                        );
+                        return;
+                    }
+
+                    getListItems(resultado.value)
+                        .map(normalizeProspecto)
+                        .forEach((registro) => {
+                            if (
+                                registro?.id_exp !== null &&
+                                registro?.id_exp !== undefined
+                            ) {
+                                registrosPorId.set(
+                                    registro.id_exp,
+                                    registro
+                                );
+                            }
+                        });
+                });
+
+                const registros = Array.from(
+                    registrosPorId.values()
+                );
+
+                setCases(registros);
+                setTotalProspectos(registros.length);
+                setServerKpis(null);
+            } catch (error) {
+                console.error(
+                    "Error cargando prospectos del coordinador:",
+                    error
+                );
+
                 setCases([]);
+                setTotalProspectos(0);
+                setServerKpis(null);
+            } finally {
+                setLoadingCases(false);
+            }
+
+            return;
+        }
+
+        const params = {
+            ligero: 1,
+            page,
+            page_size: PAGE_SIZE,
+        };
+
+        if (isAdmin && selectedNumeroAsesor === "Todos") {
+            params.todos = 1;
+        } else {
+            let numero = "";
+
+            if (isAdmin || isCoordinador) {
+                numero = normalizaTelefonoMx(
+                    selectedNumeroAsesor
+                );
+            } else {
+                numero =
+                    numeroAsesorActivo ||
+                    numeroUsuarioSesion;
+            }
+
+            if (!numero) {
+                setCases([]);
+                setTotalProspectos(0);
+                setServerKpis(null);
                 return;
             }
 
-            numerosAConsultar = [numero];
+            if (
+                isCoordinador &&
+                !numerosPermitidosCoordinador.includes(numero)
+            ) {
+                setCases([]);
+                setTotalProspectos(0);
+                setServerKpis(null);
+                return;
+            }
+
+            if (
+                !isAdmin &&
+                !isCoordinador &&
+                !numerosUsuarioSesion.includes(numero)
+            ) {
+                setCases([]);
+                setTotalProspectos(0);
+                setServerKpis(null);
+                return;
+            }
+
+            params.numero_asesor = numero;
+        }
+
+        const search = deferredQ.trim();
+
+        if (search) {
+            params.search = search;
+        }
+
+        if (filters.agencia !== "Todos") {
+            params.agencia = filters.agencia;
+        }
+
+        if (filters.estado !== "Todos") {
+            params.estado = filters.estado;
+        }
+
+        if (filters.linea !== "Todos") {
+            params.business = filters.linea;
+        }
+
+        if (filters.buro !== "Todos") {
+            params.buro = filters.buro;
+        }
+
+        if (filters.formaPago !== "Todos") {
+            params.forma_pago = filters.formaPago;
+        }
+
+        if (filters.tipoCliente !== "Todos") {
+            params.tipo_cliente = filters.tipoCliente;
+        }
+
+        if (filters.fechaRegistroDesde) {
+            params.fecha_registro_desde =
+                filters.fechaRegistroDesde;
+        }
+
+        if (filters.fechaRegistroHasta) {
+            params.fecha_registro_hasta =
+                filters.fechaRegistroHasta;
+        }
+
+        if (sort.key) {
+            params.sort_key = sort.key;
+            params.sort_dir = sort.dir;
         }
 
         setLoadingCases(true);
 
         try {
-            const consultas = numerosAConsultar.map((numero) => ({
-                etiqueta: numero,
-                params: { numero_asesor: numero, ligero: 1 },
-            }));
+            const data =
+                await api.digitalesListProspectos(params);
 
-            const respuestas = await Promise.allSettled(
-                consultas.map(({ params }) => listarProspectosDigitalesCompletos(params))
+            const registros = getListItems(data).map(
+                normalizeProspecto
             );
 
-            const registrosPorId = new Map();
+            setCases(registros);
 
-            respuestas.forEach((resultado, index) => {
-                if (resultado.status !== "fulfilled") {
-                    console.error("No se pudo cargar la línea:", consultas[index]?.etiqueta, resultado.reason);
-                    return;
-                }
+            setTotalProspectos(
+                Number(
+                    data?.count ??
+                    registros.length
+                )
+            );
 
-                getListItems(resultado.value).map(normalizeProspecto).forEach((registro) => {
-                    if (registro?.id_exp !== null && registro?.id_exp !== undefined) registrosPorId.set(registro.id_exp, registro);
-                });
-            });
-
-            setCases(Array.from(registrosPorId.values()));
-            setPage(1);
+            setServerKpis(
+                data?.kpis ?? null
+            );
         } catch (error) {
-            console.error("Error cargando prospectos por línea:", error);
+            console.error(
+                "Error cargando prospectos paginados:",
+                error
+            );
+
             setCases([]);
+            setTotalProspectos(0);
+            setServerKpis(null);
         } finally {
             setLoadingCases(false);
         }
     }, [
         ready,
+        usaPaginacionServidor,
         isAdmin,
         isCoordinador,
         selectedNumeroAsesor,
@@ -1476,7 +1635,12 @@ export default function DigitalesProspectos() {
         numeroUsuarioSesion,
         numerosUsuarioSesion,
         numerosPermitidosCoordinador,
+        page,
+        deferredQ,
+        filters,
+        sort,
     ]);
+
     useEffect(() => {
         cargarProspectosPorLinea();
     }, [cargarProspectosPorLinea]);
@@ -1594,9 +1758,16 @@ export default function DigitalesProspectos() {
             .slice(0, 1);
     }, [isAdmin, isCoordinador, numerosUsuarioSesion, numerosPermitidosCoordinador]);
     function toggleSort(key) {
-        setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
+       setPage(1); setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
     }
-    const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
+    const updateFilter = (key, value) => {
+        setPage(1);
+
+        setFilters((prev) => ({
+            ...prev,
+            [key]: value,
+        }));
+    };
     const accessibleCases = useMemo(() => cases.filter((c) => {
         if (!isAdmin && !isCoordinador && userAgencias.length && !userTieneAgencia(c.agencia)) return false;
 
@@ -1607,6 +1778,10 @@ export default function DigitalesProspectos() {
         return true;
     }), [cases, isAdmin, isCoordinador, filtroNumeroActivo, userAgencias, userTieneAgencia]);
     const baseFiltered = useMemo(() => {
+        if (usaPaginacionServidor) {
+            return cases;
+        }
+
         const q = deferredQ.trim().toLowerCase();
         return accessibleCases.filter((c) => {
             const nombre = `${c.cliente_nombre || ""} ${c.cliente_apellidos || ""}`.trim();
@@ -1623,6 +1798,10 @@ export default function DigitalesProspectos() {
         });
     }, [accessibleCases, deferredQ, filters]);
     const sorted = useMemo(() => {
+        if (usaPaginacionServidor) {
+            return baseFiltered;
+        }
+
         const data = [...baseFiltered];
         if (!sort.key)
             return data;
@@ -1636,27 +1815,108 @@ export default function DigitalesProspectos() {
             return 0;
         });
     }, [baseFiltered, sort]);
-    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+
+    const totalFiltrado = usaPaginacionServidor
+        ? totalProspectos
+        : sorted.length;
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(totalFiltrado / PAGE_SIZE)
+    );
+
     useEffect(() => {
-        setPage(1);
-    }, [filters, sort]);
-    useEffect(() => {
-        setPage((prev) => Math.min(prev, totalPages));
+        setPage((prev) =>
+            Math.min(prev, totalPages)
+        );
     }, [totalPages]);
-    const paginatedRows = useMemo(() => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [sorted, page]);
-    // KPIs
-    const kpis = useMemo(() => {
+
+    const paginatedRows = useMemo(
+        () =>
+            usaPaginacionServidor
+                ? sorted
+                : sorted.slice(
+                    (page - 1) * PAGE_SIZE,
+                    page * PAGE_SIZE
+                ),
+        [
+            sorted,
+            page,
+            usaPaginacionServidor,
+        ]
+    );
+
+    const kpisLocales = useMemo(() => {
         const total = sorted.length;
-        const pendIA = sorted.filter((r) => r.cotizacion_pendiente || r.requiere_asesor).length;
-        const conPerfil = sorted.filter(hasPerfilComercial).length;
-        const financiamiento = sorted.filter((r) => ["credito", "arrendamiento"].includes(normalizeText(r.forma_pago))).length;
+
+        const pendIA = sorted.filter(
+            (r) =>
+                r.cotizacion_pendiente ||
+                r.requiere_asesor
+        ).length;
+
+        const conPerfil = sorted.filter(
+            hasPerfilComercial
+        ).length;
+
+        const financiamiento = sorted.filter(
+            (r) =>
+                [
+                    "credito",
+                    "arrendamiento",
+                ].includes(
+                    normalizeText(r.forma_pago)
+                )
+        ).length;
+
         const tiemposResp = sorted
-            .filter((r) => r.primer_contacto_at && r.creado)
-            .map((r) => (new Date(r.primer_contacto_at).getTime() - new Date(r.creado).getTime()) / 60000)
-            .filter((v) => v > 0 && v < 1440);
-        const avgResp = tiemposResp.length ? Math.round(tiemposResp.reduce((a, b) => a + b, 0) / tiemposResp.length) : null;
-        return { total, pendIA, conPerfil, financiamiento, avgResp };
+            .filter(
+                (r) =>
+                    r.primer_contacto_at &&
+                    r.creado
+            )
+            .map(
+                (r) =>
+                    (
+                        new Date(
+                            r.primer_contacto_at
+                        ).getTime() -
+                        new Date(
+                            r.creado
+                        ).getTime()
+                    ) /
+                    60000
+            )
+            .filter(
+                (v) =>
+                    v > 0 &&
+                    v < 1440
+            );
+
+        const avgResp = tiemposResp.length
+            ? Math.round(
+                tiemposResp.reduce(
+                    (a, b) => a + b,
+                    0
+                ) / tiemposResp.length
+            )
+            : null;
+
+        return {
+            total,
+            pendIA,
+            conPerfil,
+            financiamiento,
+            avgResp,
+        };
     }, [sorted]);
+
+    const kpis =
+        usaPaginacionServidor &&
+        serverKpis
+            ? serverKpis
+            : kpisLocales;
+
     function calcTiempoRespuesta(creado, primerContacto) {
         if (!creado || !primerContacto)
             return null;
@@ -1696,52 +1956,504 @@ export default function DigitalesProspectos() {
         const texto = String(value).trim();
         return /^[=+\-@]/.test(texto) ? `'${texto}` : texto;
     }
-    function exportarExcelProspectos() {
-        if (!sorted.length) {
-            alert("No hay registros para exportar con los filtros actuales.");
+
+    async function cargarProspectosCompletosGraficos() {
+        if (!usaPaginacionServidor) {
+            setFullCases(sorted);
             return;
         }
-        const ahora = new Date();
-        const fecha = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
-        const hora = `${String(ahora.getHours()).padStart(2, "0")}-${String(ahora.getMinutes()).padStart(2, "0")}`;
-        const registros = sorted.map((row) => ({
-            ID: limpiarValorExcel(row.id_exp),
-            Dealer: limpiarValorExcel(row.agencia),
-            Cliente: limpiarValorExcel(`${row.cliente_nombre || ""} ${row.cliente_apellidos || ""}`.trim()),
-            Teléfono: limpiarValorExcel(formatTelefonoMx(row.telefono)),
-            Correo: limpiarValorExcel(row.correo),
-            Business: limpiarValorExcel(row.linea),
-            "Canal de Contacto": limpiarValorExcel(row.origen),
-            "Pauta de Origen": limpiarValorExcel(row.pauta),
-            Estado: limpiarValorExcel(row.estado),
-            "Motivo de descalificación": limpiarValorExcel(row.motivo_descalificacion),
-            "Asesor Digital": limpiarValorExcel(row.asesor_digital),
-            "Asignado a": limpiarValorExcel(row.asesor_solicita),
-            "VW de sus sueños": limpiarValorExcel(row.cliente_interes),
-            "Fecha de Registro": limpiarValorExcel(row.fecha_reclamacion),
-            "Primer Contacto": limpiarValorExcel(fmtDTIntl(row.primer_contacto_at)),
-            "Último Contacto": limpiarValorExcel(fmtDTIntl(row.ultimo_contacto_at)),
-            Enganche: limpiarValorExcel(formatMoneyMXN(row.enganche_monto)),
-            "Presupuesto mensual": limpiarValorExcel(formatMoneyMXN(row.presupuesto_mensual)),
-            Buró: limpiarValorExcel(valueOrDash(row.buro_estado)),
-            "Forma de pago": limpiarValorExcel(valueOrDash(row.forma_pago)),
-            "Tipo cliente": limpiarValorExcel(valueOrDash(row.tipo_cliente)),
-            "Uso vehículo": limpiarValorExcel(row.uso_vehiculo),
-            "Plazo compra": limpiarValorExcel(row.plazo_compra),
-            "Comprobación ingresos": limpiarValorExcel(row.comprobacion_ingresos),
-            "Cotización pendiente": row.cotizacion_pendiente ? "Sí" : "No",
-            "Requiere asesor": row.requiere_asesor ? "Sí" : "No",
-            "IA pausada": row.ia_pausada ? "Sí" : "No",
-            "Última cita agendada": limpiarValorExcel(fmtDTIntl(row.ultima_cita_agendada)),
-            Asistencia: row.asistencia ? "Sí" : "No",
-            Comentarios: limpiarValorExcel(row.comentarios),
-            "Resumen IA": limpiarValorExcel(row.resumen),
-        }));
-        const ws = XLSX.utils.json_to_sheet(registros);
-        ws["!cols"] = Array(32).fill({ wch: 22 });
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Prospectos");
-        XLSX.writeFile(wb, `reporte_prospectos_${fecha}_${hora}.xlsx`, { compression: true });
+
+        setLoadingFullCases(true);
+
+        try {
+            const params = {
+                ligero: 1,
+            };
+
+            if (
+                isAdmin &&
+                selectedNumeroAsesor === "Todos"
+            ) {
+                params.todos = 1;
+            } else {
+                const numero =
+                    isAdmin || isCoordinador
+                        ? normalizaTelefonoMx(
+                            selectedNumeroAsesor
+                        )
+                        : numeroAsesorActivo ||
+                        numeroUsuarioSesion;
+
+                if (numero) {
+                    params.numero_asesor = numero;
+                }
+            }
+
+            const search = deferredQ.trim();
+
+            if (search) {
+                params.search = search;
+            }
+
+            if (filters.agencia !== "Todos") {
+                params.agencia = filters.agencia;
+            }
+
+            if (filters.estado !== "Todos") {
+                params.estado = filters.estado;
+            }
+
+            if (filters.linea !== "Todos") {
+                params.business = filters.linea;
+            }
+
+            if (filters.buro !== "Todos") {
+                params.buro = filters.buro;
+            }
+
+            if (filters.formaPago !== "Todos") {
+                params.forma_pago =
+                    filters.formaPago;
+            }
+
+            if (filters.tipoCliente !== "Todos") {
+                params.tipo_cliente =
+                    filters.tipoCliente;
+            }
+
+            if (filters.fechaRegistroDesde) {
+                params.fecha_registro_desde =
+                    filters.fechaRegistroDesde;
+            }
+
+            if (filters.fechaRegistroHasta) {
+                params.fecha_registro_hasta =
+                    filters.fechaRegistroHasta;
+            }
+
+            if (sort.key) {
+                params.sort_key = sort.key;
+                params.sort_dir = sort.dir;
+            }
+
+            const data =
+                await listarProspectosDigitalesCompletos(
+                    params
+                );
+
+            const registrosGraficos =
+                getListItems(data).map(
+                    normalizeProspecto
+                );
+
+            setFullCases(registrosGraficos);
+        } catch (error) {
+            console.error(
+                "Error cargando datos completos para gráficos:",
+                error
+            );
+
+            setFullCases([]);
+        } finally {
+            setLoadingFullCases(false);
+        }
+    }
+
+    useEffect(() => {
+        if (viewMode !== "graficos") {
+            return;
+        }
+
+        cargarProspectosCompletosGraficos();
+    }, [
+        viewMode,
+        selectedNumeroAsesor,
+        deferredQ,
+        filters,
+        sort,
+    ]);
+
+    async function cargarProspectosCompletosBDC() {
+        if (!usaPaginacionServidor) {
+            setFullCasesBDC(accessibleCases);
+            return;
+        }
+
+        setLoadingFullCasesBDC(true);
+
+        try {
+            const params = {
+                ligero: 1,
+            };
+
+            if (
+                isAdmin &&
+                selectedNumeroAsesor === "Todos"
+            ) {
+                params.todos = 1;
+            } else {
+                const numero =
+                    isAdmin || isCoordinador
+                        ? normalizaTelefonoMx(
+                            selectedNumeroAsesor
+                        )
+                        : numeroAsesorActivo ||
+                        numeroUsuarioSesion;
+
+                if (!numero) {
+                    setFullCasesBDC([]);
+                    return;
+                }
+
+                params.numero_asesor = numero;
+            }
+
+            const data =
+                await listarProspectosDigitalesCompletos(
+                    params
+                );
+
+            setFullCasesBDC(
+                getListItems(data).map(
+                    normalizeProspecto
+                )
+            );
+        } catch (error) {
+            console.error(
+                "Error cargando datos completos para Ejecutivo BDC:",
+                error
+            );
+
+            setFullCasesBDC([]);
+        } finally {
+            setLoadingFullCasesBDC(false);
+        }
+    }
+
+    useEffect(() => {
+        if (viewMode !== "ejecutivo") {
+            return;
+        }
+
+        cargarProspectosCompletosBDC();
+    }, [
+        viewMode,
+        selectedNumeroAsesor,
+        versionOperativaBDC,
+    ]);
+
+    async function exportarExcelProspectos() {
+        if (exportandoExcel) return;
+
+        setExportandoExcel(true);
+
+        try {
+            let filasExportar = [];
+
+            // El coordinador en "Todos" ya tiene el conjunto completo cargado.
+            if (!usaPaginacionServidor) {
+                filasExportar = sorted;
+            } else {
+                const params = {
+                    ligero: 1,
+                };
+
+                if (
+                    isAdmin &&
+                    selectedNumeroAsesor === "Todos"
+                ) {
+                    params.todos = 1;
+                } else {
+                    const numero =
+                        isAdmin || isCoordinador
+                            ? normalizaTelefonoMx(
+                                selectedNumeroAsesor
+                            )
+                            : numeroAsesorActivo ||
+                            numeroUsuarioSesion;
+
+                    if (numero) {
+                        params.numero_asesor = numero;
+                    }
+                }
+
+                const search = deferredQ.trim();
+
+                if (search) {
+                    params.search = search;
+                }
+
+                if (filters.agencia !== "Todos") {
+                    params.agencia = filters.agencia;
+                }
+
+                if (filters.estado !== "Todos") {
+                    params.estado = filters.estado;
+                }
+
+                if (filters.linea !== "Todos") {
+                    params.business = filters.linea;
+                }
+
+                if (filters.buro !== "Todos") {
+                    params.buro = filters.buro;
+                }
+
+                if (filters.formaPago !== "Todos") {
+                    params.forma_pago =
+                        filters.formaPago;
+                }
+
+                if (filters.tipoCliente !== "Todos") {
+                    params.tipo_cliente =
+                        filters.tipoCliente;
+                }
+
+                if (filters.fechaRegistroDesde) {
+                    params.fecha_registro_desde =
+                        filters.fechaRegistroDesde;
+                }
+
+                if (filters.fechaRegistroHasta) {
+                    params.fecha_registro_hasta =
+                        filters.fechaRegistroHasta;
+                }
+
+                if (sort.key) {
+                    params.sort_key = sort.key;
+                    params.sort_dir = sort.dir;
+                }
+
+                const data =
+                    await listarProspectosDigitalesCompletos(
+                        params
+                    );
+
+                filasExportar = getListItems(data).map(
+                    normalizeProspecto
+                );
+            }
+
+            if (!filasExportar.length) {
+                alert(
+                    "No hay registros para exportar con los filtros actuales."
+                );
+                return;
+            }
+
+            const ahora = new Date();
+
+            const fecha =
+                `${ahora.getFullYear()}-` +
+                `${String(
+                    ahora.getMonth() + 1
+                ).padStart(2, "0")}-` +
+                `${String(
+                    ahora.getDate()
+                ).padStart(2, "0")}`;
+
+            const hora =
+                `${String(
+                    ahora.getHours()
+                ).padStart(2, "0")}-` +
+                `${String(
+                    ahora.getMinutes()
+                ).padStart(2, "0")}`;
+
+            const registros = filasExportar.map(
+                (row) => ({
+                    ID: limpiarValorExcel(row.id_exp),
+
+                    Dealer: limpiarValorExcel(
+                        row.agencia
+                    ),
+
+                    Cliente: limpiarValorExcel(
+                        `${row.cliente_nombre || ""} ${
+                            row.cliente_apellidos || ""
+                        }`.trim()
+                    ),
+
+                    Teléfono: limpiarValorExcel(
+                        formatTelefonoMx(row.telefono)
+                    ),
+
+                    Correo: limpiarValorExcel(
+                        row.correo
+                    ),
+
+                    Business: limpiarValorExcel(
+                        row.linea
+                    ),
+
+                    "Canal de Contacto":
+                        limpiarValorExcel(row.origen),
+
+                    "Pauta de Origen":
+                        limpiarValorExcel(row.pauta),
+
+                    Estado: limpiarValorExcel(
+                        row.estado
+                    ),
+
+                    "Motivo de descalificación":
+                        limpiarValorExcel(
+                            row.motivo_descalificacion
+                        ),
+
+                    "Asesor Digital":
+                        limpiarValorExcel(
+                            row.asesor_digital
+                        ),
+
+                    "Asignado a":
+                        limpiarValorExcel(
+                            row.asesor_solicita
+                        ),
+
+                    "VW de sus sueños":
+                        limpiarValorExcel(
+                            row.cliente_interes
+                        ),
+
+                    "Fecha de Registro":
+                        limpiarValorExcel(
+                            row.fecha_reclamacion
+                        ),
+
+                    "Primer Contacto":
+                        limpiarValorExcel(
+                            fmtDTIntl(
+                                row.primer_contacto_at
+                            )
+                        ),
+
+                    "Último Contacto":
+                        limpiarValorExcel(
+                            fmtDTIntl(
+                                row.ultimo_contacto_at
+                            )
+                        ),
+
+                    Enganche: limpiarValorExcel(
+                        formatMoneyMXN(
+                            row.enganche_monto
+                        )
+                    ),
+
+                    "Presupuesto mensual":
+                        limpiarValorExcel(
+                            formatMoneyMXN(
+                                row.presupuesto_mensual
+                            )
+                        ),
+
+                    Buró: limpiarValorExcel(
+                        valueOrDash(row.buro_estado)
+                    ),
+
+                    "Forma de pago":
+                        limpiarValorExcel(
+                            valueOrDash(
+                                row.forma_pago
+                            )
+                        ),
+
+                    "Tipo cliente":
+                        limpiarValorExcel(
+                            valueOrDash(
+                                row.tipo_cliente
+                            )
+                        ),
+
+                    "Uso vehículo":
+                        limpiarValorExcel(
+                            row.uso_vehiculo
+                        ),
+
+                    "Plazo compra":
+                        limpiarValorExcel(
+                            row.plazo_compra
+                        ),
+
+                    "Comprobación ingresos":
+                        limpiarValorExcel(
+                            row.comprobacion_ingresos
+                        ),
+
+                    "Cotización pendiente":
+                        row.cotizacion_pendiente
+                            ? "Sí"
+                            : "No",
+
+                    "Requiere asesor":
+                        row.requiere_asesor
+                            ? "Sí"
+                            : "No",
+
+                    "IA pausada":
+                        row.ia_pausada
+                            ? "Sí"
+                            : "No",
+
+                    "Última cita agendada":
+                        limpiarValorExcel(
+                            fmtDTIntl(
+                                row.ultima_cita_agendada
+                            )
+                        ),
+
+                    Asistencia: row.asistencia
+                        ? "Sí"
+                        : "No",
+
+                    Comentarios:
+                        limpiarValorExcel(
+                            row.comentarios
+                        ),
+
+                    "Resumen IA":
+                        limpiarValorExcel(
+                            row.resumen
+                        ),
+                })
+            );
+
+            const ws =
+                XLSX.utils.json_to_sheet(registros);
+
+            ws["!cols"] = Array(32).fill({
+                wch: 22,
+            });
+
+            const wb =
+                XLSX.utils.book_new();
+
+            XLSX.utils.book_append_sheet(
+                wb,
+                ws,
+                "Prospectos"
+            );
+
+            XLSX.writeFile(
+                wb,
+                `reporte_prospectos_${fecha}_${hora}.xlsx`,
+                {
+                    compression: true,
+                }
+            );
+        } catch (error) {
+            console.error(
+                "Error exportando prospectos:",
+                error
+            );
+
+            alert(
+                "No se pudo generar el Excel. Revisa la consola."
+            );
+        } finally {
+            setExportandoExcel(false);
+        }
     }
     const closeProspectoModal = () => setProspectoModal((p) => ({ ...p, open: false }));
     const openCreate = () => setProspectoModal({ open: true, mode: "create", prospectoId: null, estadoInicial: "", tieneChatInicial: false });
@@ -2054,7 +2766,7 @@ export default function DigitalesProspectos() {
             {/* KPIs arriba */}
             <div className="mb-5 overflow-hidden rounded-2xl bg-white">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5">
-                    <KPICard icon={Users} label="Total prospectos hoy" value={kpis.total.toLocaleString()} sub={`${sorted.length} con filtros`} subColor="text-slate-400" />
+                    <KPICard icon={Users} label="Total prospectos hoy" value={kpis.total.toLocaleString()} sub={`${totalFiltrado} con filtros`} subColor="text-slate-400" />
                     <KPICard icon={Bot} label="Pendientes de respuesta IA" value={kpis.pendIA} sub={kpis.pendIA > 0 ? "Requieren atención" : "Sin pendientes"} subColor={kpis.pendIA > 0 ? "text-amber-600" : "text-emerald-600"} iconColor="text-amber-700" />
                     <KPICard icon={UserCheck} label="Perfil comercial" value={`${percent(kpis.conPerfil, kpis.total || 1)}%`} sub={`${kpis.conPerfil} con datos de compra`} subColor="text-sky-600" iconColor="text-sky-700" />
                     <KPICard icon={HandCoins} label="Crédito / arrendamiento" value={kpis.financiamiento} sub="Oportunidad financiera" subColor="text-violet-600" iconColor="text-violet-700" />
@@ -2156,9 +2868,9 @@ export default function DigitalesProspectos() {
         {/* Vista Resultados IA */}
         {viewMode === "resultados" && <ResultadosIA numeroAsesorInicial={selectedNumeroAsesor !== "Todos" ? selectedNumeroAsesor : ""} agenciaInicial={filters.agencia !== "Todos" ? filters.agencia : ""} businessInicial={filters.linea !== "Todos" ? filters.linea : ""} />}
         {/* Vista Ejecutivo BDC */}
-        {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC rows={accessibleCases} versionOperativa={versionOperativaBDC} asesoresPermitidos={asesoresPermitidosBDC} accesoTotal={isAdmin} />)}
+        {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC rows={usaPaginacionServidor ? fullCasesBDC : accessibleCases} versionOperativa={versionOperativaBDC} asesoresPermitidos={asesoresPermitidosBDC} accesoTotal={isAdmin} />)}
         {/* Vista Gráficos */}
-        {viewMode === "graficos" && <VistaGraficos rows={sorted} />}
+        {viewMode === "graficos" && <VistaGraficos rows={usaPaginacionServidor ? fullCases: sorted} />}
         {/* Vista Tabla */}
         {viewMode === "tabla" && (<div className="min-w-0">
             {/* Tabla principal */}
@@ -2324,7 +3036,7 @@ export default function DigitalesProspectos() {
                     {/* Paginación */}
                     {sorted.length > 0 && (<div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/60">
                         <div className="text-xs text-slate-500">
-                            Mostrando <span className="font-semibold text-[#131E5C]">{(page - 1) * PAGE_SIZE + 1}</span>–<span className="font-semibold text-[#131E5C]">{Math.min(page * PAGE_SIZE, sorted.length)}</span> de <span className="font-semibold text-[#131E5C]">{sorted.length}</span> registros
+                            Mostrando <span className="font-semibold text-[#131E5C]">{(page - 1) * PAGE_SIZE + 1}</span>–<span className="font-semibold text-[#131E5C]">{Math.min(page * PAGE_SIZE, totalFiltrado)}</span> de <span className="font-semibold text-[#131E5C]">{totalFiltrado}</span> registros
                         </div>
                         <div className="flex items-center gap-1">
                             <button type="button" onClick={() => setPage(1)} disabled={page === 1} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#131E5C]/15 bg-white text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-[#131E5C] shadow-sm" title="Primera página">
