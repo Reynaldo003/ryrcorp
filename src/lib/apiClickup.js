@@ -35,6 +35,7 @@ function normalizeMember(item) {
     joined_at: item.unido_en,
     user: u,
     user_id: Number(u.id_usuario),
+    color: item.color || null,
     name:
       u.nombre_completo ||
       [u.nombre, u.apellidos].filter(Boolean).join(" ").trim() ||
@@ -629,6 +630,13 @@ export const apiClickup = {
   async getTeamMembers(teamId) {
     const data = await http(`${API_BASE}/equipos/${Number(teamId)}/miembros/`);
     return Array.isArray(data) ? data.map(normalizeMember) : [];
+  },
+
+  async setMemberColor(teamId, memberId, color) {
+    return await http(`${API_BASE}/equipos/${Number(teamId)}/miembros/${Number(memberId)}/color/`, {
+      method: "PATCH",
+      body: JSON.stringify({ color: color || null }),
+    });
   },
 
   async cancelInvite(teamId, inviteId) {

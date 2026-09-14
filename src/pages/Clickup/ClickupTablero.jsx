@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { apiClickup } from "../../lib/apiClickup";
 import { useActiveTeam } from "./useActiveTeam";
+import { useSyncTasks, notifyTasksChanged } from "../../hooks/useSyncTasks";
 import ClickupUserAutocomplete from "./ClickupUserAutocomplete";
 import {
     RefreshCcw,
@@ -108,6 +109,7 @@ export default function ClickupTablero() {
                 [Number(projectId)]: undefined,
             }));
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         } finally {
@@ -291,14 +293,14 @@ export default function ClickupTablero() {
     );
 
     const ensureProjectTasks = useCallback(
-        async (pid, forcedTeamId) => {
+        async (pid, forcedTeamId, force = false) => {
             const projectIdNum = Number(pid);
             const effectiveTeamId = Number(forcedTeamId || teamId);
 
             if (!projectIdNum || !effectiveTeamId) return;
 
             const current = tasksMetaByProject[projectIdNum];
-            if (current?.loading || Array.isArray(current?.tasks)) return;
+            if (!force && (current?.loading || Array.isArray(current?.tasks))) return;
 
             setTasksMetaByProject((prev) => ({
                 ...prev,
@@ -363,14 +365,14 @@ export default function ClickupTablero() {
         }
     }, [createProjectTeamId, projectId, refreshTeamData, teamId]);
 
-    const loadBoard = useCallback(async () => {
+    const loadBoard = useCallback(async (silent = false) => {
         if (!teamId || !projectId) {
             setLoadingBoard(false);
             setData(null);
             return;
         }
 
-        setLoadingBoard(true);
+        if (!silent) setLoadingBoard(true);
 
         try {
             const res = await apiClickup.getBoard(Number(teamId), Number(projectId));
@@ -388,7 +390,7 @@ export default function ClickupTablero() {
 
             setData(null);
         } finally {
-            setLoadingBoard(false);
+            if (!silent) setLoadingBoard(false);
         }
     }, [projectId, refreshTeamData, teamId]);
 
@@ -418,6 +420,14 @@ export default function ClickupTablero() {
     useEffect(() => {
         loadBoard();
     }, [loadBoard]);
+
+    const syncRefresh = useCallback(async () => {
+        if (!teamId || !projectId) return;
+        await ensureProjectTasks(Number(projectId), Number(teamId), true);
+        await loadBoard(true);
+    }, [teamId, projectId, ensureProjectTasks, loadBoard]);
+
+    useSyncTasks(syncRefresh, { interval: 20000 });
 
     useEffect(() => {
         const handler = async () => {
@@ -513,6 +523,7 @@ export default function ClickupTablero() {
             }));
 
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         }
@@ -618,6 +629,7 @@ export default function ClickupTablero() {
             }));
 
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         }
@@ -677,6 +689,7 @@ export default function ClickupTablero() {
             }));
 
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         } finally {
@@ -745,6 +758,7 @@ export default function ClickupTablero() {
             }));
 
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         } finally {
@@ -775,6 +789,7 @@ export default function ClickupTablero() {
             }));
 
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         } finally {
@@ -796,6 +811,7 @@ export default function ClickupTablero() {
             }));
 
             ensureProjectTasks(Number(projectId));
+            notifyTasksChanged();
         } catch (e) {
             alert(e.message);
         }

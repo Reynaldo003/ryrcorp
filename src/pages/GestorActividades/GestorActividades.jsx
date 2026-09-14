@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { apiClickup } from "../../lib/apiClickup";
 import WeeklyPlanner from "./components/WeeklyPlanner";
+import { useSyncTasks, notifyTasksChanged } from "../../hooks/useSyncTasks";
+import { useUserColors, USER_COLOR_PALETTE, userColorOf } from "../../hooks/useUserColors";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -252,6 +254,8 @@ function ActividadModal({
     lists,
     teamId,
     onSaved,
+    userColors = {},
+    onSetUserColor,
 }) {
     const [title, setTitle] = useState("");
     const [listId, setListId] = useState("");
@@ -716,11 +720,29 @@ function ActividadModal({
                                         key={user.id}
                                         className="flex items-center gap-2 rounded-full bg-[#131E5C]/10 px-3 py-1.5"
                                     >
-                                        <UserAvatar user={user} />
+                                        <UserAvatar user={user} userColor={userColorOf(userColors, user.id)} />
 
                                         <span className="text-sm font-bold text-[#131E5C]">
                                             {user.name}
                                         </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const current = userColorOf(userColors, user.idonge);
+
+                                                const next =
+                                                    USER_COLOR_PALETTE[
+                                                        (USER_COLOR_PALETTE.indexOf(current) + 1)
+                                                        % USER_COLOR_PALETTE.length
+                                                    ];
+
+                                                onSetUserColor(user.id, next);
+                                            }}
+                                            title="Cambiar color de este usuario"
+                                            className="h-3.5 w-3.5 rounded-full border-2 border-white shadow"
+                                            style={{ backgroundColor: userColorOf(userColors, user.id) }}
+                                        />
 
                                         <button
                                             type="button"
@@ -1110,6 +1132,8 @@ export default function GestorActividades() {
             : null;
     });
 
+    const { userColors, setUserColor: onSetUserColor } = useUserColors(teamId);
+
     const [projectId, setProjectId] = useState(() => {
         const value = localStorage.getItem(
             "gestor_actividades_project_id"
@@ -1267,10 +1291,10 @@ export default function GestorActividades() {
         };
     }, [teamId]);
 
-    const loadBoard = useCallback(async () => {
+    const loadBoard = useCallback(async (silent = false) => {
         if (!teamId || !projectId) return;
 
-        setLoading(true);
+        if (!silent) setLoading(true);
 
         try {
             const response = await apiClickup.getBoard(
@@ -1303,7 +1327,7 @@ export default function GestorActividades() {
                 error
             );
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [teamId, projectId]);
 
@@ -1311,12 +1335,12 @@ export default function GestorActividades() {
         loadBoard();
     }, [loadBoard]);
 
-    const loadAgenda = useCallback(async (startStr, endStr) => {
+    const loadAgenda = useCallback(async (startStr, endStr, silent = false) => {
         if (!teamId || !projectId) return;
 
         const seq = ++agendaFetchRef.current;
 
-        setAgendaLoading(true);
+        if (!silent) setAgendaLoading(true);
         setAgendaError(null);
 
         try {
@@ -1493,7 +1517,8 @@ export default function GestorActividades() {
 
         loadAgenda(
             agendaRange.start,
-            agendaRange.end
+            agendaRange.end,
+            true
         );
     }, [
         teamId,
@@ -1513,6 +1538,20 @@ export default function GestorActividades() {
         agendaRange,
         loadAgenda,
     ]);
+
+    const refreshFromSync = useCallback(async () => {
+        if (!teamId || !projectId) return;
+
+        await Promise.all([
+            loadBoard(true),
+            (async () => {
+                if (!agendaRange) return;
+                await loadAgenda(agendaRange.start, agendaRange.end, true);
+            })(),
+        ]);
+    }, [teamId, projectId, loadBoard, loadAgenda, agendaRange]);
+
+    useSyncTasks(refreshFromSync, { interval: 20000 });
 
     const onAgendaRangeChange = useCallback((start, end) => {
         setAgendaRange((prev) => {
@@ -1681,6 +1720,7 @@ export default function GestorActividades() {
 
             await loadBoard();
             await reloadAgenda();
+            notifyTasksChanged();
         } catch (error) {
             alert(
                 error.message
@@ -1706,6 +1746,7 @@ export default function GestorActividades() {
 
             await loadBoard();
             await reloadAgenda();
+            notifyTasksChanged();
         } catch (error) {
             console.error(
                 "Error cambiando estado:",
@@ -1731,6 +1772,7 @@ export default function GestorActividades() {
 
             await loadBoard();
             await reloadAgenda();
+            notifyTasksChanged();
         } catch (error) {
             console.error(
                 "Error moviendo actividad:",
@@ -1975,10 +2017,11 @@ export default function GestorActividades() {
 
             {view === "agenda"
                 ? (
-                    <WeeklyPlanner
+<WeeklyPlanner
                         tasks={filteredAgenda}
                         pendingTasks={filteredAgendaPending}
-                        lists={effectiveLists}
+                        lists={lists}
+                        userColors={userColors}
                         loading={agendaLoading}
                         error={agendaError}
                         onWeekRange={onAgendaRangeChange}
@@ -2021,9 +2064,12 @@ export default function GestorActividades() {
                 actividad={editingTask}
                 lists={lists}
                 teamId={teamId}
+                userColors={userColors}
+                onSetUserColor={onSetUserColor}
                 onSaved={async () => {
                     await loadBoard();
                     await reloadAgenda();
+                    notifyTasksChanged();
                 }}
             />
 

@@ -3,6 +3,7 @@ import {
     Check, ChevronLeft, ChevronRight, Clock3, Inbox, Loader2,
     Pencil, Plus, RotateCcw, Search, Trash2
 } from "lucide-react";
+import { userColorOf } from "../../../hooks/useUserColors";
 
 const WORK_START = 9;
 const WORK_END = 18;
@@ -54,6 +55,11 @@ function sameDay(a, b) {
         && a.getMonth() === b.getMonth()
         && a.getDate() === b.getDate()
     );
+}
+
+function weekdayIndexOf(date) {
+    const day = date.getDay();
+    return day === 0 ? 6 : day - 1;
 }
 
 function dateKey(date) {
@@ -325,7 +331,32 @@ function getTaskListName(task, lists) {
     return list?.name || "";
 }
 
-function getTaskColor(task, lists) {
+function getAssignedUsers(task) {
+    if (Array.isArray(task?.assigned)) return task.assigned;
+    if (Array.isArray(task?.asignados)) return task.asignados;
+    return [];
+}
+
+function firstAssignedUserId(task) {
+    const first = getAssignedUsers(task)[0];
+    if (!first) return null;
+
+    const uid = Number(
+        first?.user_id
+        ?? first?.id_usuario
+        ?? first?.id
+    );
+
+    return Number.isFinite(uid) && uid > 0 ? uid : null;
+}
+
+function getTaskColor(task, lists, userColors = {}) {
+    const userId = firstAssignedUserId(task);
+
+    if (userId) {
+        return userColorOf(userColors, userId);
+    }
+
     const name = getTaskListName(
         task,
         lists
@@ -517,7 +548,8 @@ function getScheduledSegments(
     tasks,
     day,
     previewEnds,
-    lists
+    lists,
+    userColors = {}
 ) {
     const workStart = dayWorkStart(day);
     const workEnd = dayWorkEnd(day);
@@ -564,7 +596,8 @@ function getScheduledSegments(
             ),
             color: getTaskColor(
                 task,
-                lists
+                lists,
+                userColors
             ),
         });
     });
@@ -741,6 +774,7 @@ export default function WeeklyPlanner({
     lists = [],
     loading = false,
     error = null,
+    userColors = {},
     onWeekRange,
     onRetry,
     onAddTask,
@@ -757,6 +791,9 @@ export default function WeeklyPlanner({
     const [draggingTask, setDraggingTask] = useState(null);
     const [previewEnds, setPreviewEnds] = useState({});
     const [resizeState, setResizeState] = useState(null);
+    const [selectedDayIdx, setSelectedDayIdx] = useState(
+        () => weekdayIndexOf(new Date())
+    );
 
     const scrollRef = useRef(null);
 
@@ -772,6 +809,8 @@ export default function WeeklyPlanner({
     );
 
     const weekEnd = weekDays[6];
+
+    const activeDay = weekDays[selectedDayIdx];
 
     useEffect(() => {
         onWeekRange?.(
@@ -790,7 +829,7 @@ export default function WeeklyPlanner({
         if (!container) return;
 
         container.scrollTop = 0;
-    }, [weekStart]);
+    }, [weekStart, selectedDayIdx]);
 
     /*
      * Ya no clasificamos tasks aquí.
@@ -1424,31 +1463,44 @@ export default function WeeklyPlanner({
                 {/* CALENDARIO */}
                 <div className="min-w-0 flex-1">
                     <div className="overflow-x-auto">
-                        <div className="min-w-[1120px]">
+                        <div className="min-w-max">
                             <div
                                 className="grid border-b border-slate-200 bg-white"
                                 style={{
-                                    gridTemplateColumns: "68px repeat(7, minmax(150px, 1fr))",
+                                    gridTemplateColumns: "68px repeat(7, minmax(72px, 1fr))",
                                 }}
                             >
                                 <div className="border-r border-slate-100" />
 
-                                {weekDays.map((day) => {
+                                {weekDays.map((day, index) => {
                                     const isToday = sameDay(
                                         day,
                                         today
                                     );
 
+                                    const isSelected = index === selectedDayIdx;
+
                                     return (
-                                        <div
+                                        <button
+                                            type="button"
                                             key={dateKey(day)}
+                                            onClick={() => setSelectedDayIdx(index)}
                                             className={cls(
-                                                "border-r border-slate-100 px-3 py-3 text-center last:border-r-0",
-                                                isToday && "bg-blue-50/60"
+                                                "cursor-pointer border-r border-slate-100 px-2 py-3 text-center transition last:border-r-0 hover:bg-slate-50",
+                                                isToday && "bg-blue-50/60",
+                                                isSelected && "ring-2 ring-inset ring-[#131E5C]/60"
+                                            )}
+                                            title={day.toLocaleDateString(
+                                                "es-MX",
+                                                {
+                                                    weekday: "long",
+                                                    day: "numeric",
+                                                    month: "long",
+                                                }
                                             )}
                                         >
-                                            <div className={cls(
-                                                "text-xs font-black uppercase tracking-wide",
+                                            <span className={cls(
+                                                "block text-xs font-black uppercase tracking-wide",
                                                 isToday
                                                     ? "text-blue-600"
                                                     : "text-slate-400"
@@ -1459,66 +1511,69 @@ export default function WeeklyPlanner({
                                                         weekday: "short",
                                                     }
                                                 )}
-                                            </div>
+                                            </span>
 
-                                            <div className={cls(
+                                            <span className={cls(
                                                 "mx-auto mt-1 flex h-9 w-9 items-center justify-center rounded-full text-lg font-black",
                                                 isToday
                                                     ? "bg-[#131E5C] text-white"
                                                     : "text-slate-800"
                                             )}>
                                                 {day.getDate()}
-                                            </div>
-                                        </div>
+                                            </span>
+                                        </button>
                                     );
                                 })}
                             </div>
+                        </div>
+                    </div>
 
+                    <div
+                        ref={scrollRef}
+                        className="max-h-[720px] overflow-y-auto"
+                    >
+                        <div
+                            className="grid"
+                            style={{
+                                gridTemplateColumns: "68px minmax(0, 1fr)",
+                            }}
+                        >
                             <div
-                                ref={scrollRef}
-                                className="max-h-[720px] overflow-y-auto"
+                                className="relative border-r border-slate-200 bg-slate-50"
+                                style={{
+                                    height: TIMELINE_HEIGHT,
+                                }}
                             >
-                                <div
-                                    className="grid"
-                                    style={{
-                                        gridTemplateColumns: "68px repeat(7, minmax(150px, 1fr))",
-                                    }}
-                                >
-                                    <div
-                                        className="relative border-r border-slate-200 bg-slate-50"
-                                        style={{
-                                            height: TIMELINE_HEIGHT,
-                                        }}
-                                    >
-                                        {Array.from(
-                                            {
-                                                length: WORK_END - WORK_START + 1,
-                                            },
-                                            (_, index) => {
-                                                const hour = WORK_START + index;
-                                                const top = index * HOUR_HEIGHT;
+                                {Array.from(
+                                    {
+                                        length: WORK_END - WORK_START + 1,
+                                    },
+                                    (_, index) => {
+                                        const hour = WORK_START + index;
+                                        const top = index * HOUR_HEIGHT;
 
-                                                return (
-                                                    <div
-                                                        key={hour}
-                                                        className="absolute right-2 -translate-y-1/2 text-[12px] font-bold text-slate-400"
-                                                        style={{
-                                                            top,
-                                                        }}
-                                                    >
-                                                        {pad(hour)}:00
-                                                    </div>
-                                                );
-                                            }
-                                        )}
-                                    </div>
+                                        return (
+                                            <div
+                                                key={hour}
+                                                className="absolute right-2 -translate-y-1/2 text-[12px] font-bold text-slate-400"
+                                                style={{
+                                                    top,
+                                                }}
+                                            >
+                                                {pad(hour)}:00
+                                            </div>
+                                        );
+                                    }
+                                )}
+                            </div>
 
-                                    {weekDays.map((day) => {
+                            {[activeDay].map((day) => {
                                         const segments = getScheduledSegments(
                                             tasks,
                                             day,
                                             previewEnds,
-                                            lists
+                                            lists,
+                                            userColors
                                         );
 
                                         const isToday = sameDay(
@@ -1795,8 +1850,6 @@ export default function WeeklyPlanner({
                                     })}
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
                         <span>

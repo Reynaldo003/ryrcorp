@@ -32,6 +32,14 @@ const PALETA_CONDICION = {
 
 const ESTATUS_EXCLUIDOS = ["V", "O", "C", "D", "P", "T"];
 
+const MODELOS_COMERCIALES = [
+  "E-CRAFTER",
+  "CRAFTER",
+  "AMAROK",
+  "TRANSPORTER",
+  "CADDY",
+];
+
 const KPI_ICONS = {
   "Total activo": (
     <path
@@ -492,6 +500,8 @@ function FiltrosInventario({
   filtrosDisponibles,
   agenciaSeleccionada,
   setAgenciaSeleccionada,
+  modelosComerciales,
+  setModelosComerciales,
   estatusSeleccionado,
   setEstatusSeleccionado,
   periodoGracia,
@@ -519,6 +529,17 @@ function FiltrosInventario({
             onClick={() => setAgenciaSeleccionada("")}
           >
             Todas
+          </BotonFiltro>
+
+          <BotonFiltro
+            activo={modelosComerciales}
+            onClick={() =>
+              setModelosComerciales(
+                (valor) => !valor
+              )
+            }
+          >
+            R&R Vehículos Comerciales
           </BotonFiltro>
 
           {filtrosDisponibles.agencias.map((agencia) => (
@@ -1572,6 +1593,11 @@ export default function InventarioIndex() {
   ] = useState("");
 
   const [
+    modelosComerciales,
+    setModelosComerciales,
+  ] = useState(false);
+
+  const [
     estatusSeleccionado,
     setEstatusSeleccionado,
   ] = useState("");
@@ -1684,6 +1710,9 @@ export default function InventarioIndex() {
         agenciaSeleccionada || undefined,
       estatus:
         estatusSeleccionado || undefined,
+      modelos: modelosComerciales
+        ? MODELOS_COMERCIALES.join(",")
+        : undefined,
     };
 
     setCargando(true);
@@ -1771,6 +1800,7 @@ export default function InventarioIndex() {
   }, [
     agenciaSeleccionada,
     estatusSeleccionado,
+    modelosComerciales,
   ]);
 
   const vehiculosCalculados = useMemo(
@@ -2639,6 +2669,8 @@ export default function InventarioIndex() {
             filtrosDisponibles={filtrosDisponibles}
             agenciaSeleccionada={agenciaSeleccionada}
             setAgenciaSeleccionada={setAgenciaSeleccionada}
+            modelosComerciales={modelosComerciales}
+            setModelosComerciales={setModelosComerciales}
             estatusSeleccionado={estatusSeleccionado}
             setEstatusSeleccionado={setEstatusSeleccionado}
             periodoGracia={periodoGracia}

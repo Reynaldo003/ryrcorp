@@ -12,6 +12,7 @@ import {
 import { apiClickup } from "../../lib/apiClickup";
 import { API_ROOT } from "../../lib/apiClient";
 import { VW_HEAD_BOLD, VW_TEXT_LIGHT } from "../../assets/fonts/vwFonts.js";
+import { useSyncTasks, notifyTasksChanged } from "../../hooks/useSyncTasks";
 
 // ─────────────────────────────────────────────────────────────
 
@@ -2124,9 +2125,9 @@ export default function TimeForAction() {
         }).catch(console.error);
     },[teamId]);
 
-    const loadBoard = useCallback(async () => {
+    const loadBoard = useCallback(async (silent = false) => {
         if(!teamId||!projectId)return;
-        setLoading(true);
+        if(!silent) setLoading(true);
         try {
             const res         = await apiClickup.getBoard(Number(teamId),Number(projectId));
             const rawLists    = res?.lists||[];
@@ -2134,10 +2135,17 @@ export default function TimeForAction() {
             setLists(rawLists);
             setTasks(rawLists.flatMap(l=>(tasksByList[l.id]||[]).map(t=>({...t,list_name:l.name,list_id:l.id}))));
         } catch(e){console.error(e);}
-        finally{setLoading(false);}
+        finally{if(!silent) setLoading(false);}
     },[teamId,projectId]);
 
     useEffect(()=>{loadBoard();},[loadBoard]);
+
+    const syncRefresh = useCallback(async () => {
+        if (!teamId || !projectId) return;
+        await loadBoard(true);
+    }, [teamId, projectId, loadBoard]);
+
+    useSyncTasks(syncRefresh, { interval: 20000 });
 
     useEffect(()=>{
         if(!teamId)return;
@@ -2181,6 +2189,7 @@ export default function TimeForAction() {
                 };
                 await apiClickup.updateTask(Number(teamId), Number(taskId), payload);
                 setTasks(prev => prev.map(t => t.id === taskId ? { ...t, start_date: newStart, due_date: newEnd } : t));
+                notifyTasksChanged();
             } else {
                 const updatedSubtareas = (Array.isArray(task.subtareas) ? task.subtareas : []).map((s, i) =>
                     i === subIdx ? { ...s, start_date: newStart, due_date: newEnd } : s
@@ -2201,6 +2210,7 @@ export default function TimeForAction() {
                 };
                 await apiClickup.updateTask(Number(teamId), Number(taskId), payload);
                 setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtareas: updatedSubtareas } : t));
+                notifyTasksChanged();
             }
         } catch(e) {
             console.error("Error al actualizar fechas desde timeline:", e);
@@ -2230,7 +2240,7 @@ export default function TimeForAction() {
 
     async function confirmTaskDelete(){
         if(!confirmDeleteTask)return;setDeletingTask(true);
-        try{await apiClickup.deleteTask(Number(teamId),Number(confirmDeleteTask.id));setConfirmDeleteTask(null);await loadBoard();}
+        try{await apiClickup.deleteTask(Number(teamId),Number(confirmDeleteTask.id));setConfirmDeleteTask(null);await loadBoard();notifyTasksChanged();}
         catch(e){alert(e.message);}finally{setDeletingTask(false);}
     }
 
@@ -2239,6 +2249,7 @@ export default function TimeForAction() {
         try{
             await apiClickup.deleteProject(teamId,projectId);
             setConfirmDeleteProject(false);
+            notifyTasksChanged();
             const data=await apiClickup.listProjects(teamId);
             const arr=Array.isArray(data)?data:[];
             setProjects(arr);
@@ -2289,7 +2300,7 @@ export default function TimeForAction() {
                     {editingProject ? (
                         <div className="flex items-center gap-1.5">
                             <input value={projectName} onChange={e=>setProjectName(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm font-bold outline-none focus:border-[#131E5C]" placeholder="Nombre del proyecto"/>
-                            <button onClick={async()=>{if(!projectName.trim()||!projectId||!teamId)return;try{await apiClickup.updateProject(teamId,projectId,{name:projectName.trim(),description:""});const data=await apiClickup.listProjects(teamId);setProjects(Array.isArray(data)?data:[]);setEditingProject(false);}catch(e){alert(e.message||"Error");}}} className="rounded-xl bg-[#131E5C] px-3 py-1.5 text-xs font-extrabold text-white hover:opacity-90">Guardar</button>
+                            <button onClick={async()=>{if(!projectName.trim()||!projectId||!teamId)return;try{await apiClickup.updateProject(teamId,projectId,{name:projectName.trim(),description:""});const data=await apiClickup.listProjects(teamId);setProjects(Array.isArray(data)?data:[]);setEditingProject(false);notifyTasksChanged();}catch(e){alert(e.message||"Error");}}} className="rounded-xl bg-[#131E5C] px-3 py-1.5 text-xs font-extrabold text-white hover:opacity-90">Guardar</button>
                             <button onClick={()=>setEditingProject(false)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-xs font-extrabold text-black/60 hover:bg-slate-50">Cancelar</button>
                         </div>
                     ) : (
@@ -2340,11 +2351,12 @@ export default function TimeForAction() {
             {view==="timeline"&&<TimelineView tasks={filtered} onEdit={openEdit} onDelete={handleDeleteTask} onUpdateDates={handleUpdateDates} loading={loading}
                 teams={teams} projects={projects} teamId={teamId} projectId={projectId} currentUser={currentUser} allTasks={tasks}/>}
 
-            <TaskModal open={modalOpen} onClose={()=>setModalOpen(false)} task={editingTask} lists={lists} teamId={teamId} onSaved={loadBoard}/>
+            <TaskModal open={modalOpen} onClose={()=>setModalOpen(false)} task={editingTask} lists={lists} teamId={teamId} onSaved={async()=>{notifyTasksChanged();await loadBoard();}}/>
             <TeamsModal open={teamsModalOpen} onClose={()=>setTeamsModalOpen(false)} onCreated={async()=>{
                 await fetchTeams();
                 if(teamId){const data=await apiClickup.listProjects(teamId);const arr=Array.isArray(data)?data:[];setProjects(arr);if(!projectId&&arr[0])setProjectId(Number(arr[0].id));}
                 await loadBoard();
+                notifyTasksChanged();
             }}/>
             <ConfirmDialog open={!!confirmDeleteTask} title="Eliminar plan de acción" message={`¿Seguro que deseas eliminar "${confirmDeleteTask?.title}"? Esta acción no se puede deshacer.`} onConfirm={confirmTaskDelete} onCancel={()=>setConfirmDeleteTask(null)} loading={deletingTask}/>
             <ConfirmDialog open={confirmDeleteProject} title="Eliminar proyecto" message={`¿Seguro que deseas eliminar "${currentProject?.name}"? Se eliminarán todos sus planes.`} onConfirm={deleteCurrentProject} onCancel={()=>setConfirmDeleteProject(false)} loading={deletingProject}/>
@@ -2359,7 +2371,7 @@ export default function TimeForAction() {
                         </div>
                         <div className="p-5 space-y-3">
                             <div><label className="text-xs font-extrabold text-black/60">Nombre *</label><input value={newProjectName} onChange={e=>setNewProjectName(e.target.value)} className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-[#131E5C]" placeholder="Ej. Plan Q2 2026"/></div>
-                            <button disabled={!newProjectName.trim()} onClick={async()=>{if(!newProjectName.trim()||!teamId)return;try{const created=await apiClickup.createProject(teamId,{name:newProjectName.trim(),description:""});await apiClickup.bootstrapProject(teamId,created.id);const data=await apiClickup.listProjects(teamId);setProjects(Array.isArray(data)?data:[]);setProjectId(created.id);localStorage.setItem("clickup_project_id",String(created.id));setNewProjectName("");setProjectModalOpen(false);}catch(e){alert(e.message||"Error al crear proyecto");}}}
+                            <button disabled={!newProjectName.trim()} onClick={async()=>{if(!newProjectName.trim()||!teamId)return;try{const created=await apiClickup.createProject(teamId,{name:newProjectName.trim(),description:""});await apiClickup.bootstrapProject(teamId,created.id);const data=await apiClickup.listProjects(teamId);setProjects(Array.isArray(data)?data:[]);setProjectId(created.id);localStorage.setItem("clickup_project_id",String(created.id));setNewProjectName("");setProjectModalOpen(false);notifyTasksChanged();}catch(e){alert(e.message||"Error al crear proyecto");}}}
                                 className="w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-extrabold text-white disabled:opacity-50" style={{backgroundColor:BRAND_BLUE}}>
                                 <Plus className="h-4 w-4"/>Crear proyecto
                             </button>
