@@ -222,14 +222,14 @@ function Filtros({ añoSel, setAñoSel, mesSel, setMesSel, agenciaSel, setAgenci
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setAgenciaSel(null)} className={`rounded-lg px-4 py-2 font-bold transition ${!agenciaSel ? "bg-[#131E5C] text-white" : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"}`}>Todas</button>
-          {AGENCIAS.map((agencia) => <button key={agencia} type="button" onClick={() => setAgenciaSel(agencia)} className={`rounded-lg px-4 py-2 bg-white border border-[#131E5C] font-bold transition ${agenciaSel === agencia ? "bg-[#131E5C] text-white" : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"}`}>{agencia}</button>)}
+          {AGENCIAS.map((agencia) => <button key={agencia} type="button" onClick={() => setAgenciaSel(agencia)} className={`rounded-lg px-4 py-2 border border-[#131E5C] font-bold transition ${agenciaSel === agencia ? "bg-[#131E5C] text-white" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white hover:px-6"}`}>{agencia}</button>)}
         </div>
       </div>
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
         {MESES.map((mes, index) => {
           const futuro = añoSel === añoActual && index > mesActual;
           const active = mesSel === index;
-          return <button key={mes} type="button" disabled={futuro} onClick={() => setMesSel(index)} className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 font-bold transition ${active ? "bg-[#131E5C] text-white shadow" : futuro ? "cursor-not-allowed text-[#AEB6C5]" : " text-[#152754] hover:bg-[#E3E9F3]"}`}>{mes}</button>;
+          return <button key={mes} type="button" disabled={futuro} onClick={() => setMesSel(index)} className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 font-bold transition ${active ? "bg-[#131E5C] text-white shadow" : futuro ? "cursor-not-allowed text-[#131E5C]" : " bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>{mes}</button>;
         })}
       </div>
     </div>
@@ -533,7 +533,7 @@ function EficienciaCanales({ canales, loading }) {
 }
 
 function RendimientoAsesores({ asesores, loading }) {
-  const top = [...(asesores || [])].slice(0, 6);
+  const top = [...(asesores || [])].slice(0, 14);
   return (
     <Tarjeta>
       <TituloCard icono={<Users className="h-5 w-5" />} titulo="Rendimiento de asesores" detalle="Ordenado por cierres y conversión" />

@@ -1,14 +1,13 @@
 // src/lib/apiClient.js
-import {
-  http as httpPruebas,
-  getAccessToken,
-} from "./apiPruebas";
+import { http as httpPruebas, getAccessToken } from "./apiPruebas";
 
 export { getAccessToken };
 
 export const API_ROOT = (
   import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com"
-).replace(/\/+$/, "");
+)
+  //"http://127.0.0.1:8000"
+  .replace(/\/+$/, "");
 
 export function getWebSocketAuthQuery() {
   const token = getAccessToken();
@@ -40,15 +39,22 @@ function shouldRedirectOnUnauthorized(path) {
 async function fetchPublic(path, { method = "GET", body, headers = {} } = {}) {
   const finalHeaders = { Accept: "application/json", ...headers };
 
-  if (!isFormData(body) && body !== undefined && !finalHeaders["Content-Type"]) {
+  if (
+    !isFormData(body) &&
+    body !== undefined &&
+    !finalHeaders["Content-Type"]
+  ) {
     finalHeaders["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_ROOT}${path.startsWith("/") ? path : `/${path}`}`, {
-    method,
-    headers: finalHeaders,
-    body,
-  });
+  const res = await fetch(
+    `${API_ROOT}${path.startsWith("/") ? path : `/${path}`}`,
+    {
+      method,
+      headers: finalHeaders,
+      body,
+    },
+  );
 
   if (res.status === 204) return null;
 
@@ -59,7 +65,8 @@ async function fetchPublic(path, { method = "GET", body, headers = {} } = {}) {
 
   if (!res.ok) {
     const message =
-      (responseData && (responseData.detail || responseData.error || responseData.message)) ||
+      (responseData &&
+        (responseData.detail || responseData.error || responseData.message)) ||
       `HTTP ${res.status}`;
     const error = new Error(message);
     error.status = res.status;
@@ -85,19 +92,35 @@ export async function http(
   const finalBody = buildBody({ body, data });
 
   const finalHeaders = { ...headers };
-  if (!isFormData(finalBody) && finalBody !== undefined && !finalHeaders["Content-Type"]) {
+  if (
+    !isFormData(finalBody) &&
+    finalBody !== undefined &&
+    !finalHeaders["Content-Type"]
+  ) {
     finalHeaders["Content-Type"] = "application/json";
   }
 
   if (!auth) {
-    return fetchPublic(path, { method, body: finalBody, headers: finalHeaders });
+    return fetchPublic(path, {
+      method,
+      body: finalBody,
+      headers: finalHeaders,
+    });
   }
 
   try {
-    return await httpPruebas(path, { method, body: finalBody, headers: finalHeaders });
+    return await httpPruebas(path, {
+      method,
+      body: finalBody,
+      headers: finalHeaders,
+    });
   } catch (error) {
     if (error?.code === "SESSION_EXPIRED" && retryWithoutAuth) {
-      return fetchPublic(path, { method, body: finalBody, headers: finalHeaders });
+      return fetchPublic(path, {
+        method,
+        body: finalBody,
+        headers: finalHeaders,
+      });
     }
     throw error;
   }
