@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Users, ArchiveX, LayoutList } from "lucide-react";
+import { CarFront, Users, ArchiveX, LayoutList, BadgeDollarSign, CircleDollarSign } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
@@ -32,6 +32,18 @@ export default function GestionTopNav() {
             label: "Prospectos Digitales",
             to: "/gestion_negocio/prospectos_digitales",
             icon: Users,
+            show: true,
+        },
+        {
+            label: "Presupuestos",
+            to: "/gestion_negocio/presupuestos",
+            icon: CircleDollarSign,
+            show: true,
+        },
+        {
+            label: "Presupuestos Refacciones",
+            to: "/gestion_negocio/presupuestos_refacciones",
+            icon: BadgeDollarSign,
             show: true,
         },
     ].filter((tab) => tab.show);

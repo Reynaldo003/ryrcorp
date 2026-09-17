@@ -690,11 +690,12 @@ export default function RefaccionesObsolescencia() {
                                     {loadingDashboard ? <ChartLoading type="horizontal" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={porGrupo} layout="vertical" margin={{ top: 4, right: 35, left: 35, bottom: 4 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} stroke={C.border} />
                                                 <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
                                                 <YAxis type="category" dataKey="grupo_principal" width={160} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
                                                 <Bar
+                                                    stackId="v"
                                                     dataKey="valor_stock"
                                                     fill={C.navyMid}
                                                     radius={[0, 7, 7, 0]}
@@ -709,6 +710,13 @@ export default function RefaccionesObsolescencia() {
                                                         )
                                                     }
                                                 />
+                                                <Bar
+                                                    dataKey="valor_reservado"
+                                                    stackId="v"
+                                                    fill={C.navy}
+                                                    radius={[0, 7, 7, 0]}
+                                                    barSize={25}
+                                                    onClick={(e) => alternarFiltro("grupo_principal", e?.grupo_principal)} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     )}
