@@ -123,6 +123,8 @@ import Piezas from "./pages/GestionNegocio/Piezas";
 import ProspectosDigitales from "./pages/GestionNegocio/ProspectosDigitales";
 import CompraRefacciones from "./pages/GestionNegocio/CompraRefacciones";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
+import Presupuestos from "./pages/Presupuestos/Presupuestos";
+import PresupuestosRefacciones from "./pages/Presupuestos/PresupuestosRefacciones";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -446,10 +448,25 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
+<<<<<<< HEAD
                                     path: "compra_refacciones",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
                                             <CompraRefacciones />
+=======
+                                    path: "presupuestos",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <Presupuestos />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "presupuestos_refacciones",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <PresupuestosRefacciones />
+>>>>>>> 060ea125ee30320efd549352cd05b4c5125362a4
                                         </RequirePermission>
                                     ),
                                 },
