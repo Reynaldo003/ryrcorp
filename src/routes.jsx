@@ -448,12 +448,14 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
-<<<<<<< HEAD
                                     path: "compra_refacciones",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
                                             <CompraRefacciones />
-=======
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
                                     path: "presupuestos",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
@@ -466,7 +468,6 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
                                             <PresupuestosRefacciones />
->>>>>>> 060ea125ee30320efd549352cd05b4c5125362a4
                                         </RequirePermission>
                                     ),
                                 },

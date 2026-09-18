@@ -1,9 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-<<<<<<< HEAD
-import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart } from "lucide-react";
-=======
-import { CarFront, Users, ArchiveX, LayoutList, BadgeDollarSign, CircleDollarSign } from "lucide-react";
->>>>>>> 060ea125ee30320efd549352cd05b4c5125362a4
+import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
