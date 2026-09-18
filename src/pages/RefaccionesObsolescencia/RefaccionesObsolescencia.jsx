@@ -112,7 +112,7 @@ function convertirGrafica(items) {
         valor_disponible: numero(item.valor_disponible),
         valor_reservado: numero(item.valor_reservado),
         valor_pendiente: numero(item.valor_pendiente),
-        promedioDias: numero(item.promedioDias || item.promediodias || item.promedio_dias),
+        promedioDias: item.promedioDias !== undefined ? numero(item.promedioDias) : 0,
     }));
 }
 
@@ -133,6 +133,33 @@ export default function RefaccionesObsolescencia() {
     const [errorDashboard, setErrorDashboard] = useState("");
     const requestDatosRef = useRef(0);
     const requestDashboardRef = useRef(0);
+    const [anioActivo, setAnioActivo] = useState(new Date().getFullYear().toString());
+    const [mesActivo, setMesActivo] = useState("");
+    const anioActual = new Date().getFullYear();
+    const opcionesAnios = Array.from({ length: anioActual - 2023 + 1 }, (_, i) => (2023 + i).toString());
+
+    // Traduce los botones de Año/Mes a los campos fecha_desde y fecha_hasta de la API
+    useEffect(() => {
+        if (anioActivo) {
+            setPagina(1);
+            if (mesActivo) {
+                // Calcula el último día del mes seleccionado
+                const ultimoDia = new Date(anioActivo, parseInt(mesActivo), 0).getDate();
+                setFiltros(prev => ({
+                    ...prev,
+                    fecha_desde: `${anioActivo}-${mesActivo}-01`,
+                    fecha_hasta: `${anioActivo}-${mesActivo}-${ultimoDia}`
+                }));
+            } else {
+                // Si solo hay año, abarca los 12 meses
+                setFiltros(prev => ({
+                    ...prev,
+                    fecha_desde: `${anioActivo}-01-01`,
+                    fecha_hasta: `${anioActivo}-12-31`
+                }));
+            }
+        }
+    }, [anioActivo, mesActivo]);
 
     useEffect(() => {
         const timeout = setTimeout(() => setQBuscado(filtros.q), 400);
@@ -460,10 +487,6 @@ export default function RefaccionesObsolescencia() {
                         </div>
 
                         <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
-                            <SelectFilter label="Agencia" icon={MapPin} value={filtros.agencia} onChange={(value) => cambiarFiltro("agencia", value)} loading={loadingOpciones}>
-                                <option value="">Todas las agencias</option>
-                                {opciones.agencias.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </SelectFilter>
 
                             <SelectFilter label="Grupo principal" icon={Layers3} value={filtros.grupo_principal} onChange={(value) => cambiarFiltro("grupo_principal", value)} loading={loadingOpciones}>
                                 <option value="">Todos los grupos</option>
@@ -486,6 +509,64 @@ export default function RefaccionesObsolescencia() {
                             </SelectFilter>
                         </div>
 
+                        {/* --- PANEL SUPERIOR ESTILO PROSPECTOS DIGITALES --- */}
+                        <div className="mb-6 space-y-4 rounded-2xl bg-white p-5 border border-[#E4E7F0] shadow-sm">
+
+                            {/* Fila 1: Botones de Agencia (Concesionaria) */}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <span className="w-32 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD]">
+                                    Concesionaria
+                                </span>
+                                <div className="flex-1 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+                                    <ButtonGroup
+                                        options={opciones.agencias}
+                                        activeValue={filtros.agencia}
+                                        onChange={(val) => cambiarFiltro("agencia", val)}
+                                        allLabel="Todas las agencias"
+                                    />
+                                </div>
+                            </div>
+
+                            <hr className="border-[#E4E7F0]" />
+
+                            {/* Fila 2: Botones de Año y Mes */}
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+
+                                {/* Sección Año */}
+                                <div className="flex items-center gap-2">
+                                    <span className="w-32 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD] lg:w-auto lg:pr-4">
+                                        Año
+                                    </span>
+                                    <ButtonGroup
+                                        options={opcionesAnios}
+                                        activeValue={anioActivo}
+                                        onChange={setAnioActivo}
+                                        showAllOption={false}
+                                    />
+                                </div>
+
+                                <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
+
+                                {/* Sección Meses */}
+                                <div className="flex items-center gap-2 flex-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
+                                    <ButtonGroup
+                                        options={[
+                                            { label: "Ene", value: "01" }, { label: "Feb", value: "02" },
+                                            { label: "Mar", value: "03" }, { label: "Abr", value: "04" },
+                                            { label: "May", value: "05" }, { label: "Jun", value: "06" },
+                                            { label: "Jul", value: "07" }, { label: "Ago", value: "08" },
+                                            { label: "Sep", value: "09" }, { label: "Oct", value: "10" },
+                                            { label: "Nov", value: "11" }, { label: "Dic", value: "12" }
+                                        ]}
+                                        activeValue={mesActivo}
+                                        onChange={setMesActivo}
+                                        allLabel="Anual"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        {/* --- FIN PANEL SUPERIOR --- */}
+
                         <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-6">
                             <SelectFilter label="Reservadas" icon={Boxes} value={filtros.reservadas} onChange={(value) => cambiarFiltro("reservadas", value)}>
                                 <option value="">Todas</option>
@@ -498,14 +579,6 @@ export default function RefaccionesObsolescencia() {
                                 <option value="con">Con pendientes</option>
                                 <option value="sin">Sin pendientes</option>
                             </SelectFilter>
-
-                            <FilterField label="Fecha referencia desde" icon={CalendarDays}>
-                                <input type="date" value={filtros.fecha_desde} onChange={(e) => cambiarFiltro("fecha_desde", e.target.value)} className={inputClass} />
-                            </FilterField>
-
-                            <FilterField label="Fecha referencia hasta" icon={CalendarDays}>
-                                <input type="date" value={filtros.fecha_hasta} onChange={(e) => cambiarFiltro("fecha_hasta", e.target.value)} className={inputClass} />
-                            </FilterField>
 
                             <FilterField label="Días mínimo" icon={Clock3}>
                                 <input type="number" min="0" value={filtros.dias_min} onChange={(e) => cambiarFiltro("dias_min", e.target.value)} placeholder="Ej. 180" className={inputClass} />
@@ -864,7 +937,7 @@ export default function RefaccionesObsolescencia() {
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${value} días`, "Promedio"]} />
 
                                                 {/* Línea roja visual de límite (Ej. 180 días) */}
-                                                <ReferenceLine y={180} stroke="#EF4444" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (180d)', fill: '#EF4444', fontSize: 11 }} />
+                                                <ReferenceLine y={183} stroke="#EF4444" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (180d)', fill: '#EF4444', fontSize: 11 }} />
 
                                                 <Bar dataKey="promedioDias" fill={C.navyLight} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={700}>
                                                     {porGrupo.map((entry, index) => (
@@ -879,22 +952,24 @@ export default function RefaccionesObsolescencia() {
                         </div>
 
                         <div className="xl:col-span-6">
-                            <ChartCard title="Mapa de Obsolescencia" subtitle="Antigüedad vs Valor vs Cantidad (Burbujas)" icon={Layers3}>
+                            <ChartCard title="Comparativa por Grupo Principal" subtitle="Valor de inventario vs Antigüedad promedio" icon={Layers3}>
                                 <div className="h-[360px]">
                                     {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                                                <XAxis type="number" dataKey="promedioDias" name="Antigüedad" unit=" d" tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <YAxis type="number" dataKey="valor_inventario" name="Valor" tickFormatter={formatoCompacto} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <ZAxis type="number" dataKey="productos" range={[50, 500]} name="Piezas" />
-                                                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={TOOLTIP_STYLE} formatter={(value, name) => name === 'Valor' ? money(value) : value} />
-                                                <Scatter name="Grupos" data={porGrupo} fill={C.navy}>
-                                                    {porGrupo.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                                                    ))}
-                                                </Scatter>
-                                            </ScatterChart>
+                                            <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                                                <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <YAxis yAxisId="left" orientation="left" tickFormatter={formatoCompacto} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [name === "Valor Inventario" ? money(value) : `${value} días`, name]} />
+                                                <Legend formatter={(value) => value} />
+
+                                                {/* Primera columna agrupada: Valor del Inventario */}
+                                                <Bar yAxisId="left" dataKey="valor_inventario" name="Valor Inventario" fill={C.navy} radius={[6, 6, 0, 0]} barSize={16} isAnimationActive animationDuration={700} />
+
+                                                {/* Segunda columna agrupada: Días de Antigüedad */}
+                                                <Bar yAxisId="right" dataKey="promedioDias" name="Antigüedad (días)" fill={C.navyLight} radius={[6, 6, 0, 0]} barSize={16} isAnimationActive animationDuration={700} />
+                                            </BarChart>
                                         </ResponsiveContainer>
                                     )}
                                 </div>
@@ -1076,6 +1151,48 @@ function ChartEmpty() {
             <Database className="h-7 w-7 text-[#C8CEDF]" />
             <p className="mt-2 text-sm font-semibold text-[#515778]">Sin información</p>
             <p className="mt-1 text-xs text-[#8891AD]">No existen datos para los filtros seleccionados.</p>
+        </div>
+    );
+}
+
+function ButtonGroup({ options, activeValue, onChange, showAllOption = true, allLabel = "Todos" }) {
+    return (
+        <div className="flex w-max items-center gap-2">
+            {showAllOption && (
+                <button
+                    type="button"
+                    onClick={() => onChange("")}
+                    className={cn(
+                        "inline-flex shrink-0 items-center justify-center rounded-lg border border-[#131E5C] px-4 py-1.5 text-[13px] font-bold transition-all active:scale-[0.97]",
+                        activeValue === ""
+                            ? "bg-[#131E5C] text-white shadow-md shadow-[#131E5C]/20"
+                            : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10"
+                    )}
+                >
+                    {allLabel}
+                </button>
+            )}
+            {options.map((opt) => {
+                const value = typeof opt === "string" ? opt : opt.value;
+                const label = typeof opt === "string" ? opt : opt.label;
+                const isActive = activeValue === value;
+
+                return (
+                    <button
+                        key={value}
+                        type="button"
+                        onClick={() => onChange(value)}
+                        className={cn(
+                            "inline-flex shrink-0 items-center justify-center rounded-lg border border-[#131E5C] px-4 py-1.5 text-[13px] font-bold transition-all active:scale-[0.97]",
+                            isActive
+                                ? "bg-[#131E5C] text-white shadow-md shadow-[#131E5C]/20"
+                                : "bg-white text-[#131E5C] hover:bg-[#131E5C]/10"
+                        )}
+                    >
+                        {label}
+                    </button>
+                );
+            })}
         </div>
     );
 }
