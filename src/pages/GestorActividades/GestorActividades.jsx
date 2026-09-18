@@ -1527,16 +1527,18 @@ export default function GestorActividades() {
         loadAgenda,
     ]);
 
-    const reloadAgenda = useCallback(async () => {
+    const reloadAgenda = useCallback(async (silent = false) => {
         if (!agendaRange) return;
 
         await loadAgenda(
             agendaRange.start,
-            agendaRange.end
+            agendaRange.end,
+            silent
         );
     }, [
         agendaRange,
         loadAgenda,
+        notifyTasksChanged,
     ]);
 
     const refreshFromSync = useCallback(async () => {
@@ -1719,7 +1721,7 @@ export default function GestorActividades() {
             setConfirmDeleteTask(null);
 
             await loadBoard();
-            await reloadAgenda();
+            await reloadAgenda(true);
             notifyTasksChanged();
         } catch (error) {
             alert(
@@ -1745,7 +1747,7 @@ export default function GestorActividades() {
             );
 
             await loadBoard();
-            await reloadAgenda();
+            await reloadAgenda(true);
             notifyTasksChanged();
         } catch (error) {
             console.error(
@@ -1771,7 +1773,7 @@ export default function GestorActividades() {
             );
 
             await loadBoard();
-            await reloadAgenda();
+            await reloadAgenda(true);
             notifyTasksChanged();
         } catch (error) {
             console.error(
@@ -2068,7 +2070,7 @@ export default function GestorActividades() {
                 onSetUserColor={onSetUserColor}
                 onSaved={async () => {
                     await loadBoard();
-                    await reloadAgenda();
+                    await reloadAgenda(true);
                     notifyTasksChanged();
                 }}
             />

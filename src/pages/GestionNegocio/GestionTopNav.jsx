@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Users, ArchiveX, LayoutList } from "lucide-react";
+import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
@@ -23,6 +23,12 @@ export default function GestionTopNav() {
             show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
         {
+            label: "Compra de Refacciones",
+            to: "/gestion_negocio/compra_refacciones",
+            icon: ShoppingCart,
+            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]),
+        },
+        {
             label: "Autos Nuevos",
             to: "/gestion_negocio/autos_nuevos",
             icon: CarFront,
@@ -32,6 +38,18 @@ export default function GestionTopNav() {
             label: "Prospectos Digitales",
             to: "/gestion_negocio/prospectos_digitales",
             icon: Users,
+            show: true,
+        },
+        {
+            label: "Presupuestos",
+            to: "/gestion_negocio/presupuestos",
+            icon: CircleDollarSign,
+            show: true,
+        },
+        {
+            label: "Presupuestos Refacciones",
+            to: "/gestion_negocio/presupuestos_refacciones",
+            icon: BadgeDollarSign,
             show: true,
         },
     ].filter((tab) => tab.show);
