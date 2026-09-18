@@ -41,19 +41,12 @@ export default function GestionTopNav() {
             show: true,
         },
         {
-            label: "Presupuestos",
+            label: "Presupuestos Serv",
             to: "/gestion_negocio/presupuestos",
             icon: CircleDollarSign,
             show: true,
         },
-        {
-            label: "Presupuestos Refacciones",
-            to: "/gestion_negocio/presupuestos_refacciones",
-            icon: BadgeDollarSign,
-            show: true,
-        },
     ].filter((tab) => tab.show);
-
     return (
         <header className="sticky top-0 z-40 w-full border-b bg-white" style={{ borderColor: `${BRAND_BLUE}22` }}>
             <div className="flex min-h-[76px] items-center gap-4 px-4 md:px-6 lg:px-8">

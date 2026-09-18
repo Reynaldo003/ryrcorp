@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+    CalendarDays,
     ChevronDown,
+    ClipboardList,
     FileCheck2,
     FileText,
+    Wrench,
 } from "lucide-react";
 import {
     Cell,
@@ -730,80 +733,89 @@ export default function PresupuestosServicio() {
                     </Tarjeta>
                 </div>
 
-                {/* =====================================================
-                    CONTENIDO PRINCIPAL
-                ====================================================== */}
+                                {/* =====================================================
+                                    CONTENIDO PRINCIPAL
+                                ====================================================== */}
 
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.02fr_1fr]">
+                                <div className="space-y-5">
 
-                    <div className="space-y-5">
+                                    {/* ===================================================
+                                        PRESUPUESTO EMITIDO / AUTORIZADO
+                                    ==================================================== */}
 
-                        <BloquePresupuesto
-                            titulo={
-                                <>
-                                    Presupuesto{" "}
-                                    <strong>
-                                        emitido
-                                    </strong>
-                                </>
-                            }
-                            icono={
-                                <FileText className="h-5 w-5" />
-                            }
-                            data={
-                                data.emitidos
-                            }
-                            tipo="emitido"
-                        />
+                                    <div className="grid min-w-0 grid-cols-1 gap-5 2xl:grid-cols-2">
 
-                        <BloquePresupuesto
-                            titulo={
-                                <>
-                                    Presupuesto{" "}
-                                    <strong>
-                                        autorizado
-                                    </strong>
-                                </>
-                            }
-                            icono={
-                                <FileCheck2 className="h-5 w-5" />
-                            }
-                            data={
-                                data.autorizados
-                            }
-                            tipo="autorizado"
-                        />
-                    </div>
+                                        <BloquePresupuesto
+                                            titulo={
+                                                <>
+                                                    Presupuesto{" "}
+                                                    <strong>
+                                                        emitido
+                                                    </strong>
+                                                </>
+                                            }
+                                            icono={
+                                                <FileText className="h-5 w-5" />
+                                            }
+                                            data={
+                                                data.emitidos
+                                            }
+                                            tipo="emitido"
+                                        />
 
-                    <Seccion
-                        titulo={
-                            <>
-                                Seguimiento a{" "}
-                                <strong>
-                                    Presupuestos
-                                </strong>
-                            </>
-                        }
-                    >
-                        <TablaSeguimiento
-                            datos={
-                                data.seguimiento
-                            }
-                            total={
-                                data.totalSeguimiento
-                            }
-                        />
-                    </Seccion>
-                </div>
-            </main>
-        </div>
-    );
-}
+                                        <BloquePresupuesto
+                                            titulo={
+                                                <>
+                                                    Presupuesto{" "}
+                                                    <strong>
+                                                        autorizado
+                                                    </strong>
+                                                </>
+                                            }
+                                            icono={
+                                                <FileCheck2 className="h-5 w-5" />
+                                            }
+                                            data={
+                                                data.autorizados
+                                            }
+                                            tipo="autorizado"
+                                        />
+
+                                    </div>
+
+                                    {/* ===================================================
+                                        SEGUIMIENTO A PRESUPUESTOS
+                                    ==================================================== */}
+
+                                    <Seccion
+                                        titulo={
+                                            <>
+                                                Seguimiento a{" "}
+                                                <strong>
+                                                    Presupuestos
+                                                </strong>
+                                            </>
+                                        }
+                                    >
+                                        <TablaSeguimiento
+                                            datos={
+                                                data.seguimiento
+                                            }
+                                            total={
+                                                data.totalSeguimiento
+                                            }
+                                        />
+                                    </Seccion>
+
+                                </div>
+                            </main>
+                        </div>
+                    );
+                }
 
 /* ============================================================
    CABECERA
 ============================================================ */
-
 function Cabecera({
     anio,
     setAnio,
@@ -814,98 +826,135 @@ function Cabecera({
     setMes,
     anios,
 }) {
+    const hoy = new Date();
+    const anioActual = hoy.getFullYear();
+    const mesActual = hoy.getMonth();
+
     return (
-        <div className="rounded-xl bg-white px-5 py-4 shadow-sm">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="space-y-4">
+            <div className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex items-center gap-3">
+                        <CalendarDays className="h-5 w-5 text-[#131E5C]" />
 
-                <div className="flex flex-wrap items-center gap-5">
+                        <span className="font-black uppercase tracking-[0.08em] text-[#131E5C]">
+                            Periodo
+                        </span>
 
-                    <div>
-                        <h1 className="text-[28px] font-medium tracking-tight text-[#155A91]">
-                            Presupuestos de{" "}
-                            <strong className="text-[#131E5C]">
-                                Servicio
-                            </strong>
-                        </h1>
+                        <select
+                            value={anio}
+                            onChange={(e) => {
+                                const nuevoAnio =
+                                    Number(
+                                        e.target.value,
+                                    );
+
+                                setAnio(
+                                    nuevoAnio,
+                                );
+
+                                if (
+                                    nuevoAnio ===
+                                        anioActual &&
+                                    MESES.indexOf(
+                                        mes,
+                                    ) > mesActual
+                                ) {
+                                    setMes(
+                                        MESES[
+                                            mesActual
+                                        ],
+                                    );
+                                }
+                            }}
+                            className="h-10 rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-bold outline-none focus:border-[#1555C7]"
+                        >
+                            {anios.map((item) => (
+                                <option
+                                    key={item}
+                                    value={item}
+                                >
+                                    {item}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
-                    <div className="hidden h-11 w-px bg-[#D8DEE8] md:block" />
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setAgencia(
+                                    "Todas",
+                                )
+                            }
+                            className={`rounded-lg px-4 py-2 font-bold transition ${
+                                agencia === "Todas"
+                                    ? "bg-[#131E5C] text-white"
+                                    : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"
+                            }`}
+                        >
+                            Todas
+                        </button>
 
-                    <Marcas />
+                        {agencias.map((item) => (
+                            <button
+                                key={item}
+                                type="button"
+                                onClick={() =>
+                                    setAgencia(
+                                        item,
+                                    )
+                                }
+                                className={`rounded-lg border border-[#131E5C] px-4 py-2 font-bold transition ${
+                                    agencia === item
+                                        ? "bg-[#131E5C] text-white"
+                                        : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                }`}
+                            >
+                                {item}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                    {MESES.map(
+                        (item, index) => {
+                            const futuro =
+                                anio ===
+                                    anioActual &&
+                                index >
+                                    mesActual;
 
-                    <FiltroSelect
-                        label="Año"
-                        value={anio}
-                        onChange={(e) =>
-                            setAnio(
-                                Number(
-                                    e.target.value,
-                                ),
-                            )
-                        }
-                    >
-                        {anios.map(
-                            (item) => (
-                                <option
+                            const activo =
+                                mes === item;
+
+                            return (
+                                <button
                                     key={item}
-                                    value={item}
+                                    type="button"
+                                    disabled={
+                                        futuro
+                                    }
+                                    onClick={() =>
+                                        setMes(
+                                            item,
+                                        )
+                                    }
+                                    className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 font-bold capitalize transition ${
+                                        activo
+                                            ? "bg-[#131E5C] text-white shadow"
+                                            : futuro
+                                              ? "cursor-not-allowed text-[#131E5C] opacity-50"
+                                              : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                    }`}
                                 >
                                     {item}
-                                </option>
-                            ),
-                        )}
-                    </FiltroSelect>
-
-                    <FiltroSelect
-                        label="Agencia"
-                        value={agencia}
-                        onChange={(e) =>
-                            setAgencia(
-                                e.target.value,
-                            )
-                        }
-                        className="min-w-[180px]"
-                    >
-                        <option value="Todas">
-                            Todas
-                        </option>
-
-                        {agencias.map(
-                            (item) => (
-                                <option
-                                    key={item}
-                                    value={item}
-                                >
-                                    {item}
-                                </option>
-                            ),
-                        )}
-                    </FiltroSelect>
-
-                    <FiltroSelect
-                        label="Mes"
-                        value={mes}
-                        onChange={(e) =>
-                            setMes(
-                                e.target.value,
-                            )
-                        }
-                        className="min-w-[205px]"
-                    >
-                        {MESES.map(
-                            (item) => (
-                                <option
-                                    key={item}
-                                    value={item}
-                                >
-                                    {item}
-                                </option>
-                            ),
-                        )}
-                    </FiltroSelect>
+                                </button>
+                            );
+                        },
+                    )}
                 </div>
             </div>
         </div>
@@ -1059,7 +1108,7 @@ function BloquePresupuesto({
     return (
         <Seccion titulo={titulo}>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[135px_1fr]">
+            <div className="grid min-w-0 grid-cols-1 gap-4 2xl:grid-cols-[135px_minmax(0,1fr)]">
 
                 <div className="flex flex-col items-center justify-center">
 
@@ -1075,7 +1124,7 @@ function BloquePresupuesto({
                     />
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
 
                     <MetricaPresupuesto
                         titulo={
@@ -1146,7 +1195,7 @@ function MetricaPresupuesto({
 }) {
     return (
         <div
-            className={`flex flex-col items-center justify-center rounded-lg bg-white px-3 text-center shadow-[0_3px_12px_rgba(15,23,42,.18)] ${small
+            className={`flex min-w-0 flex-col items-center justify-center rounded-lg bg-white px-3 text-center shadow-[0_3px_12px_rgba(15,23,42,.18)] ${small
                 ? "min-h-[82px] py-2"
                 : "min-h-[170px] py-4"
                 }`}
@@ -1156,7 +1205,7 @@ function MetricaPresupuesto({
             </div>
 
             <div
-                className={`mt-3 font-black text-[#2F2F2F] ${small
+                className={`mt-3 max-w-full font-black leading-tight text-[#2F2F2F] ${small
                     ? "text-[19px]"
                     : "text-[24px]"
                     }`}
