@@ -1,11 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-    CalendarDays,
     ChevronDown,
-    ClipboardList,
     FileCheck2,
     FileText,
-    Wrench,
 } from "lucide-react";
 import {
     Cell,
@@ -16,17 +13,29 @@ import {
     Tooltip,
 } from "recharts";
 
+import {
+    getOpcionesPresupuestos,
+    getPresupuestos,
+    getPresupuestosDashboard,
+} from "../../lib/apiPresupuestos";
+
 /* ============================================================
    CONFIGURACIÓN GENERAL
 ============================================================ */
 
-const COLOR_PRINCIPAL = "#131E5C";
-const COLOR_AZUL = "#1555C7";
 const COLOR_AZUL_CLARO = "#2584F2";
-const COLOR_VERDE = "#145B54";
 const COLOR_ROJO = "#E31B23";
 const COLOR_AMARILLO = "#F2C313";
-const COLOR_GRIS = "#D8DEE8";
+
+/*
+ * Por los datos actuales estamos considerando:
+ *
+ * A = Autorizado
+ *
+ * Si posteriormente confirmamos que Power BI utiliza otra regla,
+ * sólo hay que cambiar esta constante o mover la regla al backend.
+ */
+const ESTATUS_AUTORIZADO = "A";
 
 const MESES = [
     "enero",
@@ -43,7 +52,16 @@ const MESES = [
     "diciembre",
 ];
 
-const CANALES = ["Clientes", "Interno", "Garantías", "Todos"];
+const COLORES_ASESORES = [
+    "#145B54",
+    "#155A91",
+    "#2584F2",
+    "#16A67A",
+    "#78BFA8",
+    "#153A5E",
+    "#3B74D4",
+    "#5F92DE",
+];
 
 const TOOLTIP_STYLE = {
     borderRadius: 10,
@@ -52,208 +70,45 @@ const TOOLTIP_STYLE = {
     fontSize: 13,
 };
 
-/* ============================================================
-   DATOS MOCK
-   Posteriormente este objeto puede salir directamente del backend.
-============================================================ */
+const DATA_VACIA = {
+    ordenesEmitidas: 0,
+    conversionMonto: 0,
 
-const MOCK_DATA = {
-    ordenesEmitidas: 327,
-    conversionMonto: 22.51,
+    estatus: [],
 
-    estatus: [
-        {
-            name: "N",
-            value: 61,
-            color: "#155B91",
-        },
-        {
-            name: "A",
-            value: 70,
-            color: "#1885D8",
-        },
-        {
-            name: "E",
-            value: 150,
-            color: "#153A5E",
-        },
-    ],
-
-    presupuestosEmitidosAsesor: [
-        {
-            name: "JORGE YAMIL TEPOLE",
-            value: 102,
-            color: "#145B54",
-        },
-        {
-            name: "IVAN ELISEO RAMIREZ",
-            value: 94,
-            color: "#155A91",
-        },
-        {
-            name: "VERONICA GONZALEZ",
-            value: 79,
-            color: "#2584F2",
-        },
-        {
-            name: "OTROS",
-            value: 3,
-            color: "#16A67A",
-        },
-        {
-            name: "SIN ASIGNAR",
-            value: 3,
-            color: "#78BFA8",
-        },
-    ],
-
-    presupuestosAutorizadosAsesor: [
-        {
-            name: "IVAN ELISEO RAMIREZ",
-            value: 27,
-            color: "#155A91",
-        },
-        {
-            name: "VERONICA GONZALEZ",
-            value: 26,
-            color: "#2584F2",
-        },
-        {
-            name: "JORGE YAMIL TEPOLE",
-            value: 14,
-            color: "#145B54",
-        },
-        {
-            name: "OTROS",
-            value: 3,
-            color: "#16A67A",
-        },
-    ],
+    presupuestosEmitidosAsesor: [],
+    presupuestosAutorizadosAsesor: [],
 
     emitidos: {
-        porcentaje: 85.93,
-        total: 281,
-        manoObra: 693962.16,
-        refacciones: 1948297.67,
-        montoTotal: 2703901.03,
+        porcentaje: 0,
+        total: 0,
+        manoObra: 0,
+        refacciones: 0,
+        montoTotal: 0,
     },
 
     autorizados: {
-        porcentaje: 24.91,
-        total: 70,
-        manoObra: 249991.36,
-        refacciones: 358652.18,
-        montoTotal: 608643.54,
+        porcentaje: 0,
+        total: 0,
+        manoObra: 0,
+        refacciones: 0,
+        montoTotal: 0,
     },
 
-    seguimiento: [
-        {
-            asesor: "VERONICA GONZALEZ VELASCO",
-            presupuesto: 32112,
-            fecha: "15/01/2026",
-            sit: "N",
-            vin: "WV1DLY7H0KH087421",
-        },
-        {
-            asesor: "IVAN ELISEO RAMIREZ MEDICO",
-            presupuesto: 32097,
-            fecha: "14/01/2026",
-            sit: "E",
-            vin: "XW85G261XHG021428",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32161,
-            fecha: "20/01/2026",
-            sit: "N",
-            vin: "MEX5A2604LT088521",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32169,
-            fecha: "20/01/2026",
-            sit: "N",
-            vin: "3VVHP65N0MM118221",
-        },
-        {
-            asesor: "IVAN ELISEO RAMIREZ MEDICO",
-            presupuesto: 32125,
-            fecha: "15/01/2026",
-            sit: "A",
-            vin: "1VWAH7A30DC145822",
-        },
-        {
-            asesor: "IVAN ELISEO RAMIREZ MEDICO",
-            presupuesto: 32040,
-            fecha: "09/01/2026",
-            sit: "N",
-            vin: "WV1GRNSY9P9061425",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32055,
-            fecha: "10/01/2026",
-            sit: "N",
-            vin: "WVG2N4CW8PT003251",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32193,
-            fecha: "22/01/2026",
-            sit: "N",
-            vin: "3VVKP65NXLM028521",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32074,
-            fecha: "13/01/2026",
-            sit: "N",
-            vin: "WVW1FHKSYUS906512",
-        },
-        {
-            asesor: "IVAN ELISEO RAMIREZ MEDICO",
-            presupuesto: 32208,
-            fecha: "23/01/2026",
-            sit: "A",
-            vin: "3VVVP65N3RM095221",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32229,
-            fecha: "26/01/2026",
-            sit: "N",
-            vin: "3VVKP65NXLM028612",
-        },
-        {
-            asesor: "JORGE YAMIL TEPOLE MENENDEZ",
-            presupuesto: 32274,
-            fecha: "30/01/2026",
-            sit: "N",
-            vin: "3VWC7BU0KM168421",
-        },
-        {
-            asesor: "IVAN ELISEO RAMIREZ MEDICO",
-            presupuesto: 32033,
-            fecha: "08/01/2026",
-            sit: "E",
-            vin: "3VVJA65N6RM121512",
-        },
-        {
-            asesor: "IVAN ELISEO RAMIREZ MEDICO",
-            presupuesto: 32031,
-            fecha: "08/01/2026",
-            sit: "N",
-            vin: "MEX612605LT068821",
-        },
-    ],
+    seguimiento: [],
+    totalSeguimiento: 0,
 };
 
 /* ============================================================
-   FORMATEADORES
+   HELPERS
 ============================================================ */
 
 function numero(valor) {
-    return Number(valor ?? 0);
+    const resultado = Number(valor ?? 0);
+
+    return Number.isFinite(resultado)
+        ? resultado
+        : 0;
 }
 
 function entero(valor) {
@@ -263,7 +118,7 @@ function entero(valor) {
 }
 
 function dinero(valor) {
-    return numero(valor).toLocaleString("es-ES", {
+    return numero(valor).toLocaleString("es-MX", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
@@ -276,55 +131,555 @@ function porcentaje(valor) {
     })}%`;
 }
 
+function porcentajeSeguro(valor, total) {
+    const numerador = numero(valor);
+    const denominador = numero(total);
+
+    if (!denominador) {
+        return 0;
+    }
+
+    return (numerador / denominador) * 100;
+}
+
+/* ============================================================
+   FECHAS
+============================================================ */
+
+function pad(valor) {
+    return String(valor).padStart(2, "0");
+}
+
+function obtenerRangoMes(anio, mes) {
+    const indiceMes = MESES.indexOf(mes);
+
+    if (indiceMes < 0) {
+        return {
+            fecha_desde: "",
+            fecha_hasta: "",
+        };
+    }
+
+    const numeroMes = indiceMes + 1;
+
+    const ultimoDia = new Date(
+        anio,
+        numeroMes,
+        0,
+    ).getDate();
+
+    return {
+        fecha_desde: `${anio}-${pad(numeroMes)}-01`,
+        fecha_hasta: `${anio}-${pad(numeroMes)}-${pad(ultimoDia)}`,
+    };
+}
+
+function formatearFecha(valor) {
+    if (!valor) {
+        return "";
+    }
+
+    const texto = String(valor).trim();
+
+    /*
+     * YYYYMMDD
+     */
+    if (/^\d{8}$/.test(texto)) {
+        const anio = texto.substring(0, 4);
+        const mes = texto.substring(4, 6);
+        const dia = texto.substring(6, 8);
+
+        return `${dia}/${mes}/${anio}`;
+    }
+
+    /*
+     * YYYY-MM-DD
+     * YYYY-MM-DDTHH:mm:ss
+     */
+    const formatoISO = texto.match(
+        /^(\d{4})-(\d{2})-(\d{2})/,
+    );
+
+    if (formatoISO) {
+        return `${formatoISO[3]}/${formatoISO[2]}/${formatoISO[1]}`;
+    }
+
+    /*
+     * Ya viene como DD/MM/YYYY.
+     */
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(texto)) {
+        return texto.substring(0, 10);
+    }
+
+    return texto;
+}
+
+/* ============================================================
+   ESTATUS
+============================================================ */
+
+function colorEstatus(estatus, index) {
+    const colores = {
+        N: "#155B91",
+        A: "#1885D8",
+        E: "#153A5E",
+    };
+
+    return (
+        colores[String(estatus || "").trim()] ||
+        COLORES_ASESORES[
+        index % COLORES_ASESORES.length
+        ]
+    );
+}
+
+/* ============================================================
+   NORMALIZACIÓN BACKEND -> FRONTEND
+============================================================ */
+
+function normalizarAsesores(items = []) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+
+    return [...items]
+        .sort(
+            (a, b) =>
+                numero(b.presupuestos) -
+                numero(a.presupuestos),
+        )
+        .map((item, index) => ({
+            name:
+                item.cod_func !== null &&
+                    item.cod_func !== undefined
+                    ? `Asesor ${item.cod_func}`
+                    : "Sin asignar",
+
+            value: numero(item.presupuestos),
+
+            color:
+                COLORES_ASESORES[
+                index %
+                COLORES_ASESORES.length
+                ],
+        }));
+}
+
+function normalizarEstatus(items = []) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+
+    return items.map((item, index) => ({
+        name:
+            item.estatus ||
+            "Sin estatus",
+
+        value: numero(
+            item.presupuestos ??
+            item.total,
+        ),
+
+        color: colorEstatus(
+            item.estatus,
+            index,
+        ),
+    }));
+}
+
+function normalizarSeguimiento(items = []) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+
+    return items.map((item) => ({
+        asesor:
+            item.cod_func !== null &&
+                item.cod_func !== undefined
+                ? `Asesor ${item.cod_func}`
+                : "Sin asignar",
+
+        presupuesto:
+            item.nr_orcamento,
+
+        fecha: formatearFecha(
+            item.dt_emissao,
+        ),
+
+        sit:
+            item.sit || "",
+
+        vin:
+            item.chassi || "",
+    }));
+}
+
+function construirData(
+    dashboard,
+    dashboardAutorizados,
+    listado,
+) {
+    const totales =
+        dashboard?.totales || {};
+
+    const totalesAutorizados =
+        dashboardAutorizados?.totales ||
+        {};
+
+    const graficas =
+        dashboard?.graficas || {};
+
+    const graficasAutorizados =
+        dashboardAutorizados?.graficas ||
+        {};
+
+    const totalRegistros = numero(
+        totales.registros,
+    );
+
+    const totalPresupuestos = numero(
+        totales.presupuestos,
+    );
+
+    const totalAutorizados = numero(
+        totalesAutorizados.presupuestos,
+    );
+
+    const montoEmitidos = numero(
+        totales.monto_total,
+    );
+
+    const montoAutorizados = numero(
+        totalesAutorizados.monto_total,
+    );
+
+    /*
+     * Actualmente no tenemos una tabla de Órdenes de Servicio,
+     * así que este KPI usa los registros de Matriz_Presupuestos.
+     */
+    const ordenesEmitidas =
+        totalRegistros;
+
+    /*
+     * Este porcentaje todavía no tiene el denominador real
+     * del Power BI, porque necesitaríamos la tabla de órdenes.
+     *
+     * Usamos presupuestos únicos / registros.
+     */
+    const porcentajeEmitidos =
+        porcentajeSeguro(
+            totalPresupuestos,
+            totalRegistros,
+        );
+
+    const porcentajeAutorizados =
+        porcentajeSeguro(
+            totalAutorizados,
+            totalPresupuestos,
+        );
+
+    const conversionMonto =
+        porcentajeSeguro(
+            montoAutorizados,
+            montoEmitidos,
+        );
+
+    return {
+        ordenesEmitidas,
+        conversionMonto,
+
+        estatus: normalizarEstatus(
+            graficas.por_estatus,
+        ),
+
+        presupuestosEmitidosAsesor:
+            normalizarAsesores(
+                graficas.por_asesor,
+            ),
+
+        presupuestosAutorizadosAsesor:
+            normalizarAsesores(
+                graficasAutorizados.por_asesor,
+            ),
+
+        emitidos: {
+            porcentaje:
+                porcentajeEmitidos,
+
+            total:
+                totalPresupuestos,
+
+            manoObra: numero(
+                totales.monto_mano_obra,
+            ),
+
+            refacciones: numero(
+                totales.monto_productos,
+            ),
+
+            montoTotal:
+                montoEmitidos,
+        },
+
+        autorizados: {
+            porcentaje:
+                porcentajeAutorizados,
+
+            total:
+                totalAutorizados,
+
+            manoObra: numero(
+                totalesAutorizados.monto_mano_obra,
+            ),
+
+            refacciones: numero(
+                totalesAutorizados.monto_productos,
+            ),
+
+            montoTotal:
+                montoAutorizados,
+        },
+
+        seguimiento:
+            normalizarSeguimiento(
+                listado?.results,
+            ),
+
+        totalSeguimiento: numero(
+            listado?.count,
+        ),
+    };
+}
+
 /* ============================================================
    COMPONENTE PRINCIPAL
 ============================================================ */
 
 export default function PresupuestosServicio() {
-    const [anio, setAnio] = useState(2026);
-    const [canal, setCanal] = useState("Clientes");
-    const [mes, setMes] = useState("enero");
+    const hoy = new Date();
 
-    const anios = useMemo(
-        () => [2026, 2025, 2024, 2023, 2022],
-        [],
-    );
+    const anioActual =
+        hoy.getFullYear();
+
+    const mesActual =
+        MESES[hoy.getMonth()];
+
+    const [anio, setAnio] =
+        useState(anioActual);
+
+    const [mes, setMes] =
+        useState(mesActual);
+
+    const [agencia, setAgencia] =
+        useState("Todas");
+
+    const [agencias, setAgencias] =
+        useState([]);
+
+    const [data, setData] =
+        useState(DATA_VACIA);
+
+    const [loading, setLoading] =
+        useState(true);
+
+    const [error, setError] =
+        useState("");
+
+    const anios = useMemo(() => {
+        return Array.from(
+            { length: 5 },
+            (_, index) =>
+                anioActual - index,
+        );
+    }, [anioActual]);
+
+    /* ========================================================
+       OPCIONES
+    ======================================================== */
+
+    useEffect(() => {
+        let activo = true;
+
+        getOpcionesPresupuestos()
+            .then((respuesta) => {
+                if (!activo) {
+                    return;
+                }
+
+                setAgencias(
+                    Array.isArray(
+                        respuesta?.agencias,
+                    )
+                        ? respuesta.agencias
+                        : [],
+                );
+            })
+            .catch((err) => {
+                console.error(
+                    "Error cargando opciones de presupuestos:",
+                    err,
+                );
+            });
+
+        return () => {
+            activo = false;
+        };
+    }, []);
+
+    /* ========================================================
+       DASHBOARD
+    ======================================================== */
+
+    useEffect(() => {
+        let activo = true;
+
+        const {
+            fecha_desde,
+            fecha_hasta,
+        } = obtenerRangoMes(
+            anio,
+            mes,
+        );
+
+        const params = {
+            fecha_desde,
+            fecha_hasta,
+
+            agencia:
+                agencia !== "Todas"
+                    ? agencia
+                    : undefined,
+        };
+
+        const paramsAutorizados = {
+            ...params,
+            sit: ESTATUS_AUTORIZADO,
+        };
+
+        const paramsListado = {
+            ...params,
+            page: 1,
+            page_size: 500,
+        };
+
+        setLoading(true);
+        setError("");
+
+        Promise.all([
+            getPresupuestosDashboard(
+                params,
+            ),
+
+            getPresupuestosDashboard(
+                paramsAutorizados,
+            ),
+
+            getPresupuestos(
+                paramsListado,
+            ),
+        ])
+            .then(
+                ([
+                    dashboard,
+                    dashboardAutorizados,
+                    listado,
+                ]) => {
+                    if (!activo) {
+                        return;
+                    }
+
+                    const nuevaData =
+                        construirData(
+                            dashboard,
+                            dashboardAutorizados,
+                            listado,
+                        );
+
+                    setData(nuevaData);
+                },
+            )
+            .catch((err) => {
+                if (!activo) {
+                    return;
+                }
+
+                console.error(
+                    "Error cargando presupuestos:",
+                    err,
+                );
+
+                setError(
+                    err?.message ||
+                    "No fue posible cargar los presupuestos.",
+                );
+
+                setData(DATA_VACIA);
+            })
+            .finally(() => {
+                if (activo) {
+                    setLoading(false);
+                }
+            });
+
+        return () => {
+            activo = false;
+        };
+    }, [
+        anio,
+        mes,
+        agencia,
+    ]);
 
     return (
         <div className="min-h-screen bg-[#F5F6F8] text-[#1A2344]">
             <main className="mx-auto max-w-[1700px] space-y-5 px-4 py-5">
-                {/* =====================================================
-            CABECERA
-        ====================================================== */}
 
                 <Cabecera
                     anio={anio}
                     setAnio={setAnio}
-                    canal={canal}
-                    setCanal={setCanal}
+                    agencia={agencia}
+                    setAgencia={setAgencia}
+                    agencias={agencias}
                     mes={mes}
                     setMes={setMes}
                     anios={anios}
                 />
 
+                {error && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-semibold text-red-700">
+                        {error}
+                    </div>
+                )}
+
+                {loading && (
+                    <div className="rounded-xl border border-[#C8D0DF] bg-white px-4 py-3 text-sm font-semibold text-[#566276] shadow-sm">
+                        Cargando información de presupuestos...
+                    </div>
+                )}
+
                 {/* =====================================================
-            RESUMEN SUPERIOR
-        ====================================================== */}
+                    RESUMEN SUPERIOR
+                ====================================================== */}
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[155px_180px_210px_1fr_1fr]">
+
                     <OrdenesEmitidas
-                        total={MOCK_DATA.ordenesEmitidas}
+                        total={
+                            data.ordenesEmitidas
+                        }
                     />
 
                     <Tarjeta>
-                        <div className="text-center text-[11px] font-black leading-tight text-[#33415F]">
+                        <div className="text-center text-[14px] font-black leading-tight text-[#33415F]">
                             Conversión de montos emitidos vs
                             <br />
                             autorizados
                         </div>
 
                         <Gauge
-                            value={MOCK_DATA.conversionMonto}
+                            value={
+                                data.conversionMonto
+                            }
                             height={135}
                             compact
                         />
@@ -337,7 +692,9 @@ export default function PresupuestosServicio() {
 
                         <div className="p-3">
                             <DonutSimple
-                                datos={MOCK_DATA.estatus}
+                                datos={
+                                    data.estatus
+                                }
                                 height={125}
                                 showLegend
                             />
@@ -352,7 +709,7 @@ export default function PresupuestosServicio() {
                         <div className="p-3">
                             <DonutAsesores
                                 datos={
-                                    MOCK_DATA.presupuestosEmitidosAsesor
+                                    data.presupuestosEmitidosAsesor
                                 }
                             />
                         </div>
@@ -366,7 +723,7 @@ export default function PresupuestosServicio() {
                         <div className="p-3">
                             <DonutAsesores
                                 datos={
-                                    MOCK_DATA.presupuestosAutorizadosAsesor
+                                    data.presupuestosAutorizadosAsesor
                                 }
                             />
                         </div>
@@ -374,56 +731,67 @@ export default function PresupuestosServicio() {
                 </div>
 
                 {/* =====================================================
-            CONTENIDO PRINCIPAL
-        ====================================================== */}
+                    CONTENIDO PRINCIPAL
+                ====================================================== */}
 
                 <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.02fr_1fr]">
-                    {/* ===================================================
-              COLUMNA IZQUIERDA
-          ==================================================== */}
 
                     <div className="space-y-5">
+
                         <BloquePresupuesto
                             titulo={
                                 <>
                                     Presupuesto{" "}
-                                    <strong>emitido</strong>
+                                    <strong>
+                                        emitido
+                                    </strong>
                                 </>
                             }
                             icono={
                                 <FileText className="h-5 w-5" />
                             }
-                            data={MOCK_DATA.emitidos}
+                            data={
+                                data.emitidos
+                            }
+                            tipo="emitido"
                         />
 
                         <BloquePresupuesto
                             titulo={
                                 <>
                                     Presupuesto{" "}
-                                    <strong>autorizado</strong>
+                                    <strong>
+                                        autorizado
+                                    </strong>
                                 </>
                             }
                             icono={
                                 <FileCheck2 className="h-5 w-5" />
                             }
-                            data={MOCK_DATA.autorizados}
+                            data={
+                                data.autorizados
+                            }
+                            tipo="autorizado"
                         />
                     </div>
-
-                    {/* ===================================================
-              TABLA SEGUIMIENTO
-          ==================================================== */}
 
                     <Seccion
                         titulo={
                             <>
                                 Seguimiento a{" "}
-                                <strong>Presupuestos</strong>
+                                <strong>
+                                    Presupuestos
+                                </strong>
                             </>
                         }
                     >
                         <TablaSeguimiento
-                            datos={MOCK_DATA.seguimiento}
+                            datos={
+                                data.seguimiento
+                            }
+                            total={
+                                data.totalSeguimiento
+                            }
                         />
                     </Seccion>
                 </div>
@@ -439,8 +807,9 @@ export default function PresupuestosServicio() {
 function Cabecera({
     anio,
     setAnio,
-    canal,
-    setCanal,
+    agencia,
+    setAgencia,
+    agencias,
     mes,
     setMes,
     anios,
@@ -448,7 +817,9 @@ function Cabecera({
     return (
         <div className="rounded-xl bg-white px-5 py-4 shadow-sm">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+
                 <div className="flex flex-wrap items-center gap-5">
+
                     <div>
                         <h1 className="text-[28px] font-medium tracking-tight text-[#155A91]">
                             Presupuestos de{" "}
@@ -464,48 +835,76 @@ function Cabecera({
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+
                     <FiltroSelect
                         label="Año"
                         value={anio}
                         onChange={(e) =>
-                            setAnio(Number(e.target.value))
+                            setAnio(
+                                Number(
+                                    e.target.value,
+                                ),
+                            )
                         }
                     >
-                        {anios.map((item) => (
-                            <option key={item} value={item}>
-                                {item}
-                            </option>
-                        ))}
+                        {anios.map(
+                            (item) => (
+                                <option
+                                    key={item}
+                                    value={item}
+                                >
+                                    {item}
+                                </option>
+                            ),
+                        )}
                     </FiltroSelect>
 
                     <FiltroSelect
-                        label="Canal"
-                        value={canal}
+                        label="Agencia"
+                        value={agencia}
                         onChange={(e) =>
-                            setCanal(e.target.value)
+                            setAgencia(
+                                e.target.value,
+                            )
                         }
-                        className="min-w-[150px]"
+                        className="min-w-[180px]"
                     >
-                        {CANALES.map((item) => (
-                            <option key={item} value={item}>
-                                {item}
-                            </option>
-                        ))}
+                        <option value="Todas">
+                            Todas
+                        </option>
+
+                        {agencias.map(
+                            (item) => (
+                                <option
+                                    key={item}
+                                    value={item}
+                                >
+                                    {item}
+                                </option>
+                            ),
+                        )}
                     </FiltroSelect>
 
                     <FiltroSelect
                         label="Mes"
                         value={mes}
                         onChange={(e) =>
-                            setMes(e.target.value)
+                            setMes(
+                                e.target.value,
+                            )
                         }
                         className="min-w-[205px]"
                     >
-                        {MESES.map((item) => (
-                            <option key={item} value={item}>
-                                {item}
-                            </option>
-                        ))}
+                        {MESES.map(
+                            (item) => (
+                                <option
+                                    key={item}
+                                    value={item}
+                                >
+                                    {item}
+                                </option>
+                            ),
+                        )}
                     </FiltroSelect>
                 </div>
             </div>
@@ -516,11 +915,13 @@ function Cabecera({
 function Marcas() {
     return (
         <div className="flex items-center gap-4">
+
             <div className="flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-[#07184C] text-[17px] font-black text-[#07184C]">
                 VW
             </div>
 
             <div className="leading-none text-[#07184C]">
+
                 <div className="text-[22px] font-black italic">
                     R&R
                 </div>
@@ -549,6 +950,7 @@ function FiltroSelect({
             </div>
 
             <div className="relative">
+
                 <select
                     value={value}
                     onChange={onChange}
@@ -564,7 +966,7 @@ function FiltroSelect({
 }
 
 /* ============================================================
-   TARJETAS GENERALES
+   TARJETAS
 ============================================================ */
 
 function Tarjeta({
@@ -580,7 +982,9 @@ function Tarjeta({
     );
 }
 
-function TituloAzul({ children }) {
+function TituloAzul({
+    children,
+}) {
     return (
         <div className="bg-[#155A91] px-3 py-2 text-[15px] font-black text-white">
             {children}
@@ -588,9 +992,12 @@ function TituloAzul({ children }) {
     );
 }
 
-function OrdenesEmitidas({ total }) {
+function OrdenesEmitidas({
+    total,
+}) {
     return (
         <Tarjeta className="overflow-hidden p-0">
+
             <div className="bg-[#06251F] px-3 py-3 text-center text-[15px] font-black leading-tight text-white">
                 Órdenes emitidas
                 <br />
@@ -600,6 +1007,7 @@ function OrdenesEmitidas({ total }) {
             </div>
 
             <div className="flex min-h-[80px] items-center justify-center">
+
                 <span className="text-[27px] font-black text-[#242424]">
                     {entero(total)}
                 </span>
@@ -609,7 +1017,7 @@ function OrdenesEmitidas({ total }) {
 }
 
 /* ============================================================
-   SECCIÓN CON TÍTULO SOBRE EL BORDE
+   SECCIÓN
 ============================================================ */
 
 function Seccion({
@@ -622,6 +1030,7 @@ function Seccion({
             className={`relative rounded-[20px] border-[1.5px] border-[#527189] bg-white px-4 pb-4 pt-8 ${className}`}
         >
             <div className="absolute -top-[17px] left-10 flex items-center bg-[#F5F6F8] px-3">
+
                 <h2 className="text-[24px] font-light text-[#454545]">
                     {titulo}
                 </h2>
@@ -642,44 +1051,87 @@ function BloquePresupuesto({
     titulo,
     data,
     icono,
+    tipo,
 }) {
+    const esAutorizado =
+        tipo === "autorizado";
+
     return (
         <Seccion titulo={titulo}>
+
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[135px_1fr]">
+
                 <div className="flex flex-col items-center justify-center">
+
                     <div className="mb-1 flex items-center gap-2 font-black text-[#131E5C] lg:hidden">
                         {icono}
                     </div>
 
                     <Gauge
-                        value={data.porcentaje}
+                        value={
+                            data.porcentaje
+                        }
                         height={155}
                     />
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+
                     <MetricaPresupuesto
-                        titulo="Total de Presupuestos Emitidos"
-                        valor={entero(data.total)}
+                        titulo={
+                            esAutorizado
+                                ? "Total de Presupuestos Autorizados"
+                                : "Total de Presupuestos Emitidos"
+                        }
+                        valor={
+                            entero(
+                                data.total,
+                            )
+                        }
                     />
 
                     <div className="grid gap-3">
+
                         <MetricaPresupuesto
-                            titulo="Total de Presupuestos Emitidos M.O"
-                            valor={dinero(data.manoObra)}
+                            titulo={
+                                esAutorizado
+                                    ? "Total de Presupuestos Autorizados M.O"
+                                    : "Total de Presupuestos Emitidos M.O"
+                            }
+                            valor={
+                                dinero(
+                                    data.manoObra,
+                                )
+                            }
                             small
                         />
 
                         <MetricaPresupuesto
-                            titulo="Total de Presupuestos Emitidos Ref"
-                            valor={dinero(data.refacciones)}
+                            titulo={
+                                esAutorizado
+                                    ? "Total de Presupuestos Autorizados Ref"
+                                    : "Total de Presupuestos Emitidos Ref"
+                            }
+                            valor={
+                                dinero(
+                                    data.refacciones,
+                                )
+                            }
                             small
                         />
                     </div>
 
                     <MetricaPresupuesto
-                        titulo="Monto Total de Presupuestos Emitidos"
-                        valor={dinero(data.montoTotal)}
+                        titulo={
+                            esAutorizado
+                                ? "Monto Total de Presupuestos Autorizados"
+                                : "Monto Total de Presupuestos Emitidos"
+                        }
+                        valor={
+                            dinero(
+                                data.montoTotal,
+                            )
+                        }
                     />
                 </div>
             </div>
@@ -695,8 +1147,8 @@ function MetricaPresupuesto({
     return (
         <div
             className={`flex flex-col items-center justify-center rounded-lg bg-white px-3 text-center shadow-[0_3px_12px_rgba(15,23,42,.18)] ${small
-                    ? "min-h-[82px] py-2"
-                    : "min-h-[170px] py-4"
+                ? "min-h-[82px] py-2"
+                : "min-h-[170px] py-4"
                 }`}
         >
             <div className="max-w-[170px] text-[13px] font-black leading-tight text-[#333]">
@@ -705,8 +1157,8 @@ function MetricaPresupuesto({
 
             <div
                 className={`mt-3 font-black text-[#2F2F2F] ${small
-                        ? "text-[19px]"
-                        : "text-[24px]"
+                    ? "text-[19px]"
+                    : "text-[24px]"
                     }`}
             >
                 {valor}
@@ -726,7 +1178,10 @@ function Gauge({
 }) {
     const valor = Math.min(
         100,
-        Math.max(0, numero(value)),
+        Math.max(
+            0,
+            numero(value),
+        ),
     );
 
     const needleAngle =
@@ -750,15 +1205,20 @@ function Gauge({
     return (
         <div
             className="relative mx-auto w-full max-w-[190px]"
-            style={{ height }}
+            style={{
+                height,
+            }}
         >
             <ResponsiveContainer
                 width="100%"
                 height="100%"
             >
                 <PieChart>
+
                     <Pie
-                        data={segmentos}
+                        data={
+                            segmentos
+                        }
                         dataKey="value"
                         startAngle={180}
                         endAngle={0}
@@ -767,13 +1227,22 @@ function Gauge({
                         innerRadius="52%"
                         outerRadius="72%"
                         stroke="none"
-                        isAnimationActive={false}
+                        isAnimationActive={
+                            false
+                        }
                     >
                         {segmentos.map(
-                            (item, index) => (
+                            (
+                                item,
+                                index,
+                            ) => (
                                 <Cell
-                                    key={index}
-                                    fill={item.color}
+                                    key={
+                                        index
+                                    }
+                                    fill={
+                                        item.color
+                                    }
                                 />
                             ),
                         )}
@@ -784,8 +1253,13 @@ function Gauge({
             <div
                 className="absolute left-1/2 h-[2px] w-[34%] bg-[#697685]"
                 style={{
-                    bottom: compact ? "38px" : "40px",
-                    transformOrigin: "left center",
+                    bottom: compact
+                        ? "38px"
+                        : "40px",
+
+                    transformOrigin:
+                        "left center",
+
                     transform: `rotate(${needleAngle}deg)`,
                 }}
             />
@@ -793,14 +1267,16 @@ function Gauge({
             <div
                 className="absolute left-1/2 h-4 w-4 -translate-x-1/2 rounded-full border-[4px] border-[#697685] bg-white"
                 style={{
-                    bottom: compact ? "31px" : "33px",
+                    bottom: compact
+                        ? "31px"
+                        : "33px",
                 }}
             />
 
             <div
                 className={`absolute bottom-0 left-0 right-0 text-center font-medium text-[#333] ${compact
-                        ? "text-[18px]"
-                        : "text-[21px]"
+                    ? "text-[18px]"
+                    : "text-[21px]"
                     }`}
             >
                 {porcentaje(valor)}
@@ -818,6 +1294,19 @@ function DonutSimple({
     height = 150,
     showLegend = false,
 }) {
+    if (!datos.length) {
+        return (
+            <div
+                className="flex items-center justify-center text-base font-semibold text-[#8A94A8]"
+                style={{
+                    height,
+                }}
+            >
+                Sin datos
+            </div>
+        );
+    }
+
     return (
         <div
             style={{
@@ -829,6 +1318,7 @@ function DonutSimple({
                 height="100%"
             >
                 <PieChart>
+
                     <Pie
                         data={datos}
                         dataKey="value"
@@ -840,20 +1330,33 @@ function DonutSimple({
                         strokeWidth={1}
                         stroke="#fff"
                     >
-                        {datos.map((item) => (
-                            <Cell
-                                key={item.name}
-                                fill={item.color}
-                            />
-                        ))}
+                        {datos.map(
+                            (item) => (
+                                <Cell
+                                    key={
+                                        item.name
+                                    }
+                                    fill={
+                                        item.color
+                                    }
+                                />
+                            ),
+                        )}
                     </Pie>
 
                     <Tooltip
-                        contentStyle={TOOLTIP_STYLE}
-                        formatter={(value, name) => [
-                            entero(value),
+                        contentStyle={
+                            TOOLTIP_STYLE
+                        }
+                        formatter={(
+                            value,
                             name,
-                        ]}
+                        ) => [
+                                entero(
+                                    value,
+                                ),
+                                name,
+                            ]}
                     />
 
                     {showLegend && (
@@ -861,9 +1364,13 @@ function DonutSimple({
                             verticalAlign="middle"
                             align="right"
                             layout="vertical"
-                            formatter={(value) => (
-                                <span className="text-[12px] font-bold text-[#4B5563]">
-                                    {value}
+                            formatter={(
+                                value,
+                            ) => (
+                                <span className="text-[14px] font-bold text-[#4B5563]">
+                                    {
+                                        value
+                                    }
                                 </span>
                             )}
                         />
@@ -874,44 +1381,70 @@ function DonutSimple({
     );
 }
 
-function DonutAsesores({ datos }) {
+function DonutAsesores({
+    datos,
+}) {
     const total = datos.reduce(
-        (acc, item) =>
-            acc + numero(item.value),
+        (acumulado, item) =>
+            acumulado +
+            numero(item.value),
         0,
     );
 
-    const datosCalculados = datos.map(
-        (item) => ({
+    const datosCalculados =
+        datos.map((item) => ({
             ...item,
+
             porcentaje:
                 total > 0
-                    ? (item.value / total) * 100
+                    ? (numero(
+                        item.value,
+                    ) /
+                        total) *
+                    100
                     : 0,
-        }),
-    );
+        }));
+
+    if (
+        datosCalculados.length === 0
+    ) {
+        return (
+            <div className="flex h-[125px] items-center justify-center text-base font-semibold text-[#8A94A8]">
+                Sin datos
+            </div>
+        );
+    }
 
     return (
-        <div className="grid grid-cols-[150px_1fr] items-center gap-2">
-            <div className="h-[125px]">
+        <div className="grid grid-cols-1 items-center gap-2">
+
+            <div className="h-[145px]">
+
                 <ResponsiveContainer
                     width="100%"
                     height="100%"
                 >
                     <PieChart>
+
                         <Pie
-                            data={datosCalculados}
+                            data={
+                                datosCalculados
+                            }
                             dataKey="value"
                             nameKey="name"
                             innerRadius={34}
-                            outerRadius={56}
+                            outerRadius={70}
                             stroke="#fff"
                         >
                             {datosCalculados.map(
                                 (item) => (
                                     <Cell
-                                        key={item.name}
-                                        fill={item.color}
+                                        key={
+                                            item.name
+                                        }
+                                        fill={
+                                            item.color
+                                        }
                                     />
                                 ),
                             )}
@@ -929,10 +1462,14 @@ function DonutAsesores({ datos }) {
                                     `${entero(
                                         value,
                                     )} (${porcentaje(
-                                        item?.payload
+                                        item
+                                            ?.payload
                                             ?.porcentaje,
                                     )})`,
-                                    item?.payload?.name,
+
+                                    item
+                                        ?.payload
+                                        ?.name,
                                 ]}
                         />
                     </PieChart>
@@ -940,7 +1477,8 @@ function DonutAsesores({ datos }) {
             </div>
 
             <div className="min-w-0 space-y-2">
-                <div className="text-[11px] font-black text-[#566276]">
+
+                <div className="text-[14px] font-black text-[#566276]">
                     Asesor
                 </div>
 
@@ -948,7 +1486,9 @@ function DonutAsesores({ datos }) {
                     .slice(0, 4)
                     .map((item) => (
                         <div
-                            key={item.name}
+                            key={
+                                item.name
+                            }
                             className="flex min-w-0 items-center gap-2"
                         >
                             <span
@@ -960,10 +1500,14 @@ function DonutAsesores({ datos }) {
                             />
 
                             <span
-                                className="truncate text-[11px] font-medium text-[#697386]"
-                                title={item.name}
+                                className="truncate text-[14px] font-medium text-[#697386]"
+                                title={
+                                    item.name
+                                }
                             >
-                                {item.name}
+                                {
+                                    item.name
+                                }
                             </span>
                         </div>
                     ))}
@@ -976,13 +1520,21 @@ function DonutAsesores({ datos }) {
    TABLA DE SEGUIMIENTO
 ============================================================ */
 
-function TablaSeguimiento({ datos }) {
+function TablaSeguimiento({
+    datos,
+    total = 0,
+}) {
     return (
         <div className="rounded-lg border border-[#646464] bg-white p-2 shadow-sm">
+
             <div className="max-h-[390px] overflow-auto">
+
                 <table className="w-full min-w-[720px] border-collapse text-[12px]">
+
                     <thead className="sticky top-0 z-10">
+
                         <tr className="bg-[#155A91] text-white">
+
                             <th className="px-2 py-2 text-left font-black">
                                 Asesor
                             </th>
@@ -1006,49 +1558,82 @@ function TablaSeguimiento({ datos }) {
                     </thead>
 
                     <tbody>
-                        {datos.map(
-                            (item, index) => (
-                                <tr
-                                    key={`${item.presupuesto}-${index}`}
-                                    className={
-                                        index % 2 === 0
-                                            ? "bg-white"
-                                            : "bg-[#EEEEEE]"
-                                    }
+
+                        {datos.length ===
+                            0 ? (
+                            <tr>
+                                <td
+                                    colSpan={5}
+                                    className="h-40 text-center font-semibold text-[#8A94A8]"
                                 >
-                                    <td className="whitespace-nowrap px-2 py-1.5 font-medium text-[#555]">
-                                        {item.asesor}
-                                    </td>
+                                    Sin presupuestos en el periodo seleccionado
+                                </td>
+                            </tr>
+                        ) : (
+                            datos.map(
+                                (
+                                    item,
+                                    index,
+                                ) => (
+                                    <tr
+                                        key={`${item.presupuesto}-${index}`}
+                                        className={
+                                            index %
+                                                2 ===
+                                                0
+                                                ? "bg-white"
+                                                : "bg-[#EEEEEE]"
+                                        }
+                                    >
+                                        <td className="whitespace-nowrap px-2 py-1.5 font-medium text-[#555]">
+                                            {
+                                                item.asesor
+                                            }
+                                        </td>
 
-                                    <td className="px-2 py-1.5 text-right font-medium text-[#555]">
-                                        {item.presupuesto}
-                                    </td>
+                                        <td className="px-2 py-1.5 text-right font-medium text-[#555]">
+                                            {
+                                                item.presupuesto
+                                            }
+                                        </td>
 
-                                    <td className="whitespace-nowrap px-2 py-1.5 text-center font-medium text-[#555]">
-                                        {item.fecha}
-                                    </td>
+                                        <td className="whitespace-nowrap px-2 py-1.5 text-center font-medium text-[#555]">
+                                            {
+                                                item.fecha
+                                            }
+                                        </td>
 
-                                    <td className="px-1 py-0 text-center">
-                                        <EstatusSit
-                                            value={item.sit}
-                                        />
-                                    </td>
+                                        <td className="px-1 py-0 text-center">
+                                            <EstatusSit
+                                                value={
+                                                    item.sit
+                                                }
+                                            />
+                                        </td>
 
-                                    <td className="whitespace-nowrap px-2 py-1.5 font-medium text-[#555]">
-                                        {item.vin}
-                                    </td>
-                                </tr>
-                            ),
+                                        <td className="whitespace-nowrap px-2 py-1.5 font-medium text-[#555]">
+                                            {
+                                                item.vin
+                                            }
+                                        </td>
+                                    </tr>
+                                ),
+                            )
                         )}
                     </tbody>
 
                     <tfoot>
                         <tr className="border-t-2 border-[#999] bg-white">
+
                             <td
                                 colSpan={5}
                                 className="px-2 py-2 font-black text-[#444]"
                             >
-                                Total
+                                Total:{" "}
+                                {entero(
+                                    total,
+                                )}{" "}
+                                presupuestos
                             </td>
                         </tr>
                     </tfoot>
@@ -1058,20 +1643,27 @@ function TablaSeguimiento({ datos }) {
     );
 }
 
-function EstatusSit({ value }) {
+function EstatusSit({
+    value,
+}) {
+    const estatus =
+        String(value || "")
+            .trim()
+            .toUpperCase();
+
     const estilos = {
-        N: "bg-[#F20D30] text-[#721020]",
+        N: "bg-[#F20D30] text-white",
         A: "bg-[#97E68C] text-[#24611C]",
         E: "bg-[#FFF071] text-[#6C5D00]",
     };
 
     return (
         <span
-            className={`inline-flex h-7 min-w-7 items-center justify-center px-2 font-black ${estilos[value] ||
+            className={`inline-flex h-7 min-w-7 items-center justify-center px-2 font-black ${estilos[estatus] ||
                 "bg-[#E5E7EB] text-[#374151]"
                 }`}
         >
-            {value}
+            {estatus || "-"}
         </span>
     );
 }

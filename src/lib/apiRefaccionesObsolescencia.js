@@ -1,3 +1,4 @@
+//src/lib/apiRefaccionesObsolescencia.js
 import { buildQuery, http } from "./apiClient";
 
 const BASE_URL = "/refacciones-obsolescencia/api";
