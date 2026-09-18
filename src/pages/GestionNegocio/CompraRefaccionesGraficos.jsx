@@ -20,6 +20,15 @@ function money(value) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
+function nombreCortoDonut(nombre) {
+  let limpio = (nombre || "").trim();
+  const esSinTip = limpio.endsWith("(sin tip.)");
+  let base = limpio.replace(/\s*\(sin tip\.\)\s*$/, "").trim();
+  const palabras = base.split(/\s+/);
+  if (palabras.length > 4) base = palabras.slice(0, 4).join(" ") + "…";
+  return esSinTip ? `${base} (sin tip.)` : base;
+}
+
 const MESES = [
   ["01", "Enero"], ["02", "Febrero"], ["03", "Marzo"], ["04", "Abril"],
   ["05", "Mayo"], ["06", "Junio"], ["07", "Julio"], ["08", "Agosto"],
@@ -211,10 +220,15 @@ export default function CompraRefaccionesGraficos() {
   const datosDonut = useMemo(() => {
     const ordenadas = porLineaNeto
       .filter((item) => numero(item.neto) > 0)
-      .map((item) => ({
-        name: (item.linea ?? "").trim() || "SIN TIPIFICAR",
-        value: numero(item.neto),
-      }))
+      .map((item) => {
+        const original = (item.linea ?? "").trim() || "SIN TIPIFICAR";
+        const partes = original.split(" - ");
+        const name =
+          !item.tipificada && partes.length === 2 && partes[0] === "SIN TIPIFICAR"
+            ? `${partes[1].trim()} (sin tip.)`
+            : original;
+        return { name, fullName: original, value: numero(item.neto) };
+      })
       .sort((a, b) => b.value - a.value);
     const top = ordenadas.slice(0, 8);
     const resto = ordenadas.slice(8).reduce((acc, item) => acc + item.value, 0);
@@ -257,34 +271,36 @@ export default function CompraRefaccionesGraficos() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KPICard icon={TrendingDown} label="Costo de venta" value={costoVentaLoading ? "—" : money(costoVenta)} sub={`${anio || "Todos los años"}${agencia ? " · " + agencia : " · Todas las agencias"}`} accent="#EF4444" />
+          <KPICard icon={TrendingDown} label="Costo de venta" value={costoVentaLoading ? "—" : money(costoVenta)} sub={`${anio || "Todos los años"}${mes ? ` · ${MESES_MAP[mes]}` : ""}${agencia ? ` · ${agencia}` : " · Todas las agencias"}`} accent="#EF4444" />
           <KPICard icon={Wallet} label="Valor neto compras" value={loading ? "—" : money(kpi.valor_neto)} sub="Compras − devoluciones" accent="#0D9488" />
           <KPICard icon={Percent} label="Índice venta/compra" value={loading || costoVentaLoading ? "—" : indiceVentaCompra === null ? "—" : `${indiceVentaCompra.toFixed(2)}×`} sub="Costo de venta ÷ valor neto compras" accent="#0EA5E9" />
           <KPICard icon={Factory} label="Fidelidad planta" value={loading ? "—" : fidelidadPlanta === null ? "—" : `${fidelidadPlanta.toFixed(1)}%`} sub="Planta vs otros proveedores" accent="#10B981" />
         </div>
 
         <div id="Filtros" className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3">
-            <CalendarDays className="h-5 w-5 text-[#131E5C]" />
-            <span className="font-black uppercase tracking-[0.08em] text-[#131E5C]">Periodo</span>
-            <select value={anio || ""} onChange={(e) => cambiarFiltro(setAnio)(e.target.value)}
-              className="h-10 rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-bold text-[#07184C] outline-none transition focus:border-[#1555C7]">
-              {ANIOS.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <CalendarDays className="h-5 w-5 text-[#131E5C]" />
+              <span className="font-black uppercase tracking-[0.08em] text-[#131E5C]">Periodo</span>
+              <select value={anio || ""} onChange={(e) => cambiarFiltro(setAnio)(e.target.value)}
+                className="h-8 rounded-md border border-[#C8D0DF] bg-[#F7F8FC] px-2 text-sm font-bold text-[#07184C] outline-none transition focus:border-[#1555C7]">
+                {ANIOS.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => cambiarFiltro(setAgencia)("Todos")} className={`rounded-md px-3.5 py-2 text-[13px] font-bold transition ${!agencia ? "bg-[#131E5C] text-white" : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"}`}>Todas</button>
+              {opciones.agencias.map((agn) => (
+                <button key={agn} type="button" onClick={() => cambiarFiltro(setAgencia)(agn)} className={`rounded-md border border-[#131E5C] px-3.5 py-2 text-[13px] font-bold transition ${agencia === agn ? "bg-[#131E5C] text-white" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>{agn}</button>
+              ))}
+            </div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => cambiarMes("Todos")} className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 font-bold transition ${!mes ? "bg-[#131E5C] text-white shadow" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>Todos</button>
+<div className="mt-4 flex gap-1.5 overflow-x-auto pb-1">
+            <button type="button" onClick={() => cambiarMes("Todos")} className={`min-w-[72px] flex-1 rounded-md border border-[#131E5C] px-2.5 py-2 text-[13px] font-bold transition ${!mes ? "bg-[#131E5C] text-white shadow" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>Todos</button>
             {MESES.map(([valor, nombre], index) => {
               const futuro = anio === String(new Date().getFullYear()) && index > new Date().getMonth();
               const active = mes === valor;
-              return <button key={valor} type="button" disabled={futuro} onClick={() => cambiarMes(valor)} className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 font-bold transition ${active ? "bg-[#131E5C] text-white shadow" : futuro ? "cursor-not-allowed text-[#131E5C]/40" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>{nombre}</button>;
+              return <button key={valor} type="button" disabled={futuro} onClick={() => cambiarMes(valor)} className={`min-w-[72px] flex-1 rounded-md border border-[#131E5C] px-2.5 py-2 text-[13px] font-bold transition ${active ? "bg-[#131E5C] text-white shadow" : futuro ? "cursor-not-allowed text-[#131E5C]/40" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>{nombre}</button>;
             })}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => cambiarFiltro(setAgencia)("Todos")} className={`rounded-lg px-4 py-2 font-bold transition ${!agencia ? "bg-[#131E5C] text-white" : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"}`}>Todas</button>
-            {opciones.agencias.map((agn) => (
-              <button key={agn} type="button" onClick={() => cambiarFiltro(setAgencia)(agn)} className={`rounded-lg border border-[#131E5C] px-4 py-2 font-bold transition ${agencia === agn ? "bg-[#131E5C] text-white" : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"}`}>{agn}</button>
-            ))}
           </div>
 
           <div className="mt-5 space-y-4 border-t border-[#E6EAF1] pt-4">
@@ -336,57 +352,60 @@ export default function CompraRefaccionesGraficos() {
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
 
         {/* NIVEL 2 · INFORMACIÓN PRINCIPAL */}
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
 
         {/* SECCIÓN 5 · COMPRAS POR MES Y AÑO */}
-        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm xl:col-span-2 xl:flex xl:flex-col">
-          <div className="mb-4 flex items-center gap-3">
+        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm xl:col-span-3">
+          <div className="mb-3 flex items-center gap-3">
             <BarChart3 className="h-5 w-5 text-[#131E5C]" />
             <div>
               <h2 className="text-lg font-extrabold text-[#131E5C]">Compras por Mes y Año</h2>
-              <p className="text-xs font-semibold text-[#8891AD]">Enero–diciembre de {anio || "—"} · importe líquido (VrLiqTotal) por fecha de emisión (DtEmissao)</p>
+              <p className="text-xs font-semibold text-[#8891AD]">Enero–diciembre de {anio || "—"} · importe líquido por fecha de emisión</p>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
+            <table className="w-full min-w-[520px] border-collapse text-sm">
               <thead>
                 <tr className="bg-[#131E5C] text-white">
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-left font-extrabold">AÑO/MES</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">OTRO PROVEEDOR</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">PLANTA</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">TOTAL</th>
+                  <th className="w-[22%] border border-[#131E5C]/20 px-3 py-2.5 text-left font-extrabold">AÑO/MES</th>
+                  <th className="border border-[#131E5C]/20 px-3 py-2.5 text-right font-extrabold">OTRO PROVEEDOR</th>
+                  <th className="border border-[#131E5C]/20 px-3 py-2.5 text-right font-extrabold">PLANTA</th>
+                  <th className="border border-[#131E5C]/20 px-3 py-2.5 text-right font-extrabold">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 {tabla.map((fila) => (
-                  <tr key={fila.claveMes} className={`transition hover:bg-[#F1F4FA] ${!fila.tieneDatos ? "text-[#B6BFD2]" : ""}`}>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 font-bold text-[#152754]">
+                  <tr key={fila.claveMes} className={`transition hover:bg-[#F1F4FA] ${!fila.tieneDatos ? "text-[#B6BFD2]" : ""} ${mes === fila.claveMes ? "bg-[#FEF3C7] hover:bg-[#FEF3C7]" : ""}`}>
+                    <td className="border border-[#E6EAF1] px-3 py-2 font-bold text-[#152754]">
                       {fila.nombreMes} <span className="font-semibold text-[#8891AD]">{anio}</span>
                     </td>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 text-right font-semibold tabular-nums">{money(fila.otros)}</td>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 text-right font-semibold tabular-nums">{money(fila.planta)}</td>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 text-right font-bold tabular-nums text-[#131E5C]">{money(fila.totalMes)}</td>
+                    <td className="border border-[#E6EAF1] px-3 py-2 text-right font-semibold tabular-nums">{money(fila.otros)}</td>
+                    <td className="border border-[#E6EAF1] px-3 py-2 text-right font-semibold tabular-nums">{money(fila.planta)}</td>
+                    <td className="border border-[#E6EAF1] px-3 py-2 text-right font-bold tabular-nums text-[#131E5C]">{money(fila.totalMes)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-[#131E5C] text-white">
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-left font-extrabold uppercase tracking-wide">
-                    Total acumulado
-                    {totales.conDatos > 0 && <span className="ml-2 text-[11px] font-semibold text-white/60">({totales.conDatos} meses con datos)</span>}
+                  <td className="border border-[#131E5C]/20 px-3 py-2.5 text-left font-extrabold uppercase tracking-wide">
+                    Total
+                    {totales.conDatos > 0 && <span className="ml-2 text-[11px] font-semibold text-white/60">({totales.conDatos})</span>}
                   </td>
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold tabular-nums">{money(totales.otros)}</td>
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold tabular-nums">{money(totales.planta)}</td>
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold tabular-nums">{money(totales.totalMes)}</td>
+                  <td className="border border-[#131E5C]/20 px-3 py-2.5 text-right font-extrabold tabular-nums">{money(totales.otros)}</td>
+                  <td className="border border-[#131E5C]/20 px-3 py-2.5 text-right font-extrabold tabular-nums">{money(totales.planta)}</td>
+                  <td className="border border-[#131E5C]/20 px-3 py-2.5 text-right font-extrabold tabular-nums">{money(totales.totalMes)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         </section>
 
+        {/* COLUMNA DERECHA · NIVEL 2 */}
+        <div className="flex h-full flex-col gap-4 xl:col-span-2">
+
         {/* SECCIÓN 6 · COMPRA POR LÍNEA */}
-        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+        <section className="flex-1 rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
             <Layers className="h-5 w-5 text-[#131E5C]" />
             <div>
@@ -396,34 +415,34 @@ export default function CompraRefaccionesGraficos() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
+            <table className="w-full min-w-[360px] table-fixed border-collapse text-sm">
               <thead>
                 <tr className="bg-[#131E5C] text-white">
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-left font-extrabold">LÍNEA</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">OTRO PROVEEDOR</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">PLANTA</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">TOTAL</th>
+                  <th className="w-[30%] border border-[#131E5C]/20 px-2 py-2.5 text-left font-extrabold">LÍNEA</th>
+                  <th className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold">OTRO PROV.</th>
+                  <th className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold">PLANTA</th>
+                  <th className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 {filasLinea.map((fila) => (
                   <tr key={fila.linea} className="transition hover:bg-[#F1F4FA]">
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 font-bold text-[#152754]">{fila.linea}</td>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 text-right font-semibold tabular-nums">{money(fila.otros)}</td>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 text-right font-semibold tabular-nums">{money(fila.planta)}</td>
-                    <td className="border border-[#E6EAF1] px-4 py-2.5 text-right font-bold tabular-nums text-[#131E5C]">{money(fila.total)}</td>
+                    <td className="truncate border border-[#E6EAF1] px-2 py-2 font-bold text-[#152754]" title={fila.linea}>{fila.linea}</td>
+                    <td className="border border-[#E6EAF1] px-2 py-2 text-right font-semibold tabular-nums">{money(fila.otros)}</td>
+                    <td className="border border-[#E6EAF1] px-2 py-2 text-right font-semibold tabular-nums">{money(fila.planta)}</td>
+                    <td className="border border-[#E6EAF1] px-2 py-2 text-right font-bold tabular-nums text-[#131E5C]">{money(fila.total)}</td>
                   </tr>
                 ))}
                 {filasLinea.length === 0 && (
-                  <tr><td colSpan={4} className="border border-[#E6EAF1] px-4 py-6 text-center text-sm font-semibold text-slate-400">Sin datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={4} className="border border-[#E6EAF1] px-2 py-4 text-center text-sm font-semibold text-slate-400">Sin datos para los filtros seleccionados.</td></tr>
                 )}
               </tbody>
               <tfoot>
                 <tr className="bg-[#131E5C] text-white">
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-left font-extrabold uppercase tracking-wide">Total</td>
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold tabular-nums">{money(totalesLinea.otros)}</td>
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold tabular-nums">{money(totalesLinea.planta)}</td>
-                  <td className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold tabular-nums">{money(totalesLinea.total)}</td>
+                  <td className="border border-[#131E5C]/20 px-2 py-2.5 text-left font-extrabold uppercase tracking-wide">Total</td>
+                  <td className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold tabular-nums">{money(totalesLinea.otros)}</td>
+                  <td className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold tabular-nums">{money(totalesLinea.planta)}</td>
+                  <td className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold tabular-nums">{money(totalesLinea.total)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -431,7 +450,7 @@ export default function CompraRefaccionesGraficos() {
         </section>
 
         {/* SECCIÓN 7 · DEVOLUCIONES Y TRASPASOS */}
-        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+        <section className="flex-1 rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
             <Undo2 className="h-5 w-5 text-[#131E5C]" />
             <div>
@@ -441,13 +460,13 @@ export default function CompraRefaccionesGraficos() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
+            <table className="w-full min-w-[360px] table-fixed border-collapse text-sm">
               <thead>
                 <tr className="bg-[#131E5C] text-white">
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-left font-extrabold">FUENTE</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">COMPRAS</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">DEVOL/TRASP.</th>
-                  <th className="border border-[#131E5C]/20 px-4 py-3 text-right font-extrabold">NETO COMPRAS</th>
+                  <th className="w-[24%] border border-[#131E5C]/20 px-2 py-2.5 text-left font-extrabold">FUENTE</th>
+                  <th className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold">COMPRAS</th>
+                  <th className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold">DEVOL/TRASP.</th>
+                  <th className="border border-[#131E5C]/20 px-2 py-2.5 text-right font-extrabold">NETO COMPRAS</th>
                 </tr>
               </thead>
               <tbody>
@@ -455,10 +474,10 @@ export default function CompraRefaccionesGraficos() {
                   const esTotal = fila.nombre === "Total";
                   return (
                     <tr key={fila.nombre} className={`${esTotal ? "bg-[#131E5C] text-white" : "transition hover:bg-[#F1F4FA]"}`}>
-                      <td className={`border px-4 py-2.5 font-bold ${esTotal ? "border-[#131E5C]/20 text-left uppercase tracking-wide" : "border-[#E6EAF1] text-[#152754]"}`}>{fila.nombre}</td>
-                      <td className={`border px-4 py-2.5 text-right font-semibold tabular-nums ${esTotal ? "border-[#131E5C]/20 font-extrabold" : "border-[#E6EAF1]"}`}>{money(fila.compras)}</td>
-                      <td className={`border px-4 py-2.5 text-right font-semibold tabular-nums ${esTotal ? "border-[#131E5C]/20 font-extrabold" : "border-[#E6EAF1]"}`}>{money(fila.devol)}</td>
-                      <td className={`border px-4 py-2.5 text-right font-bold tabular-nums ${esTotal ? "border-[#131E5C]/20 text-white" : "border-[#E6EAF1] text-[#131E5C]"}`}>{money(fila.neto)}</td>
+                      <td className={`border px-2 py-2 font-bold ${esTotal ? "border-[#131E5C]/20 text-left uppercase tracking-wide" : "border-[#E6EAF1] text-[#152754]"}`}>{fila.nombre}</td>
+                      <td className={`border px-2 py-2 text-right font-semibold tabular-nums ${esTotal ? "border-[#131E5C]/20 font-extrabold" : "border-[#E6EAF1]"}`}>{money(fila.compras)}</td>
+                      <td className={`border px-2 py-2 text-right font-semibold tabular-nums ${esTotal ? "border-[#131E5C]/20 font-extrabold" : "border-[#E6EAF1]"}`}>{money(fila.devol)}</td>
+                      <td className={`border px-2 py-2 text-right font-bold tabular-nums ${esTotal ? "border-[#131E5C]/20 text-white" : "border-[#E6EAF1] text-[#131E5C]"}`}>{money(fila.neto)}</td>
                     </tr>
                   );
                 })}
@@ -467,20 +486,26 @@ export default function CompraRefaccionesGraficos() {
           </div>
         </section>
 
+        </div>
+        </div>
+
+        {/* NIVEL 3 · GRÁFICAS */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+
         {/* SECCIÓN 8 · DONUT VALOR NETO COMPRAS POR LÍNEA */}
-        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+        <section className="order-2 rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm xl:order-2">
           <div className="mb-4 flex items-center gap-3">
             <PieChart className="h-5 w-5 text-[#131E5C]" />
             <div>
               <h2 className="text-lg font-extrabold text-[#131E5C]">Valor Neto Compras por Línea</h2>
-              <p className="text-xs font-semibold text-[#8891AD]">Participación por línea (grupo principal) sobre el valor neto de compras</p>
+              <p className="text-xs font-semibold text-[#8891AD]">Participación por línea (grupo principal) · los no tipificados se desglosan por proveedor · sobre el valor neto de compras</p>
             </div>
           </div>
 
           {datosDonut.length > 0 ? (
-            <div className="flex flex-col items-center gap-6 lg:flex-row">
+            <div className="flex flex-col items-center gap-6">
               <div className="relative w-full max-w-md shrink-0">
-                <ResponsiveContainer width="100%" height={320}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
                       data={datosDonut}
@@ -506,8 +531,8 @@ export default function CompraRefaccionesGraficos() {
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
                   {topDonut ? (
-                    <div className="px-6">
-                      <div className="text-[22px] font-black leading-none text-[#131E5C]" title={topDonut.name}>{topDonut.name}</div>
+                    <div className="w-full px-3">
+                      <div className="mx-auto line-clamp-2 max-w-[200px] text-base font-black leading-tight text-[#131E5C]" title={topDonut.fullName || topDonut.name}>{nombreCortoDonut(topDonut.name)}</div>
                       <div className="mt-1 text-2xl font-black text-[#10B981]">
                         {totalDonut > 0 ? `${((topDonut.value / totalDonut) * 100).toFixed(1)}%` : "—"}
                       </div>
@@ -517,11 +542,11 @@ export default function CompraRefaccionesGraficos() {
                   ) : null}
                 </div>
               </div>
-              <div className="grid w-full grid-cols-1 gap-1.5 sm:grid-cols-2">
+              <div className="grid w-full grid-cols-1 gap-1.5">
                 {datosDonut.map((item, index) => (
                   <div key={item.name} className="flex items-center gap-2 rounded-lg bg-[#F7F8FC] px-3 py-2">
                     <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: COLORES_DONUT[index % COLORES_DONUT.length] }} />
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#152754]" title={item.name}>{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#152754]" title={item.fullName || item.name}>{item.name}</span>
                     <span className="text-xs font-bold tabular-nums text-[#131E5C]">{totalDonut > 0 ? `${((item.value / totalDonut) * 100).toFixed(1)}%` : "—"}</span>
                   </div>
                 ))}
@@ -533,7 +558,7 @@ export default function CompraRefaccionesGraficos() {
         </section>
 
         {/* SECCIÓN 9 · EVOLUCIÓN DE COMPRAS POR MES */}
-        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+        <section className="order-1 rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm xl:order-1 xl:col-span-2">
           <div className="mb-4 flex items-center gap-3">
             <BarChart3 className="h-5 w-5 text-[#131E5C]" />
             <div>
@@ -560,6 +585,8 @@ export default function CompraRefaccionesGraficos() {
             </ResponsiveContainer>
           </div>
         </section>
+
+        </div>
       </main>
     </div>
   );
