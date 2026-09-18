@@ -308,6 +308,10 @@ export default function InteractiveTable({
   onNext,
   storageKey = "default",
   resetColumnsOnMount = false,
+  detail = true,
+  rowKey = "nr_mov",
+  exportName = "Autos Nuevos",
+  exportFile = `venta_autos_nuevos_${new Date().toISOString().slice(0, 10)}`,
 }) {
   const keyColumnas = `${storageKey}_${STORAGE_COLUMNAS}`;
   const keyFiltros = `${storageKey}_${STORAGE_FILTROS}`;
@@ -432,8 +436,8 @@ export default function InteractiveTable({
     const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
     ws["!cols"] = visibleCols.map(() => ({ wch: 22 }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Autos Nuevos");
-    XLSX.writeFile(wb, `venta_autos_nuevos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, exportName);
+    XLSX.writeFile(wb, `${exportFile}.xlsx`);
   }
 
   return (
@@ -515,10 +519,10 @@ export default function InteractiveTable({
               </tr>
             ) : filtered.map((registro, index) => (
               <tr
-                key={`${registro.nr_mov || ""}-${registro.nr_nota || ""}-${registro.serie || ""}-${index}`}
-                onClick={() => setSeleccionado(registro)}
-                className="cursor-pointer transition-colors odd:bg-white even:bg-[#EAF1FF] hover:bg-blue-50/70 active:bg-blue-100/70"
-                title="Ver detalle del auto"
+                key={`${registro[rowKey] || ""}-${registro.nr_nota || ""}-${registro.serie || ""}-${index}`}
+                onClick={detail ? () => setSeleccionado(registro) : undefined}
+                className={`transition-colors odd:bg-white even:bg-[#EAF1FF] ${detail ? "cursor-pointer hover:bg-blue-50/70 active:bg-blue-100/70" : "hover:bg-blue-50/40"}${detail ? "" : ""}`}
+                title={detail ? "Ver detalle del auto" : undefined}
               >
                 {visibleCols.map((col) => {
                   const value = formatCell(registro[col.key], col.tipo);
@@ -552,7 +556,7 @@ export default function InteractiveTable({
         </div>
       </div>
 
-      {seleccionado && (
+      {detail && seleccionado && (
         <DetallePopup registro={seleccionado} columns={columns} onClose={() => setSeleccionado(null)} />
       )}
     </div>

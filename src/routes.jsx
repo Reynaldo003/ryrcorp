@@ -122,6 +122,7 @@ import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
 import Piezas from "./pages/GestionNegocio/Piezas";
 import ProspectosDigitales from "./pages/GestionNegocio/ProspectosDigitales";
 import CompraRefacciones from "./pages/GestionNegocio/CompraRefacciones";
+import CompraRefaccionesGraficos from "./pages/GestionNegocio/CompraRefaccionesGraficos";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 import Presupuestos from "./pages/Presupuestos/Presupuestos";
 import PresupuestosRefacciones from "./pages/Presupuestos/PresupuestosRefacciones";
@@ -448,12 +449,22 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
-<<<<<<< HEAD
                                     path: "compra_refacciones",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
                                             <CompraRefacciones />
-=======
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "compra_refacciones/graficos",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <CompraRefaccionesGraficos />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
                                     path: "presupuestos",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
@@ -466,7 +477,6 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
                                             <PresupuestosRefacciones />
->>>>>>> 060ea125ee30320efd549352cd05b4c5125362a4
                                         </RequirePermission>
                                     ),
                                 },
