@@ -112,6 +112,7 @@ function convertirGrafica(items) {
         valor_disponible: numero(item.valor_disponible),
         valor_reservado: numero(item.valor_reservado),
         valor_pendiente: numero(item.valor_pendiente),
+        promedioDias: numero(item.promedioDias || item.promediodias || item.promedio_dias),
     }));
 }
 
