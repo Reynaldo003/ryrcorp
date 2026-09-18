@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
     Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart,
-    ResponsiveContainer, Tooltip, XAxis, YAxis,
+    ResponsiveContainer, Tooltip, XAxis, YAxis, ScatterChart, Scatter, ZAxis, ReferenceLine
 } from "recharts";
 
 import {
@@ -87,6 +87,7 @@ const DASHBOARD_INICIAL = {
         por_grupo: [],
         por_categoria: [],
         por_antiguedad: [],
+        por_grupo_capa: [],
     },
 };
 
@@ -111,6 +112,7 @@ function convertirGrafica(items) {
         valor_disponible: numero(item.valor_disponible),
         valor_reservado: numero(item.valor_reservado),
         valor_pendiente: numero(item.valor_pendiente),
+        promedioDias: numero(item.promedioDias || item.promediodias || item.promedio_dias),
     }));
 }
 
@@ -230,6 +232,7 @@ export default function RefaccionesObsolescencia() {
                     por_categoria_movimiento: response?.graficas?.por_categoria_movimiento || [],
                     por_agencia: response?.graficas?.por_agencia || [],
                     por_grupo: response?.graficas?.por_grupo || [],
+                    por_grupo_capa: response?.graficas?.por_grupo_capa || [],
                     por_categoria: response?.graficas?.por_categoria || [],
                     por_antiguedad: response?.graficas?.por_antiguedad || [],
                 },
@@ -269,12 +272,50 @@ export default function RefaccionesObsolescencia() {
     const porMovimiento = useMemo(() => convertirGrafica(dashboard.graficas.por_categoria_movimiento), [dashboard.graficas.por_categoria_movimiento]);
     const porAgencia = useMemo(() => convertirGrafica(dashboard.graficas.por_agencia), [dashboard.graficas.por_agencia]);
     const porGrupo = useMemo(() => convertirGrafica(dashboard.graficas.por_grupo), [dashboard.graficas.por_grupo]);
+    console.log("Datos de porGrupo:", porGrupo);
     const porAntiguedad = useMemo(() => convertirGrafica(dashboard.graficas.por_antiguedad), [dashboard.graficas.por_antiguedad]);
     const totalValorCapas = useMemo(
         () => porCapa.reduce((acc, item) => acc + item.valor_inventario, 0),
         [porCapa]
     );
     const cargandoGeneral = loading || loadingDashboard || loadingOpciones;
+
+    const ORDEN_CAPAS = ["A", "B", "O"];
+
+    const { datosGrupoCapa, capas } = useMemo(() => {
+        const filas = dashboard.graficas.por_grupo_capa || [];
+        const mapa = new Map();
+        const setCapas = new Set();
+
+        for (const f of filas) {
+            const grupo = f.grupo_principal || "Sin grupo";
+            const capa = f.capa_obsolescencia || "Sin capa";
+            setCapas.add(capa);
+
+            const fila = mapa.get(grupo) || { grupo_principal: grupo, total: 0 };
+            const valor = numero(f.valor_stock);
+            fila[capa] = (fila[capa] || 0) + valor;
+            fila.total += valor;
+            mapa.set(grupo, fila);
+        }
+
+        const listaCapas = [...setCapas].sort((a, b) => {
+            const ia = ORDEN_CAPAS.indexOf(a);
+            const ib = ORDEN_CAPAS.indexOf(b);
+            return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+
+        // rellena capas faltantes con 0 para que el tooltip salga completo
+        const datos = [...mapa.values()]
+            .sort((a, b) => b.total - a.total)
+            .map((fila) => {
+                const completa = { ...fila };
+                for (const capa of listaCapas) if (completa[capa] == null) completa[capa] = 0;
+                return completa;
+            });
+
+        return { datosGrupoCapa: datos, capas: listaCapas };
+    }, [dashboard.graficas.por_grupo_capa]);
 
     function cambiarFiltro(campo, value) {
         setPagina(1);
@@ -689,34 +730,28 @@ export default function RefaccionesObsolescencia() {
                                 <div className="h-[490px]">
                                     {loadingDashboard ? <ChartLoading type="horizontal" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={porGrupo} layout="vertical" margin={{ top: 4, right: 35, left: 35, bottom: 4 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} stroke={C.border} />
-                                                <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
-                                                <YAxis type="category" dataKey="grupo_principal" width={160} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
-                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
-                                                <Bar
-                                                    stackId="v"
-                                                    dataKey="valor_stock"
-                                                    fill={C.navyMid}
-                                                    radius={[0, 7, 7, 0]}
-                                                    barSize={25}
-                                                    className="cursor-pointer"
-                                                    isAnimationActive
-                                                    animationDuration={700}
-                                                    onClick={(entry) =>
-                                                        alternarFiltro(
-                                                            "grupo_principal",
-                                                            entry?.grupo_principal,
-                                                        )
-                                                    }
-                                                />
-                                                <Bar
-                                                    dataKey="valor_reservado"
-                                                    stackId="v"
-                                                    fill={C.navy}
-                                                    radius={[0, 7, 7, 0]}
-                                                    barSize={25}
-                                                    onClick={(e) => alternarFiltro("grupo_principal", e?.grupo_principal)} />
+                                            <BarChart data={datosGrupoCapa} layout="vertical" margin={{ top: 4, right: 35, left: 35, bottom: 4 }}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
+                                                <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000" }} axisLine={false} tickLine={false} />
+                                                <YAxis type="category" dataKey="grupo_principal" width={160} tick={{ fontSize: 14, fill: "#000" }} axisLine={false} tickLine={false} />
+                                                <Tooltip content={<TooltipGrupoCapa />} />
+                                                <Legend formatter={(v) => `Capa ${v}`} />
+
+                                                {capas.map((capa, i) => (
+                                                    console.log(capa),
+                                                    <Bar
+                                                        key={capa}
+                                                        dataKey={capa}
+                                                        stackId="capas"
+                                                        fill={PIE_COLORS[i % PIE_COLORS.length]}
+                                                        radius={i === capas.length - 1 ? [0, 7, 7, 0] : undefined}
+                                                        barSize={25}
+                                                        className="cursor-pointer"
+                                                        isAnimationActive
+                                                        animationDuration={700}
+                                                        onClick={() => alternarFiltro("capa_obsolescencia", capa)}
+                                                    />
+                                                ))}
                                             </BarChart>
                                         </ResponsiveContainer>
                                     )}
@@ -816,6 +851,56 @@ export default function RefaccionesObsolescencia() {
                                 </div>
                             </ChartCard>
                         </div>
+                        {/* --- INICIO NUEVOS GRÁFICOS --- */}
+                        <div className="xl:col-span-6">
+                            <ChartCard title="Promedio de Antigüedad" subtitle="Días en inventario por Grupo Principal" icon={Clock3}>
+                                <div className="h-[360px]">
+                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                                                <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <YAxis tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${value} días`, "Promedio"]} />
+
+                                                {/* Línea roja visual de límite (Ej. 180 días) */}
+                                                <ReferenceLine y={180} stroke="#EF4444" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (180d)', fill: '#EF4444', fontSize: 11 }} />
+
+                                                <Bar dataKey="promedioDias" fill={C.navyLight} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={700}>
+                                                    {porGrupo.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.promedioDias > 180 ? "#EF4444" : C.navyLight} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </ChartCard>
+                        </div>
+
+                        <div className="xl:col-span-6">
+                            <ChartCard title="Mapa de Obsolescencia" subtitle="Antigüedad vs Valor vs Cantidad (Burbujas)" icon={Layers3}>
+                                <div className="h-[360px]">
+                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                                                <XAxis type="number" dataKey="promedioDias" name="Antigüedad" unit=" d" tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <YAxis type="number" dataKey="valor_inventario" name="Valor" tickFormatter={formatoCompacto} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <ZAxis type="number" dataKey="productos" range={[50, 500]} name="Piezas" />
+                                                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={TOOLTIP_STYLE} formatter={(value, name) => name === 'Valor' ? money(value) : value} />
+                                                <Scatter name="Grupos" data={porGrupo} fill={C.navy}>
+                                                    {porGrupo.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                                    ))}
+                                                </Scatter>
+                                            </ScatterChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </ChartCard>
+                        </div>
+                        {/* --- FIN NUEVOS GRÁFICOS --- */}
                     </div >
                 )
                 }
@@ -839,6 +924,31 @@ export default function RefaccionesObsolescencia() {
                 }
             </main >
         </div >
+    );
+}
+
+function TooltipGrupoCapa({ active, payload, label }) {
+    if (!active || !payload || payload.length === 0) return null;
+    const total = payload[0]?.payload?.total ?? 0;
+    return (
+        <div style={{ ...TOOLTIP_STYLE, background: "white", padding: "10px 12px" }}>
+            <p className="mb-1.5 text-base font-bold text-[#1A1F3C]">{label}</p>
+
+            {payload.map((item) => (
+                <div key={item.dataKey} className="flex items-center justify-between gap-4 text-base">
+                    <span className="flex items-center gap-1.5 text-[#515778]">
+                        <span className="h-2 w-2 rounded-full m-2" style={{ backgroundColor: item.color }} />
+                        Capa {item.dataKey}
+                    </span>
+                    <span className="font-semibold text-[#1A1F3C]">{money(item.value)}</span>
+                </div>
+            ))}
+
+            <div className="mt-1.5 flex items-center justify-between gap-4 border-t border-[#E4E7F0] pt-1.5 text-xs">
+                <span className="font-bold text-[#131E5C] text-base">Total</span>
+                <span className="font-bold text-[#131E5C] text-base">{money(total)}</span>
+            </div>
+        </div>
     );
 }
 
