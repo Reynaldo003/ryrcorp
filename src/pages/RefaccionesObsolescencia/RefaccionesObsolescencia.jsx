@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
     Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart,
-    ResponsiveContainer, Tooltip, XAxis, YAxis,
+    ResponsiveContainer, Tooltip, XAxis, YAxis, ScatterChart, Scatter, ZAxis, ReferenceLine
 } from "recharts";
 
 import {
@@ -269,6 +269,7 @@ export default function RefaccionesObsolescencia() {
     const porMovimiento = useMemo(() => convertirGrafica(dashboard.graficas.por_categoria_movimiento), [dashboard.graficas.por_categoria_movimiento]);
     const porAgencia = useMemo(() => convertirGrafica(dashboard.graficas.por_agencia), [dashboard.graficas.por_agencia]);
     const porGrupo = useMemo(() => convertirGrafica(dashboard.graficas.por_grupo), [dashboard.graficas.por_grupo]);
+    console.log("Datos de porGrupo:", porGrupo);
     const porAntiguedad = useMemo(() => convertirGrafica(dashboard.graficas.por_antiguedad), [dashboard.graficas.por_antiguedad]);
     const totalValorCapas = useMemo(
         () => porCapa.reduce((acc, item) => acc + item.valor_inventario, 0),
@@ -808,6 +809,56 @@ export default function RefaccionesObsolescencia() {
                                 </div>
                             </ChartCard>
                         </div>
+                        {/* --- INICIO NUEVOS GRÁFICOS --- */}
+                        <div className="xl:col-span-6">
+                            <ChartCard title="Promedio de Antigüedad" subtitle="Días en inventario por Grupo Principal" icon={Clock3}>
+                                <div className="h-[360px]">
+                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                                                <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <YAxis tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${value} días`, "Promedio"]} />
+
+                                                {/* Línea roja visual de límite (Ej. 180 días) */}
+                                                <ReferenceLine y={180} stroke="#EF4444" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (180d)', fill: '#EF4444', fontSize: 11 }} />
+
+                                                <Bar dataKey="promedioDias" fill={C.navyLight} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={700}>
+                                                    {porGrupo.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.promedioDias > 180 ? "#EF4444" : C.navyLight} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </ChartCard>
+                        </div>
+
+                        <div className="xl:col-span-6">
+                            <ChartCard title="Mapa de Obsolescencia" subtitle="Antigüedad vs Valor vs Cantidad (Burbujas)" icon={Layers3}>
+                                <div className="h-[360px]">
+                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                                                <XAxis type="number" dataKey="promedioDias" name="Antigüedad" unit=" d" tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <YAxis type="number" dataKey="valor_inventario" name="Valor" tickFormatter={formatoCompacto} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                <ZAxis type="number" dataKey="productos" range={[50, 500]} name="Piezas" />
+                                                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={TOOLTIP_STYLE} formatter={(value, name) => name === 'Valor' ? money(value) : value} />
+                                                <Scatter name="Grupos" data={porGrupo} fill={C.navy}>
+                                                    {porGrupo.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                                    ))}
+                                                </Scatter>
+                                            </ScatterChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </ChartCard>
+                        </div>
+                        {/* --- FIN NUEVOS GRÁFICOS --- */}
                     </div >
                 )
                 }
