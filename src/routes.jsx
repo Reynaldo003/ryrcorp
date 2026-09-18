@@ -124,7 +124,6 @@ import ProspectosDigitales from "./pages/GestionNegocio/ProspectosDigitales";
 import CompraRefacciones from "./pages/GestionNegocio/CompraRefacciones";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 import Presupuestos from "./pages/Presupuestos/Presupuestos";
-import PresupuestosRefacciones from "./pages/Presupuestos/PresupuestosRefacciones";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -460,14 +459,6 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
                                             <Presupuestos />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
-                                    path: "presupuestos_refacciones",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
-                                            <PresupuestosRefacciones />
                                         </RequirePermission>
                                     ),
                                 },
