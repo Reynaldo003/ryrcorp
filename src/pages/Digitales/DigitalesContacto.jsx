@@ -83,8 +83,8 @@ import {
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
 const CHAT_PAGE_SIZE = 8;
-const CHAT_LIST_PAGE_SIZE = 30;
-const CHAT_LIST_DAYS = 3;
+const CHAT_LIST_PAGE_SIZE = 20;
+const CHAT_LIST_DAYS = "";
 const CHAT_UPDATES_LIMIT = 40;
 const CHAT_CACHE_LIMIT = 80;
 const CHAT_UPDATES_INTERVAL = 2500;
@@ -2567,7 +2567,7 @@ export default function DigitalesContacto() {
 
     const [q, setQ] = useState("");
     const [chatFilter, setChatFilter] = useState("todos");
-    const [loadingList, setLoadingList] = useState(false);
+    const [loadingList, setLoadingList] = useState(true);
     const [loadingMoreChats, setLoadingMoreChats] = useState(false);
     const [chatsHasMore, setChatsHasMore] = useState(true);
     const [loadingChat, setLoadingChat] = useState(false);
@@ -2766,11 +2766,12 @@ export default function DigitalesContacto() {
         const telefonoBusqueda = normalizaTelefonoMx(q);
 
         return chats.filter((chat) => {
-            if (
-                chatFilter === "no_leidos" &&
-                !(chat.unread > 0)
-            ) {
-                return false;
+            if (chatFilter === "no_leidos") {
+                const esElChatAbierto = chat.telefono === activeTel;
+                // Permite que el chat abierto permanezca en pantalla mientras se atiende
+                if (!(chat.unread > 0) && !esElChatAbierto) {
+                    return false;
+                }
             }
 
             if (chatFilter?.startsWith("estado:")) {
@@ -2976,7 +2977,9 @@ export default function DigitalesContacto() {
         const actual = chatsPaginationRef.current;
         if (!reset && !actual.hasMore) return [];
 
-        const scope = reset ? (busqueda ? "busqueda" : "recientes") : (actual.scope || (busqueda ? "busqueda" : "recientes"));
+        const scope = reset
+            ? (busqueda ? "busqueda" : "recientes")
+            : (actual.scope || (busqueda ? "busqueda" : "recientes"));
         const before = reset ? "" : (actual.before || "");
         const beforeId = reset ? "" : (actual.before_id || "");
         const beforePrioridad = reset ? "" : (actual.before_prioridad || "");
@@ -2987,7 +2990,7 @@ export default function DigitalesContacto() {
             numero_asesor: numeroLinea,
             paginado: 1,
             limit: CHAT_LIST_PAGE_SIZE,
-            dias: CHAT_LIST_DAYS,
+            dias: CHAT_LIST_DAYS, // Vacío para no restringir días
             q: busqueda,
             scope,
             before,
@@ -2998,9 +3001,11 @@ export default function DigitalesContacto() {
         if (requestId !== chatsRequestRef.current || numeroAsesorActivoRef.current !== numeroLinea) return [];
         const items = Array.isArray(response?.results) ? response.results : Array.isArray(response) ? response : [];
         const normalizados = items.map((chat) => normalizarResumenChat(chat, numeroLinea)).filter((chat) => Boolean(chat.telefono));
+
         let manualesCambiaron = false;
         for (const chat of normalizados) if (chatsManualesRef.current.delete(chat.telefono)) manualesCambiaron = true;
         if (manualesCambiaron) guardarChatsManualesGuardados(chatsManualesRef.current);
+
         const queryNormalizada = normalizeText(busqueda), queryTelefono = normalizaTelefonoMx(busqueda);
         const manuales = Array.from(chatsManualesRef.current.values()).filter((chat) => {
             if (normalizaTelefonoMx(chat?.numero_asesor) !== numeroLinea) return false;
@@ -3008,6 +3013,7 @@ export default function DigitalesContacto() {
             const texto = normalizeText(`${chat?.nombre || ""} ${chat?.telefono || ""} ${chat?.agencia || ""}`);
             return texto.includes(queryNormalizada) || Boolean(queryTelefono && normalizaTelefonoMx(chat?.telefono).includes(queryTelefono));
         });
+
         if (reset) setChats(mezclarPaginasChats(manuales, normalizados));
         else setChats((actuales) => mezclarPaginasChats(actuales, normalizados));
 
@@ -3015,6 +3021,7 @@ export default function DigitalesContacto() {
         const tieneMasEnScope = Boolean(paginacion.has_more);
         const siguienteScope = tieneMasEnScope ? scope : (paginacion.next_scope || "");
         const tieneMas = Boolean(tieneMasEnScope || siguienteScope);
+
         chatsPaginationRef.current = {
             query: busqueda,
             scope: siguienteScope || scope,
@@ -3025,9 +3032,11 @@ export default function DigitalesContacto() {
         };
         setChatsHasMore(tieneMas);
 
-        if (reset && !busqueda && normalizados.length === 0 && siguienteScope === "historico") {
+        // Si la primera llamada devolvió pocos elementos y hay scope histórico, encadenar para llenar
+        if (reset && !busqueda && siguienteScope === "historico" && normalizados.length < CHAT_LIST_PAGE_SIZE) {
             return refreshChats({ numeroAsesor: numeroLinea, reset: false, query: "" });
         }
+
         return normalizados;
     }
 
@@ -3048,7 +3057,11 @@ export default function DigitalesContacto() {
             params.set("numero_asesor", numeroLinea);
             params.set("paginado", "1");
             params.set("limit", String(CHAT_LIST_PAGE_SIZE));
-            params.set("dias", String(CHAT_LIST_DAYS));
+            if (CHAT_LIST_DAYS) {
+                params.set("dias", String(CHAT_LIST_DAYS));
+            } else {
+                params.delete("dias");
+            }
             params.set("scope", busqueda ? "busqueda" : "recientes");
             params.set("before", "");
             params.set("before_id", "");
@@ -3287,9 +3300,17 @@ export default function DigitalesContacto() {
         if (loadingList || loadingMoreChats || !chatsHasMore) return;
         setLoadingMoreChats(true);
         try {
-            await refreshChats({ numeroAsesor: numeroAsesorActivoRef.current, reset: false, query: chatsPaginationRef.current.query });
+            const nuevos = await refreshChats({
+                numeroAsesor: numeroAsesorActivoRef.current,
+                reset: false,
+                query: chatsPaginationRef.current.query
+            });
+            if (!nuevos || nuevos.length === 0) {
+                setChatsHasMore(false);
+            }
         } catch (error) {
             console.error("Error cargando más chats:", error);
+            setChatsHasMore(false);
         } finally {
             setLoadingMoreChats(false);
         }
@@ -3297,8 +3318,12 @@ export default function DigitalesContacto() {
 
     function onChatsScroll(event) {
         const element = event.currentTarget;
+        if (element.scrollHeight <= element.clientHeight) return;
+
         const distanciaAlFinal = element.scrollHeight - element.scrollTop - element.clientHeight;
-        if (distanciaAlFinal <= 250) cargarMasChats();
+        if (distanciaAlFinal <= 120 && chatsHasMore && !loadingMoreChats && !loadingList) {
+            cargarMasChats();
+        }
     }
 
     async function cargarChatInicial(tel52) {
@@ -4575,10 +4600,8 @@ export default function DigitalesContacto() {
                 }
             );
 
-            await refreshChats({
-                numeroAsesor:
-                    numeroAsesorActivoRef.current,
-                reset: true,
+            await refreshChatsSilencioso({
+                numeroAsesor: numeroAsesorActivoRef.current,
                 query: qRef.current,
             }).catch(() => { });
 
