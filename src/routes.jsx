@@ -121,6 +121,7 @@ import VentasVN from "./pages/VentasVN/VentasVN";
 import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
 import Piezas from "./pages/GestionNegocio/Piezas";
 import ProspectosDigitales from "./pages/GestionNegocio/ProspectosDigitales";
+import Citas from "./pages/GestionNegocio/Citas";
 import CompraRefacciones from "./pages/GestionNegocio/CompraRefacciones";
 import CompraRefaccionesGraficos from "./pages/GestionNegocio/CompraRefaccionesGraficos";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
@@ -440,14 +441,6 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
-                                    path: "prospectos_digitales",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
-                                            <ProspectosDigitales />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
                                     path: "compra_refacciones",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
@@ -471,6 +464,22 @@ export const router = createBrowserRouter(
                                         </RequirePermission>
                                     ),
                                 },
+                                {
+                                    path: "prospectos_digitales",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <ProspectosDigitales />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "citas",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <Citas />
+                                        </RequirePermission>
+                                    ),
+                                }
                             ],
                         },
                         {

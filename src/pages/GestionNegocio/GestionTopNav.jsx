@@ -35,15 +35,21 @@ export default function GestionTopNav() {
             show: true,
         },
         {
+            label: "Presupuestos Serv",
+            to: "/gestion_negocio/presupuestos",
+            icon: CircleDollarSign,
+            show: true,
+        },
+        {
             label: "Prospectos Digitales",
             to: "/gestion_negocio/prospectos_digitales",
             icon: Users,
             show: true,
         },
         {
-            label: "Presupuestos Serv",
-            to: "/gestion_negocio/presupuestos",
-            icon: CircleDollarSign,
+            label: "Citas",
+            to: "/gestion_negocio/citas",
+            icon: Users,
             show: true,
         },
     ].filter((tab) => tab.show);
