@@ -512,6 +512,10 @@ function FiltrosInventario({
   setModelosComerciales,
   estatusSeleccionado,
   setEstatusSeleccionado,
+
+  condicionInventario,
+  setCondicionInventario,
+
   periodoGracia,
   setPeriodoGracia,
   tiie,
@@ -544,106 +548,133 @@ function FiltrosInventario({
   };
 
   return (
-    <div className="p-4 shadow-sm">
-      <div className="space-y-5 grid grid-cols-4">
-        <GrupoFiltro titulo="Agencia">
-          <BotonFiltro
-            activo={!agenciaSeleccionada && !modelosComerciales}
-            onClick={seleccionarTodasAgencias}
-          >
-            Todas
-          </BotonFiltro>
+    <div className="space-y-5 pl-3 pr-3">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-12">
 
-          <BotonFiltro
-            activo={modelosComerciales}
-            onClick={seleccionarVehiculosComerciales}
-          >
-            R&R Vehículos Comerciales
-          </BotonFiltro>
-
-          {filtrosDisponibles.agencias.map((agencia) => (
+        {/* CONDICIÓN */}
+        <div className="min-w-0 xl:col-span-3">
+          <GrupoFiltro titulo="Condición">
             <BotonFiltro
-              key={agencia.codigo}
-              activo={
-                !modelosComerciales &&
-                agenciaSeleccionada === agencia.codigo
-              }
-              onClick={() =>
-                seleccionarAgencia(agencia.codigo)
-              }
+              activo={condicionInventario === "N"}
+              onClick={() => setCondicionInventario("N")}
             >
-              {agencia.nombre}
+              Nuevos
             </BotonFiltro>
-          ))}
-        </GrupoFiltro>
 
-        <GrupoFiltro titulo="Estatus">
-          <BotonFiltro
-            activo={!estatusSeleccionado}
-            onClick={() => setEstatusSeleccionado("")}
-          >
-            Todos
-          </BotonFiltro>
-
-          {estatusDisponibles.map((estatus) => (
             <BotonFiltro
-              key={estatus.codigo}
-              activo={estatusSeleccionado === estatus.codigo}
-              onClick={() =>
-                setEstatusSeleccionado(estatus.codigo)
-              }
+              activo={condicionInventario === "U"}
+              onClick={() => setCondicionInventario("U")}
             >
-              {estatus.nombre}
+              Usados
             </BotonFiltro>
-          ))}
-        </GrupoFiltro>
-
-        <GrupoFiltro titulo="Periodo de gracia">
-          {[30, 45, 60].map((dias) => (
-            <BotonFiltro
-              key={dias}
-              activo={periodoGracia === dias}
-              onClick={() => setPeriodoGracia(dias)}
-            >
-              {dias} días
-            </BotonFiltro>
-          ))}
-        </GrupoFiltro>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <CampoFinanciero
-            titulo="TIIE 28 días"
-            descripcion="Tasa anual de referencia"
-            value={tiie}
-            onChange={(e) => setTiie(e.target.value)}
-            min="0"
-            step="0.0001"
-            suffix="%"
-          />
-
-          <CampoFinanciero
-            titulo="Spread base"
-            descripcion="Antes del descuento wholesale"
-            value={spreadBase}
-            onChange={(e) => setSpreadBase(e.target.value)}
-            step="0.01"
-            suffix="pp"
-          />
-
-          <CampoFinanciero
-            titulo="Penetración retail"
-            descripcion="Define bono y descuento"
-            value={penetracionRetail}
-            onChange={(e) =>
-              setPenetracionRetail(e.target.value)
-            }
-            min="0"
-            max="100"
-            step="0.01"
-            suffix="%"
-          />
+          </GrupoFiltro>
         </div>
+
+        {/* AGENCIA */}
+        <div className="min-w-0 xl:col-span-4">
+          <GrupoFiltro titulo="Agencia">
+            <BotonFiltro
+              activo={!agenciaSeleccionada && !modelosComerciales}
+              onClick={seleccionarTodasAgencias}
+            >
+              Todas
+            </BotonFiltro>
+
+            <BotonFiltro
+              activo={modelosComerciales}
+              onClick={seleccionarVehiculosComerciales}
+            >
+              R&R Vehículos Comerciales
+            </BotonFiltro>
+
+            {filtrosDisponibles.agencias.map((agencia) => (
+              <BotonFiltro
+                key={agencia.codigo}
+                activo={
+                  !modelosComerciales &&
+                  agenciaSeleccionada === agencia.codigo
+                }
+                onClick={() => seleccionarAgencia(agencia.codigo)}
+              >
+                {agencia.nombre}
+              </BotonFiltro>
+            ))}
+          </GrupoFiltro>
+        </div>
+
+        {/* ESTATUS */}
+        <div className="min-w-0 xl:col-span-3">
+          <GrupoFiltro titulo="Estatus">
+            <BotonFiltro
+              activo={!estatusSeleccionado}
+              onClick={() => setEstatusSeleccionado("")}
+            >
+              Todos
+            </BotonFiltro>
+
+            {estatusDisponibles.map((estatus) => (
+              <BotonFiltro
+                key={estatus.codigo}
+                activo={estatusSeleccionado === estatus.codigo}
+                onClick={() => setEstatusSeleccionado(estatus.codigo)}
+              >
+                {estatus.nombre}
+              </BotonFiltro>
+            ))}
+          </GrupoFiltro>
+        </div>
+
+        {/* PERIODO DE GRACIA */}
+        <div className="min-w-0 xl:col-span-2">
+          <GrupoFiltro titulo="Periodo de gracia">
+            {[30, 45, 60].map((dias) => (
+              <BotonFiltro
+                key={dias}
+                activo={periodoGracia === dias}
+                onClick={() => setPeriodoGracia(dias)}
+              >
+                {dias} días
+              </BotonFiltro>
+            ))}
+          </GrupoFiltro>
+        </div>
+
       </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:max-w-3xl">
+
+        <CampoFinanciero
+          titulo="TIIE 28 días"
+          descripcion="Tasa anual de referencia"
+          value={tiie}
+          onChange={(e) => setTiie(e.target.value)}
+          min="0"
+          step="0.0001"
+          suffix="%"
+        />
+
+        <CampoFinanciero
+          titulo="Spread base"
+          descripcion="Antes del descuento wholesale"
+          value={spreadBase}
+          onChange={(e) => setSpreadBase(e.target.value)}
+          step="0.01"
+          suffix="pp"
+        />
+
+        <CampoFinanciero
+          titulo="Penetración retail"
+          descripcion="Define bono y descuento"
+          value={penetracionRetail}
+          onChange={(e) => setPenetracionRetail(e.target.value)}
+          min="0"
+          max="100"
+          step="0.01"
+          suffix="%"
+        />
+
+      </div>
+
 
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricaFinanciera
@@ -673,6 +704,7 @@ function FiltrosInventario({
     </div>
   );
 }
+
 function obtenerColorAntiguedad(
   dias,
   periodoGracia
@@ -1630,6 +1662,12 @@ export default function InventarioIndex() {
     setEstatusSeleccionado,
   ] = useState("");
 
+
+  const [
+    condicionInventario,
+    setCondicionInventario,
+  ] = useState("N");
+
   const [familiaFiltro, setFamiliaFiltro] =
     useState("");
 
@@ -1763,6 +1801,26 @@ export default function InventarioIndex() {
         modelosComerciales
           ? MODELOS_COMERCIALES.join(",")
           : undefined,
+
+      condicion:
+        condicionInventario,
+    };
+
+    /*
+     * Este endpoint lo dejamos sin condición porque sirve
+     * para comparar Nuevo vs Usado.
+     */
+    const paramsNuevoUsado = {
+      agencia:
+        agenciaSeleccionada || undefined,
+
+      estatus:
+        estatusSeleccionado || undefined,
+
+      modelos:
+        modelosComerciales
+          ? MODELOS_COMERCIALES.join(",")
+          : undefined,
     };
 
     setCargando(true);
@@ -1772,9 +1830,17 @@ export default function InventarioIndex() {
       apiInventario.getPorAgencia(params),
       apiInventario.getPorEstatus(params),
       apiInventario.getPorMarca(params),
-      apiInventario.getNuevoUsado(params),
-      apiInventario.getNacionalImportado(params),
+
+      apiInventario.getNuevoUsado(
+        paramsNuevoUsado
+      ),
+
+      apiInventario.getNacionalImportado(
+        params
+      ),
+
       apiInventario.getCosto(params),
+
       apiInventario.getAntiguedad(params),
     ])
       .then(
@@ -1798,7 +1864,9 @@ export default function InventarioIndex() {
             )
           );
 
-          setPorMarca(marca.slice(0, 13));
+          setPorMarca(
+            marca.slice(0, 13)
+          );
 
           setNuevoUsado(
             nu.filter(
@@ -1809,7 +1877,9 @@ export default function InventarioIndex() {
           );
 
           setNacionalImportado(ni);
+
           setCostoTotal(costo);
+
           setAntiguedad(antig);
         }
       )
@@ -1828,16 +1898,19 @@ export default function InventarioIndex() {
     apiInventario
       .getInventario(params)
       .then((data) => {
-        const vehiculosActivos = data.filter(
-          (vehiculo) =>
-            !ESTATUS_EXCLUIDOS.includes(
-              (
-                vehiculo.StEstoque || ""
-              ).trim()
-            )
-        );
+        const vehiculosActivos =
+          data.filter(
+            (vehiculo) =>
+              !ESTATUS_EXCLUIDOS.includes(
+                (
+                  vehiculo.StEstoque || ""
+                ).trim()
+              )
+          );
 
-        setVehiculos(vehiculosActivos);
+        setVehiculos(
+          vehiculosActivos
+        );
       })
       .catch(() =>
         setErrorTabla(
@@ -1851,6 +1924,7 @@ export default function InventarioIndex() {
     agenciaSeleccionada,
     estatusSeleccionado,
     modelosComerciales,
+    condicionInventario,
   ]);
 
   const vehiculosCalculados = useMemo(
@@ -2718,20 +2792,31 @@ export default function InventarioIndex() {
         <Seccion titulo='Inventario'>
           <FiltrosInventario
             filtrosDisponibles={filtrosDisponibles}
+
             agenciaSeleccionada={agenciaSeleccionada}
             setAgenciaSeleccionada={setAgenciaSeleccionada}
+
             modelosComerciales={modelosComerciales}
             setModelosComerciales={setModelosComerciales}
+
             estatusSeleccionado={estatusSeleccionado}
             setEstatusSeleccionado={setEstatusSeleccionado}
+
+            condicionInventario={condicionInventario}
+            setCondicionInventario={setCondicionInventario}
+
             periodoGracia={periodoGracia}
             setPeriodoGracia={setPeriodoGracia}
+
             tiie={tiie}
             setTiie={setTiie}
+
             spreadBase={spreadBase}
             setSpreadBase={setSpreadBase}
+
             penetracionRetail={penetracionRetail}
             setPenetracionRetail={setPenetracionRetail}
+
             reglaPenetracion={reglaPenetracion}
             spreadEfectivo={spreadEfectivo}
             tasaAnual={tasaAnual}

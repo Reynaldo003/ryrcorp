@@ -23,6 +23,12 @@ export default function GestionTopNav() {
             show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
         {
+            label: "Usados",
+            to: "/gestion_negocio/usados",
+            icon: LayoutList,
+            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+        },
+        {
             label: "Compra de Refacciones",
             to: "/gestion_negocio/compra_refacciones",
             icon: ShoppingCart,

@@ -44,12 +44,9 @@ const AZUL_VW_NAVY = "#001E50";
 const AZUL_VW_PRIMARY = "#1677FF";
 
 // IMÁGENES LOCALES DESDE LA CARPETA PUBLIC DE VITE
-const IMAGEN_CITAS_GLOBALES = "/fondo4.jpg";
-const IMAGEN_CITAS_DIGITALES = "/fondo2.jpg";
-const IMAGEN_CITAS_TRADICIONALES = "/fondo3.jpg";
-
-// RESPALDO EN CASO DE FALLA DE RUTA LOCAL
-const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80";
+const IMAGEN_CITAS_GLOBALES = "../citas_totales.jpeg";
+const IMAGEN_CITAS_DIGITALES = "../citas_digitales.jpeg";
+const IMAGEN_CITAS_TRADICIONALES = "../citas_tradicionales.jpeg";
 
 // FUNCIÓN PARA FORMATEAR NOMBRE: "PRIMER NOMBRE + INICIAL DEL APELLIDO"
 function formatearNombreCorto(str) {
@@ -534,8 +531,8 @@ export default function CitasDashboard({ rows: initialRows }) {
                         type="button"
                         onClick={() => setAgenciaSel(null)}
                         className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
-                                ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                                : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                            ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                            : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
                             }`}
                     >
                         <span>Todas las agencias</span>
@@ -549,8 +546,8 @@ export default function CitasDashboard({ rows: initialRows }) {
                                 type="button"
                                 onClick={() => setAgenciaSel(active ? null : agencia)}
                                 className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${active
-                                        ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                                        : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                                    ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                                    : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
                                     }`}
                             >
                                 <span>{agencia}</span>
@@ -578,8 +575,8 @@ export default function CitasDashboard({ rows: initialRows }) {
                         type="button"
                         onClick={() => setMesSel(null)}
                         className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-3 py-1.5 text-xs transition-all ${mesSel === null
-                                ? "bg-[#001E50] text-white font-vw-head font-bold"
-                                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
+                            ? "bg-[#001E50] text-white font-vw-head font-bold"
+                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
                             }`}
                     >
                         {mesSel === null ? <Check className="h-3 w-3 text-white" /> : <Plus className="h-3 w-3 text-slate-400" />}
@@ -597,10 +594,10 @@ export default function CitasDashboard({ rows: initialRows }) {
                                 disabled={futuro}
                                 onClick={() => setMesSel(active ? null : index)}
                                 className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-xs transition-all ${active
-                                        ? "bg-[#001E50] text-white font-vw-head font-bold"
-                                        : futuro
-                                            ? "border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed font-vw-head font-bold"
-                                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
+                                    ? "bg-[#001E50] text-white font-vw-head font-bold"
+                                    : futuro
+                                        ? "border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed font-vw-head font-bold"
+                                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
                                     }`}
                             >
                                 {active ? <Check className="h-3 w-3 text-white" /> : <Plus className="h-3 w-3 text-slate-400" />}
@@ -627,10 +624,6 @@ export default function CitasDashboard({ rows: initialRows }) {
                                 src={IMAGEN_CITAS_GLOBALES}
                                 alt="Volkswagen Global Showroom"
                                 className="h-full w-full object-cover object-center transition-transform duration-500 hover:scale-105"
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = FALLBACK_IMAGE;
-                                }}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#001E50]/90 via-[#001E50]/40 to-transparent" />
 
@@ -731,10 +724,6 @@ export default function CitasDashboard({ rows: initialRows }) {
                                 src={IMAGEN_CITAS_DIGITALES}
                                 alt="Ingreso Prospectos Redes Sociales"
                                 className="h-full w-full object-cover object-center transition-transform duration-500 hover:scale-105"
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = FALLBACK_IMAGE;
-                                }}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#001E50]/80 via-[#001E50]/20 to-transparent" />
 
@@ -863,10 +852,6 @@ export default function CitasDashboard({ rows: initialRows }) {
                                 src={IMAGEN_CITAS_TRADICIONALES}
                                 alt="Exploración de CRM y Piso"
                                 className="h-full w-full object-cover object-center transition-transform duration-500 hover:scale-105"
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = FALLBACK_IMAGE;
-                                }}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#001E50]/80 via-[#001E50]/20 to-transparent" />
 
@@ -1198,8 +1183,8 @@ export default function CitasDashboard({ rows: initialRows }) {
                                     >
                                         <div
                                             className={`absolute -top-12 transition-all duration-200 bg-[#001E50] text-white text-[9px] p-2 rounded-lg pointer-events-none whitespace-nowrap space-y-0.5 ${esSeleccionado
-                                                    ? "opacity-100 z-30 scale-100"
-                                                    : "opacity-0 group-hover:opacity-100 z-20 scale-95 group-hover:scale-100"
+                                                ? "opacity-100 z-30 scale-100"
+                                                : "opacity-0 group-hover:opacity-100 z-20 scale-95 group-hover:scale-100"
                                                 }`}
                                         >
                                             <div className="font-vw-head font-bold border-b border-white/20 pb-0.5 mb-0.5">
@@ -1405,8 +1390,8 @@ export default function CitasDashboard({ rows: initialRows }) {
 
                                         <div className="flex items-center gap-3 min-w-[200px]">
                                             <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-vw-head font-bold text-xs shrink-0 transition-colors ${isTop
-                                                    ? "bg-[#001E50] text-white"
-                                                    : "bg-slate-100 text-slate-600"
+                                                ? "bg-[#001E50] text-white"
+                                                : "bg-slate-100 text-slate-600"
                                                 }`}>
                                                 F{idx + 1}
                                             </div>
@@ -1511,7 +1496,7 @@ export default function CitasDashboard({ rows: initialRows }) {
                                                                     {asesor.asistio}/{asesor.total} citas
                                                                 </span>
                                                                 <span className={`font-vw-head font-bold text-[8px] px-1 py-0.2 rounded ${aPctNum >= 60 ? "bg-emerald-50 text-emerald-700" :
-                                                                        aPctNum >= 40 ? "bg-blue-50 text-[#1677FF]" : "bg-slate-100 text-slate-600"
+                                                                    aPctNum >= 40 ? "bg-blue-50 text-[#1677FF]" : "bg-slate-100 text-slate-600"
                                                                     }`}>
                                                                     {asesor.pct}% efect.
                                                                 </span>
