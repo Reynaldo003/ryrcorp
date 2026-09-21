@@ -2657,6 +2657,7 @@ export default function DigitalesContacto() {
     const chatsRequestRef = useRef(0);
     const silentChatsRefreshRef = useRef(false);
     const chatListScrollRef = useRef(null);
+    const loadingMoreChatsRef = useRef(false);
     const qRef = useRef("");
     const chatsPaginationRef = useRef({
         query: "",
@@ -2996,6 +2997,8 @@ export default function DigitalesContacto() {
             before,
             before_id: beforeId,
             before_prioridad: beforePrioridad,
+            solo_no_leidos:
+                chatFilter === "no_leidos" ? 1 : 0,
         });
 
         if (requestId !== chatsRequestRef.current || numeroAsesorActivoRef.current !== numeroLinea) return [];
@@ -3297,14 +3300,24 @@ export default function DigitalesContacto() {
     }
 
     async function cargarMasChats() {
-        if (loadingList || loadingMoreChats || !chatsHasMore) return;
+        if (
+            loadingList ||
+            loadingMoreChatsRef.current ||
+            !chatsPaginationRef.current.hasMore
+        ) {
+            return;
+        }
+
+        loadingMoreChatsRef.current = true;
         setLoadingMoreChats(true);
+
         try {
             const nuevos = await refreshChats({
                 numeroAsesor: numeroAsesorActivoRef.current,
                 reset: false,
-                query: chatsPaginationRef.current.query
+                query: chatsPaginationRef.current.query,
             });
+
             if (!nuevos || nuevos.length === 0) {
                 setChatsHasMore(false);
             }
@@ -3312,16 +3325,29 @@ export default function DigitalesContacto() {
             console.error("Error cargando más chats:", error);
             setChatsHasMore(false);
         } finally {
+            loadingMoreChatsRef.current = false;
             setLoadingMoreChats(false);
         }
     }
 
     function onChatsScroll(event) {
         const element = event.currentTarget;
-        if (element.scrollHeight <= element.clientHeight) return;
 
-        const distanciaAlFinal = element.scrollHeight - element.scrollTop - element.clientHeight;
-        if (distanciaAlFinal <= 120 && chatsHasMore && !loadingMoreChats && !loadingList) {
+        if (element.scrollHeight <= element.clientHeight) {
+            return;
+        }
+
+        const distanciaAlFinal =
+            element.scrollHeight -
+            element.scrollTop -
+            element.clientHeight;
+
+        if (
+            distanciaAlFinal <= 120 &&
+            chatsHasMore &&
+            !loadingMoreChats &&
+            !loadingList
+        ) {
             cargarMasChats();
         }
     }
