@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Car, CheckCircle2, Clock3, FileText, Gauge, Landmark, Target, TrendingUp, UserCheck, Users } from "lucide-react";
+import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Car, CheckCircle2, Clock3, FileText, Gauge, Landmark, Target, TrendingUp, UserCheck, Users, Facebook, MessageCircle, PhoneIncoming, Building, BookAlert, Phone } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getCanalDiario, getCitasStats, getCotizacionesStats, getLineasNegocio, getMotivosDescarte, getPautasOrigen, getSolicitudesFinanciamiento } from "../../lib/apiProspectosDigitales";
 import { http } from "../../lib/apiPruebas";
+import vwWhite from "../../assets/vw_white.png";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const AGENCIAS = ["VW Córdoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"];
@@ -181,15 +182,14 @@ export default function ProspectosDigitales() {
         </Seccion>
 
         <Seccion titulo="Origen, Demanda y Productividad">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-            <GraficoCanalDiario datos={data.canalDiario} loading={loading} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+            <GraficoCanalDiario datos={data.canalDiario} lineas={data.lineasNegocio.lineas} pautas={data.pautas} loading={loading} />
             <EficienciaCanales canales={canales} loading={loading} />
             <RendimientoAsesores asesores={asesores} loading={loading} />
-            <DemandaOrigen lineas={data.lineasNegocio.lineas} pautas={data.pautas} loading={loading} />
           </div>
         </Seccion>
 
-        <Seccion titulo="Perfilamiento y Calidad del Dato" subtitulo="Identifica pérdidas de calidad, descarte y consistencia del registro comercial">
+        <Seccion titulo="Perfilamiento y Calidad del Dato">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <MotivosDescarte motivos={data.motivos} loading={loading} />
             <CalidadDato calidad={calidad} total={total} loading={loading} />
@@ -197,7 +197,7 @@ export default function ProspectosDigitales() {
           </div>
         </Seccion>
 
-        <Seccion titulo="Resultado Comercial" subtitulo="Cotización, financiamiento y cierre atribuido a prospectos digitales">
+        <Seccion titulo="Resultado Comercial">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <Cotizaciones data={data.cotizaciones} loading={loading} />
             <Solicitudes data={data.solicitudes} loading={loading} />
@@ -312,16 +312,12 @@ function EmbudoComercial({ etapas = [], loading }) {
   ];
 
   const anchoInicial = 100;
-  const anchoFinal = 36;
+  const anchoFinal = 40;
 
   const datosFunnel = datos.map((etapa, index) => {
     const totalEtapas = Math.max(datos.length - 1, 1);
-
-    // Reducción lineal y progresiva.
-    // No depende de los valores comerciales.
     const progreso = index / totalEtapas;
-    const ancho =
-      anchoInicial - (anchoInicial - anchoFinal) * progreso;
+    const ancho = anchoInicial - (anchoInicial - anchoFinal) * progreso;
 
     return {
       ...etapa,
@@ -368,26 +364,11 @@ function EmbudoComercial({ etapas = [], loading }) {
               <div className="flex w-full max-w-[720px] flex-col items-center">
                 {datosFunnel.map((etapa, index) => {
                   const siguiente = datosFunnel[index + 1];
-
-                  const anchoInferior = siguiente
-                    ? siguiente.ancho
-                    : Math.max(etapa.ancho - 7, 24);
-
-                  const relacionInferior =
-                    anchoInferior / etapa.ancho;
-
-                  const recorte =
-                    ((1 - relacionInferior) / 2) * 100;
-
-                  const conversionOrigen =
-                    index === 0
-                      ? 100
-                      : numero(etapa.conversion_origen);
-
-                  const conversionAnterior =
-                    index === 0
-                      ? 100
-                      : numero(etapa.conversion_anterior);
+                  const anchoInferior = siguiente ? siguiente.ancho : Math.max(etapa.ancho - 7, 24);
+                  const relacionInferior = anchoInferior / etapa.ancho;
+                  const recorte = ((1 - relacionInferior) / 2) * 100;
+                  const conversionOrigen = index === 0 ? 100 : numero(etapa.conversion_origen);
+                  const conversionAnterior = index === 0 ? 100 : numero(etapa.conversion_anterior);
 
                   return (
                     <div
@@ -491,14 +472,16 @@ function TituloCard({ icono, titulo, detalle }) {
   return <div><div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#EAF0FF] text-[#1555C7]">{icono}</span><div className="font-black uppercase tracking-[0.07em] text-[#152754]">{titulo}</div></div>{detalle && <div className="mt-2 font-medium text-[#7A859C]">{detalle}</div>}</div>;
 }
 
-function GraficoCanalDiario({ datos, loading }) {
+function GraficoCanalDiario({ datos, loading, lineas, pautas }) {
+  const topLineas = [...(lineas || [])].sort((a, b) => numero(b.total) - numero(a.total)).slice(0, 3);
+  const topPautas = [...(pautas || [])].sort((a, b) => numero(b.total) - numero(a.total)).slice(0, 5);
   return (
     <Tarjeta>
       <TituloCard icono={<Activity className="h-5 w-5" />} titulo="Demanda diaria por canal" detalle="Entrada de prospectos durante el mes" />
       <div className="mt-4 h-[300px]">
         {loading ? <Skeleton className="h-full w-full" /> : datos.length === 0 ? <Vacio texto="Sin prospectos en el periodo" /> : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={datos} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <BarChart data={datos} margin={{ top: 8, right: 0, left: -35, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="#E7EBF2" />
               <XAxis dataKey="rotulo" tick={{ fontSize: 13, fill: "#738099" }} axisLine={false} tickLine={false} interval={2} />
               <YAxis tick={{ fontSize: 13, fill: "#738099" }} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -511,6 +494,16 @@ function GraficoCanalDiario({ datos, loading }) {
           </ResponsiveContainer>
         )}
       </div>
+
+      <TituloCard icono={<TrendingUp className="h-5 w-5" />} titulo="Demanda y campañas" />
+      <div className="mt-4">
+        <div className="font-black text-[#152754]">Líneas de negocio</div>
+        <div className="mt-2 space-y-2">{loading ? <Skeleton className="h-24 w-full" /> : topLineas.map((l) => <BarraProgreso key={l.id || l.nombre} label={l.nombre} value={numero(l.porcentaje)} right={`${entero(l.total)} · ${porcentaje(l.porcentaje)}`} />)}</div>
+      </div>
+      <div className="mt-5 border-t border-[#E5E9F0] pt-4">
+        <div className="font-black text-[#152754]">Top pautas</div>
+        <div className="mt-2 space-y-2">{loading ? <Skeleton className="h-28 w-full" /> : topPautas.length === 0 ? <Vacio texto="Sin pauta identificada" compact /> : topPautas.map((p) => <BarraProgreso key={`${p.nombre}-${p.canal}`} label={p.nombre} value={numero(p.porcentaje)} right={`${entero(p.total)} · ${porcentaje(p.porcentaje)}`} />)}</div>
+      </div>
     </Tarjeta>
   );
 }
@@ -519,12 +512,34 @@ function EficienciaCanales({ canales, loading }) {
   const ordenados = [...(canales || [])].sort((a, b) => numero(b.prospectos) - numero(a.prospectos));
   return (
     <Tarjeta>
-      <TituloCard icono={<Gauge className="h-5 w-5" />} titulo="Calidad por canal" detalle="No sólo volumen: cita, descarte y facturación" />
+      <TituloCard icono={<Gauge className="h-5 w-5" />} titulo="Calidad por canal" />
       <div className="mt-4 space-y-3">
-        {loading ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />) : ordenados.length === 0 ? <Vacio texto="Sin canales" /> : ordenados.map((c) => (
-          <div key={c.nombre} className="rounded-lg border border-[#E1E6EF] p-3">
-            <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: COLOR_CANAL[c.id] || "#94A3B8" }} /><span className="truncate font-black text-[#152754]">{c.nombre}</span></div><span className="font-black text-[#07184C]">{entero(c.prospectos)}</span></div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center"><MetricaLinea label="Cita" value={porcentaje(c.tasa_cita)} /><MetricaLinea label="Descarte" value={porcentaje(c.tasa_descarte)} /><MetricaLinea label="Factura" value={porcentaje(c.tasa_facturacion)} /></div>
+        {loading ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-20 w-full" />) : ordenados.length === 0 ? <Vacio texto="Sin canales" /> : ordenados.map((c) => (
+          <div key={c.nombre} className="h-38 rounded-lg border border-[#E1E6EF] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 items-center truncate font-black text-[#152754]">
+                  {c.nombre === "Facebook Ads" ? <Facebook className="mr-1 inline h-10 w-10 text-white bg-blue-500 rounded-md p-2" />
+                    : c.nombre === "Sin clasificar" ? <BookAlert className="mr-1 inline h-10 w-10 text-red-600 bg-amber-300 rounded-md p-2" />
+                      : c.nombre === "VW Concesionaria/VW" ? <img src={vwWhite} alt="VW" className="mr-1 h-10 w-10 shrink-0 bg-[#131E5C] rounded-md p-0.5" />
+                        : c.nombre === "WhatsApp" ? (
+                          <span className="relative mr-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-green-500 text-white">
+                            <MessageCircle className="h-8 w-8" />
+                            <Phone className="absolute h-3.5 w-3.5" strokeWidth={3} />
+                          </span>
+                        )
+                          : c.nombre === "Llamada entrante" ? <PhoneIncoming className="mr-1 inline h-10 w-10 text-white bg-purple-500 rounded-md p-2" />
+                            : null}
+                  {c.nombre}
+                </span>
+              </div>
+              <span className="font-black text-[#07184C]">{entero(c.prospectos)}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+              <MetricaLinea label="Cita" value={porcentaje(c.tasa_cita)} prospectos={c.prospectos} />
+              <MetricaLinea label="Descarte" value={porcentaje(c.tasa_descarte)} prospectos={c.prospectos} />
+              <MetricaLinea label="Factura" value={porcentaje(c.tasa_facturacion)} prospectos={c.prospectos} />
+            </div>
           </div>
         ))}
       </div>
@@ -545,24 +560,6 @@ function RendimientoAsesores({ asesores, loading }) {
             <div className="mt-1 flex justify-between text-[13px] font-medium text-[#7A859C]"><span>{entero(a.prospectos)} leads · {entero(a.cotizaciones)} cotizaciones</span><span>{porcentaje(a.tasa_facturacion)} cierre</span></div>
           </div>
         ))}
-      </div>
-    </Tarjeta>
-  );
-}
-
-function DemandaOrigen({ lineas, pautas, loading }) {
-  const topLineas = [...(lineas || [])].sort((a, b) => numero(b.total) - numero(a.total)).slice(0, 3);
-  const topPautas = [...(pautas || [])].sort((a, b) => numero(b.total) - numero(a.total)).slice(0, 5);
-  return (
-    <Tarjeta>
-      <TituloCard icono={<TrendingUp className="h-5 w-5" />} titulo="Demanda y campañas" detalle="Qué negocio y pauta están generando intención" />
-      <div className="mt-4">
-        <div className="font-black text-[#152754]">Líneas de negocio</div>
-        <div className="mt-2 space-y-2">{loading ? <Skeleton className="h-24 w-full" /> : topLineas.map((l) => <BarraProgreso key={l.id || l.nombre} label={l.nombre} value={numero(l.porcentaje)} right={`${entero(l.total)} · ${porcentaje(l.porcentaje)}`} />)}</div>
-      </div>
-      <div className="mt-5 border-t border-[#E5E9F0] pt-4">
-        <div className="font-black text-[#152754]">Top pautas</div>
-        <div className="mt-2 space-y-2">{loading ? <Skeleton className="h-28 w-full" /> : topPautas.length === 0 ? <Vacio texto="Sin pauta identificada" compact /> : topPautas.map((p) => <BarraProgreso key={`${p.nombre}-${p.canal}`} label={p.nombre} value={numero(p.porcentaje)} right={`${entero(p.total)} · ${porcentaje(p.porcentaje)}`} />)}</div>
       </div>
     </Tarjeta>
   );
@@ -678,8 +675,11 @@ function CierreDigital({ negocio, loading }) {
   );
 }
 
-function MetricaLinea({ label, value }) {
-  return <div className="rounded-md bg-[#F5F7FB] px-2 py-1.5"><div className="text-[12px] font-semibold text-[#7A859C]">{label}</div><div className="font-black text-[#152754]">{value}</div></div>;
+function MetricaLinea({ label, value, prospectos }) {
+  return <div className="rounded-md h-20 bg-neutral-100 px-2 py-1.5">
+    <div className="text-[14px] font-semibold text-[#7A859C]">{label}</div>
+    <div className="font-black text-[#152754]">{value}</div>
+    <div className="font-black text-[#152754]">{Math.round(parseFloat(value.replace("%", "")) * prospectos / 100)}</div></div>;
 }
 
 function MetricaCaja({ label, value, destacado = false }) {

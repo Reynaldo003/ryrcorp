@@ -133,32 +133,79 @@ export default function RefaccionesObsolescencia() {
     const [errorDashboard, setErrorDashboard] = useState("");
     const requestDatosRef = useRef(0);
     const requestDashboardRef = useRef(0);
-    const [anioActivo, setAnioActivo] = useState(new Date().getFullYear().toString());
+    const [anioActivo, setAnioActivo] = useState("");
     const [mesActivo, setMesActivo] = useState("");
     const anioActual = new Date().getFullYear();
     const opcionesAnios = Array.from({ length: anioActual - 2023 + 1 }, (_, i) => (2023 + i).toString());
 
+    function cambiarAnio(anio) {
+        setAnioActivo((anioActual) => {
+            // Si presiono el mismo año, lo desactivo.
+            if (anioActual === anio) {
+                setMesActivo("");
+                return "";
+            }
+
+            return anio;
+        });
+    }
+
+    function cambiarMes(mes) {
+        if (!mes) {
+            setMesActivo("");
+            return;
+        }
+        if (mesActivo === mes) {
+            setMesActivo("");
+            return;
+        }
+        if (!anioActivo) {
+            setAnioActivo(new Date().getFullYear().toString());
+        }
+
+        setMesActivo(mes);
+    }
+
     // Traduce los botones de Año/Mes a los campos fecha_desde y fecha_hasta de la API
     useEffect(() => {
-        if (anioActivo) {
-            setPagina(1);
-            if (mesActivo) {
-                // Calcula el último día del mes seleccionado
-                const ultimoDia = new Date(anioActivo, parseInt(mesActivo), 0).getDate();
-                setFiltros(prev => ({
-                    ...prev,
-                    fecha_desde: `${anioActivo}-${mesActivo}-01`,
-                    fecha_hasta: `${anioActivo}-${mesActivo}-${ultimoDia}`
-                }));
-            } else {
-                // Si solo hay año, abarca los 12 meses
-                setFiltros(prev => ({
-                    ...prev,
-                    fecha_desde: `${anioActivo}-01-01`,
-                    fecha_hasta: `${anioActivo}-12-31`
-                }));
-            }
+        setPagina(1);
+
+        // Sin año seleccionado = sin filtro de fecha.
+        if (!anioActivo) {
+            setMesActivo("");
+
+            setFiltros((prev) => ({
+                ...prev,
+                fecha_desde: "",
+                fecha_hasta: "",
+            }));
+
+            return;
         }
+
+        // Año + mes seleccionado.
+        if (mesActivo) {
+            const ultimoDia = new Date(
+                Number(anioActivo),
+                Number(mesActivo),
+                0,
+            ).getDate();
+
+            setFiltros((prev) => ({
+                ...prev,
+                fecha_desde: `${anioActivo}-${mesActivo}-01`,
+                fecha_hasta: `${anioActivo}-${mesActivo}-${ultimoDia}`,
+            }));
+
+            return;
+        }
+
+        // Solo año seleccionado.
+        setFiltros((prev) => ({
+            ...prev,
+            fecha_desde: `${anioActivo}-01-01`,
+            fecha_hasta: `${anioActivo}-12-31`,
+        }));
     }, [anioActivo, mesActivo]);
 
     useEffect(() => {
@@ -391,7 +438,6 @@ export default function RefaccionesObsolescencia() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-xl font-extrabold text-[#131E5C]">Obsolescencia de Refacciones</h1>
-                        <p className="mt-1 text-xs font-medium text-[#8891AD]">Inventario, antigüedad y movimiento de refacciones</p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -460,24 +506,6 @@ export default function RefaccionesObsolescencia() {
 
                 <section className="relative overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
                     {cargandoGeneral && <div className="absolute inset-x-0 top-0 z-20 h-1 overflow-hidden bg-[#131E5C]/10"><div className="h-full w-full animate-pulse bg-[#131E5C]" /></div>}
-
-                    <div className="flex items-center justify-between gap-3 border-b border-[#E4E7F0] px-4 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]">
-                                {cargandoGeneral ? <LoaderCircle className="h-[18px] w-[18px] animate-spin text-[#131E5C]" /> : <SlidersHorizontal className="h-[18px] w-[18px] text-[#131E5C]" />}
-                            </span>
-
-                            <div>
-                                <h2 className="text-sm font-black tracking-wide text-[#1A1F3C]">Filtros</h2>
-                                <p className="text-[11px] font-medium text-[#8891AD]">{cargandoGeneral ? "Actualizando resultados..." : "Se aplican a tabla, KPIs y gráficos"}</p>
-                            </div>
-                        </div>
-
-                        <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E4E7F0] bg-white px-3 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-40">
-                            <Eraser className="h-3.5 w-3.5" />Limpiar
-                        </button>
-                    </div>
-
                     <div className="space-y-4 p-4">
                         <div className="relative">
                             <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Buscar</label>
@@ -485,7 +513,6 @@ export default function RefaccionesObsolescencia() {
                             <input type="text" value={filtros.q} onChange={(e) => cambiarFiltro("q", e.target.value)} placeholder="Código, producto, grupo, categoría, ubicación..." className="h-11 w-full rounded-xl border border-[#E4E7F0] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10" />
                             {filtros.q && <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>}
                         </div>
-
                         <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
 
                             <SelectFilter label="Grupo principal" icon={Layers3} value={filtros.grupo_principal} onChange={(value) => cambiarFiltro("grupo_principal", value)} loading={loadingOpciones}>
@@ -507,14 +534,17 @@ export default function RefaccionesObsolescencia() {
                                 <option value="">Todos los movimientos</option>
                                 {opciones.categorias_movimiento.map((item) => <option key={item} value={item}>{item}</option>)}
                             </SelectFilter>
+                            <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="inline-flex h-10 mt-5 items-center gap-1.5 rounded-xl border border-[#131E5C] bg-white px-3 text-[14px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-50">
+                                <Eraser className="h-3.5 w-3.5" />Limpiar
+                            </button>
                         </div>
 
                         {/* --- PANEL SUPERIOR ESTILO PROSPECTOS DIGITALES --- */}
-                        <div className="mb-6 space-y-4 rounded-2xl bg-white p-5 border border-[#E4E7F0] shadow-sm">
+                        <div className="mb-6 mt-6 space-y-4 rounded-2xl bg-white">
 
                             {/* Fila 1: Botones de Agencia (Concesionaria) */}
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <span className="w-32 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD]">
+                                <span className="w-25 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD]">
                                     Concesionaria
                                 </span>
                                 <div className="flex-1 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
@@ -525,22 +555,18 @@ export default function RefaccionesObsolescencia() {
                                         allLabel="Todas las agencias"
                                     />
                                 </div>
-                            </div>
 
-                            <hr className="border-[#E4E7F0]" />
-
-                            {/* Fila 2: Botones de Año y Mes */}
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                                <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
 
                                 {/* Sección Año */}
                                 <div className="flex items-center gap-2">
-                                    <span className="w-32 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD] lg:w-auto lg:pr-4">
+                                    <span className="w-15 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD] lg:w-auto lg:pr-4">
                                         Año
                                     </span>
                                     <ButtonGroup
                                         options={opcionesAnios}
                                         activeValue={anioActivo}
-                                        onChange={setAnioActivo}
+                                        onChange={cambiarAnio}
                                         showAllOption={false}
                                     />
                                 </div>
@@ -548,18 +574,24 @@ export default function RefaccionesObsolescencia() {
                                 <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
 
                                 {/* Sección Meses */}
-                                <div className="flex items-center gap-2 flex-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
+                                <div className="flex items-center gap-2 flex-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
                                     <ButtonGroup
                                         options={[
-                                            { label: "Ene", value: "01" }, { label: "Feb", value: "02" },
-                                            { label: "Mar", value: "03" }, { label: "Abr", value: "04" },
-                                            { label: "May", value: "05" }, { label: "Jun", value: "06" },
-                                            { label: "Jul", value: "07" }, { label: "Ago", value: "08" },
-                                            { label: "Sep", value: "09" }, { label: "Oct", value: "10" },
-                                            { label: "Nov", value: "11" }, { label: "Dic", value: "12" }
+                                            { label: "Ene", value: "01" },
+                                            { label: "Feb", value: "02" },
+                                            { label: "Mar", value: "03" },
+                                            { label: "Abr", value: "04" },
+                                            { label: "May", value: "05" },
+                                            { label: "Jun", value: "06" },
+                                            { label: "Jul", value: "07" },
+                                            { label: "Ago", value: "08" },
+                                            { label: "Sep", value: "09" },
+                                            { label: "Oct", value: "10" },
+                                            { label: "Nov", value: "11" },
+                                            { label: "Dic", value: "12" },
                                         ]}
                                         activeValue={mesActivo}
-                                        onChange={setMesActivo}
+                                        onChange={cambiarMes}
                                         allLabel="Anual"
                                     />
                                 </div>
@@ -567,7 +599,7 @@ export default function RefaccionesObsolescencia() {
                         </div>
                         {/* --- FIN PANEL SUPERIOR --- */}
 
-                        <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-6">
+                        <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-4">
                             <SelectFilter label="Reservadas" icon={Boxes} value={filtros.reservadas} onChange={(value) => cambiarFiltro("reservadas", value)}>
                                 <option value="">Todas</option>
                                 <option value="con">Con reservadas</option>
@@ -1061,8 +1093,8 @@ function FilterField({ label, icon: Icon, children }) {
     return (
         <div>
             <div className="mb-1.5 flex items-center gap-1.5">
-                {Icon && <Icon className="h-3.5 w-3.5 text-[#131E5C]/60" />}
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">{label}</label>
+                {Icon && <Icon className="h-3.5 w-3.5 text-[#131E5C]" />}
+                <label className="text-[12px] font-semibold uppercase tracking-widest text-[#131E5C]">{label}</label>
             </div>
             {children}
         </div>

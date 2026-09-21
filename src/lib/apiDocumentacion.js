@@ -1,5 +1,6 @@
 // src/lib/apiDocumentacion.js
 import { buildQuery, http } from "./apiClient";
+import { http as httpDescarga } from "./apiPruebas";
 
 const BASE_URL = "/documentacion/api";
 
@@ -39,15 +40,30 @@ export const apiDocumentacion = {
     return unwrapData(response);
   },
 
+  descargarExpediente: async (expedienteId) => {
+    requireId(expedienteId, "Falta el ID del expediente.");
+
+    return httpDescarga(
+      `${BASE_URL}/expedientes/${encodeURIComponent(expedienteId)}/descargar/`,
+      {
+        method: "GET",
+        responseType: "blob",
+      },
+    );
+  },
+
   // ============================================================
   // REQUISITOS
   // ============================================================
 
   requisitos: (tipoPersona, financiamiento) => {
-    if (!tipoPersona)
+    if (!tipoPersona) {
       return Promise.reject(new Error("Falta el tipo de persona."));
-    if (!financiamiento)
+    }
+
+    if (!financiamiento) {
       return Promise.reject(new Error("Falta el tipo de financiamiento."));
+    }
 
     return http(
       `${BASE_URL}/requisitos/${buildQuery({
@@ -65,13 +81,22 @@ export const apiDocumentacion = {
   upload: async (expedienteId, requisitoId, archivo) => {
     requireId(expedienteId, "Falta el ID del expediente.");
 
-    if (!requisitoId) throw new Error("Falta el requisito del documento.");
-    if (!archivo) throw new Error("Selecciona un archivo PDF.");
-    if (!(archivo instanceof File))
+    if (!requisitoId) {
+      throw new Error("Falta el requisito del documento.");
+    }
+
+    if (!archivo) {
+      throw new Error("Selecciona un archivo PDF.");
+    }
+
+    if (!(archivo instanceof File)) {
       throw new Error("El archivo seleccionado no es válido.");
+    }
 
     const formData = new FormData();
+
     formData.set("requisito_id", String(requisitoId));
+
     formData.set("archivo", archivo);
 
     const response = await http(

@@ -592,6 +592,7 @@ async function http(
     method = "GET",
     body,
     headers,
+    responseType = "auto",
     _retryRefresh = true,
     _skipProactiveRefresh = false,
   } = {},
@@ -672,6 +673,7 @@ async function http(
       method,
       body,
       headers,
+      responseType,
       _retryRefresh: false,
       _skipProactiveRefresh: true,
     });
@@ -698,6 +700,14 @@ async function http(
 
   if (response.status === 204) {
     return null;
+  }
+
+  if (responseType === "blob") {
+    return {
+      blob: await response.blob(),
+      contentDisposition: response.headers.get("content-disposition") || "",
+      contentType: response.headers.get("content-type") || "",
+    };
   }
 
   const contentType = response.headers.get("content-type") || "";

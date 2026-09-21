@@ -1,16 +1,13 @@
 // src/pages/Documentacion/Documentacion.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Building2, CheckCircle2, ChevronDown, CircleAlert, Eye, FileCheck2, FileText, FolderOpen, Loader2, Pencil, Plus, Search, Trash2, UploadCloud, UserRound, X } from "lucide-react";
+import { Building2, CheckCircle2, ChevronDown, CircleAlert, Download, Eye, FileCheck2, FileText, FolderOpen, Loader2, Pencil, Plus, Search, Trash2, UploadCloud, UserRound, X } from "lucide-react";
 import EditorFormatoPdf from "./EditorFormatoPDF";
 import { useAuth } from "../../auth/AuthContext";
 import { apiDocumentacion } from "../../lib/apiDocumentacion";
-import {
-    AGENCIAS_DIGITALES,
-} from "../../config/asesoresGestionComercial";
-import {
-    useAsesoresGestionComercial,
-} from "../../hooks/useAsesoresGestionComercial";
+import { http } from "../../lib/apiPruebas";
+import { AGENCIAS_DIGITALES, } from "../../config/asesoresGestionComercial";
+import { useAsesoresGestionComercial, } from "../../hooks/useAsesoresGestionComercial";
 
 const TIPOS_PERSONA = [
     { value: "fisica_asalariada", label: "Persona Física Asalariada" },
@@ -289,6 +286,181 @@ function DocumentoCard({ requisito, documento, uploading, editable, onSelecciona
     );
 }
 
+function DescargarExpedienteButton({ expediente }) {
+    const [descargando, setDescargando] = useState(false);
+
+    const documentos =
+        Object.keys(expediente?.documentos || {});
+
+    const tieneDocumentos =
+        documentos.length > 0;
+
+    const tieneSolicitud =
+        !!expediente?.solicitud_pdf_url;
+
+    const tieneArchivos =
+        tieneDocumentos || tieneSolicitud;
+
+    const obtenerNombreArchivo = (
+        contentDisposition
+    ) => {
+        const fallback =
+            `${expediente?.folio || "expediente"}.zip`;
+
+        if (!contentDisposition) {
+            return fallback;
+        }
+
+        const utf8Match =
+            contentDisposition.match(
+                /filename\*=UTF-8''([^;]+)/i
+            );
+
+        if (utf8Match?.[1]) {
+            try {
+                return decodeURIComponent(
+                    utf8Match[1]
+                );
+            } catch {
+                return utf8Match[1];
+            }
+        }
+
+        const normalMatch =
+            contentDisposition.match(
+                /filename="?([^";]+)"?/i
+            );
+
+        if (normalMatch?.[1]) {
+            return normalMatch[1];
+        }
+
+        return fallback;
+    };
+
+    const descargar = async () => {
+        if (
+            descargando ||
+            !tieneArchivos
+        ) {
+            return;
+        }
+
+        const idExpediente =
+            expediente?.id_expediente;
+
+        if (!idExpediente) {
+            window.alert(
+                "No se encontró el expediente."
+            );
+
+            return;
+        }
+
+        setDescargando(true);
+
+        try {
+            const respuesta =
+                await apiDocumentacion
+                    .descargarExpediente(
+                        idExpediente
+                    );
+
+            const blob =
+                respuesta?.blob;
+
+            if (!blob) {
+                throw new Error(
+                    "El servidor no devolvió el archivo ZIP."
+                );
+            }
+
+            const nombreArchivo =
+                obtenerNombreArchivo(
+                    respuesta?.contentDisposition
+                );
+
+            /*
+             * Creamos una URL temporal que representa
+             * al ZIP recibido desde Django.
+             */
+            const url =
+                window.URL.createObjectURL(
+                    blob
+                );
+
+            const enlace =
+                document.createElement("a");
+
+            enlace.href = url;
+            enlace.download = nombreArchivo;
+
+            document.body.appendChild(
+                enlace
+            );
+
+            enlace.click();
+
+            enlace.remove();
+
+            /*
+             * Liberamos la URL temporal después
+             * de iniciar la descarga.
+             */
+            window.setTimeout(() => {
+                window.URL.revokeObjectURL(
+                    url
+                );
+            }, 1000);
+
+        } catch (error) {
+            console.error(
+                "Error descargando expediente:",
+                error
+            );
+
+            window.alert(
+                error?.message ||
+                "No fue posible descargar el expediente."
+            );
+
+        } finally {
+            setDescargando(false);
+        }
+    };
+
+    return (
+        <button
+            type="button"
+            disabled={
+                !tieneArchivos ||
+                descargando
+            }
+            onClick={descargar}
+            className="
+                inline-flex h-10 items-center
+                justify-center gap-2
+                rounded-lg bg-[#131E5C]
+                px-4 text-xs font-black
+                text-white transition
+                hover:bg-[#1d2d86]
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+            "
+        >
+            {descargando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+                <Download className="h-4 w-4" />
+            )}
+
+            {descargando
+                ? "Preparando ZIP..."
+                : "Descargar expediente"}
+        </button>
+    );
+}
+
 function ExpedienteCard({
     expediente,
     abierto,
@@ -303,53 +475,119 @@ function ExpedienteCard({
     onVer,
     onEliminar,
 }) {
-    const avance = expediente.avance || { porcentaje: 0, completados: 0, faltantes: 0, total: 0 };
-    const completo = avance.porcentaje >= 100;
-    const formatoGuardado = expediente.solicitud_pdf_plantilla || "";
-    const tienePdfGuardado = !!expediente.solicitud_pdf_url;
-    const cambioFormatoPendiente = !!formatoGuardado && !!formatoSeleccionado && formatoGuardado !== formatoSeleccionado;
+    const avance =
+        expediente.avance || {
+            porcentaje: 0,
+            completados: 0,
+            faltantes: 0,
+            total: 0,
+        };
+
+    const completo =
+        avance.porcentaje >= 100;
+
+    const formatoGuardado =
+        expediente.solicitud_pdf_plantilla || "";
+
+    const tienePdfGuardado =
+        !!expediente.solicitud_pdf_url;
+
+    const cambioFormatoPendiente =
+        !!formatoGuardado &&
+        !!formatoSeleccionado &&
+        formatoGuardado !== formatoSeleccionado;
 
     return (
         <>
             <tr
                 onClick={onToggle}
-                className={`cursor-pointer border-b border-black/10 transition hover:bg-[#131E5C]/[0.035] ${abierto ? "bg-[#131E5C]/[0.045]" : "bg-white"}`}
+                className={`
+                    cursor-pointer
+                    border-b border-black/10
+                    transition
+                    hover:bg-[#131E5C]/[0.035]
+                    ${abierto
+                        ? "bg-[#131E5C]/[0.045]"
+                        : "bg-white"
+                    }
+                `}
             >
                 <td className="w-12 px-3 py-3">
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${abierto ? "bg-[#131E5C] text-white" : "bg-slate-100 text-[#131E5C]"}`}>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${abierto ? "rotate-180" : ""}`} />
+                    <div
+                        className={`
+                            flex h-8 w-8
+                            items-center justify-center
+                            rounded-lg transition
+                            ${abierto
+                                ? "bg-[#131E5C] text-white"
+                                : "bg-slate-100 text-[#131E5C]"
+                            }
+                        `}
+                    >
+                        <ChevronDown
+                            className={`
+                                h-4 w-4
+                                transition-transform
+                                ${abierto
+                                    ? "rotate-180"
+                                    : ""
+                                }
+                            `}
+                        />
                     </div>
                 </td>
 
                 <td className="min-w-[230px] px-4 py-3">
-                    <div className="font-black text-[#131E5C]">{expediente.cliente || "Sin cliente"}</div>
+                    <div className="font-black text-[#131E5C]">
+                        {expediente.cliente || "Sin cliente"}
+                    </div>
 
                     <div className="mt-1 flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-400">{expediente.folio || "Sin folio"}</span>
+                        <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-400">
+                            {expediente.folio || "Sin folio"}
+                        </span>
+
                         <span className="h-1 w-1 rounded-full bg-slate-300" />
-                        <span className="text-[10px] font-semibold text-slate-400">{avance.completados} de {avance.total} documentos</span>
+
+                        <span className="text-[10px] font-semibold text-slate-400">
+                            {avance.completados} de {avance.total} documentos
+                        </span>
                     </div>
                 </td>
 
                 <td className="min-w-[180px] px-4 py-3">
-                    <Badge type="blue">{nombrePersona(expediente.tipo_persona)}</Badge>
+                    <Badge type="blue">
+                        {nombrePersona(
+                            expediente.tipo_persona
+                        )}
+                    </Badge>
                 </td>
 
                 <td className="px-4 py-3">
-                    <Badge>{nombreFinanciamiento(expediente.financiamiento)}</Badge>
+                    <Badge>
+                        {nombreFinanciamiento(
+                            expediente.financiamiento
+                        )}
+                    </Badge>
                 </td>
 
                 <td className="min-w-[160px] px-4 py-3">
                     <div className="flex items-center gap-2 text-xs font-bold text-[#131E5C]">
                         <Building2 className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{expediente.agencia || "Sin Dealer"}</span>
+
+                        <span className="truncate">
+                            {expediente.agencia || "Sin Dealer"}
+                        </span>
                     </div>
                 </td>
 
                 <td className="min-w-[180px] px-4 py-3">
                     <div className="flex items-center gap-2 text-xs font-bold text-[#131E5C]">
                         <UserRound className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{expediente.asesor_nombre || "Sin asignar"}</span>
+
+                        <span className="truncate">
+                            {expediente.asesor_nombre || "Sin asignar"}
+                        </span>
                     </div>
                 </td>
 
@@ -361,107 +599,306 @@ function ExpedienteCard({
                     <div className="flex items-center gap-3">
                         <div className="h-2 min-w-[90px] flex-1 overflow-hidden rounded-full bg-slate-200">
                             <div
-                                className={`h-full rounded-full transition-all duration-500 ${completo ? "bg-emerald-500" : "bg-[#131E5C]"}`}
-                                style={{ width: `${Math.min(avance.porcentaje || 0, 100)}%` }}
+                                className={`
+                                    h-full rounded-full
+                                    transition-all duration-500
+                                    ${completo
+                                        ? "bg-emerald-500"
+                                        : "bg-[#131E5C]"
+                                    }
+                                `}
+                                style={{
+                                    width:
+                                        `${Math.min(
+                                            avance.porcentaje || 0,
+                                            100
+                                        )}%`,
+                                }}
                             />
                         </div>
 
-                        <span className={`w-9 text-right text-xs font-black ${completo ? "text-emerald-600" : "text-[#131E5C]"}`}>
+                        <span
+                            className={`
+                                w-9 text-right
+                                text-xs font-black
+                                ${completo
+                                    ? "text-emerald-600"
+                                    : "text-[#131E5C]"
+                                }
+                            `}
+                        >
                             {avance.porcentaje}%
                         </span>
                     </div>
                 </td>
 
                 <td className="whitespace-nowrap px-4 py-3">
-                    {completo ? <Badge type="green">Completo</Badge> : <Badge type="yellow">En proceso</Badge>}
+                    {completo ? (
+                        <Badge type="green">
+                            Completo
+                        </Badge>
+                    ) : (
+                        <Badge type="yellow">
+                            En proceso
+                        </Badge>
+                    )}
                 </td>
             </tr>
 
             {abierto ? (
                 <tr>
-                    <td colSpan={9} className="border-b border-[#131E5C]/20 bg-slate-50/80 p-0">
+                    <td
+                        colSpan={9}
+                        className="
+                            border-b
+                            border-[#131E5C]/20
+                            bg-slate-50/80
+                            p-0
+                        "
+                    >
                         <div className="pt-4 sm:pt-5">
-                            {/* DOCUMENTOS */}
+
+                            {/* ========================= */}
+                            {/* HEADER DOCUMENTOS         */}
+                            {/* ========================= */}
+
+                            <div
+                                className="
+                                    flex flex-col gap-3
+                                    px-4 pb-4
+                                    sm:flex-row
+                                    sm:items-center
+                                    sm:justify-between
+                                "
+                            >
+                                <div>
+                                    <div className="text-sm font-black text-[#131E5C]">
+                                        Documentos del expediente
+                                    </div>
+
+                                    <div className="mt-1 text-[10px] font-semibold text-slate-400">
+                                        {avance.completados} de {avance.total} documentos obligatorios cargados
+                                    </div>
+                                </div>
+
+                                <DescargarExpedienteButton
+                                    expediente={expediente}
+                                />
+                            </div>
+
+                            {/* ========================= */}
+                            {/* DOCUMENTOS                */}
+                            {/* ========================= */}
+
                             <div className="overflow-hidden border border-slate-200 bg-white shadow-sm">
                                 <div className="overflow-auto">
                                     <table className="min-w-full text-left text-sm">
                                         <thead className="border border-black bg-[#131E5C] text-xs text-white">
                                             <tr>
-                                                <th className="px-4 py-3 font-bold">Documento / Especificación</th>
-                                                <th className="px-4 py-3 font-bold">Tipo</th>
-                                                <th className="px-4 py-3 font-bold">Estado</th>
-                                                <th className="px-4 py-3 font-bold">Archivo</th>
-                                                <th className="px-4 py-3 text-right font-bold">Acciones</th>
+                                                <th className="px-4 py-3 font-bold">
+                                                    Documento / Especificación
+                                                </th>
+
+                                                <th className="px-4 py-3 font-bold">
+                                                    Tipo
+                                                </th>
+
+                                                <th className="px-4 py-3 font-bold">
+                                                    Estado
+                                                </th>
+
+                                                <th className="px-4 py-3 font-bold">
+                                                    Archivo
+                                                </th>
+
+                                                <th className="px-4 py-3 text-right font-bold">
+                                                    Acciones
+                                                </th>
                                             </tr>
                                         </thead>
 
                                         <tbody>
-                                            {(expediente.requisitos || []).map((requisito) => {
-                                                const documento = expediente.documentos?.[requisito.id];
-                                                const key = `${expediente.id_expediente}-${requisito.id}`;
+                                            {(expediente.requisitos || []).map(
+                                                (requisito) => {
+                                                    const documento =
+                                                        expediente.documentos?.[
+                                                        requisito.id
+                                                        ];
 
-                                                return (
-                                                    <DocumentoCard
-                                                        key={requisito.id}
-                                                        requisito={requisito}
-                                                        documento={documento}
-                                                        uploading={!!uploading[key]}
-                                                        editable={editable}
-                                                        onSeleccionar={(req, file) => onSeleccionar(expediente, req, file)}
-                                                        onVer={onVer}
-                                                        onEliminar={(doc) => onEliminar(expediente, requisito, doc)}
-                                                    />
-                                                );
-                                            })}
+                                                    const key =
+                                                        `${expediente.id_expediente}-${requisito.id}`;
+
+                                                    return (
+                                                        <DocumentoCard
+                                                            key={requisito.id}
+                                                            requisito={requisito}
+                                                            documento={documento}
+                                                            uploading={
+                                                                !!uploading[key]
+                                                            }
+                                                            editable={editable}
+                                                            onSeleccionar={(
+                                                                req,
+                                                                file
+                                                            ) =>
+                                                                onSeleccionar(
+                                                                    expediente,
+                                                                    req,
+                                                                    file
+                                                                )
+                                                            }
+                                                            onVer={onVer}
+                                                            onEliminar={(
+                                                                doc
+                                                            ) =>
+                                                                onEliminar(
+                                                                    expediente,
+                                                                    requisito,
+                                                                    doc
+                                                                )
+                                                            }
+                                                        />
+                                                    );
+                                                }
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
-                        {/* FORMATO PDF EDITABLE */}
+
+                        {/* ========================= */}
+                        {/* FORMATO PDF EDITABLE      */}
+                        {/* ========================= */}
+
                         <div className="mb-4 overflow-hidden">
                             <div className="grid gap-3 p-4 lg:grid-cols-[minmax(300px,1fr)_auto_auto] lg:items-end">
                                 <label>
                                     <div className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
                                         Formato asignado
                                     </div>
-                                    <select
-                                        value={formatoSeleccionado || ""}
-                                        disabled
-                                        className="h-10 w-full rounded-lg border border-[#131E5C] bg-white px-3 text-xs font-bold text-[#131E5C] outline-none disabled:cursor-default disabled:opacity-80"
-                                    >
-                                        <option value="">Sin formato asignado</option>
 
-                                        {FORMATOS_SOLICITUD.map((formato) => (
-                                            <option key={formato.value} value={formato.value}>
-                                                {formato.label}
-                                            </option>
-                                        ))}
+                                    <select
+                                        value={
+                                            formatoSeleccionado ||
+                                            ""
+                                        }
+                                        disabled
+                                        className="
+                                            h-10 w-full
+                                            rounded-lg
+                                            border border-[#131E5C]
+                                            bg-white px-3
+                                            text-xs font-bold
+                                            text-[#131E5C]
+                                            outline-none
+                                            disabled:cursor-default
+                                            disabled:opacity-80
+                                        "
+                                    >
+                                        <option value="">
+                                            Sin formato asignado
+                                        </option>
+
+                                        {FORMATOS_SOLICITUD.map(
+                                            (formato) => (
+                                                <option
+                                                    key={
+                                                        formato.value
+                                                    }
+                                                    value={
+                                                        formato.value
+                                                    }
+                                                >
+                                                    {
+                                                        formato.label
+                                                    }
+                                                </option>
+                                            )
+                                        )}
                                     </select>
                                 </label>
 
                                 {editable ? (
                                     <button
                                         type="button"
-                                        disabled={!formatoSeleccionado}
-                                        onClick={() => onEditarFormato(formatoSeleccionado)}
-                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 text-xs font-black text-white hover:bg-[#1d2d86] disabled:cursor-not-allowed disabled:opacity-50"
+                                        disabled={
+                                            !formatoSeleccionado
+                                        }
+                                        onClick={() =>
+                                            onEditarFormato(
+                                                formatoSeleccionado
+                                            )
+                                        }
+                                        className="
+                                            inline-flex h-10
+                                            items-center
+                                            justify-center
+                                            gap-2 rounded-lg
+                                            bg-[#131E5C]
+                                            px-4 text-xs
+                                            font-black
+                                            text-white
+                                            hover:bg-[#1d2d86]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     >
                                         <Pencil className="h-4 w-4" />
 
-                                        {tienePdfGuardado && formatoGuardado === formatoSeleccionado ? "Editar formato" : "Llenar formato"}
+                                        {tienePdfGuardado &&
+                                            formatoGuardado ===
+                                            formatoSeleccionado
+                                            ? "Editar formato"
+                                            : "Llenar formato"}
                                     </button>
                                 ) : null}
-                                <div className="inline-flex h-10 items-center justify-center  gap-2 rounded-lg border border-[#131E5C] px-4 text-xs font-black text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-50">
-                                    {tienePdfGuardado ? <div className="text-green-500">PDF guardado</div> : <div className="text-yellow-300">Sin generar</div>}
+
+                                <div
+                                    className="
+                                        inline-flex h-10
+                                        items-center
+                                        justify-center
+                                        gap-2 rounded-lg
+                                        border
+                                        border-[#131E5C]
+                                        px-4 text-xs
+                                        font-black
+                                        text-[#131E5C]
+                                    "
+                                >
+                                    {tienePdfGuardado ? (
+                                        <div className="text-green-500">
+                                            PDF guardado
+                                        </div>
+                                    ) : (
+                                        <div className="text-yellow-500">
+                                            Sin generar
+                                        </div>
+                                    )}
                                 </div>
+
                                 {tienePdfGuardado ? (
                                     <button
                                         type="button"
-                                        onClick={onVerFormato}
-                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-xs font-black text-[#131E5C] hover:bg-slate-50"
+                                        onClick={
+                                            onVerFormato
+                                        }
+                                        className="
+                                            inline-flex h-10
+                                            items-center
+                                            justify-center
+                                            gap-2 rounded-lg
+                                            border
+                                            border-[#131E5C]/20
+                                            bg-white px-4
+                                            text-xs font-black
+                                            text-[#131E5C]
+                                            hover:bg-slate-50
+                                        "
                                     >
                                         <Eye className="h-4 w-4" />
+
                                         Ver PDF guardado
                                     </button>
                                 ) : null}
@@ -473,18 +910,24 @@ function ExpedienteCard({
                                 </div>
                             ) : null}
 
-                            {tienePdfGuardado && formatoGuardado === formatoSeleccionado ? (
+                            {tienePdfGuardado &&
+                                formatoGuardado ===
+                                formatoSeleccionado ? (
                                 <div className="border-t border-emerald-100 bg-emerald-50/60 px-4 py-2.5 text-[10px] font-semibold text-emerald-700">
-                                    Última actualización: {expediente.solicitud_pdf_actualizado
-                                        ? new Date(expediente.solicitud_pdf_actualizado).toLocaleString("es-MX")
+                                    Última actualización:{" "}
+                                    {expediente.solicitud_pdf_actualizado
+                                        ? new Date(
+                                            expediente.solicitud_pdf_actualizado
+                                        ).toLocaleString(
+                                            "es-MX"
+                                        )
                                         : "—"}
                                 </div>
                             ) : null}
                         </div>
                     </td>
-                </tr >
-            ) : null
-            }
+                </tr>
+            ) : null}
         </>
     );
 }

@@ -40,6 +40,14 @@ const MODELOS_COMERCIALES = [
   "CADDY",
 ];
 
+function normalizarTexto(valor) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
 const KPI_ICONS = {
   "Total activo": (
     <path
@@ -520,24 +528,35 @@ function FiltrosInventario({
     (estatus) => !ESTATUS_EXCLUIDOS.includes(estatus.codigo)
   );
 
+  const seleccionarTodasAgencias = () => {
+    setAgenciaSeleccionada("");
+    setModelosComerciales(false);
+  };
+
+  const seleccionarVehiculosComerciales = () => {
+    setAgenciaSeleccionada("");
+    setModelosComerciales(true);
+  };
+
+  const seleccionarAgencia = (codigo) => {
+    setModelosComerciales(false);
+    setAgenciaSeleccionada(codigo);
+  };
+
   return (
     <div className="p-4 shadow-sm">
       <div className="space-y-5 grid grid-cols-4">
         <GrupoFiltro titulo="Agencia">
           <BotonFiltro
-            activo={!agenciaSeleccionada}
-            onClick={() => setAgenciaSeleccionada("")}
+            activo={!agenciaSeleccionada && !modelosComerciales}
+            onClick={seleccionarTodasAgencias}
           >
             Todas
           </BotonFiltro>
 
           <BotonFiltro
             activo={modelosComerciales}
-            onClick={() =>
-              setModelosComerciales(
-                (valor) => !valor
-              )
-            }
+            onClick={seleccionarVehiculosComerciales}
           >
             R&R Vehículos Comerciales
           </BotonFiltro>
@@ -545,8 +564,13 @@ function FiltrosInventario({
           {filtrosDisponibles.agencias.map((agencia) => (
             <BotonFiltro
               key={agencia.codigo}
-              activo={agenciaSeleccionada === agencia.codigo}
-              onClick={() => setAgenciaSeleccionada(agencia.codigo)}
+              activo={
+                !modelosComerciales &&
+                agenciaSeleccionada === agencia.codigo
+              }
+              onClick={() =>
+                seleccionarAgencia(agencia.codigo)
+              }
             >
               {agencia.nombre}
             </BotonFiltro>
@@ -565,7 +589,9 @@ function FiltrosInventario({
             <BotonFiltro
               key={estatus.codigo}
               activo={estatusSeleccionado === estatus.codigo}
-              onClick={() => setEstatusSeleccionado(estatus.codigo)}
+              onClick={() =>
+                setEstatusSeleccionado(estatus.codigo)
+              }
             >
               {estatus.nombre}
             </BotonFiltro>
@@ -608,7 +634,9 @@ function FiltrosInventario({
             titulo="Penetración retail"
             descripcion="Define bono y descuento"
             value={penetracionRetail}
-            onChange={(e) => setPenetracionRetail(e.target.value)}
+            onChange={(e) =>
+              setPenetracionRetail(e.target.value)
+            }
             min="0"
             max="100"
             step="0.01"
@@ -1692,6 +1720,25 @@ export default function InventarioIndex() {
     [tiieNumero, spreadEfectivo]
   );
 
+  const agenciaActual = useMemo(() => {
+    return filtrosDisponibles.agencias.find(
+      (agencia) =>
+        String(agencia.codigo) ===
+        String(agenciaSeleccionada)
+    );
+  }, [
+    filtrosDisponibles.agencias,
+    agenciaSeleccionada,
+  ]);
+
+  const esAgenciaCordoba = useMemo(() => {
+    const nombre = normalizarTexto(
+      agenciaActual?.nombre
+    );
+
+    return nombre.includes("CORDOBA");
+  }, [agenciaActual]);
+
   useEffect(() => {
     apiInventario
       .getFiltros()
@@ -1708,11 +1755,14 @@ export default function InventarioIndex() {
     const params = {
       agencia:
         agenciaSeleccionada || undefined,
+
       estatus:
         estatusSeleccionado || undefined,
-      modelos: modelosComerciales
-        ? MODELOS_COMERCIALES.join(",")
-        : undefined,
+
+      modelos:
+        modelosComerciales
+          ? MODELOS_COMERCIALES.join(",")
+          : undefined,
     };
 
     setCargando(true);
@@ -1723,9 +1773,7 @@ export default function InventarioIndex() {
       apiInventario.getPorEstatus(params),
       apiInventario.getPorMarca(params),
       apiInventario.getNuevoUsado(params),
-      apiInventario.getNacionalImportado(
-        params
-      ),
+      apiInventario.getNacionalImportado(params),
       apiInventario.getCosto(params),
       apiInventario.getAntiguedad(params),
     ])
@@ -1770,25 +1818,27 @@ export default function InventarioIndex() {
           "No se pudo cargar el inventario."
         )
       )
-      .finally(() => setCargando(false));
+      .finally(() =>
+        setCargando(false)
+      );
 
     setCargandoTabla(true);
     setErrorTabla("");
 
     apiInventario
       .getInventario(params)
-      .then((data) =>
-        setVehiculos(
-          data.filter(
-            (vehiculo) =>
-              !ESTATUS_EXCLUIDOS.includes(
-                (
-                  vehiculo.StEstoque || ""
-                ).trim()
-              )
-          )
-        )
-      )
+      .then((data) => {
+        const vehiculosActivos = data.filter(
+          (vehiculo) =>
+            !ESTATUS_EXCLUIDOS.includes(
+              (
+                vehiculo.StEstoque || ""
+              ).trim()
+            )
+        );
+
+        setVehiculos(vehiculosActivos);
+      })
       .catch(() =>
         setErrorTabla(
           "No se pudo cargar el listado."
@@ -1899,41 +1949,42 @@ export default function InventarioIndex() {
   const costosPorAgencia = useMemo(() => {
     const agrupado = {};
 
-    vehiculosCalculados.forEach(
-      (vehiculo) => {
-        const agencia =
-          vehiculo.agenciaNombre ||
-          "Sin agencia";
+    vehiculosCalculados.forEach((vehiculo) => {
+      const familia = String(vehiculo.NmFamilia || "").trim().toUpperCase();
+      const esVehiculoComercial =
+        MODELOS_COMERCIALES.some((modelo) =>
+          familia.includes(modelo.toUpperCase())
+        );
 
-        if (!agrupado[agencia]) {
-          agrupado[agencia] = {
-            agencia,
-            total: 0,
-            vehiculosFuera: 0,
-          };
-        }
+      // Los modelos comerciales se consideran una agencia virtual.
+      const agencia = esVehiculoComercial
+        ? "Vehiculos Comerciales"
+        : vehiculo.agenciaNombre || "Sin agencia";
 
-        agrupado[agencia].total +=
-          numeroSeguro(
-            vehiculo.costoFinancieroTotal
-          );
-
-        if (
-          numeroSeguro(
-            vehiculo.diasFueraGracia
-          ) > 0
-        ) {
-          agrupado[agencia].vehiculosFuera +=
-            1;
-        }
+      if (!agrupado[agencia]) {
+        agrupado[agencia] = {
+          agencia,
+          total: 0,
+          vehiculosFuera: 0,
+        };
       }
-    );
+
+      agrupado[agencia].total += numeroSeguro(
+        vehiculo.costoFinancieroTotal
+      );
+
+      if (
+        numeroSeguro(
+          vehiculo.diasFueraGracia
+        ) > 0
+      ) {
+        agrupado[agencia].vehiculosFuera += 1;
+      }
+    });
 
     return Object.values(agrupado)
       .filter((item) => item.total > 0)
-      .sort(
-        (a, b) => b.total - a.total
-      );
+      .sort((a, b) => b.total - a.total);
   }, [vehiculosCalculados]);
 
   const optionCostoFinancieroAgencia =
@@ -2884,37 +2935,7 @@ export default function InventarioIndex() {
             </Panel>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Panel
-              titulo="Estatus de stock"
-              subtitulo="Distribución actual"
-              alto={280}
-            >
-              {optionPorEstatus ? (
-                <ChartDiv
-                  option={optionPorEstatus}
-                  loading={cargando}
-                />
-              ) : (
-                <EmptyState />
-              )}
-            </Panel>
-
-            <Panel
-              titulo="Nuevo vs. Usado"
-              subtitulo="Por agencia"
-              alto={280}
-            >
-              {optionNuevoUsado ? (
-                <ChartDiv
-                  option={optionNuevoUsado}
-                  loading={cargando}
-                />
-              ) : (
-                <EmptyState />
-              )}
-            </Panel>
-
+          <div className="mt-4 grid grid-cols-1 ">
             <Panel
               titulo="Nacional vs. Importado"
               subtitulo="Tipo de nacionalización"
