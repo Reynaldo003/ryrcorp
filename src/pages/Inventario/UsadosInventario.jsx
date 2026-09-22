@@ -549,26 +549,7 @@ function FiltrosInventario({
 
     return (
         <div className="space-y-5 pl-3 pr-3">
-            <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-12">
-
-                {/* CONDICIÓN */}
-                <div className="min-w-0 xl:col-span-3">
-                    <GrupoFiltro titulo="Condición">
-                        <BotonFiltro
-                            activo={condicionInventario === "N"}
-                            onClick={() => setCondicionInventario("N")}
-                        >
-                            Nuevos
-                        </BotonFiltro>
-
-                        <BotonFiltro
-                            activo={condicionInventario === "U"}
-                            onClick={() => setCondicionInventario("U")}
-                        >
-                            Usados
-                        </BotonFiltro>
-                    </GrupoFiltro>
-                </div>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-9">
 
                 {/* AGENCIA */}
                 <div className="min-w-0 xl:col-span-4">
