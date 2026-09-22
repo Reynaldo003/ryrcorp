@@ -2675,6 +2675,13 @@ export default function DigitalesContacto() {
         before_prioridad: "",
         hasMore: true,
     });
+    const [filterCounts, setFilterCounts] = useState({
+        todos: 0,
+        no_leidos: 0,
+        pendiente_cotizacion: 0,
+        seguimiento: 0,
+        calificado: 0,
+    });
     const emojiRef = useRef(null);
     const fileInputRef = useRef(null);
     const inputRef = useRef(null);
@@ -3005,9 +3012,14 @@ export default function DigitalesContacto() {
             before,
             before_id: beforeId,
             before_prioridad: beforePrioridad,
-            solo_no_leidos:
-                chatFilter === "no_leidos" ? 1 : 0,
+            solo_no_leidos: chatFilter === "no_leidos" ? 1 : 0,
+            filtro_chat: chatFilter,
         });
+
+        // ACTUALIZACIÓN DE CONTEOS REALES:
+        if (response?.conteos) {
+            setFilterCounts(response.conteos);
+        }
 
         if (requestId !== chatsRequestRef.current || numeroAsesorActivoRef.current !== numeroLinea) return [];
         const items = Array.isArray(response?.results) ? response.results : Array.isArray(response) ? response : [];
@@ -3084,6 +3096,10 @@ export default function DigitalesContacto() {
                 params.set("q", busqueda);
             }
 
+            if (chatFilter && chatFilter !== "todos") {
+                params.set("filtro_chat", chatFilter);
+            }
+
             const usuarioCrm = String(
                 user?.usuario ||
                 user?.username ||
@@ -3099,6 +3115,11 @@ export default function DigitalesContacto() {
             const response = await api.get(
                 `/digitales/chats/?${params.toString()}`
             );
+
+            // ACTUALIZACIÓN DE CONTEOS REALES EN BACKGROUND:
+            if (response?.conteos) {
+                setFilterCounts(response.conteos);
+            }
 
             /*
              * Si mientras cargábamos cambió la línea
@@ -5455,6 +5476,7 @@ export default function DigitalesContacto() {
         q,
         numeroAsesorActivo,
         isDirectChatMode,
+        chatFilter,
     ]);
     useEffect(() => {
         const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
@@ -5833,20 +5855,41 @@ export default function DigitalesContacto() {
                                         />
                                     </div>
 
-                                    {/* Filtros rápidos con scroll horizontal */}
+                                    {/* Filtros rápidos con Badges de conteo real */}
                                     <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                                        {CHAT_FILTERS.map((f) => (
-                                            <button key={f.key} onClick={() => setChatFilter(f.key)}
-                                                className={cls(
-                                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-extrabold transition whitespace-nowrap",
-                                                    chatFilter === f.key
-                                                        ? "border-[#131E5C] bg-[#131E5C] text-white shadow-sm"
-                                                        : "border-slate-200 bg-white text-slate-500 hover:border-[#1746D1]/40 hover:text-[#1746D1]"
-                                                )}
-                                                type="button">
-                                                {f.label}
-                                            </button>
-                                        ))}
+                                        {CHAT_FILTERS.map((f) => {
+                                            const activo = chatFilter === f.key;
+                                            const count = filterCounts[f.key] ?? 0;
+                                            const esNoLeidos = f.key === "no_leidos";
+
+                                            return (
+                                                <button
+                                                    key={f.key}
+                                                    onClick={() => setChatFilter(f.key)}
+                                                    className={cls(
+                                                        "group shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold transition whitespace-nowrap",
+                                                        activo
+                                                            ? "border-[#131E5C] bg-[#131E5C] text-white shadow-sm"
+                                                            : "border-slate-200 bg-white text-slate-500 hover:border-[#1746D1]/40 hover:text-[#1746D1]"
+                                                    )}
+                                                    type="button"
+                                                >
+                                                    <span>{f.label}</span>
+                                                    <span
+                                                        className={cls(
+                                                            "inline-flex h-4 min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-black leading-none transition-all",
+                                                            activo
+                                                                ? "bg-white/20 text-white"
+                                                                : esNoLeidos && count > 0
+                                                                    ? "bg-[#1746D1] text-white shadow-sm"
+                                                                    : "bg-slate-100 text-[#131E5C] group-hover:bg-[#1746D1]/10 group-hover:text-[#1746D1]"
+                                                        )}
+                                                    >
+                                                        {count}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

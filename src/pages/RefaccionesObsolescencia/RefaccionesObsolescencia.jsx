@@ -968,12 +968,12 @@ export default function RefaccionesObsolescencia() {
                                                 <YAxis tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
                                                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${value} días`, "Promedio"]} />
 
-                                                {/* Línea roja visual de límite (Ej. 180 días) */}
-                                                <ReferenceLine y={183} stroke="#EF4444" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (180d)', fill: '#EF4444', fontSize: 11 }} />
+                                                {/* Línea roja visual de límite (Ej. 183 días) */}
+                                                <ReferenceLine y={183} stroke="#122473" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (6 meses)', fill: C.navy, fontSize: 11 }} />
 
                                                 <Bar dataKey="promedioDias" fill={C.navyLight} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={700}>
                                                     {porGrupo.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={entry.promedioDias > 180 ? "#EF4444" : C.navyLight} />
+                                                        <Cell key={`cell-${index}`} fill={entry.promedioDias > 180 ? C.navy : C.navyLight} />
                                                     ))}
                                                 </Bar>
                                             </BarChart>
