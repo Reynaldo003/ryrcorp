@@ -362,6 +362,16 @@ async function executeRefreshAccessToken() {
     refresh: data.refresh || refresh,
   });
 
+  try {
+    window.dispatchEvent(
+      new CustomEvent("auth:token-refreshed", {
+        detail: { access: data.access },
+      }),
+    );
+  } catch {
+    // No interrumpir el flujo si no hay window (SSR/test).
+  }
+
   return data.access;
 }
 
@@ -1488,6 +1498,38 @@ export const api = {
       body: formData,
     });
   },
+
+  notificacionesListar: ({ limite = 50, solo_no_leidas = 0 } = {}) =>
+    http(
+      `/api/notificaciones/${buildQuery({
+        limite,
+        solo_no_leidas: solo_no_leidas ? 1 : 0,
+      })}`,
+    ),
+
+  notificacionesNoLeidas: () =>
+    http("/api/notificaciones/no-leidas/"),
+
+  notificacionesMarcarLeida: (ids = []) => {
+    const listaIds = Array.isArray(ids) ? ids : [ids];
+
+    return http("/api/notificaciones/marcar-leida/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids: listaIds }),
+    });
+  },
+
+  notificacionesMarcarTodas: () =>
+    http("/api/notificaciones/marcar-leida/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ todas: true }),
+    }),
 };
 
 export {

@@ -38,6 +38,7 @@ import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
 import { useAuth } from "../auth/AuthContext";
 import ClickupNotificationsBell from "./ClickupNotificationsBell";
+import WhatsappNotificationsBell from "./WhatsappNotificationsBell";
 import { apiClickup } from "../lib/apiClickup";
 
 function cls(...items) {
@@ -425,7 +426,8 @@ export default function Sidebar() {
                 <div className={cls("relative mt-auto border-t px-4 py-3", !showText && !isMobile && "px-2")} style={{ borderColor: VW.line }}>
                     <div className={cls("flex flex-col gap-1.5", !showText && !isMobile && "items-center")}>
                         <div className={cls("flex items-center rounded-2xl", showText ? "gap-3 px-3 py-2" : "justify-center py-2")}>
-                            <ClickupNotificationsBell />
+<ClickupNotificationsBell />
+                            <WhatsappNotificationsBell />
                             <FadeSlide show={showText} className="text-[13px] font-semibold text-white/70">
                                 Notificaciones
                             </FadeSlide>
@@ -500,6 +502,7 @@ export default function Sidebar() {
                     </NavLink>
 
                     <ClickupNotificationsBell />
+                    <WhatsappNotificationsBell />
                 </div>
             </div>
 

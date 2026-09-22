@@ -2658,6 +2658,14 @@ export default function DigitalesContacto() {
     const silentChatsRefreshRef = useRef(false);
     const chatListScrollRef = useRef(null);
     const qRef = useRef("");
+    const chatsRef = useRef([]);
+    const prospectoRef = useRef(null);
+
+    useEffect(() => {
+        chatsRef.current = chats;
+        prospectoRef.current = prospecto;
+    });
+
     const chatsPaginationRef = useRef({
         query: "",
         scope: "recientes",
@@ -5598,6 +5606,36 @@ export default function DigitalesContacto() {
                                         timestamp: nuevoUltimo?.created_at || chat.last?.timestamp || "",
                                     },
                                 } : chat));
+
+                                const entrantesNuevos = incoming.filter((m) => !m?.mine);
+                                if (entrantesNuevos.length) {
+                                    const nombreEntrante =
+                                        chatsRef.current?.find((c) => c.telefono === target)?.nombre ||
+                                        prospectoRef.current?.nombre ||
+                                        "Prospecto";
+                                    const expedienteEntrante =
+                                        prospectoRef.current?.id_exp ||
+                                        prospectoRef.current?.id ||
+                                        null;
+
+                                    for (const m of entrantesNuevos) {
+                                        window.dispatchEvent(
+                                            new CustomEvent("whatsapp:mensaje-local", {
+                                                detail: {
+                                                    wa_message_id: m?.wa_message_id || m?.id || `local-${target}-${Date.now()}-${Math.random()}`,
+                                                    telefono: target,
+                                                    numero_asesor: numeroLinea,
+                                                    nombre: nombreEntrante,
+                                                    mensaje: String(m?.text || "").trim() || "Nuevo mensaje de WhatsApp",
+                                                    expediente_id: expedienteEntrante,
+                                                    created_at: m?.created_at || new Date().toISOString(),
+                                                    url: `/comercial/prospectos/contacto?tel=${encodeURIComponent(target)}&direct=1`,
+                                                },
+                                            }),
+                                        );
+                                    }
+                                }
+
                                 if (!isDirectChatMode) {
                                     refreshChatsSilencioso({ numeroAsesor: numeroLinea, query: qRef.current }).catch(() => { });
                                 }

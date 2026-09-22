@@ -4,10 +4,8 @@ import { ensureFreshAccessToken, refreshAccessToken } from "../lib/apiPruebas";
 
 const FRONTEND_ORIGIN = "https://grupoautomotrizryr.com";
 const FRONTEND_BASE = "/crm";
-const BACKEND_WS = "wss://crm.grupoautomotrizryr.com";
-const SW_URL = `${FRONTEND_BASE}/sw-notificaciones.js`;
-const SW_SCOPE = `${FRONTEND_BASE}/`;
-const WHATSAPP_ICON = `${FRONTEND_ORIGIN}${FRONTEND_BASE}/whatsapp.svg`;
+const BACKEND_WS =
+  import.meta.env.VITE_BACKEND_WS || "wss://crm.grupoautomotrizryr.com";
 
 function normalizarUrlApp(url) {
   if (!url) return FRONTEND_BASE;
@@ -15,22 +13,6 @@ function normalizarUrlApp(url) {
   if (url.startsWith(`${FRONTEND_BASE}/`)) return url;
   if (url.startsWith("/")) return `${FRONTEND_BASE}${url}`;
   return `${FRONTEND_BASE}/${url}`;
-}
-
-async function registrarServiceWorkerNotificaciones() {
-  if (!("serviceWorker" in navigator)) return null;
-
-  try {
-    return await navigator.serviceWorker.register(SW_URL, {
-      scope: SW_SCOPE,
-      updateViaCache: "none",
-    });
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn("No se pudo registrar el Service Worker:", error);
-    }
-    return null;
-  }
 }
 
 function normalizaTelefonoMx(tel) {
@@ -115,7 +97,9 @@ function getEsAdmin(user) {
   const localUser = getUserFromLocalStorage();
   const target = user || localUser || {};
 
-  const rol = String(target?.rol || "")
+  const rol = String(
+    target?.rol?.nombre || target?.rol || target?.rol_name || ""
+  )
     .trim()
     .toLowerCase();
   const permisos = Array.isArray(target?.permisos) ? target.permisos : [];
@@ -127,63 +111,6 @@ function getEsAdmin(user) {
     permisos.includes("USUARIOS_ADMIN") ||
     permisos.includes("DIGITALES_ADMIN")
   );
-}
-
-function getPermisoNotificaciones() {
-  if (!("Notification" in window)) return "unsupported";
-  return Notification.permission;
-}
-
-async function mostrarNotificacionNavegador(data) {
-  if (!("Notification" in window)) return false;
-  if (Notification.permission !== "granted") return false;
-
-  const nombre = data?.nombre || "Prospecto";
-  const mensaje = data?.mensaje || "Nuevo mensaje de WhatsApp";
-  const url = data?.url?.startsWith("/crm/")
-    ? data.url
-    : `/crm${data?.url || "/comercial/prospectos/contacto"}`;
-
-  const opciones = {
-    body: mensaje,
-    icon: "/crm/whatsapp.svg",
-    badge: "/crm/whatsapp.svg",
-    tag: data?.wa_message_id || `whatsapp-${Date.now()}`,
-    renotify: true,
-    requireInteraction: true,
-    silent: false,
-    data: { url },
-  };
-
-  try {
-    const registration = await navigator.serviceWorker.getRegistration("/crm/");
-
-    if (registration) {
-      await registration.showNotification(
-        `Nuevo WhatsApp de ${nombre}`,
-        opciones,
-      );
-      return true;
-    }
-
-    const notificacion = new Notification(
-      `Nuevo WhatsApp de ${nombre}`,
-      opciones,
-    );
-
-    notificacion.onclick = () => {
-      notificacion.close();
-      window.focus();
-      window.location.href = url;
-    };
-
-    return true;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn("No se pudo mostrar la notificación:", error);
-    }
-    return false;
-  }
 }
 
 function calcularEsperaReconexion(intento) {
@@ -200,49 +127,30 @@ export function useNotificacionesWhatsapp({
 }) {
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
+  const heartbeatTimerRef = useRef(null);
   const reintentosRef = useRef(0);
   const cierreManualRef = useRef(false);
   const conectandoRef = useRef(false);
+  const idsVistosRef = useRef(new Set());
 
   const [estado, setEstado] = useState(activo ? "inactivo" : "desactivado");
   const [ultimaNotificacion, setUltimaNotificacion] = useState(null);
-  const [permisoNotificaciones, setPermisoNotificaciones] = useState(() => {
-    if (typeof window === "undefined") return "unsupported";
-    return getPermisoNotificaciones();
-  });
 
   const numeroAsesor = useMemo(() => getNumeroUsuarioSesion(user), [user]);
 
   const usuario = useMemo(() => getUsuarioSesion(user), [user]);
+
+  const agencia = useMemo(() => {
+    const localUser = getUserFromLocalStorage();
+    const target = user || localUser || {};
+    return String(target?.agencia || "").trim();
+  }, [user]);
 
   const esAdmin = useMemo(() => getEsAdmin(user), [user]);
 
   const limpiarUltimaNotificacion = useCallback(() => {
     setUltimaNotificacion(null);
   }, []);
-
-  const solicitarPermisoNotificaciones = useCallback(async () => {
-    if (!activo) return "disabled";
-
-    if (!("Notification" in window)) {
-      setPermisoNotificaciones("unsupported");
-      return "unsupported";
-    }
-
-    const permiso = await Notification.requestPermission();
-    setPermisoNotificaciones(permiso);
-
-    if (permiso === "granted") {
-      await registrarServiceWorkerNotificaciones();
-    }
-
-    return permiso;
-  }, [activo]);
-
-  useEffect(() => {
-    if (!activo) return;
-    setPermisoNotificaciones(getPermisoNotificaciones());
-  }, [activo]);
 
   useEffect(() => {
     let efectoActivo = true;
@@ -271,6 +179,36 @@ export function useNotificacionesWhatsapp({
       }
     }
 
+    function procesarNuevoMensaje(notificacion) {
+      if (!efectoActivo || !notificacion) return;
+
+      const id = notificacion.wa_message_id || notificacion.id;
+
+      if (id) {
+        if (idsVistosRef.current.has(id)) return;
+        idsVistosRef.current.add(id);
+
+        if (idsVistosRef.current.size > 2000) {
+          const primero = idsVistosRef.current.values().next().value;
+          idsVistosRef.current.delete(primero);
+        }
+      }
+
+      const notificacionNormalizada = {
+        id: notificacion.id || id || `${Date.now()}`,
+        ...notificacion,
+        url: normalizarUrlApp(notificacion.url),
+      };
+
+      setUltimaNotificacion(notificacionNormalizada);
+
+      window.dispatchEvent(
+        new CustomEvent("whatsapp:nuevo-mensaje", {
+          detail: notificacionNormalizada,
+        }),
+      );
+    }
+
     if (!activo) {
       cierreManualRef.current = true;
       limpiarTimer();
@@ -292,13 +230,12 @@ export function useNotificacionesWhatsapp({
       return undefined;
     }
 
-    if (!numeroAsesor && !usuario && !esAdmin) {
+    if (!usuario) {
       setEstado("sin_identificador");
       return undefined;
     }
 
     cierreManualRef.current = false;
-    registrarServiceWorkerNotificaciones();
 
     function programarReconexion(esperaForzada = null) {
       if (
@@ -380,13 +317,12 @@ export function useNotificacionesWhatsapp({
         return;
       }
 
-      const params = new URLSearchParams();
-
-      if (numeroAsesor) params.set("numero_asesor", numeroAsesor);
-      if (usuario) params.set("usuario", usuario);
-      if (esAdmin) params.set("todas", "1");
-
-      const wsUrl = `${BACKEND_WS}/ws/notificaciones/whatsapp/?${params.toString()}`;
+      /*
+       * El backend resuelve las líneas permitidas desde el JWT
+       * (rol + agencia + teléfonos). No enviamos numero_asesor ni
+       * "todas" para no ampliar el alcance del lado del cliente.
+       */
+      const wsUrl = `${BACKEND_WS}/ws/notificaciones/whatsapp/`;
 
       setEstado("conectando");
 
@@ -429,21 +365,7 @@ export function useNotificacionesWhatsapp({
         if (data?.tipo === "conexion_establecida") return;
         if (data?.tipo !== "whatsapp_mensaje_recibido") return;
 
-        const notificacion = {
-          id: data.wa_message_id || `${Date.now()}`,
-          ...data,
-          url: normalizarUrlApp(data.url),
-        };
-
-        setUltimaNotificacion(notificacion);
-
-        window.dispatchEvent(
-          new CustomEvent("whatsapp:nuevo-mensaje", {
-            detail: notificacion,
-          }),
-        );
-
-        await mostrarNotificacionNavegador(notificacion);
+        procesarNuevoMensaje(data);
       };
 
       socket.onerror = () => {
@@ -508,8 +430,77 @@ export function useNotificacionesWhatsapp({
       setEstado("sin_red");
     }
 
+    /*
+     * Cada vez que React renueva el access token, cerramos el WebSocket
+     * viejo (autenticado con el token anterior) y lo reconectamos con el
+     * token vigente. Sin esto, una conexión abierta durante horas queda
+     * "pegada" a un token que dejó de ser el actual.
+     */
+    function manejarTokenRefreshed() {
+      if (!efectoActivo || cierreManualRef.current || !isAuthenticated) return;
+
+      const socket = socketRef.current;
+
+      if (
+        socket &&
+        (socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING)
+      ) {
+        limpiarTimer();
+        reintentosRef.current = 0;
+
+        try {
+          socket.close(1000, "token_renovado");
+        } catch {
+          // Sin acción.
+        }
+      }
+    }
+
+    /*
+     * Al volver a la pestaña se verifica la conexión: si se cerró en
+     * segundo plano se reconecta sin necesidad de recargar la página.
+     */
+    function manejarVisibilidad() {
+      if (!efectoActivo || cierreManualRef.current || !isAuthenticated) return;
+
+      if (document.visibilityState !== "visible") return;
+
+      const socket = socketRef.current;
+
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        limpiarTimer();
+        reintentosRef.current = 0;
+        programarReconexion(1000);
+      }
+    }
+
     window.addEventListener("online", manejarOnline);
     window.addEventListener("offline", manejarOffline);
+    window.addEventListener("auth:token-refreshed", manejarTokenRefreshed);
+    document.addEventListener("visibilitychange", manejarVisibilidad);
+
+    function manejarMensajeLocal(event) {
+      procesarNuevoMensaje(event?.detail || {});
+    }
+
+    window.addEventListener("whatsapp:mensaje-local", manejarMensajeLocal);
+
+    /*
+     * Heartbeat: evita que los proxies corten el WebSocket por
+     * inactividad. El consumer responde {tipo: "pong"}.
+     */
+    heartbeatTimerRef.current = window.setInterval(() => {
+      const socket = socketRef.current;
+
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({ tipo: "ping" }));
+        } catch {
+          // Sin acción: el manejador de cierre reintentará.
+        }
+      }
+    }, 25000);
 
     conectar();
 
@@ -519,22 +510,30 @@ export function useNotificacionesWhatsapp({
       conectandoRef.current = false;
 
       limpiarTimer();
+
+      if (heartbeatTimerRef.current) {
+        window.clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+
       cerrarSocket();
 
       window.removeEventListener("online", manejarOnline);
       window.removeEventListener("offline", manejarOffline);
+      window.removeEventListener("auth:token-refreshed", manejarTokenRefreshed);
+      document.removeEventListener("visibilitychange", manejarVisibilidad);
+      window.removeEventListener("whatsapp:mensaje-local", manejarMensajeLocal);
     };
-  }, [activo, ready, isAuthenticated, numeroAsesor, usuario, esAdmin]);
+  }, [activo, ready, isAuthenticated, usuario, agencia]);
 
   return {
     activo,
     estado,
     numeroAsesor,
     usuario,
+    agencia,
     esAdmin,
-    permisoNotificaciones,
     ultimaNotificacion,
     limpiarUltimaNotificacion,
-    solicitarPermisoNotificaciones,
   };
 }

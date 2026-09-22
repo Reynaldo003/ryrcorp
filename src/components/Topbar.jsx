@@ -4,6 +4,7 @@ import { UserCircle2, CirclePower, Mailbox, X, Bug, Lightbulb } from "lucide-rea
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import ClickupNotificationsBell from "./ClickupNotificationsBell";
+import WhatsappNotificationsBell from "./WhatsappNotificationsBell";
 import { apiClickup } from "../lib/apiClickup";
 
 function IconBtn({ onClick, className = "", title, children, rightText }) {
@@ -86,6 +87,8 @@ export default function Topbar() {
             <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
                 <div className="flex items-center justify-end gap-2 px-4 py-3 md:px-6 lg:px-8">
                     <ClickupNotificationsBell />
+
+                    <WhatsappNotificationsBell />
 
                     <IconBtn
                         onClick={() => setOpenBugModal(true)}

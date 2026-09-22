@@ -1,11 +1,26 @@
 // src/app/AppShell.jsx
-import React from "react";
-import { Outlet } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/Sidebar";
-import Topbar from "../components/Topbar";
 
 export default function AppShell() {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const onNavegar = (event) => {
+            const to = event?.detail?.to;
+
+            if (!to) return;
+
+            navigate(to);
+        };
+
+        window.addEventListener("app:navigate", onNavegar);
+
+        return () => window.removeEventListener("app:navigate", onNavegar);
+    }, [navigate]);
+
     return (
         <div className="min-h-screen bg-white">
             <div className="min-h-screen md:flex">
