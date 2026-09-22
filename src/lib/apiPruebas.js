@@ -1,8 +1,8 @@
 // src/lib/apiPruebas.js
 
 const API =
-  //import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
+  //import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const LOGIN_PATH = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/login`;
 const ACCESS_REFRESH_MARGIN_SECONDS = 60;
