@@ -1647,7 +1647,7 @@ export default function InventarioIndex() {
     const [
         condicionInventario,
         setCondicionInventario,
-    ] = useState("N");
+    ] = useState("U");
 
     const [familiaFiltro, setFamiliaFiltro] =
         useState("");
@@ -2894,7 +2894,7 @@ export default function InventarioIndex() {
                     titulo="Costo Financiero"
                     subtitulo="Antigüedad del inventario y costo generado fuera del periodo de gracia"
                 >
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4">
                         <Panel
                             titulo="Antigüedad en Stock"
                             subtitulo="Días desde facturación"
@@ -2907,21 +2907,6 @@ export default function InventarioIndex() {
                                 />
                             ) : (
                                 <EmptyState />
-                            )}
-                        </Panel>
-
-                        <Panel
-                            titulo="Costo financiero por agencia"
-                            subtitulo={`Tasa ${tasaAnual.toFixed(4)}% · Gracia ${periodoGracia} días`}
-                            alto={300}
-                        >
-                            {optionCostoFinancieroAgencia ? (
-                                <ChartDiv
-                                    option={optionCostoFinancieroAgencia}
-                                    loading={cargandoTabla}
-                                />
-                            ) : (
-                                <EmptyState mensaje="No existen vehículos fuera del periodo de gracia" />
                             )}
                         </Panel>
                     </div>
