@@ -109,6 +109,7 @@ import FlujoProcesos from "./pages/FlujoProcesos/FlujoProcesos";
 
 import InventarioLayout from "./pages/Inventario/InventarioLayout";
 import InventarioIndex from "./pages/Inventario/InventarioIndex";
+import UsadosInventario from "./pages/Inventario/UsadosInventario";
 import BitacoraMantenimiento from "./pages/Inventario/BitacoraMantenimiento";
 import NoConformidad from "./pages/Calidad/NoConformidad";
 import DigitalesRendimiento from "./pages/Digitales/DigitalesRendimiento";
@@ -433,6 +434,14 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
+                                    path: "usados",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <UsadosInventario />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
                                     path: "autos_nuevos",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
@@ -475,7 +484,7 @@ export const router = createBrowserRouter(
                                 {
                                     path: "citas",
                                     element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
                                             <Citas />
                                         </RequirePermission>
                                     ),

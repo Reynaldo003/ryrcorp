@@ -950,6 +950,7 @@ export const api = {
     paginado = 1,
     numero_asesor = "",
     usuario = "",
+    solo_no_leidos = 0,
   } = {}) =>
     http(
       `/digitales/chats/${buildQuery(
@@ -963,6 +964,7 @@ export const api = {
           paginado,
           numero_asesor,
           usuario,
+          solo_no_leidos,
         }),
       )}`,
     ),
