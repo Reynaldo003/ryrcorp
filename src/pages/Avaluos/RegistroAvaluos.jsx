@@ -1094,7 +1094,8 @@ export default function RegistroAvaluos() {
             rol === "administrador" ||
             permisos.includes("CRM_DIGITALES") ||
             permisos.includes("ALL") ||
-            permisos.includes("USUARIOS_ADMIN")
+            permisos.includes("USUARIOS_ADMIN") ||
+            permisos.includes("CRM_VALUADOR")
         );
     }, [user]);
 
@@ -1154,8 +1155,6 @@ export default function RegistroAvaluos() {
             "VW Poza Rica",
             "VW Tuxtepec",
             "VW Tuxpan",
-            "Chirey",
-            "JAECOO R&R",
         ],
         []
     );

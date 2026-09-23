@@ -246,7 +246,7 @@ export default function Sidebar() {
                 to: "/usados",
                 label: "Autos Usados",
                 icon: Car,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_DIGITALES", "CRM_CALIDAD"]),
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_DIGITALES", "CRM_CALIDAD", "CRM_VALUADOR"]),
             },
             {
                 section: "Retención",
@@ -424,7 +424,7 @@ export default function Sidebar() {
 
                 <div className={cls("relative mt-auto border-t px-4 py-3", !showText && !isMobile && "px-2")} style={{ borderColor: VW.line }}>
                     <div className={cls("flex flex-col gap-1.5", !showText && !isMobile && "items-center")}>
-<div className={cls("flex items-center rounded-2xl", showText ? "gap-3 px-3 py-2" : "justify-center py-2")}>
+                        <div className={cls("flex items-center rounded-2xl", showText ? "gap-3 px-3 py-2" : "justify-center py-2")}>
                             <WhatsappNotificationsBell />
                             <FadeSlide show={showText} className="text-[13px] font-semibold text-white/70">
                                 Notificaciones

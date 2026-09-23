@@ -465,7 +465,7 @@ export default function InteractiveTable({
 
       {/* Table */}
       <div className="max-h-[65vh] min-h-[360px] overflow-auto">
-        <table className="min-w-max border-collapse">
+        <table className="w-full border-collapse">
           <thead className="sticky top-0 z-20">
             <tr style={{ backgroundColor: C.navy }}>
               {visibleCols.map((col) => {

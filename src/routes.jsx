@@ -732,6 +732,7 @@ export const router = createBrowserRouter(
                                         "CRM_VENTAS",
                                         "USUARIOS_ADMIN",
                                         "CRM_CALIDAD",
+                                        "CRM_VALUADOR",
                                     ]}
                                 >
                                     <UsadosLayout />
@@ -751,6 +752,7 @@ export const router = createBrowserRouter(
                                                 "USUARIOS_ADMIN",
                                                 "CRM_VENTAS",
                                                 "CRM_CALIDAD",
+                                                "CRM_VALUADOR",
                                             ]}
                                         >
                                             <AvaluosLayout />
