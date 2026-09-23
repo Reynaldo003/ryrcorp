@@ -121,8 +121,14 @@ import GestorActividadesLayout from "./pages/GestorActividades/GestorActividades
 import VentasVN from "./pages/VentasVN/VentasVN";
 import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
 import Piezas from "./pages/GestionNegocio/Piezas";
+
 import ProspectosDigitales from "./pages/GestionNegocio/ProspectosDigitales";
 import Citas from "./pages/GestionNegocio/Citas";
+import IngresosPiso from "./pages/GestionNegocio/IngresosPiso";
+import PruebasManejo from "./pages/GestionNegocio/PruebasManejo";
+import SolicitudesCredito from "./pages/GestionNegocio/SolicitudesCredito";
+import Valuaciones from "./pages/GestionNegocio/Valuaciones";
+
 import CompraRefacciones from "./pages/GestionNegocio/CompraRefacciones";
 import CompraRefaccionesGraficos from "./pages/GestionNegocio/CompraRefaccionesGraficos";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
@@ -250,7 +256,7 @@ function GestionNegocioIndexPorPermisos() {
 
     // Administradores: Partes es su primera pestaña disponible.
     if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
-        return <Navigate to="/gestion_negocio/refacciones_obsolescencia" replace />;
+        return <Navigate to="/gestion_negocio/inventario" replace />;
     }
 
     // Coordinador Digital: su primera pestaña disponible es Autos Nuevos.
@@ -418,14 +424,6 @@ export const router = createBrowserRouter(
                                     element: <GestionNegocioIndexPorPermisos />,
                                 },
                                 {
-                                    path: "refacciones_obsolescencia",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
-                                            <RefaccionesObsolescencia />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
                                     path: "inventario",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
@@ -450,6 +448,72 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
+                                    path: "prospectos_digitales",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <ProspectosDigitales />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "citas",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                            <Citas />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "ingresos_piso",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                            <IngresosPiso />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "pruebas_manejo",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                            <PruebasManejo />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "solicitudes_credito",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                            <SolicitudesCredito />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "valuaciones",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                            <Valuaciones />
+                                        </RequirePermission>
+                                    ),
+                                },
+                            ],
+                        },
+
+                        {
+                            path: "partes",
+                            children: [
+                                {
+                                    index: true,
+                                    element: <GestionNegocioIndexPorPermisos />,
+                                },
+                                {
+                                    path: "refacciones_obsolescencia",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <RefaccionesObsolescencia />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
                                     path: "compra_refacciones",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
@@ -465,6 +529,12 @@ export const router = createBrowserRouter(
                                         </RequirePermission>
                                     ),
                                 },
+                            ]
+                        },
+
+                        {
+                            path: "servicio",
+                            children: [
                                 {
                                     path: "presupuestos",
                                     element: (
@@ -473,24 +543,9 @@ export const router = createBrowserRouter(
                                         </RequirePermission>
                                     ),
                                 },
-                                {
-                                    path: "prospectos_digitales",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
-                                            <ProspectosDigitales />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
-                                    path: "citas",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
-                                            <Citas />
-                                        </RequirePermission>
-                                    ),
-                                }
-                            ],
+                            ]
                         },
+
                         {
                             path: "comercial",
                             element: (

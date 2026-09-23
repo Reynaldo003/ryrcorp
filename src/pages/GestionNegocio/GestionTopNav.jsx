@@ -11,24 +11,6 @@ export default function GestionTopNav() {
 
     const tabs = [
         {
-            label: "Partes",
-            to: "/gestion_negocio/refacciones_obsolescencia",
-            icon: ArchiveX,
-            show: hasAnyPermission(["USUARIOS_ADMIN"]),
-        },
-        {
-            label: "Compra de Refacciones",
-            to: "/gestion_negocio/compra_refacciones",
-            icon: ShoppingCart,
-            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]),
-        },
-        {
-            label: "Ppto. Servicio",
-            to: "/gestion_negocio/presupuestos",
-            icon: CircleDollarSign,
-            show: true,
-        },
-        {
             label: "Inv. Nuevos",
             to: "/gestion_negocio/inventario",
             icon: LayoutList,
@@ -55,6 +37,30 @@ export default function GestionTopNav() {
         {
             label: "Citas",
             to: "/gestion_negocio/citas",
+            icon: Users,
+            show: true,
+        },
+        {
+            label: "Ingresos de Piso",
+            to: "/gestion_negocio/ingresos_piso",
+            icon: Users,
+            show: true,
+        },
+        {
+            label: "Pruebas de Manejo",
+            to: "/gestion_negocio/pruebas_manejo",
+            icon: Users,
+            show: true,
+        },
+        {
+            label: "Solicitudes de Crédito",
+            to: "/gestion_negocio/solicitudes_credito",
+            icon: Users,
+            show: true,
+        },
+        {
+            label: "Valuaciones",
+            to: "/gestion_negocio/valuaciones",
             icon: Users,
             show: true,
         },

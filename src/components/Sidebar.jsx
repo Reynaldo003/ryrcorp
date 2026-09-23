@@ -33,6 +33,12 @@ import {
     BanknoteArrowUp,
     UserCheck,
     CalendarCheck,
+    Cog,
+    Wrench,
+    Hammer,
+    ArchiveX,
+    CircleDollarSign,
+    ShoppingCart,
 } from "lucide-react";
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
@@ -219,6 +225,27 @@ export default function Sidebar() {
                 icon: BanknoteArrowUp,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
             },
+            {
+                section: "Partes",
+                to: "/partes/refacciones_obsolescencia",
+                label: "Partes",
+                icon: ArchiveX,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
+            },
+            {
+                section: "Partes",
+                to: "/partes/compra_refacciones",
+                label: "Compra de Refacciones",
+                icon: ShoppingCart,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
+            },
+            {
+                section: "Servicio",
+                to: "/servicio/presupuestos",
+                label: "Presupuesto de Servicio",
+                icon: CircleDollarSign,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
+            },
             { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
             {
                 section: "Comercial",
@@ -340,7 +367,7 @@ export default function Sidebar() {
     }, [hasAnyPermission]);
 
     const sections = useMemo(() => {
-        const order = ["Negocio", "Comercial", "Retención", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
+        const order = ["Negocio", "Partes", "Servicio", "Comercial", "Retención", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
         return order
             .map((section) => ({ section, items: links.filter((item) => item.section === section) }))
             .filter((group) => group.items.length > 0);
