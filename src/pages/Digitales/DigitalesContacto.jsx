@@ -2652,7 +2652,7 @@ export default function DigitalesContacto() {
     const messagesScrollRef = useRef(null);
     const activeTelRef = useRef("");
     const mensajesRef = useRef([]);
-    const didInitSelection = useRef(false);
+    const directTelSeleccionadoRef = useRef("");
     const numeroAsesorActivoRef = useRef("");
     const chatsRequestRef = useRef(0);
     const silentChatsRefreshRef = useRef(false);
@@ -2887,7 +2887,7 @@ export default function DigitalesContacto() {
         resetComposer();
 
         activeTelRef.current = "";
-        didInitSelection.current = false;
+        directTelSeleccionadoRef.current = "";
 
         chatsRequestRef.current += 1;
 
@@ -5578,10 +5578,8 @@ export default function DigitalesContacto() {
     ]);
 
     useEffect(() => {
-        if (didInitSelection.current) return;
-
-        if (isDirectChatMode && tel) {
-            didInitSelection.current = true;
+        if (isDirectChatMode && tel && tel !== directTelSeleccionadoRef.current) {
+            directTelSeleccionadoRef.current = tel;
             activeTelRef.current = tel;
             setActiveTel(tel);
             setMobileView("chat");
@@ -5589,9 +5587,9 @@ export default function DigitalesContacto() {
             return;
         }
 
-        didInitSelection.current = true;
-        activeTelRef.current = "";
-        setActiveTel("");
+        if (!isDirectChatMode && directTelSeleccionadoRef.current) {
+            directTelSeleccionadoRef.current = "";
+        }
     }, [tel, isDirectChatMode]);
 
     useEffect(() => {
