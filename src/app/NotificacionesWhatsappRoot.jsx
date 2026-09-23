@@ -1,5 +1,5 @@
 // src/app/NotificacionesWhatsappRoot.jsx
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNotificacionesWhatsapp } from "../hooks/useNotificacionesWhatsapp";
 
@@ -15,40 +15,6 @@ const NOTIFICACIONES_WS_ACTIVAS =
     String(import.meta.env.VITE_NOTIFICACIONES_WS_ACTIVAS || "true")
         .trim()
         .toLowerCase() === "true";
-
-function SinPermisoCard({ onClose }) {
-    return (
-        <div className="fixed bottom-16 right-4 z-[9998] w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-amber-200 bg-white p-4 pr-12 shadow-2xl">
-            <button
-                type="button"
-                onClick={onClose}
-                aria-label="Cerrar aviso"
-                className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-lg font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            >
-                ×
-            </button>
-
-            <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                    <span className="text-lg font-black text-amber-600" aria-hidden="true">
-                        !
-                    </span>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <div className="text-sm font-extrabold text-[#131E5C]">
-                        Notificaciones no disponibles
-                    </div>
-
-                    <div className="mt-1 text-xs font-semibold text-slate-600">
-                        Tu usuario no tiene líneas de WhatsApp autorizadas
-                        para notificaciones.
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 function rutaSpaDesdeUrl(url) {
     if (!url) return null;
@@ -149,11 +115,8 @@ function WhatsAppToast({ notificacion, onClose }) {
 
 export default function NotificacionesWhatsappRoot() {
     const { user, ready, isAuthenticated } = useAuth();
-    const [cardSinPermisoCerradaPara, setCardSinPermisoCerradaPara] =
-        useState(null);
 
     const {
-        estado,
         ultimaNotificacion,
         limpiarUltimaNotificacion,
     } = useNotificacionesWhatsapp({
@@ -164,11 +127,6 @@ export default function NotificacionesWhatsappRoot() {
     });
 
     /*
-     * Si el valor cambia (nuevo estado) la tarjeta vuelve a mostrarse;
-     * cerrar solo la oculta para ese mismo valor.
-     */
-
-    /*
      * Mientras la bandera esté apagada no renderizamos nada
      * relacionado con las notificaciones.
      */
@@ -176,18 +134,9 @@ export default function NotificacionesWhatsappRoot() {
     if (!ready || !isAuthenticated) return null;
 
     return (
-        <>
-            {cardSinPermisoCerradaPara !== estado &&
-                estado === "sin_permiso" && (
-                    <SinPermisoCard
-                        onClose={() => setCardSinPermisoCerradaPara(estado)}
-                    />
-                )}
-
-            <WhatsAppToast
-                notificacion={ultimaNotificacion}
-                onClose={limpiarUltimaNotificacion}
-            />
-        </>
+        <WhatsAppToast
+            notificacion={ultimaNotificacion}
+            onClose={limpiarUltimaNotificacion}
+        />
     );
 }
