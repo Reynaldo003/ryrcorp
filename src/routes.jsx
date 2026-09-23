@@ -56,6 +56,8 @@ import CalidadIndex from "./pages/Calidad/CalidadIndex";
 import ComercialLayout from "./pages/Comercial/ComercialLayout";
 import ComercialIndex from "./pages/Comercial/ComercialIndex";
 import GestionLayout from "./pages/GestionNegocio/GestionLayout";
+import GestionPartesLayout from "./pages/Partes/GestionPartesLayout";
+import GestionServicioLayout from "./pages/Servicio/GestionServicioLayout";
 
 import UsadosIndex from "./pages/Usados/UsadosIndex";
 import UsadosLayout from "./pages/Usados/UsadosLayout";
@@ -129,8 +131,7 @@ import PruebasManejo from "./pages/GestionNegocio/PruebasManejo";
 import SolicitudesCredito from "./pages/GestionNegocio/SolicitudesCredito";
 import Valuaciones from "./pages/GestionNegocio/Valuaciones";
 
-import CompraRefacciones from "./pages/GestionNegocio/CompraRefacciones";
-import CompraRefaccionesGraficos from "./pages/GestionNegocio/CompraRefaccionesGraficos";
+import CompraRefacciones from "./pages/Partes/CompraRefacciones";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 import Presupuestos from "./pages/Presupuestos/Presupuestos";
 
@@ -262,6 +263,48 @@ function GestionNegocioIndexPorPermisos() {
     // Coordinador Digital: su primera pestaña disponible es Autos Nuevos.
     if (tienePermiso(permisos, ["CRM_COORDINADOR_DIGITAL"])) {
         return <Navigate to="/gestion_negocio/autos_nuevos" replace />;
+    }
+
+    // Seguridad adicional por si alguien entra sin permisos válidos.
+    return <Navigate to="/" replace />;
+}
+
+function GestionPartesIndexPorPermisos() {
+    const { user, ready } = useAuth();
+
+    if (ready === false) return null;
+
+    const permisos = user?.permisos || [];
+
+    // Administradores: Partes es su primera pestaña disponible.
+    if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
+        return <Navigate to="/partes/refacciones_obsolescencia" replace />;
+    }
+
+    // Coordinador Digital: su primera pestaña disponible es Autos Nuevos.
+    if (tienePermiso(permisos, ["CRM_COORDINADOR_DIGITAL"])) {
+        return <Navigate to="/partes/compra_refacciones" replace />;
+    }
+
+    // Seguridad adicional por si alguien entra sin permisos válidos.
+    return <Navigate to="/" replace />;
+}
+
+function GestionServicioIndexPorPermisos() {
+    const { user, ready } = useAuth();
+
+    if (ready === false) return null;
+
+    const permisos = user?.permisos || [];
+
+    // Administradores: Partes es su primera pestaña disponible.
+    if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
+        return <Navigate to="/servicio/presupuestos" replace />;
+    }
+
+    // Coordinador Digital: su primera pestaña disponible es Autos Nuevos.
+    if (tienePermiso(permisos, ["CRM_COORDINADOR_DIGITAL"])) {
+        return <Navigate to="/servicio/presupuestos" replace />;
     }
 
     // Seguridad adicional por si alguien entra sin permisos válidos.
@@ -497,13 +540,17 @@ export const router = createBrowserRouter(
                                 },
                             ],
                         },
-
                         {
                             path: "partes",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                    <GestionPartesLayout />
+                                </RequirePermission>
+                            ),
                             children: [
                                 {
                                     index: true,
-                                    element: <GestionNegocioIndexPorPermisos />,
+                                    element: <GestionPartesIndexPorPermisos />,
                                 },
                                 {
                                     path: "refacciones_obsolescencia",
@@ -521,20 +568,21 @@ export const router = createBrowserRouter(
                                         </RequirePermission>
                                     ),
                                 },
-                                {
-                                    path: "compra_refacciones/graficos",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
-                                            <CompraRefaccionesGraficos />
-                                        </RequirePermission>
-                                    ),
-                                },
                             ]
                         },
 
                         {
                             path: "servicio",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                    <GestionServicioLayout />
+                                </RequirePermission>
+                            ),
                             children: [
+                                {
+                                    index: true,
+                                    element: <GestionServicioIndexPorPermisos />,
+                                },
                                 {
                                     path: "presupuestos",
                                     element: (
