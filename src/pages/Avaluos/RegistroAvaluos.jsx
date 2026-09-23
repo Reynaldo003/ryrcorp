@@ -1088,15 +1088,11 @@ export default function RegistroAvaluos() {
 
     // ── permisos y agencias (igual que RegistroCredito) ──────────────────────
     const isAdmin = useMemo(() => {
-        const permisos = user?.permisos || [];
-        const rol = String(user?.rol || "").trim().toLowerCase();
-        return (
-            rol === "administrador" ||
-            permisos.includes("CRM_DIGITALES") ||
-            permisos.includes("ALL") ||
-            permisos.includes("USUARIOS_ADMIN") ||
-            permisos.includes("CRM_VALUADOR")
-        );
+        const rol = String(user?.rol || "")
+            .trim()
+            .toLowerCase();
+
+        return rol === "administrador";
     }, [user]);
 
     // Array de agencias del usuario (soporta múltiples separadas por "|")
