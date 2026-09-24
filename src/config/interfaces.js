@@ -242,9 +242,11 @@ export function tieneAlgunPermiso(permisos = [], permitidos = []) {
 }
 
 // Interfaz visible: respeta el override manual del usuario (user.interfaces)
-// o, si no hay override, los permisos.
+// o, si no hay override, los permisos. Con permiso ALL (administradores)
+// el menú siempre se muestra completo.
 export function interfazVisible(item, permisos = [], interfaces = null) {
     if (item.alwaysOn) return true;
+    if (permisos.includes("ALL")) return true;
     if (Array.isArray(interfaces)) {
         return interfaces.includes(item.key);
     }
