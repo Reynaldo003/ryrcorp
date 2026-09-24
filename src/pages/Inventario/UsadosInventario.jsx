@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileSpreadsheet, FileText } from "lucide-react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { apiInventario } from "../../lib/apiInventario";
@@ -43,6 +44,60 @@ const MODELOS_COMERCIALES = [
     "TRANSPORTER",
     "CADDY",
 ];
+
+function descargarBlob(blob, nombreArchivo) {
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function esperarRenderCompleto() {
+    if (document.fonts?.ready) await document.fonts.ready;
+
+    await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+
+    // Permite que las gráficas (ECharts) terminen de medir y pintar.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+}
+
+function agregarCanvasPaginadoPdf(doc, canvas) {
+    const margen = 8;
+    const anchoPagina = doc.internal.pageSize.getWidth();
+    const altoPagina = doc.internal.pageSize.getHeight();
+    const anchoUtil = anchoPagina - margen * 2;
+    const altoUtil = altoPagina - margen * 2;
+    const pixelesPorMm = canvas.width / anchoUtil;
+    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+
+    let posicionY = 0;
+    let primeraPagina = true;
+
+    while (posicionY < canvas.height) {
+        if (!primeraPagina) doc.addPage("a4", "landscape");
+        primeraPagina = false;
+
+        const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
+        const corte = document.createElement("canvas");
+        corte.width = canvas.width;
+        corte.height = altoActualPx;
+        const contexto = corte.getContext("2d");
+        if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
+        contexto.fillStyle = "#ffffff";
+        contexto.fillRect(0, 0, corte.width, corte.height);
+        contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
+
+        const altoImagenMm = altoActualPx / pixelesPorMm;
+        doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
+        posicionY += altoActualPx;
+    }
+}
 
 function normalizarTexto(valor) {
     return String(valor ?? "")
@@ -1624,6 +1679,8 @@ export default function InventarioIndex() {
 
     const tablaRef = useRef(null);
 
+    const reporteRef = useRef(null);
+
     const [
         filtrosDisponibles,
         setFiltrosDisponibles,
@@ -2804,49 +2861,190 @@ export default function InventarioIndex() {
             Situación: vehiculo.SitVeiculo || "—",
         }));
 
-    const exportarExcelInventario = () => {
+    const capturarReporteVisual = async () => {
+        if (!reporteRef.current) throw new Error("No se encontró el contenido visual del reporte.");
+
+        await esperarRenderCompleto();
+
+        const canvas = await html2canvas(reporteRef.current, {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: "#ffffff",
+            logging: false,
+            windowWidth: 1440,
+            scrollX: 0,
+            scrollY: 0,
+            onclone: (documentoClonado) => {
+                const clon = documentoClonado.getElementById("reporte-inventario-usados-exportacion");
+                if (clon) {
+                    clon.style.position = "absolute";
+                    clon.style.left = "0";
+                    clon.style.top = "0";
+                    clon.style.zIndex = "0";
+                }
+            },
+        });
+
+        if (!canvas.width || !canvas.height) throw new Error("No fue posible capturar las gráficas.");
+        return canvas;
+    };
+
+    const exportarExcelInventario = async () => {
         if (!vehiculosCalculados || vehiculosCalculados.length === 0) {
             alert("No hay vehículos para exportar con los filtros actuales.");
             return;
         }
 
         try {
+            let canvas = null;
+            try {
+                canvas = await capturarReporteVisual();
+            } catch (errCaptura) {
+                console.warn("No se pudo capturar el contenido visual:", errCaptura);
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = "CRM Grupo Automotriz R&R";
+            workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
+            workbook.created = new Date();
+            workbook.modified = new Date();
+            workbook.subject = "Reporte de Inventario - Autos Usados";
+            workbook.title = "Reporte de Inventario - Autos Usados";
+
+            // ── Hoja Resumen ──
+            const hojaResumen = workbook.addWorksheet("Resumen", {
+                views: [{ showGridLines: false }],
+                pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
+            });
+            hojaResumen.columns = [{ width: 26 }, { width: 34 }, { width: 4 }, { width: 26 }, { width: 34 }];
+
+            hojaResumen.mergeCells("A1:E2");
+            const cTitulo = hojaResumen.getCell("A1");
+            cTitulo.value = "Reporte de Inventario - Autos Usados";
+            cTitulo.font = { name: "Arial", size: 20, bold: true, color: { argb: "FFFFFFFF" } };
+            cTitulo.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+            cTitulo.alignment = { vertical: "middle", horizontal: "left" };
+            hojaResumen.getRow(1).height = 24;
+            hojaResumen.getRow(2).height = 16;
+
+            hojaResumen.mergeCells("A3:E3");
+            hojaResumen.getCell("A3").value = `Generado: ${new Date().toLocaleString("es-MX")}`;
+            hojaResumen.getCell("A3").font = { italic: true, color: { argb: "FF6B7280" } };
+
+            hojaResumen.getCell("A5").value = "Filtros aplicados";
+            hojaResumen.getCell("A5").font = { bold: true, size: 13, color: { argb: "FF131E5C" } };
+
+            const filtros = [
+                ["Agencia", agenciaActual?.nombre || "Todas las agencias"],
+                ["Estatus", estatusSeleccionado || "Todos los estatus"],
+                ["Condición", condicionInventario === "N" ? "Nuevos" : condicionInventario === "U" ? "Usados" : "Todos"],
+                ["Periodo de gracia", `${periodoGracia} días`],
+            ];
+            filtros.forEach(([etiqueta, valor], indice) => {
+                const fila = 6 + indice;
+                hojaResumen.getCell(`A${fila}`).value = etiqueta;
+                hojaResumen.getCell(`A${fila}`).font = { bold: true, color: { argb: "FF374151" } };
+                hojaResumen.getCell(`B${fila}`).value = valor;
+                hojaResumen.mergeCells(`B${fila}:E${fila}`);
+                hojaResumen.getCell(`B${fila}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+                hojaResumen.getCell(`B${fila}`).alignment = { vertical: "middle" };
+            });
+
+            hojaResumen.getCell("A11").value = "Indicadores";
+            hojaResumen.getCell("A11").font = { bold: true, size: 13, color: { argb: "FF131E5C" } };
+
+            const kpis = [
+                ["Total activo", totalGeneral.toLocaleString("es-MX")],
+                ["Costo inventario", formatMoneda(costoTotal, 0)],
+                ["Fuera de gracia", unidadesFueraGracia.toLocaleString("es-MX")],
+                ["Costo financiero", formatMoneda(costoFinancieroTotal, 0)],
+                ["Agencia líder", agenciaLider?.agenciaNombre || "—"],
+                ["% Nuevos", `${pctNuevo}%`],
+                ["Tasa aplicada (TIIE + Spread)", `${tasaAnual.toFixed(4)}%`],
+            ];
+            kpis.forEach(([etiqueta, valor], indice) => {
+                const fila = 12 + indice;
+                hojaResumen.getCell(`A${fila}`).value = etiqueta;
+                hojaResumen.getCell(`A${fila}`).font = { bold: true, color: { argb: "FF374151" } };
+                hojaResumen.getCell(`B${fila}`).value = valor;
+                hojaResumen.mergeCells(`B${fila}:E${fila}`);
+                hojaResumen.getCell(`B${fila}`).font = { bold: true, color: { argb: "FF131E5C" } };
+                hojaResumen.getCell(`B${fila}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+            });
+
+            // ── Hoja Detalle (todo el contenido, sin paginación) ──
+            const hojaDatos = workbook.addWorksheet("Detalle", {
+                views: [{ state: "frozen", ySplit: 1 }],
+                pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+            });
             const registros = filasVehiculosExport();
-            const ws = XLSX.utils.json_to_sheet(registros);
-            ws["!cols"] = Object.keys(registros[0] || {}).map((k) => ({
-                wch: Math.min(45, Math.max(12, k.length + 6)),
-            }));
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Inventario Usados");
-            XLSX.writeFile(wb, `${nombreBaseInventario()}.xlsx`, { compression: true });
+            const claves = Object.keys(registros[0] || {});
+            hojaDatos.columns = claves.map((clave) => ({ key: clave, width: Math.min(45, Math.max(14, clave.length + 6)) }));
+            registros.forEach((registro) => hojaDatos.addRow(registro));
+            hojaDatos.getRow(1).eachCell((celda) => {
+                celda.font = { bold: true, color: { argb: "FFFFFFFF" } };
+                celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+                celda.alignment = { horizontal: "center" };
+            });
+            hojaDatos.headerFooter.oddHeader = "&L&16&BInventario de Autos Usados&R&D";
+            hojaDatos.headerFooter.oddFooter = "&LCRM Grupo Automotriz R&R&RPágina &P de &N";
+
+            // ── Hoja Gráficas (captura visual) ──
+            if (canvas) {
+                const hojaGraficas = workbook.addWorksheet("Gráficas", {
+                    views: [{ showGridLines: false, zoomScale: 70 }],
+                    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+                });
+                const base64 = canvas.toDataURL("image/png");
+                const imageId = workbook.addImage({ base64, extension: "png" });
+                const ancho = 1200;
+                const alto = Math.round((canvas.height / canvas.width) * ancho);
+                hojaGraficas.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: ancho, height: alto } });
+                for (let i = 1; i <= 18; i += 1) hojaGraficas.getColumn(i).width = 11;
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const archivo = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+            descargarBlob(archivo, `${nombreBaseInventario()}.xlsx`);
         } catch (error) {
             console.error("Error exportando inventario a Excel:", error);
             alert("No se pudo generar el Excel. Revisa la consola.");
         }
     };
 
-    const exportarPdfInventario = () => {
+    const exportarPdfInventario = async () => {
         if (!vehiculosCalculados || vehiculosCalculados.length === 0) {
             alert("No hay vehículos para exportar con los filtros actuales.");
             return;
         }
 
         try {
+            let canvas = null;
+            try {
+                canvas = await capturarReporteVisual();
+            } catch (errCaptura) {
+                console.warn("No se pudo capturar el contenido visual:", errCaptura);
+            }
+
             const doc = new jsPDF({
                 orientation: "landscape",
                 unit: "mm",
                 format: "a4",
                 compress: true,
             });
+            doc.setProperties({
+                title: "Reporte de Inventario - Autos Usados",
+                subject: "Reporte de inventario con gráficas y detalle completo",
+                author: "CRM Grupo Automotriz R&R",
+                creator: "CRM Grupo Automotriz R&R",
+            });
 
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.setTextColor(19, 30, 92);
-            doc.text("Reporte de Inventario - Autos Usados", 10, 12);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(8);
-            doc.setTextColor(107, 114, 128);
-            doc.text(`${agenciaActual?.nombre || "Todas las agencias"} · ${estatusSeleccionado || "Todos los estatus"} · ${condicionInventario === "N" ? "Nuevos" : condicionInventario === "U" ? "Usados" : "Nuevos y Usados"}`, 10, 16);
+            if (canvas) {
+                agregarCanvasPaginadoPdf(doc, canvas);
+            }
 
             const headers = [
                 "VIN", "Familia", "Modelo", "Agencia", "Condición", "Estatus",
@@ -2870,8 +3068,18 @@ export default function InventarioIndex() {
                 vehiculo.SitVeiculo || "—",
             ]);
 
+            doc.addPage("a4", "landscape");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(13);
+            doc.setTextColor(19, 30, 92);
+            doc.text(
+                `Detalle completo (${vehiculosCalculados.length.toLocaleString("es-MX")} vehículos) · ${agenciaActual?.nombre || "Todas las agencias"} · ${estatusSeleccionado || "Todos los estatus"}`,
+                10,
+                12
+            );
+
             autoTable(doc, {
-                startY: 18,
+                startY: 17,
                 head: [headers],
                 body,
                 theme: "grid",
@@ -2911,7 +3119,7 @@ export default function InventarioIndex() {
     };
 
     return (
-        <div className="inventario-page min-h-screen text-[14px] text-[#1A2344]">
+        <div ref={reporteRef} id="reporte-inventario-usados-exportacion" className="inventario-page min-h-screen text-[14px] text-[#1A2344]">
             <main className="space-y-6 px-2 py-4 lg:px-4">
                 {/* BOTONES EXPORTAR EXCEL / PDF */}
                 <div className="flex items-center justify-end gap-2">

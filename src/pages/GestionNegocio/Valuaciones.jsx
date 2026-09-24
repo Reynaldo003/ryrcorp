@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/Valuaciones.jsx
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
     CheckCircle2,
     Plus,
@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 
 import { Pie } from "@ant-design/plots";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { apiAvaluos } from "../../lib/apiAvaluos";
@@ -55,6 +56,60 @@ const PALETA_VW = [
     "#F59E0B", // Amber
     "#10B981"  // Emerald
 ];
+
+function descargarBlob(blob, nombreArchivo) {
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function esperarRenderCompleto() {
+    if (document.fonts?.ready) await document.fonts.ready;
+
+    await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+
+    // Permite que las gráficas terminen de medir y pintar.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+}
+
+function agregarCanvasPaginadoPdf(doc, canvas) {
+    const margen = 8;
+    const anchoPagina = doc.internal.pageSize.getWidth();
+    const altoPagina = doc.internal.pageSize.getHeight();
+    const anchoUtil = anchoPagina - margen * 2;
+    const altoUtil = altoPagina - margen * 2;
+    const pixelesPorMm = canvas.width / anchoUtil;
+    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+
+    let posicionY = 0;
+    let primeraPagina = true;
+
+    while (posicionY < canvas.height) {
+        if (!primeraPagina) doc.addPage("a4", "landscape");
+        primeraPagina = false;
+
+        const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
+        const corte = document.createElement("canvas");
+        corte.width = canvas.width;
+        corte.height = altoActualPx;
+        const contexto = corte.getContext("2d");
+        if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
+        contexto.fillStyle = "#ffffff";
+        contexto.fillRect(0, 0, corte.width, corte.height);
+        contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
+
+        const altoImagenMm = altoActualPx / pixelesPorMm;
+        doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
+        posicionY += altoActualPx;
+    }
+}
 
 function formatearNombreCorto(str) {
     if (!str || str === "—") return "—";
@@ -140,6 +195,8 @@ export default function Valuaciones({ rows: initialRows }) {
     const [avaluosData, setAvaluosData] = useState(() => normalizarAvaluos(initialRows ?? []));
     const [loading, setLoading] = useState(!initialRows);
     const [error, setError] = useState("");
+
+    const reporteRef = useRef(null);
 
     useEffect(() => {
         setAsesorExpandido(null);
@@ -252,49 +309,187 @@ export default function Valuaciones({ rows: initialRows }) {
     const nombreBaseArchivo = () =>
         `Reporte_Valuaciones_${agenciaSel || "Todas"}_${tipoVentaSel}_${añoSel}_${fileStamp()}`;
 
-    const exportarExcelValuaciones = () => {
+    const capturarReporteVisual = async () => {
+        if (!reporteRef.current) throw new Error("No se encontró el contenido visual del reporte.");
+
+        await esperarRenderCompleto();
+
+        const canvas = await html2canvas(reporteRef.current, {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: "#ffffff",
+            logging: false,
+            windowWidth: 1440,
+            scrollX: 0,
+            scrollY: 0,
+            onclone: (documentoClonado) => {
+                const clon = documentoClonado.getElementById("reporte-valuaciones-exportacion");
+                if (clon) {
+                    clon.style.position = "absolute";
+                    clon.style.left = "0";
+                    clon.style.top = "0";
+                    clon.style.zIndex = "0";
+                }
+            },
+        });
+
+        if (!canvas.width || !canvas.height) throw new Error("No fue posible capturar las gráficas.");
+        return canvas;
+    };
+
+    const exportarExcelValuaciones = async () => {
         if (!avaluosFiltrados || avaluosFiltrados.length === 0) {
             alert("No hay registros para exportar con los filtros actuales.");
             return;
         }
 
         try {
+            let canvas = null;
+            try {
+                canvas = await capturarReporteVisual();
+            } catch (errCaptura) {
+                console.warn("No se pudo capturar el contenido visual:", errCaptura);
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = "CRM Grupo Automotriz R&R";
+            workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
+            workbook.created = new Date();
+            workbook.modified = new Date();
+            workbook.subject = "Reporte de Valuaciones - Autos Usados";
+            workbook.title = `Reporte de Valuaciones - ${añoSel}`;
+
+            // ── Hoja Resumen ──
+            const hojaResumen = workbook.addWorksheet("Resumen", {
+                views: [{ showGridLines: false }],
+                pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
+            });
+            hojaResumen.columns = [{ width: 26 }, { width: 34 }, { width: 4 }, { width: 26 }, { width: 34 }];
+
+            hojaResumen.mergeCells("A1:E2");
+            const cTitulo = hojaResumen.getCell("A1");
+            cTitulo.value = "Reporte de Valuaciones - Autos Usados";
+            cTitulo.font = { name: "Arial", size: 20, bold: true, color: { argb: "FFFFFFFF" } };
+            cTitulo.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001E50" } };
+            cTitulo.alignment = { vertical: "middle", horizontal: "left" };
+            hojaResumen.getRow(1).height = 24;
+            hojaResumen.getRow(2).height = 16;
+
+            hojaResumen.mergeCells("A3:E3");
+            hojaResumen.getCell("A3").value = `Generado: ${new Date().toLocaleString("es-MX")}`;
+            hojaResumen.getCell("A3").font = { italic: true, color: { argb: "FF6B7280" } };
+
+            hojaResumen.getCell("A5").value = "Filtros aplicados";
+            hojaResumen.getCell("A5").font = { bold: true, size: 13, color: { argb: "FF001E50" } };
+
+            const filtros = [
+                ["Año", añoSel],
+                ["Mes", mesSel !== null ? MESES[mesSel] : "Todo el año"],
+                ["Agencia", agenciaSel || "Todas las agencias"],
+                ["Tipo de venta", tipoVentaSel],
+            ];
+            filtros.forEach(([etiqueta, valor], indice) => {
+                const fila = 6 + indice;
+                hojaResumen.getCell(`A${fila}`).value = etiqueta;
+                hojaResumen.getCell(`A${fila}`).font = { bold: true, color: { argb: "FF374151" } };
+                hojaResumen.getCell(`B${fila}`).value = valor;
+                hojaResumen.mergeCells(`B${fila}:E${fila}`);
+                hojaResumen.getCell(`B${fila}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+                hojaResumen.getCell(`B${fila}`).alignment = { vertical: "middle" };
+            });
+
+            hojaResumen.getCell("A11").value = "Indicadores";
+            hojaResumen.getCell("A11").font = { bold: true, size: 13, color: { argb: "FF001E50" } };
+
+            const kpis = [
+                ["Total Valuaciones", métricas.totalAvaluos],
+                ["Promedio Diario", métricas.promedioDiario],
+                ["Cerradas", métricas.conteoCerrados],
+                ["Asesores", métricas.asesoresList.length],
+            ];
+            kpis.forEach(([etiqueta, valor], indice) => {
+                const fila = 12 + indice;
+                hojaResumen.getCell(`A${fila}`).value = etiqueta;
+                hojaResumen.getCell(`A${fila}`).font = { bold: true, color: { argb: "FF374151" } };
+                hojaResumen.getCell(`B${fila}`).value = valor;
+                hojaResumen.mergeCells(`B${fila}:E${fila}`);
+                hojaResumen.getCell(`B${fila}`).font = { bold: true, color: { argb: "FF001E50" } };
+                hojaResumen.getCell(`B${fila}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+            });
+
+            // ── Hoja Datos (todo el contenido, sin paginación) ──
+            const hojaDatos = workbook.addWorksheet("Datos", {
+                views: [{ state: "frozen", ySplit: 1 }],
+                pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+            });
             const registros = filasValuacionesExport();
-            const ws = XLSX.utils.json_to_sheet(registros);
-            ws["!cols"] = Object.keys(registros[0] || {}).map((k) => ({
-                wch: Math.min(45, Math.max(12, k.length + 6)),
-            }));
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Valuaciones");
-            XLSX.writeFile(wb, `${nombreBaseArchivo()}.xlsx`, { compression: true });
+            const claves = Object.keys(registros[0] || {});
+            hojaDatos.columns = claves.map((clave) => ({ key: clave, width: Math.min(45, Math.max(14, clave.length + 6)) }));
+            registros.forEach((registro) => hojaDatos.addRow(registro));
+            hojaDatos.getRow(1).eachCell((celda) => {
+                celda.font = { bold: true, color: { argb: "FFFFFFFF" } };
+                celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001E50" } };
+                celda.alignment = { horizontal: "center" };
+            });
+            hojaDatos.headerFooter.oddHeader = `&L&16&BReporte de Valuaciones - ${añoSel}&R&D`;
+            hojaDatos.headerFooter.oddFooter = "&LCRM Grupo Automotriz R&R&RPágina &P de &N";
+
+            // ── Hoja Gráficas (captura visual) ──
+            if (canvas) {
+                const hojaGraficas = workbook.addWorksheet("Gráficas", {
+                    views: [{ showGridLines: false, zoomScale: 70 }],
+                    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+                });
+                const base64 = canvas.toDataURL("image/png");
+                const imageId = workbook.addImage({ base64, extension: "png" });
+                const ancho = 1200;
+                const alto = Math.round((canvas.height / canvas.width) * ancho);
+                hojaGraficas.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: ancho, height: alto } });
+                for (let i = 1; i <= 18; i += 1) hojaGraficas.getColumn(i).width = 11;
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const archivo = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+            descargarBlob(archivo, `${nombreBaseArchivo()}.xlsx`);
         } catch (error) {
             console.error("Error exportando valuaciones a Excel:", error);
             alert("No se pudo generar el Excel. Revisa la consola.");
         }
     };
 
-    const exportarPdfValuaciones = () => {
+    const exportarPdfValuaciones = async () => {
         if (!avaluosFiltrados || avaluosFiltrados.length === 0) {
             alert("No hay registros para exportar con los filtros actuales.");
             return;
         }
 
         try {
+            let canvas = null;
+            try {
+                canvas = await capturarReporteVisual();
+            } catch (errCaptura) {
+                console.warn("No se pudo capturar el contenido visual:", errCaptura);
+            }
+
             const doc = new jsPDF({
                 orientation: "landscape",
                 unit: "mm",
                 format: "a4",
                 compress: true,
             });
+            doc.setProperties({
+                title: `Reporte de Valuaciones - ${añoSel}`,
+                subject: "Reporte de valuaciones con gráficas y detalle completo",
+                author: "CRM Grupo Automotriz R&R",
+                creator: "CRM Grupo Automotriz R&R",
+            });
 
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.setTextColor(19, 30, 92);
-            doc.text("Reporte de Valuaciones - Autos Usados", 10, 12);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(8);
-            doc.setTextColor(107, 114, 128);
-            doc.text(`${añoSel} · ${mesSel !== null ? MESES[mesSel] : "Todo el año"} · ${agenciaSel || "Todas las agencias"} · ${tipoVentaSel}`, 10, 16);
+            if (canvas) {
+                agregarCanvasPaginadoPdf(doc, canvas);
+            }
 
             const headers = [
                 "Fecha / Hora Cita", "Agencia", "Prospecto", "Teléfono",
@@ -317,8 +512,18 @@ export default function Valuaciones({ rows: initialRows }) {
                 String(row.comentarios || "—")
             ]);
 
+            doc.addPage("a4", "landscape");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(13);
+            doc.setTextColor(19, 30, 92);
+            doc.text(
+                `Detalle completo (${avaluosFiltrados.length} valuaciones) · ${añoSel} · ${mesSel !== null ? MESES[mesSel] : "Todo el año"} · ${agenciaSel || "Todas las agencias"}`,
+                10,
+                12
+            );
+
             autoTable(doc, {
-                startY: 18,
+                startY: 17,
                 head: [headers],
                 body,
                 theme: "grid",
@@ -462,7 +667,7 @@ export default function Valuaciones({ rows: initialRows }) {
     }, [avaluosFiltrados, asesorExpandido]);
 
     return (
-        <div className="w-full bg-white text-[#1E293B] font-vw-text font-light p-3 md:p-5 space-y-5">
+        <div ref={reporteRef} id="reporte-valuaciones-exportacion" className="w-full bg-white text-[#1E293B] font-vw-text font-light p-3 md:p-5 space-y-5">
 
             {/* FILTROS DE AGENCIA */}
             <div className="w-full py-0.5">
