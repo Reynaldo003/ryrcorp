@@ -11,7 +11,7 @@ export default function GestionTopNav() {
 
     const tabs = [
         {
-            label: "Inv. Nuevos",
+            label: "Inventario",
             to: "/gestion_negocio/inventario",
             icon: LayoutList,
             show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),

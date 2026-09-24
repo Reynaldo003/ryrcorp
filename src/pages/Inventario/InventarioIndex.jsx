@@ -4,7 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { apiInventario } from "../../lib/apiInventario";
 import { useECharts } from "./useECharts";
 import "./inventario.css";
-
+import ExcelJS from "exceljs";
+import html2canvas from "html2canvas-pro";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
+import { FileSpreadsheet, FileText, LoaderCircle } from "lucide-react";
 import vwDark from "../../assets/vw_dark.png";
 
 const BRAND_BLUE = "#131E5C";
@@ -2766,11 +2770,289 @@ export default function InventarioIndex() {
       };
     }, [antiguedad]);
 
+  // ── Funciones para formatear el nombre del archivo según filtros ──
+  const limpiarNombreArchivo = (valor) => {
+    return String(valor ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase();
+  };
+
+  const obtenerSelloFecha = () => {
+    const ahora = new Date();
+    const dos = (valor) => String(valor).padStart(2, "0");
+    return `${ahora.getFullYear()}${dos(ahora.getMonth() + 1)}${dos(ahora.getDate())}_${dos(ahora.getHours())}${dos(ahora.getMinutes())}`;
+  };
+
+  const crearNombreReporteInventario = (extension) => {
+    // 1. Resolver nombre del Dealer / Agencia
+    let dealerDesc = "todos_los_dealers";
+    if (modelosComerciales) {
+      dealerDesc = "vehiculos_comerciales";
+    } else if (agenciaActual?.nombre) {
+      dealerDesc = agenciaActual.nombre;
+    }
+
+    // 2. Resolver Estatus
+    let estatusDesc = "todos_los_estatus";
+    if (estatusSeleccionado) {
+      const estatusObj = filtrosDisponibles.estatus.find(
+        (e) => String(e.codigo) === String(estatusSeleccionado)
+      );
+      estatusDesc = estatusObj?.nombre || estatusSeleccionado;
+    }
+
+    const graciaDesc = periodoGracia ? `gracia_${periodoGracia}_dias` : "";
+    const dealerLimpio = limpiarNombreArchivo(dealerDesc) || "todos_los_dealers";
+    const estatusLimpio = limpiarNombreArchivo(estatusDesc) || "todos_los_estatus";
+    const graciaLimpia = graciaDesc ? `_${limpiarNombreArchivo(graciaDesc)}` : "";
+    const modeloLimpio = familiaFiltro ? `_${limpiarNombreArchivo(familiaFiltro)}` : "";
+
+    return `reporte_inventario_${dealerLimpio}_${estatusLimpio}${graciaLimpia}${modeloLimpio}_${obtenerSelloFecha()}.${extension}`;
+  };
+  
+  const [exportando, setExportando] = useState(null);
+
+  const descargarBlob = (blob, nombreArchivo) => {
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const exportarInventarioExcel = async () => {
+    if (!vehiculosCalculados.length || exportando) return;
+    setExportando("excel");
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const hoja = workbook.addWorksheet("Inventario", {
+        views: [{ state: "frozen", ySplit: 1 }],
+        pageSetup: { orientation: "landscape" },
+      });
+
+      const columnas = [
+        { header: "VIN", key: "vin", width: 22 },
+        { header: "Familia", key: "familia", width: 18 },
+        { header: "Modelo", key: "modelo", width: 28 },
+        { header: "Agencia", key: "agencia", width: 20 },
+        { header: "Condición", key: "condicion", width: 12 },
+        { header: "Estatus", key: "estatus", width: 14 },
+        { header: "F. Factura", key: "fecha_factura", width: 14 },
+        { header: "Antigüedad (d)", key: "antiguedad", width: 15 },
+        { header: "Fuera Gracia (d)", key: "fuera_gracia", width: 16 },
+        { header: "Valor Compra", key: "valor_compra", width: 18 },
+        { header: "Costo Diario", key: "costo_diario", width: 16 },
+        { header: "Costo Financiero Total", key: "costo_total", width: 22 },
+        { header: "Situación", key: "situacion", width: 14 },
+      ];
+
+      hoja.columns = columnas;
+
+      // Encabezado estilizado
+      hoja.getRow(1).eachCell((cell) => {
+        cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+      });
+
+      vehiculosCalculados.forEach((v) => {
+        hoja.addRow({
+          vin: v.NrChassi || "—",
+          familia: v.NmFamilia || "—",
+          modelo: v.EdiModelo || "—",
+          agencia: v.agenciaNombre || "—",
+          condicion: v.CondUso === "N" ? "Nuevo" : v.CondUso === "U" ? "Usado" : v.CondUso,
+          estatus: v.estatusNombre || "—",
+          fecha_factura: v.DtFaturamento || "—",
+          antiguedad: v.diasEnStock ?? 0,
+          fuera_gracia: v.diasFueraGracia ?? 0,
+          valor_compra: Number(v.VrNF_Compra) || 0,
+          costo_diario: v.costoFinancieroDiario || 0,
+          costo_total: v.costoFinancieroTotal || 0,
+          situacion: v.SitVeiculo || "—",
+        });
+      });
+
+      hoja.getColumn(10).numFmt = "$#,##0.00";
+      hoja.getColumn(11).numFmt = "$#,##0.00";
+      hoja.getColumn(12).numFmt = "$#,##0.00";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      descargarBlob(
+        new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        crearNombreReporteInventario("xlsx")
+      );
+    } catch (err) {
+      console.error("Error generando Excel de inventario:", err);
+      alert("Error al exportar inventario a Excel.");
+    } finally {
+      setExportando(null);
+    }
+  };
+
+  const reporteVisualRef = useRef(null);
+
+  const esperarRenderCompleto = async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+    // Breve pausa para asegurar que ECharts pinte los gráficos en el canvas
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  };
+
+  const agregarCanvasPaginadoPdf = (doc, canvas) => {
+    const margen = 8;
+    const anchoPagina = doc.internal.pageSize.getWidth();
+    const altoPagina = doc.internal.pageSize.getHeight();
+    const anchoUtil = anchoPagina - margen * 2;
+    const altoUtil = altoPagina - margen * 2;
+    const pixelesPorMm = canvas.width / anchoUtil;
+    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+
+    let posicionY = 0;
+    let primeraPagina = true;
+
+    while (posicionY < canvas.height) {
+      if (!primeraPagina) doc.addPage("a4", "landscape");
+      primeraPagina = false;
+
+      const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
+      const corte = document.createElement("canvas");
+      corte.width = canvas.width;
+      corte.height = altoActualPx;
+      const contexto = corte.getContext("2d");
+      if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
+      contexto.fillStyle = "#ffffff";
+      contexto.fillRect(0, 0, corte.width, corte.height);
+      contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
+
+      const altoImagenMm = altoActualPx / pixelesPorMm;
+      doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
+      posicionY += altoActualPx;
+    }
+  };
+
+  const exportarInventarioPdf = async () => {
+    if (!vehiculosCalculados.length || exportando) return;
+    setExportando("pdf");
+
+    try {
+      if (!reporteVisualRef.current) throw new Error("No se encontró el contenedor visual.");
+
+      await esperarRenderCompleto();
+
+      // 1. Capturar todo el bloque de KPIs y gráficas en alta resolución
+      const canvas = await html2canvas(reporteVisualRef.current, {
+        scale: 1.35,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+      doc.setProperties({
+        title: `Reporte de Inventario - ${new Date().toLocaleDateString("es-MX")}`,
+        author: "CRM Grupo Automotriz R&R",
+      });
+
+      // 2. Paginar e insertar las gráficas capturadas al inicio del documento
+      agregarCanvasPaginadoPdf(doc, canvas);
+
+      // 3. Agregar la tabla detallada en las páginas siguientes
+      doc.addPage("a4", "landscape");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(19, 30, 92);
+      doc.text("Detalle de Inventario de Unidades", 10, 12);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      doc.text(
+        `Generado: ${new Date().toLocaleString("es-MX")} · Total: ${vehiculosCalculados.length} unidades`,
+        10,
+        16
+      );
+
+      autoTable(doc, {
+        startY: 19,
+        head: [["VIN", "Familia", "Modelo", "Agencia", "Cond.", "Estatus", "F. Factura", "Antig.", "F. Gracia", "Valor Compra", "Costo Fin."]],
+        body: vehiculosCalculados.map((v) => [
+          v.NrChassi || "—",
+          v.NmFamilia || "—",
+          (v.EdiModelo || "—").slice(0, 20),
+          v.agenciaNombre || "—",
+          v.CondUso === "N" ? "Nuevo" : "Usado",
+          v.estatusNombre || "—",
+          v.DtFaturamento || "—",
+          `${v.diasEnStock ?? 0}d`,
+          v.diasFueraGracia ? `${v.diasFueraGracia}d` : "0d",
+          v.VrNF_Compra ? `$${Number(v.VrNF_Compra).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—",
+          v.costoFinancieroTotal ? `$${Number(v.costoFinancieroTotal).toLocaleString("es-MX", { maximumFractionDigits: 2 })}` : "$0.00",
+        ]),
+        theme: "grid",
+        styles: { fontSize: 6.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [19, 30, 92], textColor: 255 },
+        margin: { left: 8, right: 8, bottom: 10 },
+        didDrawPage: () => {
+          const ancho = doc.internal.pageSize.getWidth();
+          const alto = doc.internal.pageSize.getHeight();
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.setTextColor(107, 114, 128);
+          doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+        },
+      });
+
+      doc.save(crearNombreReporteInventario("pdf"));
+    } catch (err) {
+      console.error("Error generando PDF de inventario:", err);
+      alert("Error al exportar inventario a PDF.");
+    } finally {
+      setExportando(null);
+    }
+  };
+
   return (
     <div className="inventario-page min-h-screen text-[14px] text-[#1A2344]">
-      <main className="space-y-6 px-2 py-4 lg:px-4">
+      <main className="space-y-8 px-2 py-4 lg:px-4">
+        {/* Barra superior con botones de exportación */}
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-6 pt-1">
+          <div>
+            <h1 className="text-xl font-extrabold text-[#131E5C]">Inventario</h1>
+            <p className="text-xs font-semibold text-[#8891AD]">Control físico y costos financieros de unidades activas</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportarInventarioExcel}
+              disabled={!vehiculosCalculados.length || Boolean(exportando)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50"
+            >
+              {exportando === "excel" ? <LoaderCircle size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+              {exportando === "excel" ? "Generando..." : "Exportar Excel"}
+            </button>
+
+            <button
+              onClick={exportarInventarioPdf}
+              disabled={!vehiculosCalculados.length || Boolean(exportando)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50"
+            >
+              {exportando === "pdf" ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}
+              {exportando === "pdf" ? "Generando..." : "Exportar PDF"}
+            </button>
+          </div>
+        </div>
+
         {/* Filtros generales */}
-        <Seccion titulo='Inventario'>
+        <Seccion titulo='Filtros'>
           <FiltrosInventario
             filtrosDisponibles={filtrosDisponibles}
 
@@ -2809,128 +3091,211 @@ export default function InventarioIndex() {
             </div>
           )}
         </Seccion>
-        {/* Resumen */}
-        <Seccion titulo="Resumen de Inventario">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <KPICard
-              label="Total activo"
-              value={
-                cargandoTabla
-                  ? "…"
-                  : totalGeneral.toLocaleString("es-MX")
-              }
-              sub="Inventario considerado"
-            />
+        {/* ========================================================================= */}
+        {/* ── BLOQUE VISUAL CAPTURADO POR EL PDF (Gráficas y KPIs) ──────────────── */}
+        {/* ========================================================================= */}
+        <div ref={reporteVisualRef} className="space-y-6 bg-white p-2 rounded-xl">
+          
+          {/* Resumen de Inventario */}
+          <Seccion titulo="Resumen de Inventario">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <KPICard
+                label="Total activo"
+                value={
+                  cargandoTabla
+                    ? "…"
+                    : totalGeneral.toLocaleString("es-MX")
+                }
+                sub="Inventario considerado"
+              />
 
-            <KPICard
-              label="Costo inventario"
-              value={
-                cargando
-                  ? "…"
-                  : formatMoneda(costoTotal, 0)
-              }
-              sub="Suma valor de compra"
-            />
+              <KPICard
+                label="Costo inventario"
+                value={
+                  cargando
+                    ? "…"
+                    : formatMoneda(costoTotal, 0)
+                }
+                sub="Suma valor de compra"
+              />
 
-            <KPICard
-              label="Fuera de gracia"
-              value={
-                cargandoTabla
-                  ? "…"
-                  : unidadesFueraGracia.toLocaleString("es-MX")
-              }
-              sub={`Más de ${periodoGracia} días`}
-            />
+              <KPICard
+                label="Fuera de gracia"
+                value={
+                  cargandoTabla
+                    ? "…"
+                    : unidadesFueraGracia.toLocaleString("es-MX")
+                }
+                sub={`Más de ${periodoGracia} días`}
+              />
 
-            <KPICard
-              label="Costo financiero"
-              value={
-                cargandoTabla
-                  ? "…"
-                  : formatMoneda(costoFinancieroTotal, 0)
-              }
-              sub="Costo acumulado actual"
-              destacado
-            />
-          </div>
+              <KPICard
+                label="Costo financiero"
+                value={
+                  cargandoTabla
+                    ? "…"
+                    : formatMoneda(costoFinancieroTotal, 0)
+                }
+                sub="Costo acumulado actual"
+                destacado
+              />
+            </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <KPICard
-              label="Agencia líder"
-              value={
-                cargando
-                  ? "…"
-                  : agenciaLider?.agenciaNombre || "—"
-              }
-              sub={
-                agenciaLider
-                  ? `${agenciaLider.total.toLocaleString("es-MX")} vehículos`
-                  : ""
-              }
-            />
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <KPICard
+                label="Agencia líder"
+                value={
+                  cargando
+                    ? "…"
+                    : agenciaLider?.agenciaNombre || "—"
+                }
+                sub={
+                  agenciaLider
+                    ? `${agenciaLider.total.toLocaleString("es-MX")} vehículos`
+                    : ""
+                }
+              />
 
-            <KPICard
-              label="% Nuevos"
-              value={cargando ? "…" : `${pctNuevo}%`}
-              sub="Del total activo"
-            />
+              <KPICard
+                label="% Nuevos"
+                value={cargando ? "…" : `${pctNuevo}%`}
+                sub="Del total activo"
+              />
 
-            <KPICard
-              label="Tasa aplicada"
-              value={`${tasaAnual.toFixed(4)}%`}
-              sub="TIIE + spread efectivo"
-            />
+              <KPICard
+                label="Tasa aplicada"
+                value={`${tasaAnual.toFixed(4)}%`}
+                sub="TIIE + spread efectivo"
+              />
 
-            <KPICard
-              label="Periodo de gracia"
-              value={`${periodoGracia} días`}
-              sub="Parámetro actual"
-            />
-          </div>
-        </Seccion>
+              <KPICard
+                label="Periodo de gracia"
+                value={`${periodoGracia} días`}
+                sub="Parámetro actual"
+              />
+            </div>
+          </Seccion>
 
-        {/* Financiamiento y antigüedad */}
-        <Seccion
-          titulo="Costo Financiero"
-          subtitulo="Antigüedad del inventario y costo generado fuera del periodo de gracia"
-        >
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Panel
-              titulo="Antigüedad en Stock"
-              subtitulo="Días desde facturación"
-              alto={300}
-            >
-              {optionAntiguedad ? (
-                <ChartDiv
-                  option={optionAntiguedad}
-                  loading={cargando}
-                />
-              ) : (
-                <EmptyState />
-              )}
-            </Panel>
+          {/* Financiamiento y antigüedad */}
+          <Seccion
+            titulo="Costo Financiero"
+            subtitulo="Antigüedad del inventario y costo generado fuera del periodo de gracia"
+          >
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <Panel
+                titulo="Antigüedad en Stock"
+                subtitulo="Días desde facturación"
+                alto={300}
+              >
+                {optionAntiguedad ? (
+                  <ChartDiv
+                    option={optionAntiguedad}
+                    loading={cargando}
+                  />
+                ) : (
+                  <EmptyState />
+                )}
+              </Panel>
 
-            <Panel
-              titulo="Costo financiero por agencia"
-              subtitulo={`Tasa ${tasaAnual.toFixed(4)}% · Gracia ${periodoGracia} días`}
-              alto={300}
-            >
-              {optionCostoFinancieroAgencia ? (
-                <ChartDiv
-                  option={optionCostoFinancieroAgencia}
-                  loading={cargandoTabla}
-                />
-              ) : (
-                <EmptyState mensaje="No existen vehículos fuera del periodo de gracia" />
-              )}
-            </Panel>
-          </div>
-        </Seccion>
+              <Panel
+                titulo="Costo financiero por agencia"
+                subtitulo={`Tasa ${tasaAnual.toFixed(4)}% · Gracia ${periodoGracia} días`}
+                alto={300}
+              >
+                {optionCostoFinancieroAgencia ? (
+                  <ChartDiv
+                    option={optionCostoFinancieroAgencia}
+                    loading={cargandoTabla}
+                  />
+                ) : (
+                  <EmptyState mensaje="No existen vehículos fuera del periodo de gracia" />
+                )}
+              </Panel>
+            </div>
+          </Seccion>
 
-        {/* Tabla */}
-        <Seccion
-          titulo="Detalle del Inventario"
-        >
+          {/* Distribución del Inventario (Gráficas) */}
+          <Seccion
+            titulo="Distribución del Inventario"
+            subtitulo="Composición actual de las unidades activas"
+          >
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <Panel
+                titulo="Inventario por modelo"
+                subtitulo={
+                  familiaFiltro
+                    ? `Filtrando: ${familiaFiltro} · Selecciona la misma barra para quitar el filtro`
+                    : "Top unidades en stock · Selecciona una barra para filtrar la tabla"
+                }
+                alto={500}
+                extra={
+                  !cargando && porMarca.length > 0 ? (
+                    <Badge
+                      label={`${porMarca.length} modelos`}
+                      color={COLORES[7]}
+                    />
+                  ) : null
+                }
+              >
+                {optionPorMarca ? (
+                  <ChartDiv
+                    option={optionPorMarca}
+                    loading={cargando}
+                    onEvents={eventosModelo}
+                  />
+                ) : (
+                  <EmptyState />
+                )}
+              </Panel>
+
+              <Panel
+                titulo="Inventario por agencia"
+                subtitulo="Total de vehículos activos"
+                alto={500}
+                extra={
+                  !cargando && porAgencia.length > 0 ? (
+                    <Badge
+                      label={`${porAgencia.length} agencias`}
+                      color={COLORES[7]}
+                    />
+                  ) : null
+                }
+              >
+                {optionPorAgencia ? (
+                  <ChartDiv
+                    option={optionPorAgencia}
+                    loading={cargando}
+                  />
+                ) : (
+                  <EmptyState />
+                )}
+              </Panel>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 ">
+              <Panel
+                titulo="Nacional vs. Importado"
+                subtitulo="Tipo de nacionalización"
+                alto={280}
+              >
+                {optionNacionalImportado ? (
+                  <ChartDiv
+                    option={optionNacionalImportado}
+                    loading={cargando}
+                  />
+                ) : (
+                  <EmptyState />
+                )}
+              </Panel>
+            </div>
+          </Seccion>
+        </div>
+        {/* ========================================================================= */}
+        {/* ── FIN DEL BLOQUE VISUAL ─────────────────────────────────────────────── */}
+        {/* ========================================================================= */}
+
+        {/* Detalle del Inventario (Tabla completa al final) */}
+        <Seccion titulo="Detalle del Inventario">
           <div ref={tablaRef}>
             <TablaVehiculos
               vehiculos={vehiculosCalculados}
@@ -2943,81 +3308,6 @@ export default function InventarioIndex() {
           </div>
         </Seccion>
 
-        {/* Distribución */}
-        <Seccion
-          titulo="Distribución del Inventario"
-          subtitulo="Composición actual de las unidades activas"
-        >
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Panel
-              titulo="Inventario por modelo"
-              subtitulo={
-                familiaFiltro
-                  ? `Filtrando: ${familiaFiltro} · Selecciona la misma barra para quitar el filtro`
-                  : "Top unidades en stock · Selecciona una barra para filtrar la tabla"
-              }
-              alto={500}
-              extra={
-                !cargando && porMarca.length > 0 ? (
-                  <Badge
-                    label={`${porMarca.length} modelos`}
-                    color={COLORES[7]}
-                  />
-                ) : null
-              }
-            >
-              {optionPorMarca ? (
-                <ChartDiv
-                  option={optionPorMarca}
-                  loading={cargando}
-                  onEvents={eventosModelo}
-                />
-              ) : (
-                <EmptyState />
-              )}
-            </Panel>
-
-            <Panel
-              titulo="Inventario por agencia"
-              subtitulo="Total de vehículos activos"
-              alto={500}
-              extra={
-                !cargando && porAgencia.length > 0 ? (
-                  <Badge
-                    label={`${porAgencia.length} agencias`}
-                    color={COLORES[7]}
-                  />
-                ) : null
-              }
-            >
-              {optionPorAgencia ? (
-                <ChartDiv
-                  option={optionPorAgencia}
-                  loading={cargando}
-                />
-              ) : (
-                <EmptyState />
-              )}
-            </Panel>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 ">
-            <Panel
-              titulo="Nacional vs. Importado"
-              subtitulo="Tipo de nacionalización"
-              alto={280}
-            >
-              {optionNacionalImportado ? (
-                <ChartDiv
-                  option={optionNacionalImportado}
-                  loading={cargando}
-                />
-              ) : (
-                <EmptyState />
-              )}
-            </Panel>
-          </div>
-        </Seccion>
       </main>
     </div>
   );

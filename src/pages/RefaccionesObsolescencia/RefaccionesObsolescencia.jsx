@@ -16,6 +16,11 @@ import {
 } from "../../lib/apiRefaccionesObsolescencia";
 import InteractiveTable from "./InteractiveTable";
 
+import ExcelJS from "exceljs";
+import html2canvas from "html2canvas-pro";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
+import { FileSpreadsheet, FileText } from "lucide-react";
 const C = { navy: "#131E5C", navyMid: "#4D96FF", navyLight: "#4D96FF", border: "#E4E7F0", muted: "#8891AD", textSub: "#515778" };
 const PIE_COLORS = ["#131E5C", "#4D96FF", "#7FB4E0", "#6681D4", "#8B9DDE", "#AEB9E8", "#42526E", "#7A869A"];
 const TOOLTIP_STYLE = { border: "1px solid #E4E7F0", borderRadius: 12, boxShadow: "0 12px 30px rgba(19,30,92,.12)", fontSize: 14 };
@@ -137,6 +142,226 @@ export default function RefaccionesObsolescencia() {
     const [mesActivo, setMesActivo] = useState("");
     const anioActual = new Date().getFullYear();
     const opcionesAnios = Array.from({ length: anioActual - 2023 + 1 }, (_, i) => (2023 + i).toString());
+
+    const [exportando, setExportando] = useState(null);
+    const reporteVisualRef = useRef(null);
+
+    // ── Funciones de formateo de nombre según filtros activos ──
+    const limpiarNombreArchivo = (valor) => {
+        return String(valor ?? "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9_-]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .toLowerCase();
+    };
+
+    const obtenerSelloFecha = () => {
+        const ahora = new Date();
+        const dos = (valor) => String(valor).padStart(2, "0");
+        return `${ahora.getFullYear()}${dos(ahora.getMonth() + 1)}${dos(ahora.getDate())}_${dos(ahora.getHours())}${dos(ahora.getMinutes())}`;
+    };
+
+    const crearNombreReporteObsolescencia = (extension) => {
+        const agenciaDesc = filtros.agencia || "todas_las_agencias";
+        const fechaDesc = anioActivo ? (mesActivo ? `mes_${mesActivo}_${anioActivo}` : `ano_${anioActivo}`) : "historico";
+        const capaDesc = filtros.capa_obsolescencia ? `capa_${filtros.capa_obsolescencia}` : "";
+        const grupoDesc = filtros.grupo_principal ? `grupo_${filtros.grupo_principal}` : "";
+
+        const agenciaLimpia = limpiarNombreArchivo(agenciaDesc) || "todas_las_agencias";
+        const fechaLimpia = limpiarNombreArchivo(fechaDesc) || "historico";
+        const capaLimpia = capaDesc ? `_${limpiarNombreArchivo(capaDesc)}` : "";
+        const grupoLimpio = grupoDesc ? `_${limpiarNombreArchivo(grupoDesc)}` : "";
+
+        return `reporte_obsolescencia_${agenciaLimpia}_${fechaLimpia}${capaLimpia}${grupoLimpio}_${obtenerSelloFecha()}.${extension}`;
+    };
+
+    const esperarRenderCompleto = async () => {
+        if (document.fonts?.ready) await document.fonts.ready;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await new Promise((resolve) => setTimeout(resolve, 800));
+    };
+
+    const agregarCanvasPaginadoPdf = (doc, canvas) => {
+        const margen = 8;
+        const anchoPagina = doc.internal.pageSize.getWidth();
+        const altoPagina = doc.internal.pageSize.getHeight();
+        const anchoUtil = anchoPagina - margen * 2;
+        const altoUtil = altoPagina - margen * 2;
+        const pixelesPorMm = canvas.width / anchoUtil;
+        const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+
+        let posicionY = 0;
+        let primeraPagina = true;
+
+        while (posicionY < canvas.height) {
+            if (!primeraPagina) doc.addPage("a4", "landscape");
+            primeraPagina = false;
+
+            const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
+            const corte = document.createElement("canvas");
+            corte.width = canvas.width;
+            corte.height = altoActualPx;
+            const contexto = corte.getContext("2d");
+            if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
+            contexto.fillStyle = "#ffffff";
+            contexto.fillRect(0, 0, corte.width, corte.height);
+            contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
+
+            const altoImagenMm = altoActualPx / pixelesPorMm;
+            doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
+            posicionY += altoActualPx;
+        }
+    };
+
+    const exportarExcel = async () => {
+        if (total === 0 || exportando) return;
+        setExportando("excel");
+        try {
+            // 1. Consultar el 100% de los registros que coinciden con los filtros actuales
+            const respuestaCompleta = await getRefaccionesObsolescencia({
+                ...parametrosFiltros(),
+                page: 1,
+                page_size: total > 0 ? total : 5000,
+            });
+            const filasAExportar = Array.isArray(respuestaCompleta?.results) 
+                ? respuestaCompleta.results 
+                : registros;
+
+            const workbook = new ExcelJS.Workbook();
+            const hoja = workbook.addWorksheet("Obsolescencia", {
+                views: [{ state: "frozen", ySplit: 1 }],
+                pageSetup: { orientation: "landscape" },
+            });
+
+            hoja.columns = COLUMNAS.map((c) => ({ header: c.label, key: c.key, width: 18 }));
+
+            hoja.getRow(1).eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+                cell.alignment = { horizontal: "center" };
+            });
+
+            // 2. Insertar todas las filas recuperadas
+            filasAExportar.forEach((row) => {
+                hoja.addRow(row);
+            });
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = crearNombreReporteObsolescencia("xlsx");
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Error exportando a Excel:", err);
+            alert("No fue posible generar el archivo Excel.");
+        } finally {
+            setExportando(null);
+        }
+    };
+
+    const exportarPdf = async () => {
+        if (!registros.length || exportando) return;
+        setExportando("pdf");
+        const vistaPrevia = vistaActiva;
+
+        try {
+            // Si el usuario está viendo la tabla, cambiamos un instante a "dashboard" para capturar las gráficas
+            if (vistaPrevia !== "dashboard") {
+                setVistaActiva("dashboard");
+                await new Promise((resolve) => setTimeout(resolve, 300));
+            }
+
+            await esperarRenderCompleto();
+
+            if (!reporteVisualRef.current) throw new Error("No se encontró el contenedor visual.");
+
+            // 1. Capturar KPIs y Gráficas
+            const canvas = await html2canvas(reporteVisualRef.current, {
+                scale: 1.35,
+                useCORS: true,
+                allowTaint: false,
+                backgroundColor: "#ffffff",
+                logging: false,
+                onclone: (documentoClonado) => {
+                    // Elimina la sección de filtros solo en la copia virtual que genera el PDF
+                    const filtrosClonados = documentoClonado.getElementById("seccion-filtros-obsolescencia");
+                    if (filtrosClonados) {
+                        filtrosClonados.remove();
+                    }
+                },
+            });
+
+            const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+            doc.setProperties({
+                title: `Reporte de Obsolescencia - ${new Date().toLocaleDateString("es-MX")}`,
+                author: "CRM Grupo Automotriz R&R",
+            });
+
+            // 2. Insertar las gráficas paginadas
+            agregarCanvasPaginadoPdf(doc, canvas);
+
+            // 3. Insertar la tabla detallada al final
+            doc.addPage("a4", "landscape");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(13);
+            doc.setTextColor(19, 30, 92);
+            doc.text("Detalle de Obsolescencia de Refacciones", 10, 12);
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(100);
+            doc.text(
+                `Generado: ${new Date().toLocaleString("es-MX")} · Total: ${total} refacciones`,
+                10,
+                16
+            );
+
+            const columnasPrincipales = [
+                { key: "agencia", label: "Agencia" },
+                { key: "cod_produto", label: "Código" },
+                { key: "nm_produto", label: "Producto" },
+                { key: "qtde_estoque", label: "Exist." },
+                { key: "vr_estoque", label: "Valor Inv." },
+                { key: "grupo_principal", label: "Grupo" },
+                { key: "dias_desde_ultimo_movimiento", label: "Días sin mov." },
+                { key: "capa_obsolescencia", label: "Capa" },
+                { key: "categoria_movimiento", label: "Movimiento" },
+            ];
+
+            autoTable(doc, {
+                startY: 19,
+                head: [columnasPrincipales.map((c) => c.label)],
+                body: registros.map((r) => columnasPrincipales.map((c) => {
+                    if (c.key === "vr_estoque") return money(r[c.key]);
+                    return r[c.key] ?? "—";
+                })),
+                styles: { fontSize: 6.5, cellPadding: 1.2 },
+                headStyles: { fillColor: [19, 30, 92], textColor: 255 },
+                margin: { left: 8, right: 8, bottom: 10 },
+                didDrawPage: () => {
+                    const ancho = doc.internal.pageSize.getWidth();
+                    const alto = doc.internal.pageSize.getHeight();
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(7);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+                },
+            });
+
+            doc.save(crearNombreReporteObsolescencia("pdf"));
+        } catch (err) {
+            console.error("Error exportando a PDF:", err);
+            alert("No fue posible generar el archivo PDF.");
+        } finally {
+            if (vistaPrevia !== "dashboard") {
+                setVistaActiva(vistaPrevia);
+            }
+            setExportando(null);
+        }
+    };
 
     function cambiarAnio(anio) {
         setAnioActivo((anioActual) => {
@@ -441,6 +666,27 @@ export default function RefaccionesObsolescencia() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                        {/* Botones de Exportar */}
+                        <button
+                            type="button"
+                            onClick={exportarExcel}
+                            disabled={!registros.length || Boolean(exportando)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50"
+                        >
+                            {exportando === "excel" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                            Exportar Excel
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={exportarPdf}
+                            disabled={!registros.length || Boolean(exportando)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50"
+                        >
+                            {exportando === "pdf" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                            Exportar PDF
+                        </button>
+
                         <div className="flex items-center rounded-xl border border-[#131E5C]/20 bg-white p-1 shadow-sm">
                             <button type="button" onClick={() => setVistaActiva("detalle")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition", vistaActiva === "detalle" ? "bg-[#131E5C] text-white shadow" : "text-[#131E5C] hover:bg-slate-100")}>
                                 <Table2 className="h-4 w-4" />Tabla
@@ -458,559 +704,563 @@ export default function RefaccionesObsolescencia() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <KPICard
-                        loading={loadingDashboard}
-                        icon={CircleDollarSign}
-                        label="Valor Total Inventario"
-                        value={money(dashboard.totales.valor_inventario)}
-                    />
+                <div ref={reporteVisualRef} className="space-y-5">
 
-                    <KPICard
-                        loading={loadingDashboard}
-                        icon={CircleDollarSign}
-                        label="Valor Obsoleto"
-                        value={money(dashboard.totales.valor_obsoleto)}
-                    />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                        <KPICard
+                            loading={loadingDashboard}
+                            icon={CircleDollarSign}
+                            label="Valor Total Inventario"
+                            value={money(dashboard.totales.valor_inventario)}
+                        />
 
-                    <KPICard
-                        loading={loadingDashboard}
-                        icon={Clock3}
-                        label="% Obsolescencia"
-                        value={`${formatoNumero(dashboard.totales.porcentaje_obsolescencia, 2)}%`}
-                        sub="Valor obsoleto / inventario"
-                    />
-                    <KPICard
-                        loading={loadingDashboard}
-                        icon={Boxes}
-                        label="Inventario Disponibles"
-                        value={formatoNumero(dashboard.totales.disponible, 2)}
-                        sub="Existencia - reservadas"
-                    />
+                        <KPICard
+                            loading={loadingDashboard}
+                            icon={CircleDollarSign}
+                            label="Valor Obsoleto"
+                            value={money(dashboard.totales.valor_obsoleto)}
+                        />
 
-                    <KPICard
-                        loading={loadingDashboard}
-                        icon={Boxes}
-                        label="Reservadas / Pendientes"
-                        value={`${money(dashboard.totales.valor_reservado)} / ${money(dashboard.totales.valor_pendiente)}`}
-                    />
+                        <KPICard
+                            loading={loadingDashboard}
+                            icon={Clock3}
+                            label="% Obsolescencia"
+                            value={`${formatoNumero(dashboard.totales.porcentaje_obsolescencia, 2)}%`}
+                            sub="Valor obsoleto / inventario"
+                        />
+                        <KPICard
+                            loading={loadingDashboard}
+                            icon={Boxes}
+                            label="Inventario Disponibles"
+                            value={formatoNumero(dashboard.totales.disponible, 2)}
+                            sub="Existencia - reservadas"
+                        />
 
-                    <KPICard
-                        loading={loadingDashboard}
-                        icon={CircleDollarSign}
-                        label="Valor Disponible"
-                        value={money(dashboard.totales.valor_disponible)}
-                        sub={`Reservado: ${money(dashboard.totales.valor_reservado)}`}
-                    />
-                </div>
+                        <KPICard
+                            loading={loadingDashboard}
+                            icon={Boxes}
+                            label="Reservadas / Pendientes"
+                            value={`${money(dashboard.totales.valor_reservado)} / ${money(dashboard.totales.valor_pendiente)}`}
+                        />
 
-                <section className="relative overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
-                    {cargandoGeneral && <div className="absolute inset-x-0 top-0 z-20 h-1 overflow-hidden bg-[#131E5C]/10"><div className="h-full w-full animate-pulse bg-[#131E5C]" /></div>}
-                    <div className="space-y-4 p-4">
-                        <div className="relative">
-                            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Buscar</label>
-                            <Search className="pointer-events-none absolute left-3 top-[37px] h-4 w-4 text-[#8891AD]" />
-                            <input type="text" value={filtros.q} onChange={(e) => cambiarFiltro("q", e.target.value)} placeholder="Código, producto, grupo, categoría, ubicación..." className="h-11 w-full rounded-xl border border-[#E4E7F0] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10" />
-                            {filtros.q && <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>}
-                        </div>
-                        <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
-
-                            <SelectFilter label="Grupo principal" icon={Layers3} value={filtros.grupo_principal} onChange={(value) => cambiarFiltro("grupo_principal", value)} loading={loadingOpciones}>
-                                <option value="">Todos los grupos</option>
-                                {opciones.grupos_principales.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </SelectFilter>
-
-                            <SelectFilter label="Categoría" icon={Tags} value={filtros.categoria} onChange={(value) => cambiarFiltro("categoria", value)} loading={loadingOpciones}>
-                                <option value="">Todas las categorías</option>
-                                {opciones.categorias.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </SelectFilter>
-
-                            <SelectFilter label="Capa obsolescencia" icon={Clock3} value={filtros.capa_obsolescencia} onChange={(value) => cambiarFiltro("capa_obsolescencia", value)} loading={loadingOpciones}>
-                                <option value="">Todas las capas</option>
-                                {opciones.capas_obsolescencia.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </SelectFilter>
-
-                            <SelectFilter label="Movimiento" icon={Boxes} value={filtros.categoria_movimiento} onChange={(value) => cambiarFiltro("categoria_movimiento", value)} loading={loadingOpciones}>
-                                <option value="">Todos los movimientos</option>
-                                {opciones.categorias_movimiento.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </SelectFilter>
-                            <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="inline-flex h-10 mt-5 items-center gap-1.5 rounded-xl border border-[#131E5C] bg-white px-3 text-[14px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-50">
-                                <Eraser className="h-3.5 w-3.5" />Limpiar
-                            </button>
-                        </div>
-
-                        {/* --- PANEL SUPERIOR ESTILO PROSPECTOS DIGITALES --- */}
-                        <div className="mb-6 mt-6 space-y-4 rounded-2xl bg-white">
-
-                            {/* Fila 1: Botones de Agencia (Concesionaria) */}
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <span className="w-25 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD]">
-                                    Concesionaria
-                                </span>
-                                <div className="flex-1 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
-                                    <ButtonGroup
-                                        options={opciones.agencias}
-                                        activeValue={filtros.agencia}
-                                        onChange={(val) => cambiarFiltro("agencia", val)}
-                                        allLabel="Todas las agencias"
-                                    />
-                                </div>
-
-                                <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
-
-                                {/* Sección Año */}
-                                <div className="flex items-center gap-2">
-                                    <span className="w-15 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD] lg:w-auto lg:pr-4">
-                                        Año
-                                    </span>
-                                    <ButtonGroup
-                                        options={opcionesAnios}
-                                        activeValue={anioActivo}
-                                        onChange={cambiarAnio}
-                                        showAllOption={false}
-                                    />
-                                </div>
-
-                                <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
-
-                                {/* Sección Meses */}
-                                <div className="flex items-center gap-2 flex-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
-                                    <ButtonGroup
-                                        options={[
-                                            { label: "Ene", value: "01" },
-                                            { label: "Feb", value: "02" },
-                                            { label: "Mar", value: "03" },
-                                            { label: "Abr", value: "04" },
-                                            { label: "May", value: "05" },
-                                            { label: "Jun", value: "06" },
-                                            { label: "Jul", value: "07" },
-                                            { label: "Ago", value: "08" },
-                                            { label: "Sep", value: "09" },
-                                            { label: "Oct", value: "10" },
-                                            { label: "Nov", value: "11" },
-                                            { label: "Dic", value: "12" },
-                                        ]}
-                                        activeValue={mesActivo}
-                                        onChange={cambiarMes}
-                                        allLabel="Anual"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        {/* --- FIN PANEL SUPERIOR --- */}
-
-                        <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-4">
-                            <SelectFilter label="Reservadas" icon={Boxes} value={filtros.reservadas} onChange={(value) => cambiarFiltro("reservadas", value)}>
-                                <option value="">Todas</option>
-                                <option value="con">Con reservadas</option>
-                                <option value="sin">Sin reservadas</option>
-                            </SelectFilter>
-
-                            <SelectFilter label="Pendientes" icon={Boxes} value={filtros.pendientes} onChange={(value) => cambiarFiltro("pendientes", value)}>
-                                <option value="">Todas</option>
-                                <option value="con">Con pendientes</option>
-                                <option value="sin">Sin pendientes</option>
-                            </SelectFilter>
-
-                            <FilterField label="Días mínimo" icon={Clock3}>
-                                <input type="number" min="0" value={filtros.dias_min} onChange={(e) => cambiarFiltro("dias_min", e.target.value)} placeholder="Ej. 180" className={inputClass} />
-                            </FilterField>
-
-                            <FilterField label="Días máximo" icon={Clock3}>
-                                <input type="number" min="0" value={filtros.dias_max} onChange={(e) => cambiarFiltro("dias_max", e.target.value)} placeholder="Ej. 730" className={inputClass} />
-                            </FilterField>
-                        </div>
+                        <KPICard
+                            loading={loadingDashboard}
+                            icon={CircleDollarSign}
+                            label="Valor Disponible"
+                            value={money(dashboard.totales.valor_disponible)}
+                            sub={`Reservado: ${money(dashboard.totales.valor_reservado)}`}
+                        />
                     </div>
-                </section>
 
-                {errorDashboard && <ErrorBox>{errorDashboard}</ErrorBox>}
-                {error && <ErrorBox>{error}</ErrorBox>}
+                    <section id="seccion-filtros-obsolescencia" data-html2canvas-ignore="true" className="relative overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
+                        {cargandoGeneral && <div className="absolute inset-x-0 top-0 z-20 h-1 overflow-hidden bg-[#131E5C]/10"><div className="h-full w-full animate-pulse bg-[#131E5C]" /></div>}
+                        <div className="space-y-4 p-4">
+                            <div className="relative">
+                                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Buscar</label>
+                                <Search className="pointer-events-none absolute left-3 top-[37px] h-4 w-4 text-[#8891AD]" />
+                                <input type="text" value={filtros.q} onChange={(e) => cambiarFiltro("q", e.target.value)} placeholder="Código, producto, grupo, categoría, ubicación..." className="h-11 w-full rounded-xl border border-[#E4E7F0] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10" />
+                                {filtros.q && <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>}
+                            </div>
+                            <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
 
-                {vistaActiva === "dashboard" && (
-                    <div className="grid gap-5 xl:grid-cols-12">
-                        <div className="xl:col-span-7">
-                            <ChartCard
-                                title="Valor disponible y reservado"
-                                subtitle="Distribución por capa de obsolescencia"
-                                icon={Layers3}
-                            >
-                                <div className="h-[360px]">
-                                    {loadingDashboard ? (
-                                        <ChartLoading type="horizontal" />
-                                    ) : porCapa.length === 0 ? (
-                                        <ChartEmpty />
-                                    ) : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart
-                                                data={porCapa}
-                                                layout="vertical"
-                                                margin={{ top: 15, right: 30, left: 10, bottom: 10 }}
-                                            >
-                                                <CartesianGrid
-                                                    strokeDasharray="3 3"
-                                                    horizontal={false}
-                                                    stroke={C.border}
-                                                />
+                                <SelectFilter label="Grupo principal" icon={Layers3} value={filtros.grupo_principal} onChange={(value) => cambiarFiltro("grupo_principal", value)} loading={loadingOpciones}>
+                                    <option value="">Todos los grupos</option>
+                                    {opciones.grupos_principales.map((item) => <option key={item} value={item}>{item}</option>)}
+                                </SelectFilter>
 
-                                                <XAxis
-                                                    type="number"
-                                                    tickFormatter={formatoCompacto}
-                                                    tick={{ fontSize: 15, fill: "#000000" }}
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                />
+                                <SelectFilter label="Categoría" icon={Tags} value={filtros.categoria} onChange={(value) => cambiarFiltro("categoria", value)} loading={loadingOpciones}>
+                                    <option value="">Todas las categorías</option>
+                                    {opciones.categorias.map((item) => <option key={item} value={item}>{item}</option>)}
+                                </SelectFilter>
 
-                                                <YAxis
-                                                    type="category"
-                                                    dataKey="capa_obsolescencia"
-                                                    width={80}
-                                                    tick={{ fontSize: 15, fill: "#000000" }}
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                />
+                                <SelectFilter label="Capa obsolescencia" icon={Clock3} value={filtros.capa_obsolescencia} onChange={(value) => cambiarFiltro("capa_obsolescencia", value)} loading={loadingOpciones}>
+                                    <option value="">Todas las capas</option>
+                                    {opciones.capas_obsolescencia.map((item) => <option key={item} value={item}>{item}</option>)}
+                                </SelectFilter>
 
-                                                <Tooltip
-                                                    contentStyle={TOOLTIP_STYLE}
-                                                    formatter={(value, name) => [
-                                                        money(value),
-                                                        name === "valor_disponible"
-                                                            ? "Valor disponible"
-                                                            : "Valor reservado",
-                                                    ]}
-                                                />
+                                <SelectFilter label="Movimiento" icon={Boxes} value={filtros.categoria_movimiento} onChange={(value) => cambiarFiltro("categoria_movimiento", value)} loading={loadingOpciones}>
+                                    <option value="">Todos los movimientos</option>
+                                    {opciones.categorias_movimiento.map((item) => <option key={item} value={item}>{item}</option>)}
+                                </SelectFilter>
+                                <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="inline-flex h-10 mt-5 items-center gap-1.5 rounded-xl border border-[#131E5C] bg-white px-3 text-[14px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-50">
+                                    <Eraser className="h-3.5 w-3.5" />Limpiar
+                                </button>
+                            </div>
 
-                                                <Legend
-                                                    formatter={(value) =>
-                                                        value === "valor_disponible"
-                                                            ? "Valor Disponible"
-                                                            : "Valor Reservado"
-                                                    }
-                                                />
+                            {/* --- PANEL SUPERIOR ESTILO PROSPECTOS DIGITALES --- */}
+                            <div className="mb-6 mt-6 space-y-4 rounded-2xl bg-white">
 
-                                                <Bar
-                                                    dataKey="valor_disponible"
-                                                    stackId="valor"
-                                                    fill={C.navyLight}
-                                                    isAnimationActive
-                                                    animationDuration={700}
-                                                    onClick={(entry) =>
-                                                        alternarFiltro(
-                                                            "capa_obsolescencia",
-                                                            entry?.capa_obsolescencia,
-                                                        )
-                                                    }
-                                                />
-
-                                                <Bar
-                                                    dataKey="valor_reservado"
-                                                    stackId="valor"
-                                                    fill={C.navy}
-                                                    radius={[0, 6, 6, 0]}
-                                                    isAnimationActive
-                                                    animationDuration={700}
-                                                    onClick={(entry) =>
-                                                        alternarFiltro(
-                                                            "capa_obsolescencia",
-                                                            entry?.capa_obsolescencia,
-                                                        )
-                                                    }
-                                                />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
-
-                        <div className="xl:col-span-5">
-                            <ChartCard title="Capas de obsolescencia" subtitle="Distribución del valor del inventario" icon={Layers3}>
-                                <div className="grid min-h-[380px] items-center md:grid-cols-[1fr_190px] xl:grid-cols-1 2xl:grid-cols-[1fr_190px]">
-                                    <div className="relative h-[380px]">
-                                        {loadingDashboard ? <ChartLoading type="pie" /> : porCapa.length === 0 ? <ChartEmpty /> : (
-                                            <>
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <PieChart>
-                                                        <Pie
-                                                            data={porCapa}
-                                                            dataKey="valor_inventario"
-                                                            nameKey="capa_obsolescencia"
-                                                            cx="50%"
-                                                            cy="50%"
-                                                            innerRadius={95}
-                                                            outerRadius={150}
-                                                            paddingAngle={2}
-                                                            className="cursor-pointer"
-                                                            isAnimationActive
-                                                            animationDuration={800}
-                                                            onClick={(entry) =>
-                                                                alternarFiltro(
-                                                                    "capa_obsolescencia",
-                                                                    entry?.capa_obsolescencia,
-                                                                )
-                                                            }
-                                                        >
-                                                            {porCapa.map((item, index) => (
-                                                                <Cell
-                                                                    key={`${item.capa_obsolescencia}-${index}`}
-                                                                    fill={PIE_COLORS[index % PIE_COLORS.length]}
-                                                                />
-                                                            ))}
-                                                        </Pie>
-                                                        <Tooltip
-                                                            contentStyle={TOOLTIP_STYLE}
-                                                            formatter={(value) => [money(value), "Valor inventario"]}
-                                                        />
-                                                    </PieChart>
-                                                </ResponsiveContainer>
-
-                                                <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-                                                    <p className="text-xl font-extrabold text-[#131E5C]">{money(totalValorCapas)}</p>
-                                                    <p className="text-[16px] font-semibold uppercase tracking-widest text-[#8891AD]">Inventario</p>
-                                                </div>
-                                            </>
-                                        )}
+                                {/* Fila 1: Botones de Agencia (Concesionaria) */}
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                    <span className="w-25 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD]">
+                                        Concesionaria
+                                    </span>
+                                    <div className="flex-1 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+                                        <ButtonGroup
+                                            options={opciones.agencias}
+                                            activeValue={filtros.agencia}
+                                            onChange={(val) => cambiarFiltro("agencia", val)}
+                                            allLabel="Todas las agencias"
+                                        />
                                     </div>
 
-                                    {loadingDashboard ? (
-                                        <div className="space-y-2">
-                                            {[1, 2, 3, 4].map((item) => <div key={item} className="h-7 animate-pulse rounded-lg bg-slate-100" />)}
-                                        </div>
-                                    ) : porCapa.length > 0 && (
-                                        <div className="space-y-2">
-                                            {porCapa.map((item, index) => (
-                                                <button key={`${item.capa_obsolescencia}-${index}`} type="button" onClick={() => alternarFiltro("capa_obsolescencia", item.capa_obsolescencia)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition", filtros.capa_obsolescencia === item.capa_obsolescencia ? "bg-[#131E5C]/[0.08]" : "hover:bg-[#F7F8FC]")}>
-                                                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
-                                                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#515778]">{item.capa_obsolescencia}</span>
-                                                    <span className="text-[14px] font-bold text-[#1A1F3C]">{formatoNumero(item.productos)}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
+                                    <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
 
-                        <div className="xl:col-span-6">
-                            <ChartCard title="Inventario por agencia" subtitle="Valor económico por dealer" icon={MapPin}>
-                                <div className="h-[390px]">
-                                    {loadingDashboard ? <ChartLoading type="horizontal" /> : porAgencia.length === 0 ? <ChartEmpty /> : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={porAgencia} layout="vertical" margin={{ top: 4, right: 50, left: 25, bottom: 4 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
-                                                <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
-                                                <YAxis type="category" dataKey="agencia" width={135} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
-                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
-                                                <Bar
-                                                    dataKey="valor_inventario"
-                                                    fill={C.navy}
-                                                    radius={[0, 7, 7, 0]}
-                                                    barSize={25}
-                                                    className="cursor-pointer"
-                                                    isAnimationActive
-                                                    animationDuration={700}
-                                                    onClick={(entry) =>
-                                                        alternarFiltro(
-                                                            "agencia",
-                                                            entry?.agencia,
-                                                        )
-                                                    }
+                                    {/* Sección Año */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-15 shrink-0 text-[11px] font-black uppercase tracking-widest text-[#8891AD] lg:w-auto lg:pr-4">
+                                            Año
+                                        </span>
+                                        <ButtonGroup
+                                            options={opcionesAnios}
+                                            activeValue={anioActivo}
+                                            onChange={cambiarAnio}
+                                            showAllOption={false}
+                                        />
+                                    </div>
+
+                                    <div className="hidden h-8 w-px bg-[#E4E7F0] lg:block"></div>
+
+                                    {/* Sección Meses */}
+                                    <div className="flex items-center gap-2 flex-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
+                                        <ButtonGroup
+                                            options={[
+                                                { label: "Ene", value: "01" },
+                                                { label: "Feb", value: "02" },
+                                                { label: "Mar", value: "03" },
+                                                { label: "Abr", value: "04" },
+                                                { label: "May", value: "05" },
+                                                { label: "Jun", value: "06" },
+                                                { label: "Jul", value: "07" },
+                                                { label: "Ago", value: "08" },
+                                                { label: "Sep", value: "09" },
+                                                { label: "Oct", value: "10" },
+                                                { label: "Nov", value: "11" },
+                                                { label: "Dic", value: "12" },
+                                            ]}
+                                            activeValue={mesActivo}
+                                            onChange={cambiarMes}
+                                            allLabel="Anual"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            {/* --- FIN PANEL SUPERIOR --- */}
+
+                            <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-4">
+                                <SelectFilter label="Reservadas" icon={Boxes} value={filtros.reservadas} onChange={(value) => cambiarFiltro("reservadas", value)}>
+                                    <option value="">Todas</option>
+                                    <option value="con">Con reservadas</option>
+                                    <option value="sin">Sin reservadas</option>
+                                </SelectFilter>
+
+                                <SelectFilter label="Pendientes" icon={Boxes} value={filtros.pendientes} onChange={(value) => cambiarFiltro("pendientes", value)}>
+                                    <option value="">Todas</option>
+                                    <option value="con">Con pendientes</option>
+                                    <option value="sin">Sin pendientes</option>
+                                </SelectFilter>
+
+                                <FilterField label="Días mínimo" icon={Clock3}>
+                                    <input type="number" min="0" value={filtros.dias_min} onChange={(e) => cambiarFiltro("dias_min", e.target.value)} placeholder="Ej. 180" className={inputClass} />
+                                </FilterField>
+
+                                <FilterField label="Días máximo" icon={Clock3}>
+                                    <input type="number" min="0" value={filtros.dias_max} onChange={(e) => cambiarFiltro("dias_max", e.target.value)} placeholder="Ej. 730" className={inputClass} />
+                                </FilterField>
+                            </div>
+                        </div>
+                    </section>
+
+                    {errorDashboard && <ErrorBox>{errorDashboard}</ErrorBox>}
+                    {error && <ErrorBox>{error}</ErrorBox>}
+
+                    {vistaActiva === "dashboard" && (
+                        <div className="grid gap-5 xl:grid-cols-12 bg-white p-3 rounded-2xl">
+                            <div className="xl:col-span-7">
+                                <ChartCard
+                                    title="Valor disponible y reservado"
+                                    subtitle="Distribución por capa de obsolescencia"
+                                    icon={Layers3}
+                                >
+                                    <div className="h-[360px]">
+                                        {loadingDashboard ? (
+                                            <ChartLoading type="horizontal" />
+                                        ) : porCapa.length === 0 ? (
+                                            <ChartEmpty />
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={porCapa}
+                                                    layout="vertical"
+                                                    margin={{ top: 15, right: 30, left: 10, bottom: 10 }}
                                                 >
-                                                    <LabelList
-                                                        dataKey="productos"
-                                                        position="right"
-                                                        fill={C.textSub}
-                                                        fontSize={14}
-                                                        formatter={(value) => `${formatoNumero(value)} ref.`}
+                                                    <CartesianGrid
+                                                        strokeDasharray="3 3"
+                                                        horizontal={false}
+                                                        stroke={C.border}
                                                     />
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
 
-                        <div className="xl:col-span-6">
-                            <ChartCard title="Grupos con mayor inventario" subtitle="Top 12 por valor económico" icon={Tags}>
-                                <div className="h-[490px]">
-                                    {loadingDashboard ? <ChartLoading type="horizontal" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={datosGrupoCapa} layout="vertical" margin={{ top: 4, right: 35, left: 35, bottom: 4 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
-                                                <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000" }} axisLine={false} tickLine={false} />
-                                                <YAxis type="category" dataKey="grupo_principal" width={160} tick={{ fontSize: 14, fill: "#000" }} axisLine={false} tickLine={false} />
-                                                <Tooltip content={<TooltipGrupoCapa />} />
-                                                <Legend formatter={(v) => `Capa ${v}`} />
+                                                    <XAxis
+                                                        type="number"
+                                                        tickFormatter={formatoCompacto}
+                                                        tick={{ fontSize: 15, fill: "#000000" }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                    />
 
-                                                {capas.map((capa, i) => (
-                                                    console.log(capa),
+                                                    <YAxis
+                                                        type="category"
+                                                        dataKey="capa_obsolescencia"
+                                                        width={80}
+                                                        tick={{ fontSize: 15, fill: "#000000" }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                    />
+
+                                                    <Tooltip
+                                                        contentStyle={TOOLTIP_STYLE}
+                                                        formatter={(value, name) => [
+                                                            money(value),
+                                                            name === "valor_disponible"
+                                                                ? "Valor disponible"
+                                                                : "Valor reservado",
+                                                        ]}
+                                                    />
+
+                                                    <Legend
+                                                        formatter={(value) =>
+                                                            value === "valor_disponible"
+                                                                ? "Valor Disponible"
+                                                                : "Valor Reservado"
+                                                        }
+                                                    />
+
                                                     <Bar
-                                                        key={capa}
-                                                        dataKey={capa}
-                                                        stackId="capas"
-                                                        fill={PIE_COLORS[i % PIE_COLORS.length]}
-                                                        radius={i === capas.length - 1 ? [0, 7, 7, 0] : undefined}
+                                                        dataKey="valor_disponible"
+                                                        stackId="valor"
+                                                        fill={C.navyLight}
+                                                        isAnimationActive
+                                                        animationDuration={700}
+                                                        onClick={(entry) =>
+                                                            alternarFiltro(
+                                                                "capa_obsolescencia",
+                                                                entry?.capa_obsolescencia,
+                                                            )
+                                                        }
+                                                    />
+
+                                                    <Bar
+                                                        dataKey="valor_reservado"
+                                                        stackId="valor"
+                                                        fill={C.navy}
+                                                        radius={[0, 6, 6, 0]}
+                                                        isAnimationActive
+                                                        animationDuration={700}
+                                                        onClick={(entry) =>
+                                                            alternarFiltro(
+                                                                "capa_obsolescencia",
+                                                                entry?.capa_obsolescencia,
+                                                            )
+                                                        }
+                                                    />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
+
+                            <div className="xl:col-span-5">
+                                <ChartCard title="Capas de obsolescencia" subtitle="Distribución del valor del inventario" icon={Layers3}>
+                                    <div className="grid min-h-[380px] items-center md:grid-cols-[1fr_190px] xl:grid-cols-1 2xl:grid-cols-[1fr_190px]">
+                                        <div className="relative h-[380px]">
+                                            {loadingDashboard ? <ChartLoading type="pie" /> : porCapa.length === 0 ? <ChartEmpty /> : (
+                                                <>
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <PieChart>
+                                                            <Pie
+                                                                data={porCapa}
+                                                                dataKey="valor_inventario"
+                                                                nameKey="capa_obsolescencia"
+                                                                cx="50%"
+                                                                cy="50%"
+                                                                innerRadius={95}
+                                                                outerRadius={150}
+                                                                paddingAngle={2}
+                                                                className="cursor-pointer"
+                                                                isAnimationActive
+                                                                animationDuration={800}
+                                                                onClick={(entry) =>
+                                                                    alternarFiltro(
+                                                                        "capa_obsolescencia",
+                                                                        entry?.capa_obsolescencia,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {porCapa.map((item, index) => (
+                                                                    <Cell
+                                                                        key={`${item.capa_obsolescencia}-${index}`}
+                                                                        fill={PIE_COLORS[index % PIE_COLORS.length]}
+                                                                    />
+                                                                ))}
+                                                            </Pie>
+                                                            <Tooltip
+                                                                contentStyle={TOOLTIP_STYLE}
+                                                                formatter={(value) => [money(value), "Valor inventario"]}
+                                                            />
+                                                        </PieChart>
+                                                    </ResponsiveContainer>
+
+                                                    <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+                                                        <p className="text-xl font-extrabold text-[#131E5C]">{money(totalValorCapas)}</p>
+                                                        <p className="text-[16px] font-semibold uppercase tracking-widest text-[#8891AD]">Inventario</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        {loadingDashboard ? (
+                                            <div className="space-y-2">
+                                                {[1, 2, 3, 4].map((item) => <div key={item} className="h-7 animate-pulse rounded-lg bg-slate-100" />)}
+                                            </div>
+                                        ) : porCapa.length > 0 && (
+                                            <div className="space-y-2">
+                                                {porCapa.map((item, index) => (
+                                                    <button key={`${item.capa_obsolescencia}-${index}`} type="button" onClick={() => alternarFiltro("capa_obsolescencia", item.capa_obsolescencia)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition", filtros.capa_obsolescencia === item.capa_obsolescencia ? "bg-[#131E5C]/[0.08]" : "hover:bg-[#F7F8FC]")}>
+                                                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
+                                                        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#515778]">{item.capa_obsolescencia}</span>
+                                                        <span className="text-[14px] font-bold text-[#1A1F3C]">{formatoNumero(item.productos)}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
+
+                            <div className="xl:col-span-6">
+                                <ChartCard title="Inventario por agencia" subtitle="Valor económico por dealer" icon={MapPin}>
+                                    <div className="h-[390px]">
+                                        {loadingDashboard ? <ChartLoading type="horizontal" /> : porAgencia.length === 0 ? <ChartEmpty /> : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={porAgencia} layout="vertical" margin={{ top: 4, right: 50, left: 25, bottom: 4 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
+                                                    <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
+                                                    <YAxis type="category" dataKey="agencia" width={135} tick={{ fontSize: 14, fill: "#000000" }} axisLine={false} tickLine={false} />
+                                                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [money(value), "Valor inventario"]} />
+                                                    <Bar
+                                                        dataKey="valor_inventario"
+                                                        fill={C.navy}
+                                                        radius={[0, 7, 7, 0]}
                                                         barSize={25}
                                                         className="cursor-pointer"
                                                         isAnimationActive
                                                         animationDuration={700}
-                                                        onClick={() => alternarFiltro("capa_obsolescencia", capa)}
-                                                    />
-                                                ))}
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
-
-                        <div className="xl:col-span-12">
-                            <ChartCard
-                                title="Categoría de movimiento"
-                                subtitle="Distribución del valor del inventario según movimiento"
-                                icon={Boxes}
-                            >
-                                <div className="h-[360px]">
-                                    {loadingDashboard ? (
-                                        <ChartLoading type="vertical" />
-                                    ) : porMovimiento.length === 0 ? (
-                                        <ChartEmpty />
-                                    ) : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart
-                                                data={porMovimiento}
-                                                margin={{ top: 20, right: 20, left: 15, bottom: 20 }}
-                                            >
-                                                <CartesianGrid
-                                                    strokeDasharray="3 3"
-                                                    vertical={false}
-                                                    stroke={C.border}
-                                                />
-
-                                                <XAxis
-                                                    dataKey="categoria_movimiento"
-                                                    tick={{
-                                                        fontSize: 14,
-                                                        fill: "#000000",
-                                                    }}
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                />
-
-                                                <YAxis
-                                                    tickFormatter={formatoCompacto}
-                                                    tick={{
-                                                        fontSize: 14,
-                                                        fill: "#000000",
-                                                    }}
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                    width={65}
-                                                />
-
-                                                <Tooltip
-                                                    contentStyle={TOOLTIP_STYLE}
-                                                    labelStyle={{
-                                                        fontSize: 14,
-                                                        fontWeight: 700,
-                                                        color: "#1A1F3C",
-                                                        marginBottom: 6,
-                                                    }}
-                                                    itemStyle={{
-                                                        fontSize: 14,
-                                                        fontWeight: 600,
-                                                    }}
-                                                    formatter={(value) => [
-                                                        money(value),
-                                                        "Valor inventario",
-                                                    ]}
-                                                />
-
-                                                <Bar
-                                                    dataKey="valor_inventario"
-                                                    fill={C.navyLight}
-                                                    radius={[6, 6, 0, 0]}
-                                                    className="cursor-pointer"
-                                                    isAnimationActive
-                                                    animationDuration={700}
-                                                    onClick={(entry) =>
-                                                        alternarFiltro(
-                                                            "categoria_movimiento",
-                                                            entry?.categoria_movimiento,
-                                                        )
-                                                    }
-                                                >
-                                                    <LabelList
-                                                        dataKey="productos"
-                                                        position="top"
-                                                        fill={C.navy}
-                                                        fontSize={14}
-                                                        formatter={(value) =>
-                                                            `${formatoNumero(value)} ref.`
+                                                        onClick={(entry) =>
+                                                            alternarFiltro(
+                                                                "agencia",
+                                                                entry?.agencia,
+                                                            )
                                                         }
-                                                    />
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
-                        {/* --- INICIO NUEVOS GRÁFICOS --- */}
-                        <div className="xl:col-span-6">
-                            <ChartCard title="Promedio de Antigüedad" subtitle="Días en inventario por Grupo Principal" icon={Clock3}>
-                                <div className="h-[360px]">
-                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
-                                                <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <YAxis tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${value} días`, "Promedio"]} />
+                                                    >
+                                                        <LabelList
+                                                            dataKey="productos"
+                                                            position="right"
+                                                            fill={C.textSub}
+                                                            fontSize={14}
+                                                            formatter={(value) => `${formatoNumero(value)} ref.`}
+                                                        />
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
 
-                                                {/* Línea roja visual de límite (Ej. 183 días) */}
-                                                <ReferenceLine y={183} stroke="#122473" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (6 meses)', fill: C.navy, fontSize: 11 }} />
+                            <div className="xl:col-span-6">
+                                <ChartCard title="Grupos con mayor inventario" subtitle="Top 12 por valor económico" icon={Tags}>
+                                    <div className="h-[490px]">
+                                        {loadingDashboard ? <ChartLoading type="horizontal" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={datosGrupoCapa} layout="vertical" margin={{ top: 4, right: 35, left: 35, bottom: 4 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
+                                                    <XAxis type="number" tickFormatter={formatoCompacto} tick={{ fontSize: 14, fill: "#000" }} axisLine={false} tickLine={false} />
+                                                    <YAxis type="category" dataKey="grupo_principal" width={160} tick={{ fontSize: 14, fill: "#000" }} axisLine={false} tickLine={false} />
+                                                    <Tooltip content={<TooltipGrupoCapa />} />
+                                                    <Legend formatter={(v) => `Capa ${v}`} />
 
-                                                <Bar dataKey="promedioDias" fill={C.navyLight} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={700}>
-                                                    {porGrupo.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={entry.promedioDias > 180 ? C.navy : C.navyLight} />
+                                                    {capas.map((capa, i) => (
+                                                        console.log(capa),
+                                                        <Bar
+                                                            key={capa}
+                                                            dataKey={capa}
+                                                            stackId="capas"
+                                                            fill={PIE_COLORS[i % PIE_COLORS.length]}
+                                                            radius={i === capas.length - 1 ? [0, 7, 7, 0] : undefined}
+                                                            barSize={25}
+                                                            className="cursor-pointer"
+                                                            isAnimationActive
+                                                            animationDuration={700}
+                                                            onClick={() => alternarFiltro("capa_obsolescencia", capa)}
+                                                        />
                                                     ))}
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
 
-                        <div className="xl:col-span-6">
-                            <ChartCard title="Comparativa por Grupo Principal" subtitle="Valor de inventario vs Antigüedad promedio" icon={Layers3}>
-                                <div className="h-[360px]">
-                                    {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
-                                                <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <YAxis yAxisId="left" orientation="left" tickFormatter={formatoCompacto} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
-                                                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [name === "Valor Inventario" ? money(value) : `${value} días`, name]} />
-                                                <Legend formatter={(value) => value} />
+                            <div className="xl:col-span-12">
+                                <ChartCard
+                                    title="Categoría de movimiento"
+                                    subtitle="Distribución del valor del inventario según movimiento"
+                                    icon={Boxes}
+                                >
+                                    <div className="h-[360px]">
+                                        {loadingDashboard ? (
+                                            <ChartLoading type="vertical" />
+                                        ) : porMovimiento.length === 0 ? (
+                                            <ChartEmpty />
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={porMovimiento}
+                                                    margin={{ top: 20, right: 20, left: 15, bottom: 20 }}
+                                                >
+                                                    <CartesianGrid
+                                                        strokeDasharray="3 3"
+                                                        vertical={false}
+                                                        stroke={C.border}
+                                                    />
 
-                                                {/* Primera columna agrupada: Valor del Inventario */}
-                                                <Bar yAxisId="left" dataKey="valor_inventario" name="Valor Inventario" fill={C.navy} radius={[6, 6, 0, 0]} barSize={16} isAnimationActive animationDuration={700} />
+                                                    <XAxis
+                                                        dataKey="categoria_movimiento"
+                                                        tick={{
+                                                            fontSize: 14,
+                                                            fill: "#000000",
+                                                        }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                    />
 
-                                                {/* Segunda columna agrupada: Días de Antigüedad */}
-                                                <Bar yAxisId="right" dataKey="promedioDias" name="Antigüedad (días)" fill={C.navyLight} radius={[6, 6, 0, 0]} barSize={16} isAnimationActive animationDuration={700} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </ChartCard>
-                        </div>
-                        {/* --- FIN NUEVOS GRÁFICOS --- */}
-                    </div >
-                )
-                }
+                                                    <YAxis
+                                                        tickFormatter={formatoCompacto}
+                                                        tick={{
+                                                            fontSize: 14,
+                                                            fill: "#000000",
+                                                        }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        width={65}
+                                                    />
+
+                                                    <Tooltip
+                                                        contentStyle={TOOLTIP_STYLE}
+                                                        labelStyle={{
+                                                            fontSize: 14,
+                                                            fontWeight: 700,
+                                                            color: "#1A1F3C",
+                                                            marginBottom: 6,
+                                                        }}
+                                                        itemStyle={{
+                                                            fontSize: 14,
+                                                            fontWeight: 600,
+                                                        }}
+                                                        formatter={(value) => [
+                                                            money(value),
+                                                            "Valor inventario",
+                                                        ]}
+                                                    />
+
+                                                    <Bar
+                                                        dataKey="valor_inventario"
+                                                        fill={C.navyLight}
+                                                        radius={[6, 6, 0, 0]}
+                                                        className="cursor-pointer"
+                                                        isAnimationActive
+                                                        animationDuration={700}
+                                                        onClick={(entry) =>
+                                                            alternarFiltro(
+                                                                "categoria_movimiento",
+                                                                entry?.categoria_movimiento,
+                                                            )
+                                                        }
+                                                    >
+                                                        <LabelList
+                                                            dataKey="productos"
+                                                            position="top"
+                                                            fill={C.navy}
+                                                            fontSize={14}
+                                                            formatter={(value) =>
+                                                                `${formatoNumero(value)} ref.`
+                                                            }
+                                                        />
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
+                            {/* --- INICIO NUEVOS GRÁFICOS --- */}
+                            <div className="xl:col-span-6">
+                                <ChartCard title="Promedio de Antigüedad" subtitle="Días en inventario por Grupo Principal" icon={Clock3}>
+                                    <div className="h-[360px]">
+                                        {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                                                    <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                    <YAxis tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${value} días`, "Promedio"]} />
+
+                                                    {/* Línea roja visual de límite (Ej. 183 días) */}
+                                                    <ReferenceLine y={183} stroke="#122473" strokeDasharray="4 4" label={{ position: 'top', value: 'Riesgo (6 meses)', fill: C.navy, fontSize: 11 }} />
+
+                                                    <Bar dataKey="promedioDias" fill={C.navyLight} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={700}>
+                                                        {porGrupo.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.promedioDias > 180 ? C.navy : C.navyLight} />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
+
+                            <div className="xl:col-span-6">
+                                <ChartCard title="Comparativa por Grupo Principal" subtitle="Valor de inventario vs Antigüedad promedio" icon={Layers3}>
+                                    <div className="h-[360px]">
+                                        {loadingDashboard ? <ChartLoading type="vertical" /> : porGrupo.length === 0 ? <ChartEmpty /> : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={porGrupo} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                                                    <XAxis dataKey="grupo_principal" tick={{ fontSize: 11, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                    <YAxis yAxisId="left" orientation="left" tickFormatter={formatoCompacto} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                    <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} tick={{ fontSize: 12, fill: "#8891AD" }} axisLine={false} tickLine={false} />
+                                                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [name === "Valor Inventario" ? money(value) : `${value} días`, name]} />
+                                                    <Legend formatter={(value) => value} />
+
+                                                    {/* Primera columna agrupada: Valor del Inventario */}
+                                                    <Bar yAxisId="left" dataKey="valor_inventario" name="Valor Inventario" fill={C.navy} radius={[6, 6, 0, 0]} barSize={16} isAnimationActive animationDuration={700} />
+
+                                                    {/* Segunda columna agrupada: Días de Antigüedad */}
+                                                    <Bar yAxisId="right" dataKey="promedioDias" name="Antigüedad (días)" fill={C.navyLight} radius={[6, 6, 0, 0]} barSize={16} isAnimationActive animationDuration={700} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </ChartCard>
+                            </div>
+                            {/* --- FIN NUEVOS GRÁFICOS --- */}
+                        </div >
+                    )
+                    }
+
+                </div>
 
                 {
                     vistaActiva === "detalle" && (

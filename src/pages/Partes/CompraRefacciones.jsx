@@ -25,6 +25,11 @@ import {
   getCompraRefTipificada,
 } from "../../lib/apiCompraRef";
 
+import ExcelJS from "exceljs";
+import html2canvas from "html2canvas-pro";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
+import { FileSpreadsheet, FileText } from "lucide-react";
 
 const PALETA_VW = [
   "#001E50",
@@ -126,6 +131,253 @@ export default function CompraRefacciones() {
   const [loadingPiezas, setLoadingPiezas] = useState({});
   const [errorPiezas, setErrorPiezas] = useState({});
   const [mostrarAnalisis, setMostrarAnalisis] = useState(true);
+
+  const [exportando, setExportando] = useState(null);
+  const reporteVisualRef = useRef(null);
+
+  // ── Formateo de nombre dinámico según filtros activos ──
+  const limpiarNombreArchivo = (valor) => {
+    return String(valor ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase();
+  };
+
+  const obtenerSelloFecha = () => {
+    const ahora = new Date();
+    const dos = (valor) => String(valor).padStart(2, "0");
+    return `${ahora.getFullYear()}${dos(ahora.getMonth() + 1)}${dos(ahora.getDate())}_${dos(ahora.getHours())}${dos(ahora.getMinutes())}`;
+  };
+
+  const crearNombreReporteCompras = (extension) => {
+    const agenciaLimpia = limpiarNombreArchivo(agencia || "todas_las_agencias");
+
+    let periodoDesc = "todas_las_fechas";
+    if (fechaDesde && fechaHasta) {
+      periodoDesc = `${fechaDesde}_a_${fechaHasta}`;
+    } else if (fechaDesde) {
+      periodoDesc = `desde_${fechaDesde}`;
+    } else if (fechaHasta) {
+      periodoDesc = `hasta_${fechaHasta}`;
+    }
+    const periodoLimpio = limpiarNombreArchivo(periodoDesc);
+    const busquedaLimpia = qBuscado ? `_${limpiarNombreArchivo(qBuscado)}` : "";
+
+    return `reporte_compras_refacciones_${agenciaLimpia}_${periodoLimpio}${busquedaLimpia}_${obtenerSelloFecha()}.${extension}`;
+  };
+
+  const esperarRenderCompleto = async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 800));
+  };
+
+  const agregarCanvasPaginadoPdf = (doc, canvas) => {
+    const margen = 8;
+    const anchoPagina = doc.internal.pageSize.getWidth();
+    const altoPagina = doc.internal.pageSize.getHeight();
+    const anchoUtil = anchoPagina - margen * 2;
+    const altoUtil = altoPagina - margen * 2;
+    const pixelesPorMm = canvas.width / anchoUtil;
+    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+
+    let posicionY = 0;
+    let primeraPagina = true;
+
+    while (posicionY < canvas.height) {
+      if (!primeraPagina) doc.addPage("a4", "landscape");
+      primeraPagina = false;
+
+      const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
+      const corte = document.createElement("canvas");
+      corte.width = canvas.width;
+      corte.height = altoActualPx;
+      const contexto = corte.getContext("2d");
+      if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
+      contexto.fillStyle = "#ffffff";
+      contexto.fillRect(0, 0, corte.width, corte.height);
+      contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
+
+      const altoImagenMm = altoActualPx / pixelesPorMm;
+      doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
+      posicionY += altoActualPx;
+    }
+  };
+
+  const exportarComprasExcel = async () => {
+    if (totalRegistros === 0 || exportando) return;
+    setExportando("excel");
+    try {
+      // 1. Consultar el 100% de las facturas que coinciden con los filtros actuales
+      const respuestaCompleta = await getCompraRefTipificada({
+        ...parametros,
+        page: 1,
+        page_size: totalRegistros > 0 ? totalRegistros : 5000,
+      });
+      const filasAExportar = Array.isArray(respuestaCompleta?.results) 
+        ? respuestaCompleta.results 
+        : datos;
+
+      const workbook = new ExcelJS.Workbook();
+      const hoja = workbook.addWorksheet("Compras", {
+        views: [{ state: "frozen", ySplit: 1 }],
+        pageSetup: { orientation: "landscape" },
+      });
+
+      hoja.columns = [
+        { header: "Agencia", key: "agencia", width: 20 },
+        { header: "Nota", key: "nrnota", width: 14 },
+        { header: "Serie", key: "serie", width: 10 },
+        { header: "Pedido", key: "nrpedunpar", width: 14 },
+        { header: "Cantidad", key: "qtprodutos", width: 12 },
+        { header: "Proveedor", key: "proveedor", width: 30 },
+        { header: "Emisión", key: "dtemissao", width: 14 },
+        { header: "Entrada", key: "dtentrada", width: 14 },
+        { header: "Subtotal", key: "subtotal", width: 16 },
+        { header: "IVA", key: "iva", width: 14 },
+        { header: "Total", key: "total", width: 16 },
+      ];
+
+      hoja.getRow(1).eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+        cell.alignment = { horizontal: "center" };
+      });
+
+      // 2. Insertar todas las facturas recuperadas
+      filasAExportar.forEach((f) => {
+        const sub = numero(f.subtotal);
+        hoja.addRow({
+          agencia: f.agencia || "—",
+          nrnota: f.nrnota ?? "—",
+          serie: f.serie || "—",
+          nrpedunpar: f.nrpedunpar || "—",
+          qtprodutos: numero(f.qtprodutos),
+          proveedor: f.proveedor || "—",
+          dtemissao: f.dtemissao || "—",
+          dtentrada: f.dtentrada || "—",
+          subtotal: sub,
+          iva: sub * 0.16,
+          total: numero(f.total),
+        });
+      });
+
+      hoja.getColumn(9).numFmt = "$#,##0.00";
+      hoja.getColumn(10).numFmt = "$#,##0.00";
+      hoja.getColumn(11).numFmt = "$#,##0.00";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = crearNombreReporteCompras("xlsx");
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error exportando compras:", err);
+      alert("No fue posible exportar a Excel.");
+    } finally {
+      setExportando(null);
+    }
+  };
+
+  const exportarComprasPdf = async () => {
+    if (!datos.length || exportando) return;
+    setExportando("pdf");
+    const previaVisibilidad = mostrarAnalisis;
+
+    try {
+      // Si el análisis de gráficas estaba oculto, se despliega temporalmente para la captura
+      if (!previaVisibilidad) {
+        setMostrarAnalisis(true);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+      await esperarRenderCompleto();
+
+      if (!reporteVisualRef.current) throw new Error("No se encontró el contenedor visual.");
+
+      // 1. Captura de gráficas y KPIs eliminando los filtros del clon
+      const canvas = await html2canvas(reporteVisualRef.current, {
+        scale: 1.35,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false,
+        onclone: (documentoClonado) => {
+          const filtrosClonados = documentoClonado.getElementById("seccion-filtros-compras");
+          if (filtrosClonados) {
+            filtrosClonados.remove();
+          }
+        },
+      });
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+      doc.setProperties({
+        title: `Reporte de Compras - ${new Date().toLocaleDateString("es-MX")}`,
+        author: "CRM Grupo Automotriz R&R",
+      });
+
+      // 2. Insertar las gráficas
+      agregarCanvasPaginadoPdf(doc, canvas);
+
+      // 3. Insertar la tabla detallada al final
+      doc.addPage("a4", "landscape");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(19, 30, 92);
+      doc.text("Detalle de Facturas de Compras", 10, 12);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      doc.text(
+        `Generado: ${new Date().toLocaleString("es-MX")} · Total: ${totalRegistros} facturas`,
+        10,
+        16
+      );
+
+      autoTable(doc, {
+        startY: 19,
+        head: [["Agencia", "Nota", "Serie", "Pedido", "Cant.", "Proveedor", "Emisión", "Entrada", "Subtotal", "Total"]],
+        body: datos.map((f) => [
+          f.agencia || "—",
+          f.nrnota ?? "—",
+          f.serie || "—",
+          f.nrpedunpar || "—",
+          formatoNumero(f.qtprodutos),
+          (f.proveedor || "—").slice(0, 24),
+          f.dtemissao || "—",
+          f.dtentrada || "—",
+          money(f.subtotal),
+          money(f.total),
+        ]),
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [19, 30, 92], textColor: 255 },
+        margin: { left: 8, right: 8, bottom: 10 },
+        didDrawPage: () => {
+          const ancho = doc.internal.pageSize.getWidth();
+          const alto = doc.internal.pageSize.getHeight();
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.setTextColor(107, 114, 128);
+          doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+        },
+      });
+
+      doc.save(crearNombreReporteCompras("pdf"));
+    } catch (err) {
+      console.error("Error exportando compras a PDF:", err);
+      alert("No fue posible exportar a PDF.");
+    } finally {
+      if (!previaVisibilidad) {
+        setMostrarAnalisis(false);
+      }
+      setExportando(null);
+    }
+  };
 
   useEffect(() => {
     const timeout = setTimeout(() => setQDebounce(qBuscado), 400);
@@ -358,187 +610,211 @@ export default function CompraRefacciones() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={consultar}
-            disabled={loading}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
-          >
-            {loading ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Actualizar
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={exportarComprasExcel}
+              disabled={!datos.length || Boolean(exportando)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50"
+            >
+              {exportando === "excel" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              Exportar Excel
+            </button>
+
+            <button
+              type="button"
+              onClick={exportarComprasPdf}
+              disabled={!datos.length || Boolean(exportando)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50"
+            >
+              {exportando === "pdf" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Exportar PDF
+            </button>
+
+            <button
+              type="button"
+              onClick={consultar}
+              disabled={loading}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
+            >
+              {loading ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Actualizar
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KPICard
-            icon={CircleDollarSign}
-            label="Total"
-            value={loading ? "—" : money(metricas.total)}
-            sub="Total de facturas"
-            accent="#0EA5E9"
-          />
+        <div ref={reporteVisualRef} className="space-y-5">
 
-          <KPICard
-            icon={CircleDollarSign}
-            label="Subtotal"
-            value={loading ? "—" : money(metricas.subtotal)}
-            sub="Subtotal de facturas"
-            accent="#10B981"
-          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <KPICard
+              icon={CircleDollarSign}
+              label="Total"
+              value={loading ? "—" : money(metricas.total)}
+              sub="Total de facturas"
+              accent="#0EA5E9"
+            />
 
-          <KPICard
-            icon={Package}
-            label="Cantidad"
-            value={loading ? "—" : formatoNumero(metricas.cantidad_total)}
-            sub="QtProdutos"
-            accent="#F59E0B"
-          />
+            <KPICard
+              icon={CircleDollarSign}
+              label="Subtotal"
+              value={loading ? "—" : money(metricas.subtotal)}
+              sub="Subtotal de facturas"
+              accent="#10B981"
+            />
 
-          <KPICard
-            icon={Database}
-            label="Registros"
-            value={loading ? "—" : formatoNumero(metricas.registros)}
-            sub="Facturas encontradas"
-            accent="#131E5C"
-          />
-        </div>
+            <KPICard
+              icon={Package}
+              label="Cantidad"
+              value={loading ? "—" : formatoNumero(metricas.cantidad_total)}
+              sub="QtProdutos"
+              accent="#F59E0B"
+            />
 
-        <section className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div>
-              <label className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-[#131E5C]/60">
-                <CalendarDays className="h-4 w-4" />
-                Fecha entrada desde
-              </label>
-
-              <input
-                type="date"
-                value={fechaDesde}
-                max={fechaHasta || undefined}
-                onChange={(e) => {
-                  setFechaDesde(e.target.value);
-                  setPagina(1);
-                }}
-                className="h-11 w-full rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-semibold text-[#07184C] outline-none transition focus:border-[#1555C7]"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-[#131E5C]/60">
-                <CalendarDays className="h-4 w-4" />
-                Fecha entrada hasta
-              </label>
-
-              <input
-                type="date"
-                value={fechaHasta}
-                min={fechaDesde || undefined}
-                onChange={(e) => {
-                  setFechaHasta(e.target.value);
-                  setPagina(1);
-                }}
-                className="h-11 w-full rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-semibold text-[#07184C] outline-none transition focus:border-[#1555C7]"
-              />
-            </div>
+            <KPICard
+              icon={Database}
+              label="Registros"
+              value={loading ? "—" : formatoNumero(metricas.registros)}
+              sub="Facturas encontradas"
+              accent="#131E5C"
+            />
           </div>
 
-          <div className="mt-5 border-t border-[#E6EAF1] pt-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Store className="h-4 w-4 text-[#131E5C]" />
-              <span className="text-[11px] font-black uppercase tracking-wider text-[#131E5C]/60">
-                Agencia
-              </span>
-            </div>
+          <section id="seccion-filtros-compras" data-html2canvas-ignore="true" className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <label className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-[#131E5C]/60">
+                  <CalendarDays className="h-4 w-4" />
+                  Fecha entrada desde
+                </label>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => cambiarAgencia("")}
-                className={`rounded-lg px-4 py-2 text-sm font-bold transition ${!agencia
-                  ? "bg-[#131E5C] text-white"
-                  : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"
-                  }`}
-              >
-                Todas
-              </button>
-
-              {opciones.agencias.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => cambiarAgencia(item)}
-                  className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold transition ${agencia === item
-                    ? "bg-[#131E5C] text-white"
-                    : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
-                    }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 border-t border-[#E6EAF1] pt-4">
-            <div className="relative">
-              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">
-                Buscar
-              </label>
-
-              <Search className="pointer-events-none absolute left-3 top-[37px] h-4 w-4 text-[#8891AD]" />
-
-              <input
-                type="text"
-                value={qBuscado}
-                onChange={(e) => {
-                  setQBuscado(e.target.value);
-                  setPagina(1);
-                }}
-                placeholder="Nota, pedido, proveedor, agencia..."
-                className="h-11 w-full rounded-xl border border-[#C8D0DF] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10"
-              />
-
-              {qBuscado && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQBuscado("");
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  max={fechaHasta || undefined}
+                  onChange={(e) => {
+                    setFechaDesde(e.target.value);
                     setPagina(1);
                   }}
-                  className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
+                  className="h-11 w-full rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-semibold text-[#07184C] outline-none transition focus:border-[#1555C7]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-[#131E5C]/60">
+                  <CalendarDays className="h-4 w-4" />
+                  Fecha entrada hasta
+                </label>
+
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  min={fechaDesde || undefined}
+                  onChange={(e) => {
+                    setFechaHasta(e.target.value);
+                    setPagina(1);
+                  }}
+                  className="h-11 w-full rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 font-semibold text-[#07184C] outline-none transition focus:border-[#1555C7]"
+                />
+              </div>
             </div>
-          </div>
-        </section>
 
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-            {error}
-          </div>
-        )}
+            <div className="mt-5 border-t border-[#E6EAF1] pt-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Store className="h-4 w-4 text-[#131E5C]" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#131E5C]/60">
+                  Agencia
+                </span>
+              </div>
 
-        <AnalisisCompras
-          datos={datos}
-          analisis={analisisPagina}
-          agencia={agencia}
-          totalRegistros={totalRegistros}
-          pagina={pagina}
-          pageSize={pageSize}
-          visible={mostrarAnalisis}
-          onToggle={() => setMostrarAnalisis((prev) => !prev)}
-          onAgenciaClick={cambiarAgencia}
-          onProveedorClick={(proveedor) => {
-            setQBuscado(proveedor);
-            setPagina(1);
-          }}
-        />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => cambiarAgencia("")}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${!agencia
+                    ? "bg-[#131E5C] text-white"
+                    : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"
+                    }`}
+                >
+                  Todas
+                </button>
 
+                {opciones.agencias.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => cambiarAgencia(item)}
+                    className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold transition ${agencia === item
+                      ? "bg-[#131E5C] text-white"
+                      : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                      }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 border-t border-[#E6EAF1] pt-4">
+              <div className="relative">
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">
+                  Buscar
+                </label>
+
+                <Search className="pointer-events-none absolute left-3 top-[37px] h-4 w-4 text-[#8891AD]" />
+
+                <input
+                  type="text"
+                  value={qBuscado}
+                  onChange={(e) => {
+                    setQBuscado(e.target.value);
+                    setPagina(1);
+                  }}
+                  placeholder="Nota, pedido, proveedor, agencia..."
+                  className="h-11 w-full rounded-xl border border-[#C8D0DF] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10"
+                />
+
+                {qBuscado && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQBuscado("");
+                      setPagina(1);
+                    }}
+                    className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          )}
+
+          <AnalisisCompras
+            datos={datos}
+            analisis={analisisPagina}
+            agencia={agencia}
+            totalRegistros={totalRegistros}
+            pagina={pagina}
+            pageSize={pageSize}
+            visible={mostrarAnalisis}
+            onToggle={() => setMostrarAnalisis((prev) => !prev)}
+            onAgenciaClick={cambiarAgencia}
+            onProveedorClick={(proveedor) => {
+              setQBuscado(proveedor);
+              setPagina(1);
+            }}
+          />
+        </div>
         <TablaFacturasExpandible
           rows={datos}
           loading={loading}
