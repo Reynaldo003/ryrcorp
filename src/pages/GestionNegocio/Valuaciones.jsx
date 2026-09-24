@@ -6,6 +6,7 @@ import {
     Check,
     ChevronDown,
     FileDown,
+    FileSpreadsheet,
     UserCheck,
     ChevronRight,
     CalendarDays,
@@ -26,6 +27,9 @@ import {
 } from "lucide-react";
 
 import { Pie } from "@ant-design/plots";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 import { apiAvaluos } from "../../lib/apiAvaluos";
 
 // RECURSOS VISUALES E IMÁGENES DEDICADAS A VALUACIONES / AVALÚOS
@@ -223,6 +227,136 @@ export default function Valuaciones({ rows: initialRows }) {
         document.body.removeChild(link);
     };
 
+    const fileStamp = () => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+    };
+
+    const filasValuacionesExport = () =>
+        (avaluosFiltrados || []).map((row) => ({
+            "Fecha / Hora Cita": row.fecha_hora_cita ? new Date(row.fecha_hora_cita).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—",
+            "Agencia": row.agencia || "—",
+            "Prospecto": formatearNombreCorto(row?.nombre),
+            "Teléfono": row.telefono || "—",
+            "Tipo Venta": row.tipo_venta || "—",
+            "Asesor de Ventas": row.asesor_ventas || "—",
+            "Etapa de Proceso": row.etapa_proceso || "—",
+            "Tipo de Toma": row.tipo_toma || "—",
+            "Marca / Auto": row.modelo_interes || "—",
+            "Oferta Económica": row.oferta_economica ? `$${Number(row.oferta_economica).toLocaleString()}` : "—",
+            "Valuación en Sí": row.valuacion_monto ? `$${Number(row.valuacion_monto).toLocaleString()}` : "—",
+            "Comentarios": row.comentarios || "—",
+        }));
+
+    const nombreBaseArchivo = () =>
+        `Reporte_Valuaciones_${agenciaSel || "Todas"}_${tipoVentaSel}_${añoSel}_${fileStamp()}`;
+
+    const exportarExcelValuaciones = () => {
+        if (!avaluosFiltrados || avaluosFiltrados.length === 0) {
+            alert("No hay registros para exportar con los filtros actuales.");
+            return;
+        }
+
+        try {
+            const registros = filasValuacionesExport();
+            const ws = XLSX.utils.json_to_sheet(registros);
+            ws["!cols"] = Object.keys(registros[0] || {}).map((k) => ({
+                wch: Math.min(45, Math.max(12, k.length + 6)),
+            }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Valuaciones");
+            XLSX.writeFile(wb, `${nombreBaseArchivo()}.xlsx`, { compression: true });
+        } catch (error) {
+            console.error("Error exportando valuaciones a Excel:", error);
+            alert("No se pudo generar el Excel. Revisa la consola.");
+        }
+    };
+
+    const exportarPdfValuaciones = () => {
+        if (!avaluosFiltrados || avaluosFiltrados.length === 0) {
+            alert("No hay registros para exportar con los filtros actuales.");
+            return;
+        }
+
+        try {
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "mm",
+                format: "a4",
+                compress: true,
+            });
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.setTextColor(19, 30, 92);
+            doc.text("Reporte de Valuaciones - Autos Usados", 10, 12);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(107, 114, 128);
+            doc.text(`${añoSel} · ${mesSel !== null ? MESES[mesSel] : "Todo el año"} · ${agenciaSel || "Todas las agencias"} · ${tipoVentaSel}`, 10, 16);
+
+            const headers = [
+                "Fecha / Hora Cita", "Agencia", "Prospecto", "Teléfono",
+                "Tipo Venta", "Asesor de Ventas", "Etapa de Proceso", "Tipo de Toma",
+                "Marca / Auto", "Oferta Económica", "Valuación en Sí", "Comentarios"
+            ];
+
+            const body = avaluosFiltrados.map((row) => [
+                row.fecha_hora_cita ? new Date(row.fecha_hora_cita).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—",
+                row.agencia || "—",
+                formatearNombreCorto(row?.nombre),
+                row.telefono || "—",
+                row.tipo_venta || "—",
+                row.asesor_ventas || "—",
+                row.etapa_proceso || "—",
+                row.tipo_toma || "—",
+                row.modelo_interes || "—",
+                row.oferta_economica ? `$${Number(row.oferta_economica).toLocaleString()}` : "—",
+                row.valuacion_monto ? `$${Number(row.valuacion_monto).toLocaleString()}` : "—",
+                String(row.comentarios || "—")
+            ]);
+
+            autoTable(doc, {
+                startY: 18,
+                head: [headers],
+                body,
+                theme: "grid",
+                styles: {
+                    font: "helvetica",
+                    fontSize: 6,
+                    cellPadding: 1.2,
+                    overflow: "linebreak",
+                    valign: "middle",
+                    textColor: [55, 65, 81],
+                    lineColor: [229, 231, 235],
+                    lineWidth: 0.15,
+                },
+                headStyles: {
+                    fillColor: [19, 30, 92],
+                    textColor: [255, 255, 255],
+                    fontStyle: "bold",
+                    halign: "center",
+                },
+                alternateRowStyles: { fillColor: [249, 250, 251] },
+                margin: { left: 8, right: 8, bottom: 10 },
+                didDrawPage: () => {
+                    const ancho = doc.internal.pageSize.getWidth();
+                    const alto = doc.internal.pageSize.getHeight();
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(7);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+                },
+            });
+
+            doc.save(`${nombreBaseArchivo()}.pdf`);
+        } catch (error) {
+            console.error("Error exportando valuaciones a PDF:", error);
+            alert("No se pudo generar el PDF. Revisa la consola.");
+        }
+    };
+
     // CÁLCULO DE MÉTRICAS
     const métricas = useMemo(() => {
         let totalAvaluos = avaluosFiltrados.length;
@@ -332,34 +466,57 @@ export default function Valuaciones({ rows: initialRows }) {
 
             {/* FILTROS DE AGENCIA */}
             <div className="w-full py-0.5">
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                        type="button"
-                        onClick={() => setAgenciaSel(null)}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
-                            ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                            : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
-                            }`}
-                    >
-                        <span>Todas las agencias</span>
-                    </button>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => setAgenciaSel(null)}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
+                                ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                                : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                                }`}
+                        >
+                            <span>Todas las agencias</span>
+                        </button>
 
-                    {AGENCIAS.map((agencia) => {
-                        const active = agenciaSel === agencia;
-                        return (
-                            <button
-                                key={agencia}
-                                type="button"
-                                onClick={() => setAgenciaSel(active ? null : agencia)}
-                                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${active
-                                    ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                                    : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
-                                    }`}
-                            >
-                                <span>{agencia}</span>
-                            </button>
-                        );
-                    })}
+                        {AGENCIAS.map((agencia) => {
+                            const active = agenciaSel === agencia;
+                            return (
+                                <button
+                                    key={agencia}
+                                    type="button"
+                                    onClick={() => setAgenciaSel(active ? null : agencia)}
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${active
+                                        ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                                        : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                                        }`}
+                                >
+                                    <span>{agencia}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* BOTONES EXPORTAR EXCEL / PDF */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={exportarExcelValuaciones}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#16A34A] bg-[#16A34A] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#16A34A]"
+                        >
+                            <FileSpreadsheet className="h-4 w-4" />
+                            <span>Exportar Excel</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={exportarPdfValuaciones}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#DC2626] bg-[#DC2626] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#DC2626]"
+                        >
+                            <FileText className="h-4 w-4" />
+                            <span>Exportar PDF</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 

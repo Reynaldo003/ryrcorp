@@ -1,6 +1,10 @@
 // src/pages/Inventario/InventarioIndex.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FileSpreadsheet, FileText } from "lucide-react";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 import { apiInventario } from "../../lib/apiInventario";
 import { useECharts } from "./useECharts";
 import "./inventario.css";
@@ -2766,9 +2770,170 @@ export default function InventarioIndex() {
             };
         }, [antiguedad]);
 
+    const fileStamp = () => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+    };
+
+    const condLabelExport = (condicion) =>
+    ({
+        N: "Nuevo",
+        U: "Usado",
+    }[(condicion || "").trim()] ??
+        condicion ??
+        "—");
+
+    const nombreBaseInventario = () =>
+        `Inventario_Usados_${agenciaActual?.nombre || "Todas"}_${estatusSeleccionado || "Todos"}_${condicionInventario === "N" ? "Nuevos" : condicionInventario === "U" ? "Usados" : "Todos"}_${fileStamp()}`;
+
+    const filasVehiculosExport = () =>
+        (vehiculosCalculados || []).map((vehiculo) => ({
+            VIN: vehiculo.NrChassi || "—",
+            Familia: vehiculo.NmFamilia || "—",
+            Modelo: vehiculo.EdiModelo || "—",
+            Agencia: vehiculo.agenciaNombre || "—",
+            Condición: condLabelExport(vehiculo.CondUso),
+            Estatus: vehiculo.estatusNombre || "—",
+            "F. Factura": vehiculo.DtFaturamento || "—",
+            "Antigüedad (días)": vehiculo.diasEnStock ?? "—",
+            "Fuera de gracia (días)": vehiculo.diasFueraGracia ?? "—",
+            "Valor Compra": vehiculo.VrNF_Compra != null ? formatMoneda(vehiculo.VrNF_Compra) : "—",
+            "Costo Financiero Diario": vehiculo.costoFinancieroDiario != null ? formatMoneda(vehiculo.costoFinancieroDiario) : "—",
+            "Costo Financiero Total": vehiculo.costoFinancieroTotal != null ? formatMoneda(vehiculo.costoFinancieroTotal) : "—",
+            Situación: vehiculo.SitVeiculo || "—",
+        }));
+
+    const exportarExcelInventario = () => {
+        if (!vehiculosCalculados || vehiculosCalculados.length === 0) {
+            alert("No hay vehículos para exportar con los filtros actuales.");
+            return;
+        }
+
+        try {
+            const registros = filasVehiculosExport();
+            const ws = XLSX.utils.json_to_sheet(registros);
+            ws["!cols"] = Object.keys(registros[0] || {}).map((k) => ({
+                wch: Math.min(45, Math.max(12, k.length + 6)),
+            }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Inventario Usados");
+            XLSX.writeFile(wb, `${nombreBaseInventario()}.xlsx`, { compression: true });
+        } catch (error) {
+            console.error("Error exportando inventario a Excel:", error);
+            alert("No se pudo generar el Excel. Revisa la consola.");
+        }
+    };
+
+    const exportarPdfInventario = () => {
+        if (!vehiculosCalculados || vehiculosCalculados.length === 0) {
+            alert("No hay vehículos para exportar con los filtros actuales.");
+            return;
+        }
+
+        try {
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "mm",
+                format: "a4",
+                compress: true,
+            });
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.setTextColor(19, 30, 92);
+            doc.text("Reporte de Inventario - Autos Usados", 10, 12);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(107, 114, 128);
+            doc.text(`${agenciaActual?.nombre || "Todas las agencias"} · ${estatusSeleccionado || "Todos los estatus"} · ${condicionInventario === "N" ? "Nuevos" : condicionInventario === "U" ? "Usados" : "Nuevos y Usados"}`, 10, 16);
+
+            const headers = [
+                "VIN", "Familia", "Modelo", "Agencia", "Condición", "Estatus",
+                "F. Factura", "Antigüedad", "Fuera gracia", "Valor Compra",
+                "Costo diario", "Costo financiero", "Situación"
+            ];
+
+            const body = (vehiculosCalculados || []).map((vehiculo) => [
+                vehiculo.NrChassi || "—",
+                vehiculo.NmFamilia || "—",
+                vehiculo.EdiModelo || "—",
+                vehiculo.agenciaNombre || "—",
+                condLabelExport(vehiculo.CondUso),
+                vehiculo.estatusNombre || "—",
+                vehiculo.DtFaturamento || "—",
+                vehiculo.diasEnStock ?? "—",
+                vehiculo.diasFueraGracia ?? "—",
+                vehiculo.VrNF_Compra != null ? formatMoneda(vehiculo.VrNF_Compra) : "—",
+                vehiculo.costoFinancieroDiario != null ? formatMoneda(vehiculo.costoFinancieroDiario) : "—",
+                vehiculo.costoFinancieroTotal != null ? formatMoneda(vehiculo.costoFinancieroTotal) : "—",
+                vehiculo.SitVeiculo || "—",
+            ]);
+
+            autoTable(doc, {
+                startY: 18,
+                head: [headers],
+                body,
+                theme: "grid",
+                styles: {
+                    font: "helvetica",
+                    fontSize: 6,
+                    cellPadding: 1.2,
+                    overflow: "linebreak",
+                    valign: "middle",
+                    textColor: [55, 65, 81],
+                    lineColor: [229, 231, 235],
+                    lineWidth: 0.15,
+                },
+                headStyles: {
+                    fillColor: [19, 30, 92],
+                    textColor: [255, 255, 255],
+                    fontStyle: "bold",
+                    halign: "center",
+                },
+                alternateRowStyles: { fillColor: [249, 250, 251] },
+                margin: { left: 8, right: 8, bottom: 10 },
+                didDrawPage: () => {
+                    const ancho = doc.internal.pageSize.getWidth();
+                    const alto = doc.internal.pageSize.getHeight();
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(7);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+                },
+            });
+
+            doc.save(`${nombreBaseInventario()}.pdf`);
+        } catch (error) {
+            console.error("Error exportando inventario a PDF:", error);
+            alert("No se pudo generar el PDF. Revisa la consola.");
+        }
+    };
+
     return (
         <div className="inventario-page min-h-screen text-[14px] text-[#1A2344]">
             <main className="space-y-6 px-2 py-4 lg:px-4">
+                {/* BOTONES EXPORTAR EXCEL / PDF */}
+                <div className="flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={exportarExcelInventario}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#16A34A] bg-[#16A34A] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#16A34A]"
+                    >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Exportar Excel
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={exportarPdfInventario}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#DC2626] bg-[#DC2626] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#DC2626]"
+                    >
+                        <FileText className="h-4 w-4" />
+                        Exportar PDF
+                    </button>
+                </div>
+
                 {/* Filtros generales */}
                 <Seccion titulo='Inventario'>
                     <FiltrosInventario
