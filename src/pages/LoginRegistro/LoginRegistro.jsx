@@ -1,13 +1,10 @@
 //src/pages/LoginRegistro/LoginRegistro.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Eye,
     EyeOff,
     User,
     Lock,
-    Mail,
-    Building2,
-    ShieldCheck,
     ArrowRight,
 } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
@@ -27,16 +24,6 @@ const BRAND_LIGHT = "#DDE8FF";
 const BRAND_SILVER = "#E8EDF5";
 
 const API = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-
-const DEALERS = [
-    "VW Cordoba",
-    "VW Orizaba",
-    "VW Poza Rica",
-    "VW Tuxtepec",
-    "VW Tuxpan",
-    "Chirey",
-    "JAECOO R&R",
-];
 
 function preloadImages(images = []) {
     images.forEach((src) => {
@@ -114,9 +101,7 @@ function TextInput({
 }
 
 export default function LoginRegistro() {
-    const [tab, setTab] = useState("login");
     const [showLoginPassword, setShowLoginPassword] = useState(false);
-    const [showRegisterPassword, setShowRegisterPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     const navigate = useNavigate();
@@ -129,46 +114,18 @@ export default function LoginRegistro() {
         contrasena: "",
     });
 
-    const [formRegistro, setFormRegistro] = useState({
-        nombre: "",
-        apellidos: "",
-        usuario: "",
-        correo: "",
-        agencia: "",
-        contrasena: "",
-        contrasenaConfirmada: "",
-    });
-
     useEffect(() => {
         preloadImages([fondo3, fondo4]);
     }, []);
 
-    const panelData = useMemo(() => {
-        if (tab === "login") {
-            return {
-                imagen: fondo4,
-                eyebrow: "Acceso corporativo",
-                title: "Conecta con tu operación comercial.",
-                description:
-                    "Accede al CRM con una experiencia alineada al estándar automotriz del grupo.",
-                bullets: [
-                    "Seguimiento centralizado de prospectos y clientes"
-                ],
-            };
-        }
-
-        return {
-            imagen: fondo3,
-            eyebrow: "Nuevo acceso",
-            title: "Activa tu cuenta y entra al ecosistema comercial.",
-            description:
-                "Registra tu perfil para comenzar a operar dentro del CRM.",
-            bullets: [
-                "Registro sencillo",
-                "Asignación por agencia",
-            ],
-        };
-    }, [tab]);
+    const panelData = {
+        imagen: fondo4,
+        eyebrow: "Acceso corporativo",
+        title: "Conecta con tu operación comercial.",
+        description:
+            "Accede al CRM con una experiencia alineada al estándar automotriz del grupo.",
+        bullets: ["Seguimiento centralizado de prospectos y clientes"],
+    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -263,59 +220,6 @@ export default function LoginRegistro() {
         }
     };
 
-    const handleRegistro = async (e) => {
-        e.preventDefault();
-
-        if (formRegistro.contrasena !== formRegistro.contrasenaConfirmada) {
-            alert("Las contraseñas no coinciden.");
-            return;
-        }
-
-        if (!formRegistro.agencia) {
-            alert("Selecciona una agencia.");
-            return;
-        }
-
-        setIsLoading(true);
-
-        try {
-            const payload = {
-                nombre: formRegistro.nombre,
-                apellidos: formRegistro.apellidos,
-                usuario: formRegistro.usuario,
-                correo: formRegistro.correo,
-                contrasena: formRegistro.contrasena,
-                agencia: formRegistro.agencia,
-            };
-
-            const res = await fetch(`${API}/conformidad/api/auth/register/`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
-            const data = await res.json().catch(() => ({}));
-
-            if (res.status === 201) {
-                alert("Registro exitoso, ahora puedes iniciar sesión.");
-                setTab("login");
-                setFormLogin({ usuario: payload.usuario, contrasena: "" });
-                setFormRegistro((prev) => ({
-                    ...prev,
-                    contrasena: "",
-                    contrasenaConfirmada: "",
-                }));
-            } else {
-                alert(data?.detail || JSON.stringify(data));
-            }
-        } catch (error) {
-            console.error(error);
-            alert("No se pudo completar el registro.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const transition = {
         duration: 0.45,
         ease: [0.22, 1, 0.36, 1],
@@ -401,7 +305,7 @@ export default function LoginRegistro() {
                                     </motion.div>
 
                                     <motion.div
-                                        key={tab + "-hero"}
+                                        key="hero"
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.12, ...transition }}
@@ -482,257 +386,76 @@ export default function LoginRegistro() {
                                         <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-100/90 p-1.5 shadow-inner">
                                             <button
                                                 type="button"
-                                                onClick={() => setTab("login")}
-                                                className={`relative rounded-xl px-5 py-2.5 text-sm font-extrabold transition ${tab === "login"
-                                                    ? "bg-white text-[#0B1F5E] shadow-sm"
-                                                    : "text-slate-500 hover:text-[#0B1F5E]"
-                                                    }`}
+                                                className="relative rounded-xl bg-white px-5 py-2.5 text-sm font-extrabold text-[#0B1F5E] shadow-sm"
                                             >
                                                 Iniciar sesión
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setTab("registro")}
-                                                className={`relative rounded-xl px-5 py-2.5 text-sm font-extrabold transition ${tab === "registro"
-                                                    ? "bg-white text-[#0B1F5E] shadow-sm"
-                                                    : "text-slate-500 hover:text-[#0B1F5E]"
-                                                    }`}
-                                            >
-                                                Crear cuenta
                                             </button>
                                         </div>
                                     </div>
 
                                     <AnimatePresence mode="wait">
-                                        {tab === "login" ? (
-                                            <motion.form
-                                                key="login-form"
-                                                initial={{ opacity: 0, y: 18 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -14 }}
-                                                transition={transition}
-                                                onSubmit={handleLogin}
-                                                className="mx-auto w-full max-w-md"
-                                            >
-                                                <div className="mb-6 text-center">
-                                                    <div className="text-xs font-extrabold uppercase tracking-[0.24em] text-[#153A8A]">
-                                                        Bienvenido
-                                                    </div>
-                                                    <h2 className="mt-2 text-3xl font-black text-[#0B1F5E]">
-                                                        Inicia sesión
-                                                    </h2>
+                                        <motion.form
+                                            key="login-form"
+                                            initial={{ opacity: 0, y: 18 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -14 }}
+                                            transition={transition}
+                                            onSubmit={handleLogin}
+                                            className="mx-auto w-full max-w-md"
+                                        >
+                                            <div className="mb-6 text-center">
+                                                <div className="text-xs font-extrabold uppercase tracking-[0.24em] text-[#153A8A]">
+                                                    Bienvenido
                                                 </div>
+                                                <h2 className="mt-2 text-3xl font-black text-[#0B1F5E]">
+                                                    Inicia sesión
+                                                </h2>
+                                            </div>
 
-                                                <div className="space-y-4">
-                                                    <Field label="Usuario" icon={User}>
-                                                        <TextInput
-                                                            value={formLogin.usuario}
-                                                            onChange={(e) =>
-                                                                setFormLogin((prev) => ({
-                                                                    ...prev,
-                                                                    usuario: e.target.value,
-                                                                }))
-                                                            }
-                                                            placeholder="Ingresa tu usuario"
-                                                            required
-                                                            autoComplete="username"
-                                                        />
-                                                    </Field>
+                                            <div className="space-y-4">
+                                                <Field label="Usuario" icon={User}>
+                                                    <TextInput
+                                                        value={formLogin.usuario}
+                                                        onChange={(e) =>
+                                                            setFormLogin((prev) => ({
+                                                                ...prev,
+                                                                usuario: e.target.value,
+                                                            }))
+                                                        }
+                                                        placeholder="Ingresa tu usuario"
+                                                        required
+                                                        autoComplete="username"
+                                                    />
+                                                </Field>
 
-                                                    <Field label="Contraseña" icon={Lock}>
-                                                        <PasswordInput
-                                                            value={formLogin.contrasena}
-                                                            onChange={(e) =>
-                                                                setFormLogin((prev) => ({
-                                                                    ...prev,
-                                                                    contrasena: e.target.value,
-                                                                }))
-                                                            }
-                                                            show={showLoginPassword}
-                                                            onToggle={() =>
-                                                                setShowLoginPassword((prev) => !prev)
-                                                            }
-                                                            required
-                                                        />
-                                                    </Field>
+                                                <Field label="Contraseña" icon={Lock}>
+                                                    <PasswordInput
+                                                        value={formLogin.contrasena}
+                                                        onChange={(e) =>
+                                                            setFormLogin((prev) => ({
+                                                                ...prev,
+                                                                contrasena: e.target.value,
+                                                            }))
+                                                        }
+                                                        show={showLoginPassword}
+                                                        onToggle={() =>
+                                                            setShowLoginPassword((prev) => !prev)
+                                                        }
+                                                        required
+                                                    />
+                                                </Field>
 
-                                                    <motion.button
-                                                        whileHover={{ y: -1, scale: 1.01 }}
-                                                        whileTap={{ scale: 0.99 }}
-                                                        type="submit"
-                                                        className="group mt-2 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#0B1F5E,#153A8A)] px-5 text-sm font-extrabold text-white shadow-[0_18px_35px_rgba(11,31,94,0.28)] transition hover:shadow-[0_24px_45px_rgba(11,31,94,0.34)]"
-                                                    >
-                                                        Entrar al CRM
-                                                        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-                                                    </motion.button>
-                                                </div>
-                                            </motion.form>
-                                        ) : (
-                                            <motion.form
-                                                key="registro-form"
-                                                initial={{ opacity: 0, y: 18 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -14 }}
-                                                transition={transition}
-                                                onSubmit={handleRegistro}
-                                                className="mx-auto w-full max-w-xl"
-                                            >
-                                                <div className="mb-6 text-center">
-                                                    <div className="text-xs font-extrabold uppercase tracking-[0.24em] text-[#153A8A]">
-                                                        Alta de usuario
-                                                    </div>
-                                                    <h2 className="mt-2 text-3xl font-black text-[#0B1F5E]">
-                                                        Crea tu cuenta
-                                                    </h2>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                                    <Field label="Nombre(s)" icon={User}>
-                                                        <TextInput
-                                                            value={formRegistro.nombre}
-                                                            onChange={(e) =>
-                                                                setFormRegistro((prev) => ({
-                                                                    ...prev,
-                                                                    nombre: e.target.value,
-                                                                }))
-                                                            }
-                                                            placeholder="Nombre(s)"
-                                                            required
-                                                            autoComplete="given-name"
-                                                        />
-                                                    </Field>
-
-                                                    <Field label="Apellidos" icon={User}>
-                                                        <TextInput
-                                                            value={formRegistro.apellidos}
-                                                            onChange={(e) =>
-                                                                setFormRegistro((prev) => ({
-                                                                    ...prev,
-                                                                    apellidos: e.target.value,
-                                                                }))
-                                                            }
-                                                            placeholder="Apellidos"
-                                                            required
-                                                            autoComplete="family-name"
-                                                        />
-                                                    </Field>
-                                                </div>
-
-                                                <div className="mt-4 space-y-4">
-                                                    <Field label="Nombre de usuario" icon={User}>
-                                                        <TextInput
-                                                            value={formRegistro.usuario}
-                                                            onChange={(e) =>
-                                                                setFormRegistro((prev) => ({
-                                                                    ...prev,
-                                                                    usuario: e.target.value,
-                                                                }))
-                                                            }
-                                                            placeholder="Usuario"
-                                                            required
-                                                            autoComplete="username"
-                                                        />
-                                                    </Field>
-
-                                                    <Field label="Correo electrónico" icon={Mail}>
-                                                        <TextInput
-                                                            type="email"
-                                                            value={formRegistro.correo}
-                                                            onChange={(e) =>
-                                                                setFormRegistro((prev) => ({
-                                                                    ...prev,
-                                                                    correo: e.target.value,
-                                                                }))
-                                                            }
-                                                            placeholder="correo@empresa.com"
-                                                            required
-                                                            autoComplete="email"
-                                                        />
-                                                    </Field>
-
-                                                    <Field
-                                                        label="Agencia"
-                                                        icon={Building2}
-                                                        hint="Obligatorio"
-                                                    >
-                                                        <select
-                                                            value={formRegistro.agencia}
-                                                            onChange={(e) =>
-                                                                setFormRegistro((prev) => ({
-                                                                    ...prev,
-                                                                    agencia: e.target.value,
-                                                                }))
-                                                            }
-                                                            className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 text-sm font-medium text-slate-800 outline-none transition focus:border-[#153A8A]/40 focus:bg-white focus:ring-4 focus:ring-[#153A8A]/10"
-                                                            required
-                                                        >
-                                                            <option value="" disabled>
-                                                                Selecciona una agencia...
-                                                            </option>
-                                                            {DEALERS.map((dealer) => (
-                                                                <option key={dealer} value={dealer}>
-                                                                    {dealer}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </Field>
-
-                                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                                        <Field label="Contraseña" icon={Lock}>
-                                                            <PasswordInput
-                                                                value={formRegistro.contrasena}
-                                                                onChange={(e) =>
-                                                                    setFormRegistro((prev) => ({
-                                                                        ...prev,
-                                                                        contrasena:
-                                                                            e.target.value,
-                                                                    }))
-                                                                }
-                                                                show={showRegisterPassword}
-                                                                onToggle={() =>
-                                                                    setShowRegisterPassword(
-                                                                        (prev) => !prev
-                                                                    )
-                                                                }
-                                                                required
-                                                            />
-                                                        </Field>
-
-                                                        <Field label="Confirmar contraseña" icon={Lock}>
-                                                            <PasswordInput
-                                                                value={
-                                                                    formRegistro.contrasenaConfirmada
-                                                                }
-                                                                onChange={(e) =>
-                                                                    setFormRegistro((prev) => ({
-                                                                        ...prev,
-                                                                        contrasenaConfirmada:
-                                                                            e.target.value,
-                                                                    }))
-                                                                }
-                                                                show={showRegisterPassword}
-                                                                onToggle={() =>
-                                                                    setShowRegisterPassword(
-                                                                        (prev) => !prev
-                                                                    )
-                                                                }
-                                                                required
-                                                            />
-                                                        </Field>
-                                                    </div>
-
-                                                    <motion.button
-                                                        whileHover={{ y: -1, scale: 1.01 }}
-                                                        whileTap={{ scale: 0.99 }}
-                                                        type="submit"
-                                                        className="group flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#0B1F5E,#153A8A)] px-5 text-sm font-extrabold text-white shadow-[0_18px_35px_rgba(11,31,94,0.28)] transition hover:shadow-[0_24px_45px_rgba(11,31,94,0.34)]"
-                                                    >
-                                                        Crear cuenta
-                                                        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-                                                    </motion.button>
-                                                </div>
-                                            </motion.form>
-                                        )}
+                                                <motion.button
+                                                    whileHover={{ y: -1, scale: 1.01 }}
+                                                    whileTap={{ scale: 0.99 }}
+                                                    type="submit"
+                                                    className="group mt-2 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#0B1F5E,#153A8A)] px-5 text-sm font-extrabold text-white shadow-[0_18px_35px_rgba(11,31,94,0.28)] transition hover:shadow-[0_24px_45px_rgba(11,31,94,0.34)]"
+                                                >
+                                                    Entrar al CRM
+                                                    <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+                                                </motion.button>
+                                            </div>
+                                        </motion.form>
                                     </AnimatePresence>
                                 </motion.div>
                             </div>

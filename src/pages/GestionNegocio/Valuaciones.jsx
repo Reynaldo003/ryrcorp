@@ -249,6 +249,110 @@ export default function Valuaciones({ rows: initialRows }) {
         });
     }, [avaluosData, añoSel, mesSel, agenciaSel, tipoVentaSel]);
 
+    // CÁLCULO DE MÉTRICAS
+    const métricas = useMemo(() => {
+        let totalAvaluos = avaluosFiltrados.length;
+        let conteoCerrados = 0;
+
+        const asesoresMap = {};
+        const etapasMap = {};
+        const tiposTomaMap = {};
+        const marcasMap = {};
+
+        let itemsComportamiento = [];
+        const mapFechaIndex = {};
+
+        if (mesSel !== null) {
+            const diasEnMes = new Date(añoSel, mesSel + 1, 0).getDate();
+            for (let i = 1; i <= diasEnMes; i++) {
+                itemsComportamiento.push({
+                    idKey: `dia_${i}`,
+                    etiqueta: `${i}`,
+                    subetiqueta: MESES[mesSel].substring(0, 3),
+                    total: 0
+                });
+                mapFechaIndex[`${mesSel}-${i}`] = i - 1;
+            }
+        } else {
+            let idx = 0;
+            for (let m = 0; m < 12; m++) {
+                const diasEnMes = new Date(añoSel, m + 1, 0).getDate();
+                for (let d = 1; d <= diasEnMes; d++) {
+                    itemsComportamiento.push({
+                        idKey: `dia_${m}_${d}`,
+                        etiqueta: `${d}`,
+                        subetiqueta: MESES[m].substring(0, 3),
+                        total: 0
+                    });
+                    mapFechaIndex[`${m}-${d}`] = idx++;
+                }
+            }
+        }
+
+        avaluosFiltrados.forEach((c) => {
+            const dt = new Date(c.fecha_hora_cita);
+            const diaNum = dt.getDate();
+            const mesNum = dt.getMonth();
+
+            const etapa = c.etapa_proceso || "En Proceso";
+            if (/cerrad|concluid|aceptad|finaliz/i.test(etapa)) {
+                conteoCerrados += 1;
+            }
+
+            const keyBusqueda = `${mesNum}-${diaNum}`;
+            const itemIdx = mapFechaIndex[keyBusqueda];
+            if (itemIdx !== undefined && itemsComportamiento[itemIdx]) {
+                itemsComportamiento[itemIdx].total += 1;
+            }
+
+            // Conteo exclusivo por Asesor
+            const asesorNombre = c.asesor_ventas || "Sin asignar";
+            if (!asesoresMap[asesorNombre]) asesoresMap[asesorNombre] = { total: 0 };
+            asesoresMap[asesorNombre].total += 1;
+
+            // Etapa Proceso
+            etapasMap[etapa] = (etapasMap[etapa] || 0) + 1;
+
+            // Tipo Toma
+            const tToma = c.tipo_toma || "Toma a Cuenta";
+            tiposTomaMap[tToma] = (tiposTomaMap[tToma] || 0) + 1;
+
+            // Marcas
+            const mMarca = c.marca || "Volkswagen";
+            marcasMap[mMarca] = (marcasMap[mMarca] || 0) + 1;
+        });
+
+        const diasPeriodo = itemsComportamiento.length || 1;
+        const promedioDiario = (totalAvaluos / diasPeriodo).toFixed(1);
+
+        const asesoresList = Object.entries(asesoresMap)
+            .map(([nombre, counts]) => ({ nombre, total: counts.total }))
+            .sort((a, b) => b.total - a.total);
+
+        const arrayToSortedChartData = (mapObj) =>
+            Object.entries(mapObj)
+                .map(([type, value]) => ({ type, value }))
+                .sort((a, b) => b.value - a.value);
+
+        return {
+            totalAvaluos, conteoCerrados, promedioDiario,
+            asesoresList, maxAvaluosAsesor: Math.max(...asesoresList.map(a => a.total), 1),
+            itemsComportamiento, maxComportamientoTotal: Math.max(...itemsComportamiento.map(d => d.total), 1),
+            nombreMesEvaluado: mesSel !== null ? MESES[mesSel] : "Todo el año",
+            dataEtapas: arrayToSortedChartData(etapasMap),
+            dataTiposToma: arrayToSortedChartData(tiposTomaMap),
+            dataMarcas: arrayToSortedChartData(marcasMap)
+        };
+    }, [avaluosFiltrados, mesSel, añoSel]);
+
+    const avaluosDelAsesorExpandido = useMemo(() => {
+        if (!asesorExpandido) return [];
+        return avaluosFiltrados.filter((c) => {
+            const nombreAsesor = c.asesor_ventas || "Sin asignar";
+            return nombreAsesor.toLowerCase() === asesorExpandido.toLowerCase();
+        });
+    }, [avaluosFiltrados, asesorExpandido]);
+
     const exportarAExcel = () => {
         if (!avaluosFiltrados || avaluosFiltrados.length === 0) return;
 
@@ -561,110 +665,6 @@ export default function Valuaciones({ rows: initialRows }) {
             alert("No se pudo generar el PDF. Revisa la consola.");
         }
     };
-
-    // CÁLCULO DE MÉTRICAS
-    const métricas = useMemo(() => {
-        let totalAvaluos = avaluosFiltrados.length;
-        let conteoCerrados = 0;
-
-        const asesoresMap = {};
-        const etapasMap = {};
-        const tiposTomaMap = {};
-        const marcasMap = {};
-
-        let itemsComportamiento = [];
-        const mapFechaIndex = {};
-
-        if (mesSel !== null) {
-            const diasEnMes = new Date(añoSel, mesSel + 1, 0).getDate();
-            for (let i = 1; i <= diasEnMes; i++) {
-                itemsComportamiento.push({
-                    idKey: `dia_${i}`,
-                    etiqueta: `${i}`,
-                    subetiqueta: MESES[mesSel].substring(0, 3),
-                    total: 0
-                });
-                mapFechaIndex[`${mesSel}-${i}`] = i - 1;
-            }
-        } else {
-            let idx = 0;
-            for (let m = 0; m < 12; m++) {
-                const diasEnMes = new Date(añoSel, m + 1, 0).getDate();
-                for (let d = 1; d <= diasEnMes; d++) {
-                    itemsComportamiento.push({
-                        idKey: `dia_${m}_${d}`,
-                        etiqueta: `${d}`,
-                        subetiqueta: MESES[m].substring(0, 3),
-                        total: 0
-                    });
-                    mapFechaIndex[`${m}-${d}`] = idx++;
-                }
-            }
-        }
-
-        avaluosFiltrados.forEach((c) => {
-            const dt = new Date(c.fecha_hora_cita);
-            const diaNum = dt.getDate();
-            const mesNum = dt.getMonth();
-
-            const etapa = c.etapa_proceso || "En Proceso";
-            if (/cerrad|concluid|aceptad|finaliz/i.test(etapa)) {
-                conteoCerrados += 1;
-            }
-
-            const keyBusqueda = `${mesNum}-${diaNum}`;
-            const itemIdx = mapFechaIndex[keyBusqueda];
-            if (itemIdx !== undefined && itemsComportamiento[itemIdx]) {
-                itemsComportamiento[itemIdx].total += 1;
-            }
-
-            // Conteo exclusivo por Asesor
-            const asesorNombre = c.asesor_ventas || "Sin asignar";
-            if (!asesoresMap[asesorNombre]) asesoresMap[asesorNombre] = { total: 0 };
-            asesoresMap[asesorNombre].total += 1;
-
-            // Etapa Proceso
-            etapasMap[etapa] = (etapasMap[etapa] || 0) + 1;
-
-            // Tipo Toma
-            const tToma = c.tipo_toma || "Toma a Cuenta";
-            tiposTomaMap[tToma] = (tiposTomaMap[tToma] || 0) + 1;
-
-            // Marcas
-            const mMarca = c.marca || "Volkswagen";
-            marcasMap[mMarca] = (marcasMap[mMarca] || 0) + 1;
-        });
-
-        const diasPeriodo = itemsComportamiento.length || 1;
-        const promedioDiario = (totalAvaluos / diasPeriodo).toFixed(1);
-
-        const asesoresList = Object.entries(asesoresMap)
-            .map(([nombre, counts]) => ({ nombre, total: counts.total }))
-            .sort((a, b) => b.total - a.total);
-
-        const arrayToSortedChartData = (mapObj) =>
-            Object.entries(mapObj)
-                .map(([type, value]) => ({ type, value }))
-                .sort((a, b) => b.value - a.value);
-
-        return {
-            totalAvaluos, conteoCerrados, promedioDiario,
-            asesoresList, maxAvaluosAsesor: Math.max(...asesoresList.map(a => a.total), 1),
-            itemsComportamiento, maxComportamientoTotal: Math.max(...itemsComportamiento.map(d => d.total), 1),
-            nombreMesEvaluado: mesSel !== null ? MESES[mesSel] : "Todo el año",
-            dataEtapas: arrayToSortedChartData(etapasMap),
-            dataTiposToma: arrayToSortedChartData(tiposTomaMap),
-            dataMarcas: arrayToSortedChartData(marcasMap)
-        };
-    }, [avaluosFiltrados, mesSel, añoSel]);
-
-    const avaluosDelAsesorExpandido = useMemo(() => {
-        if (!asesorExpandido) return [];
-        return avaluosFiltrados.filter((c) => {
-            const nombreAsesor = c.asesor_ventas || "Sin asignar";
-            return nombreAsesor.toLowerCase() === asesorExpandido.toLowerCase();
-        });
-    }, [avaluosFiltrados, asesorExpandido]);
 
     return (
         <div ref={reporteRef} id="reporte-valuaciones-exportacion" className="w-full bg-white text-[#1E293B] font-vw-text font-light p-3 md:p-5 space-y-5">
