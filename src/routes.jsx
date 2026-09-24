@@ -310,6 +310,21 @@ function GestionServicioIndexPorPermisos() {
     // Seguridad adicional por si alguien entra sin permisos válidos.
     return <Navigate to="/" replace />;
 }
+function GestionUsadosIndexPorPermisos() {
+    const { user, ready } = useAuth();
+
+    if (ready === false) return null;
+
+    const permisos = user?.permisos || [];
+
+    // Administradores: Partes es su primera pestaña disponible.
+    if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
+        return <Navigate to="/usados/avaluos" replace />;
+    }
+
+    // Seguridad adicional por si alguien entra sin permisos válidos.
+    return <Navigate to="/" replace />;
+}
 
 export const router = createBrowserRouter(
     [
@@ -475,14 +490,6 @@ export const router = createBrowserRouter(
                                     ),
                                 },
                                 {
-                                    path: "usados",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
-                                            <UsadosInventario />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
                                     path: "autos_nuevos",
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
@@ -527,14 +534,6 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
                                             <SolicitudesCredito />
-                                        </RequirePermission>
-                                    ),
-                                },
-                                {
-                                    path: "valuaciones",
-                                    element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
-                                            <Valuaciones />
                                         </RequirePermission>
                                     ),
                                 },
@@ -828,78 +827,41 @@ export const router = createBrowserRouter(
                         {
                             path: "usados",
                             element: (
-                                <RequirePermission
-                                    anyOf={[
-                                        "CRM_RECLAMACIONES",
-                                        "CRM_DIGITALES",
-                                        "CRM_VENTAS",
-                                        "USUARIOS_ADMIN",
-                                        "CRM_CALIDAD",
-                                        "CRM_VALUADOR",
-                                    ]}
-                                >
+                                <RequirePermission anyOf={["CRM_RECLAMACIONES", "CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VALUADOR",]}>
                                     <UsadosLayout />
                                 </RequirePermission>
                             ),
                             children: [
                                 {
                                     index: true,
-                                    element: <UsadosIndex />,
+                                    element: <GestionUsadosIndexPorPermisos />,
+                                },
+                                {
+                                    path: "valuaciones",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                            <Valuaciones />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "inventario",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <UsadosInventario />
+                                        </RequirePermission>
+                                    ),
                                 },
                                 {
                                     path: "avaluos",
                                     element: (
-                                        <RequirePermission
-                                            anyOf={[
-                                                "CRM_DIGITALES",
-                                                "USUARIOS_ADMIN",
-                                                "CRM_VENTAS",
-                                                "CRM_CALIDAD",
-                                                "CRM_VALUADOR",
-                                            ]}
-                                        >
-                                            <AvaluosLayout />
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <RegistroAvaluos />
                                         </RequirePermission>
                                     ),
-                                    children: [
-                                        {
-                                            index: true,
-                                            element: <RegistroAvaluos />,
-                                        },
-                                    ],
                                 },
-                                {
-                                    path: "ventas_cruzadas",
-                                    element: (
-                                        <RequirePermission
-                                            anyOf={[
-                                                "CRM_DIGITALES",
-                                                "USUARIOS_ADMIN",
-                                                "CRM_VENTAS",
-                                                "CRM_CALIDAD",
-                                            ]}
-                                        >
-                                            <DigitalesLayout />
-                                        </RequirePermission>
-                                    ),
-                                    children: [
-                                        {
-                                            index: true,
-                                            element: <DigitalesProspectos />,
-                                        },
-                                        {
-                                            path: "resumen",
-                                            element: <DigitalesOverView />,
-                                        },
-                                        {
-                                            path: "contacto",
-                                            element: <DigitalesContacto />,
-                                        },
-                                    ],
-                                },
-                            ],
+                            ]
                         },
-
                         {
                             path: "financieros",
                             element: (

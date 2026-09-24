@@ -17,12 +17,6 @@ export default function GestionTopNav() {
             show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
         {
-            label: "Inv. Usados",
-            to: "/gestion_negocio/usados",
-            icon: LayoutList,
-            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
-        },
-        {
             label: "Autos Nuevos",
             to: "/gestion_negocio/autos_nuevos",
             icon: CarFront,
@@ -55,12 +49,6 @@ export default function GestionTopNav() {
         {
             label: "Solicitudes de Crédito",
             to: "/gestion_negocio/solicitudes_credito",
-            icon: Users,
-            show: true,
-        },
-        {
-            label: "Valuaciones",
-            to: "/gestion_negocio/valuaciones",
             icon: Users,
             show: true,
         },

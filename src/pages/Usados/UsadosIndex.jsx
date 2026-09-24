@@ -8,7 +8,7 @@ export default function ComercialIndex() {
 
     useEffect(() => {
         if (hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_VALUADOR"])) {
-            navigate("/usados/avaluos", { replace: true });
+            navigate("/usados/valuaciones", { replace: true });
             return;
         }
         if (hasAnyPermission(["CRM_VENTAS", "CRM_CALIDAD"])) {
