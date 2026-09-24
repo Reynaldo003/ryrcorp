@@ -31,6 +31,7 @@ import {
     Palette,
     TableProperties,
     BarChart3,
+    FileSpreadsheet,
 
 
 } from "lucide-react";
@@ -38,6 +39,9 @@ import { apiAvaluos } from "../../lib/apiAvaluos";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import ReactECharts from "echarts-for-react";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 
 const BRAND_BLUE = "#131E5C";
 const API_BASE = (
@@ -225,6 +229,14 @@ function toYMDLocal(dateLike) {
 function ymdToInt(ymd) {
     if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
     return Number(ymd.replaceAll("-", ""));
+}
+
+function fileStamp() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+        d.getDate()
+    )}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 
 function formatFileSize(bytes) {
@@ -1120,6 +1132,7 @@ export default function RegistroAvaluos() {
 
     const [avaluos, setAvaluos] = useState([]);
     const [viewMode, setViewMode] = useState("tabla");
+    const [exportando, setExportando] = useState(null);
     const [ctxMenu, setCtxMenu] = useState({
         open: false,
         x: 0,
@@ -1526,6 +1539,178 @@ export default function RegistroAvaluos() {
         });
     }, [filtered, sort]);
 
+    // ── Exportar Excel ──────────────────────────────────────────────────────────
+    const filaAvaluoExport = (row) => ({
+        "Fecha de Avalúo": toDTLocal(row.fecha_avaluo).replace("T", " "),
+        Dealer: row.agencia || "—",
+        "Asesor Ventas": row.asesor_ventas || "—",
+        Cliente: row?.cliente?.nombre || "—",
+        Teléfono: row?.cliente?.telefono || "—",
+        Correo: row?.cliente?.correo || "—",
+        "Marca de Auto": row.marca_auto || "—",
+        Modelo: row.modelo || "—",
+        "Año Modelo": row.anio_modelo || "—",
+        Serie: row.serie || "—",
+        Kilometraje: row.kilometraje || "—",
+        "Precio Guía": row.precio_guia || "—",
+        "Costo Reparación": row.costo_reparacion || "—",
+        "Costo Estimado": row.costo_estimado || "—",
+        "Oferta Económica": row.oferta_economica || "—",
+        Color: row.color || "—",
+        "Ganador Subasta": row.ganador_subasta || "—",
+        "Etapa del Proceso": row.etapa_proceso || "—",
+        Evidencias: Array.isArray(row?.evidencias) ? row.evidencias.length : 0,
+        Descripción: row.descripcion || "—",
+        Comentarios: row.comentarios || "—",
+    });
+
+    const exportarExcelAvaluos = async () => {
+        if (exportando) return;
+
+        if (!sorted.length) {
+            alert("No hay registros para exportar con los filtros actuales.");
+            return;
+        }
+
+        setExportando("excel");
+
+        try {
+            const registros = sorted.map(filaAvaluoExport);
+
+            const ws = XLSX.utils.json_to_sheet(registros);
+
+            ws["!cols"] = Object.keys(registros[0] || {}).map((k) => ({
+                wch: Math.min(45, Math.max(12, k.length + 6)),
+            }));
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Avalúos");
+
+            XLSX.writeFile(wb, `avaluos_${fileStamp()}.xlsx`, {
+                compression: true,
+            });
+        } catch (error) {
+            console.error("Error exportando avalúos a Excel:", error);
+            alert("No se pudo generar el Excel. Revisa la consola.");
+        } finally {
+            setExportando(null);
+        }
+    };
+
+    // ── Exportar PDF ────────────────────────────────────────────────────────────
+    const exportarPdfAvaluos = async () => {
+        if (exportando) return;
+
+        if (!sorted.length) {
+            alert("No hay registros para exportar con los filtros actuales.");
+            return;
+        }
+
+        setExportando("pdf");
+
+        try {
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "mm",
+                format: "a4",
+                compress: true,
+            });
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.setTextColor(19, 30, 92);
+            doc.text("Reporte de Avalúos - Autos Usados", 10, 12);
+
+            const headers = [
+                "Fecha de Avalúo",
+                "Dealer",
+                "Asesor Ventas",
+                "Cliente",
+                "Teléfono",
+                "Correo",
+                "Marca de Auto",
+                "Modelo",
+                "Año",
+                "Serie",
+                "Kilometraje",
+                "Precio Guía",
+                "Costo Reparación",
+                "Costo Estimado",
+                "Oferta Económica",
+                "Color",
+                "Ganador Subasta",
+                "Etapa del Proceso",
+                "Evidencias",
+                "Descripción",
+                "Comentarios",
+            ];
+
+            const body = sorted.map((row) => [
+                toDTLocal(row.fecha_avaluo).replace("T", " "),
+                row.agencia || "—",
+                row.asesor_ventas || "—",
+                row?.cliente?.nombre || "—",
+                row?.cliente?.telefono || "—",
+                row?.cliente?.correo || "—",
+                row.marca_auto || "—",
+                row.modelo || "—",
+                row?.anio_modelo ?? "—",
+                row.serie || "—",
+                row?.kilometraje ?? "—",
+                row?.precio_guia ?? "—",
+                row?.costo_reparacion ?? "—",
+                row?.costo_estimado ?? "—",
+                row?.oferta_economica ?? "—",
+                row.color || "—",
+                row.ganador_subasta || "—",
+                row.etapa_proceso || "—",
+                Array.isArray(row?.evidencias) ? row.evidencias.length : 0,
+                String(row.descripcion || ""),
+                String(row.comentarios || ""),
+            ]);
+
+            autoTable(doc, {
+                startY: 17,
+                head: [headers],
+                body,
+                theme: "grid",
+                styles: {
+                    font: "helvetica",
+                    fontSize: 6,
+                    cellPadding: 1.2,
+                    overflow: "linebreak",
+                    valign: "middle",
+                    textColor: [55, 65, 81],
+                    lineColor: [229, 231, 235],
+                    lineWidth: 0.15,
+                },
+                headStyles: {
+                    fillColor: [19, 30, 92],
+                    textColor: [255, 255, 255],
+                    fontStyle: "bold",
+                    halign: "center",
+                },
+                alternateRowStyles: { fillColor: [249, 250, 251] },
+                margin: { left: 8, right: 8, bottom: 10 },
+                didDrawPage: () => {
+                    const ancho = doc.internal.pageSize.getWidth();
+                    const alto = doc.internal.pageSize.getHeight();
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(7);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+                },
+            });
+
+            doc.save(`avaluos_${fileStamp()}.pdf`);
+        } catch (error) {
+            console.error("Error exportando avalúos a PDF:", error);
+            alert("No se pudo generar el PDF. Revisa la consola.");
+        } finally {
+            setExportando(null);
+        }
+    };
+
     const openCreate = () => {
         cleanupDraftResources(draft);
         setTouchedSave(false);
@@ -1926,6 +2111,34 @@ export default function RegistroAvaluos() {
                 </div>
 
                 <div className="flex items-center gap-2 sm:ml-auto">
+                    <button
+                        type="button"
+                        onClick={exportarExcelAvaluos}
+                        disabled={Boolean(exportando) || sorted.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                        {exportando === "excel" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <FileSpreadsheet className="h-4 w-4" />
+                        )}
+                        Exportar Excel
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={exportarPdfAvaluos}
+                        disabled={Boolean(exportando) || sorted.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50"
+                    >
+                        {exportando === "pdf" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <FileText className="h-4 w-4" />
+                        )}
+                        Exportar PDF
+                    </button>
+
                     <div className="inline-flex rounded-lg border border-[#131E5C]/20 bg-white p-1 shadow-sm">
                         <button
                             type="button"
