@@ -2,49 +2,22 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import {
-    BadgeCheck,
-    HandCoins,
-    Zap,
-    Settings2,
     Menu,
     X,
     ChevronsLeft,
     ChevronsRight,
-    LayoutDashboard,
     Mailbox,
     CirclePower,
     UserCircle2,
-    Car,
-    TrendingUp,
-    ClipboardCheck,
-    QrCode,
-    UserSearch,
-    BrainCircuit,
     Bug,
     Lightbulb,
-    Send,
-    Sparkles,
-    LayoutList,
-    Workflow,
-    Globe,
-    FileSearchCorner,
-    UsersRound,
-    CarFront,
-    BanknoteArrowUp,
-    UserCheck,
-    CalendarCheck,
-    Cog,
-    Wrench,
-    Hammer,
-    ArchiveX,
-    CircleDollarSign,
-    ShoppingCart,
 } from "lucide-react";
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
 import { useAuth } from "../auth/AuthContext";
 import WhatsappNotificationsBell from "./WhatsappNotificationsBell";
 import { apiClickup } from "../lib/apiClickup";
+import { INTERFACES, SECTION_ORDER, interfazVisible } from "../config/interfaces";
 
 function cls(...items) {
     return items.filter(Boolean).join(" ");
@@ -217,151 +190,23 @@ export default function Sidebar() {
     };
 
     const links = useMemo(() => {
-        const items = [
-            {
-                section: "Negocio",
-                to: "/gestion_negocio",
-                label: "Gestión de Negocio",
-                icon: BanknoteArrowUp,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
-            },
-            {
-                section: "Negocio",
-                to: "/partes",
-                label: "Partes",
-                icon: ArchiveX,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
-            },
-            {
-                section: "Negocio",
-                to: "/servicio",
-                label: "Servicio",
-                icon: CircleDollarSign,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
-            },
-            {
-                section: "Negocio",
-                to: "/usados",
-                label: "Autos Usados",
-                icon: Car,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_DIGITALES", "CRM_CALIDAD", "CRM_VALUADOR"]),
-            },
-            { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
-            {
-                section: "Comercial",
-                to: "/calidad",
-                label: "Gestión de Calidad",
-                icon: BadgeCheck,
-                show: hasAnyPermission(["CRM_RECLAMACIONES", "USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Comercial",
-                to: "/comercial",
-                label: "Gestión Comercial",
-                icon: HandCoins,
-                show: hasAnyPermission(["CRM_RECLAMACIONES", "CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_CALL_CENTER", "CRM_COORDINADOR_DIGITAL"]),
-            },
-            {
-                section: "Comercial",
-                to: "/postventa",
-                label: "Postventa",
-                icon: ClipboardCheck,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
-            },
-            {
-                section: "Retención",
-                to: "/retencion",
-                label: "Retención",
-                icon: UserCheck,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
-            },
-            {
-                section: "Retención",
-                to: "/retencion_no_ventas",
-                label: "Retención No V.",
-                icon: UserCheck,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
-            },
-            {
-                section: "Marketing",
-                to: "/encuesta_whats",
-                label: "Envío Encuestas",
-                icon: Send,
-                show: hasAnyPermission(["CRM_RECLAMACIONES", "CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN"]),
-            },
-            {
-                section: "Marketing",
-                to: "/facturas",
-                label: "Facturas",
-                icon: FileSearchCorner,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Financiero",
-                to: "/financieros",
-                label: "Servicios Financieros",
-                icon: TrendingUp,
-                show: hasAnyPermission(["CRM_FINANCIEROS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES", "CRM_ASESOR_PISO",]),
-            },
-            {
-                section: "Herramientas",
-                to: "/configuracion_ia",
-                label: "Panel de Inteligencias Artificiales",
-                icon: BrainCircuit,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]),
-            },
-            {
-                section: "Herramientas",
-                to: "/administracion_asesores",
-                label: "Administración de Asesores",
-                icon: UsersRound,
-                show: hasAnyPermission(["USUARIOS_ADMIN"]),
-            },
-            {
-                section: "Herramientas",
-                to: "/timeforaction",
-                label: "TimeForAction",
-                icon: Zap,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Herramientas",
-                to: "/flujo_procesos",
-                label: "Flows",
-                icon: Workflow,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Herramientas",
-                to: "/webs",
-                label: "Interfacez Web",
-                icon: Globe,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Herramientas",
-                to: "/gestor_actividades",
-                label: "Gestor de Actividades",
-                icon: CalendarCheck,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
-            },
-            {
-                section: "Administrativos",
-                to: "/administrativos",
-                label: "Reclutamiento y Seleccion",
-                icon: UserSearch,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_RRHH", "CRM_CALIDAD"]),
-            },
-            { section: "Configuración", to: "/qr", label: "QR", icon: QrCode, show: hasAnyPermission(["USUARIOS_ADMIN"]) },
-            { section: "Configuración", to: "/configuracion", label: "Configuración", icon: Settings2, show: hasAnyPermission(["USUARIOS_ADMIN"]) },
-        ];
+        const interfacesUsuario = Array.isArray(user?.interfaces)
+            ? user.interfaces
+            : null;
+
+        const items = INTERFACES.map((item) => ({
+            section: item.section,
+            to: item.to,
+            label: item.label,
+            icon: item.icon,
+            show: interfazVisible(item, user?.permisos || [], interfacesUsuario),
+        }));
 
         return items.filter((item) => item.show);
-    }, [hasAnyPermission]);
+    }, [user]);
 
     const sections = useMemo(() => {
-        const order = ["Negocio", "Comercial", "Retención", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
-        return order
+        return SECTION_ORDER
             .map((section) => ({ section, items: links.filter((item) => item.section === section) }))
             .filter((group) => group.items.length > 0);
     }, [links]);

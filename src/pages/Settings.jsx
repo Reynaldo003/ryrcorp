@@ -10,6 +10,7 @@ import flags from "react-phone-number-input/flags";
 import "react-phone-number-input/style.css";
 import { useAuth } from "../auth/AuthContext";
 import { ensureFreshAccessToken } from "../lib/apiPruebas";
+import { INTERFACES, SECTION_ORDER, interfacesDesdePermisos } from "../config/interfaces";
 
 const API = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
 const AGENCIAS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
@@ -650,6 +651,39 @@ function UserModal({
     const [msg, setMsg] = useState("");
     const [loading, setLoading] = useState(false);
 
+    // ── Interfaces del menú ──────────────────────────────────────────────
+    const interfacesIniciales = useMemo(
+        () => {
+            if (Array.isArray(user?.interfaces)) {
+                return user.interfaces.filter(key =>
+                    INTERFACES.some(item => item.key === key)
+                );
+            }
+
+            return interfacesDesdePermisos(user?.permisos || []);
+        },
+        [user]
+    );
+
+    const [interfacesManual, setInterfacesManual] = useState(
+        Array.isArray(user?.interfaces)
+    );
+    const [interfacesSel, setInterfacesSel] =
+        useState(interfacesIniciales);
+
+    const toggleInterfaz = (key) => {
+        setInterfacesSel(prev =>
+            prev.includes(key)
+                ? prev.filter(item => item !== key)
+                : [...prev, key]
+        );
+    };
+
+    const interfacesConfigurables = useMemo(
+        () => INTERFACES.filter(item => !item.alwaysOn),
+        []
+    );
+
     useEffect(() => {
         requestAnimationFrame(() => setVisible(true));
     }, []);
@@ -788,6 +822,13 @@ function UserModal({
         if (foto) {
             fd.append("foto", foto);
         }
+
+        fd.append(
+            "interfaces",
+            interfacesManual
+                ? JSON.stringify(interfacesSel)
+                : ""
+        );
 
         try {
             const access =
@@ -1036,6 +1077,116 @@ function UserModal({
                             />
                         ))}
                     </div>
+
+                    <div className="crm-section-title">
+                        Interfaces del menú
+                    </div>
+
+                    <div className="crm-desc">
+                        Controla qué módulos verá este usuario en el
+                        menú lateral.
+                    </div>
+
+                    <div className="crm-interface-mode">
+                        <button
+                            type="button"
+                            className={
+                                interfacesManual
+                                    ? ""
+                                    : "active"
+                            }
+                            onClick={() =>
+                                setInterfacesManual(false)
+                            }
+                        >
+                            Heredar del rol
+                        </button>
+                        <button
+                            type="button"
+                            className={
+                                interfacesManual
+                                    ? "active"
+                                    : ""
+                            }
+                            onClick={() =>
+                                setInterfacesManual(true)
+                            }
+                        >
+                            Configurar manualmente
+                        </button>
+                    </div>
+
+                    <div className="crm-desc small">
+                        Inicio siempre es visible.
+                    </div>
+
+                    {interfacesManual && (
+                        <div className="crm-interface-groups">
+                            {SECTION_ORDER.map(section => {
+                                const items =
+                                    interfacesConfigurables.filter(
+                                        item =>
+                                            item.section === section
+                                    );
+
+                                if (items.length === 0)
+                                    return null;
+
+                                return (
+                                    <div
+                                        key={section}
+                                        className="crm-interface-group"
+                                    >
+                                        <div className="crm-interface-group-title">
+                                            {section}
+                                        </div>
+
+                                        <div className="crm-interface-list">
+                                            {items.map(item => {
+                                                const Icon = item.icon;
+                                                const checked =
+                                                    interfacesSel.includes(
+                                                        item.key
+                                                    );
+
+                                                return (
+                                                    <label
+                                                        key={item.key}
+                                                        className={
+                                                            "crm-interface-item" +
+                                                            (checked
+                                                                ? " checked"
+                                                                : "")
+                                                        }
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={
+                                                                checked
+                                                            }
+                                                            onChange={() =>
+                                                                toggleInterfaz(
+                                                                    item.key
+                                                                )
+                                                            }
+                                                        />
+
+                                                        <span className="crm-interface-icon">
+                                                            <Icon size={16} />
+                                                        </span>
+
+                                                        <span className="crm-interface-label">
+                                                            {item.label}
+                                                        </span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     <div className="crm-section-title">
                         Cambiar contraseña{" "}
@@ -2401,6 +2552,113 @@ function GlobalStyles() {
       .crm-section-title small {
         font-weight: 400;
         text-transform: none;
+      }
+
+      .crm-desc {
+        font-size: 12px;
+        color: #64748b;
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+
+      .crm-desc.small {
+        font-size: 11px;
+        margin-top: 6px;
+        margin-bottom: 14px;
+      }
+
+      .crm-interface-mode {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 2px;
+      }
+
+      .crm-interface-mode button {
+        flex: 1;
+        padding: 9px 10px;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 12.5px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all .15s ease;
+      }
+
+      .crm-interface-mode button.active {
+        background: #eef4ff;
+        border-color: #2563eb;
+        color: #1d4ed8;
+      }
+
+      .crm-interface-groups {
+        margin-top: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .crm-interface-group-title {
+        font-size: 11px;
+        font-weight: 800;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        margin-bottom: 8px;
+      }
+
+      .crm-interface-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 8px;
+      }
+
+      .crm-interface-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 11px;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 11px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #334155;
+        transition: all .15s ease;
+        font-family: inherit;
+      }
+
+      .crm-interface-item:hover {
+        border-color: #bfdbfe;
+      }
+
+      .crm-interface-item.checked {
+        background: #eff6ff;
+        border-color: #2563eb;
+        color: #1d4ed8;
+      }
+
+      .crm-interface-item input {
+        accent-color: #2563eb;
+        width: 15px;
+        height: 15px;
+        margin: 0;
+      }
+
+      .crm-interface-icon {
+        display: inline-flex;
+        color: #64748b;
+      }
+
+      .crm-interface-item.checked .crm-interface-icon {
+        color: #1d4ed8;
+      }
+
+      .crm-interface-label {
+        min-width: 0;
       }
 
       .crm-profile-banner {
