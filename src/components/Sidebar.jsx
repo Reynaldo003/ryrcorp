@@ -239,6 +239,13 @@ export default function Sidebar() {
                 icon: CircleDollarSign,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL",]),
             },
+            {
+                section: "Negocio",
+                to: "/usados",
+                label: "Autos Usados",
+                icon: Car,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_DIGITALES", "CRM_CALIDAD", "CRM_VALUADOR"]),
+            },
             { section: "Comercial", to: "/", label: "Inicio", icon: LayoutDashboard, show: true },
             {
                 section: "Comercial",
@@ -260,13 +267,6 @@ export default function Sidebar() {
                 label: "Postventa",
                 icon: ClipboardCheck,
                 show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER"]),
-            },
-            {
-                section: "Comercial",
-                to: "/usados",
-                label: "Autos Usados",
-                icon: Car,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_VENTAS", "CRM_DIGITALES", "CRM_CALIDAD", "CRM_VALUADOR"]),
             },
             {
                 section: "Retención",
@@ -360,7 +360,7 @@ export default function Sidebar() {
     }, [hasAnyPermission]);
 
     const sections = useMemo(() => {
-        const order = ["Negocio", "Partes", "Servicio", "Comercial", "Retención", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
+        const order = ["Negocio", "Comercial", "Retención", "Marketing", "Financiero", "Herramientas", "Administrativos", "Configuración"];
         return order
             .map((section) => ({ section, items: links.filter((item) => item.section === section) }))
             .filter((group) => group.items.length > 0);

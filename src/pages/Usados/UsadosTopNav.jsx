@@ -1,7 +1,7 @@
 // src/pages/Comercial/ComercialTopNav.jsx
 import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Globe, CalendarDays, Building2, createLucideIcon, MessageCircle, BanknoteArrowUp, BadgeDollarSign } from "lucide-react";
+import { Globe, CalendarDays, Building2, createLucideIcon, MessageCircle, BanknoteArrowUp, BadgeDollarSign, LayoutList, Users } from "lucide-react";
 import vwDark from "../../assets/vw_dark.png";
 import { steeringWheel } from "@lucide/lab";
 import { useAuth } from "../../auth/AuthContext";
@@ -26,7 +26,7 @@ export default function ComercialTopNav() {
     const location = useLocation();
     const { hasAnyPermission } = useAuth();
 
-    const inProspectos = location.pathname.startsWith("/usados/avaluos");
+    const inProspectos = location.pathname.startsWith("/usados/valuaciones");
     const canSeeContacto = hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"]);
 
     const tabs = useMemo(() => {
@@ -36,7 +36,19 @@ export default function ComercialTopNav() {
                 href: "/usados/avaluos",
                 icon: BanknoteArrowUp,
                 show: hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD"]),
-            }
+            },
+            {
+                label: "Valuaciones",
+                href: "/usados/valuaciones",
+                icon: Users,
+                show: true,
+            },
+            {
+                label: "Inventario",
+                href: "/usados/inventario",
+                icon: LayoutList,
+                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            },
         ];
 
         return items.filter((x) => x.show);
