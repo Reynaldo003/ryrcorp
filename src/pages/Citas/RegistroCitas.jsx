@@ -78,80 +78,212 @@ function normalizaTelefonoMx(tel) {
     return digits;
 }
 
+function esCitaDigital(cita = {}) {
+    return normalizeStr(cita?.tipo_cita).toLowerCase() === "digital";
+}
+
 // Al guardar una cita desde el panel de Citas replica en el expediente digital
 // los mismos datos que establece Contacto al agendar: agencia, vehículo de interés,
 // asesor asignado y la etapa "Cita Programada" si la cita quedó en el futuro.
 // Solo sobrescribe con valores no vacíos para nunca borrar datos del expediente.
 async function sincronizarExpedienteConCita(cita = {}) {
-    const telefono = normalizaTelefonoMx(cita?.cliente?.telefono || cita?.telefono || "");
-    if (!telefono) return;
+    // Una cita que no sea digital NO debe tocar ExpedienteDigital.
+    if (!esCitaDigital(cita)) {
+        return;
+    }
+
+    const telefono = normalizaTelefonoMx(
+        cita?.cliente?.telefono ||
+        cita?.telefono ||
+        ""
+    );
+
+    if (!telefono) {
+        return;
+    }
 
     const agencia = normalizeStr(cita?.agencia || "");
     const autoInteres = normalizeStr(cita?.auto_interes || "");
+    const asesorDigital = normalizeStr(cita?.asesor_digital || "");
     const asesorPiso = normalizeStr(cita?.asesor_piso || "");
+
     const fecha = cita?.fecha_hora_cita;
     const dt = fecha ? new Date(fecha) : null;
-    const esFutura = dt && !Number.isNaN(dt.getTime()) ? dt.getTime() > Date.now() : false;
+
+    const esFutura =
+        dt &&
+        !Number.isNaN(dt.getTime()) &&
+        dt.getTime() > Date.now();
 
     try {
         const lista = await api.digitalesListProspectos({});
-        const prospectos = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
-        const prospecto = prospectos.find((p) => normalizaTelefonoMx(p?.telefono) === telefono);
-        if (!prospecto?.id) return;
-        await api.digitalesPatchProspecto(prospecto.id, {
-            ...(agencia ? { agencia } : {}),
-            ...(autoInteres ? { auto_interes: autoInteres } : {}),
-            ...(asesorPiso ? { asesor_ventas: asesorPiso } : {}),
-            ...(esFutura ? { estado: "Cita Programada" } : {}),
-        });
+
+        const prospectos = Array.isArray(lista)
+            ? lista
+            : Array.isArray(lista?.results)
+                ? lista.results
+                : [];
+
+        const prospecto = prospectos.find(
+            (p) => normalizaTelefonoMx(p?.telefono) === telefono
+        );
+
+        // MUY IMPORTANTE:
+        // Si no existe expediente digital, NO lo creamos.
+        if (!prospecto?.id) {
+            return;
+        }
+
+        const cambios = {
+            ...(agencia
+                ? { agencia }
+                : {}),
+
+            ...(autoInteres
+                ? { auto_interes: autoInteres }
+                : {}),
+
+            ...(asesorDigital
+                ? { asesor_digital: asesorDigital }
+                : {}),
+
+            ...(asesorPiso
+                ? { asesor_ventas: asesorPiso }
+                : {}),
+
+            ...(esFutura
+                ? { estado: "Cita Programada" }
+                : {}),
+        };
+
+        if (Object.keys(cambios).length === 0) {
+            return;
+        }
+
+        await api.digitalesPatchProspecto(
+            prospecto.id,
+            cambios
+        );
     } catch (error) {
-        console.error("No se pudo sincronizar el expediente digital con la cita:", error);
+        console.error(
+            "No se pudo sincronizar el expediente digital con la cita:",
+            error
+        );
     }
 }
-
 // Cuando una cita ya ocurrió, sincroniza la etapa del prospecto en la bandeja
 // de digitales: "Asistencia a la Cita" si asistió, o "No asistió" si no.
 async function sincronizarEtapaConAsistencia(cita = {}) {
-    const telefono = normalizaTelefonoMx(cita?.cliente?.telefono || cita?.telefono || "");
-    if (!telefono) return;
+    // La asistencia de una cita tradicional no debe modificar Digitales.
+    if (!esCitaDigital(cita)) {
+        return;
+    }
+
+    const telefono = normalizaTelefonoMx(
+        cita?.cliente?.telefono ||
+        cita?.telefono ||
+        ""
+    );
+
+    if (!telefono) {
+        return;
+    }
 
     const fecha = cita?.fecha_hora_cita;
-    if (!fecha) return;
+
+    if (!fecha) {
+        return;
+    }
+
     const dt = new Date(fecha);
-    if (Number.isNaN(dt.getTime())) return;
-    if (dt.getTime() > Date.now()) return; // la cita aún no ocurre
+
+    if (Number.isNaN(dt.getTime())) {
+        return;
+    }
+
+    // La cita todavía no ocurre.
+    if (dt.getTime() > Date.now()) {
+        return;
+    }
 
     const asistio = Boolean(cita?.asistencia);
 
     try {
         const lista = await api.digitalesListProspectos({});
-        const prospectos = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
-        const prospecto = prospectos.find((p) => normalizaTelefonoMx(p?.telefono) === telefono);
-        if (!prospecto?.id) return;
+
+        const prospectos = Array.isArray(lista)
+            ? lista
+            : Array.isArray(lista?.results)
+                ? lista.results
+                : [];
+
+        const prospecto = prospectos.find(
+            (p) => normalizaTelefonoMx(p?.telefono) === telefono
+        );
+
+        // Nunca crear expediente desde aquí.
+        if (!prospecto?.id) {
+            return;
+        }
 
         const estado = estadoAutomaticoBandeja({
             plazo: prospecto?.plazo_compra,
-            vinFacturado: prospecto?.vin_facturado,
-            vinEstatus: prospecto?.vin_estatus_entrega,
-            folioSolicitudCredito: prospecto?.folio_solicitud_credito,
-            evidencias: prospecto?.evidencias,
-            calificacionRapidaLlena: tieneCalificacionRapida({
-                enganche_monto: prospecto?.enganche_monto,
-                presupuesto_mensual: prospecto?.presupuesto_mensual,
-                buro_estado: prospecto?.buro_estado,
-                plazo_compra: prospecto?.plazo_compra,
-            }),
-            citaNoAsistio: !asistio,
-            citaAsistio: asistio,
-            engancheMonto: prospecto?.enganche_monto,
-            presupuestoMensual: prospecto?.presupuesto_mensual,
-            idCotizacion: prospecto?.id_cotizacion,
-            estadoBase: prospecto?.estado || "",
+
+            vinFacturado:
+                prospecto?.vin_facturado,
+
+            vinEstatus:
+                prospecto?.vin_estatus_entrega,
+
+            folioSolicitudCredito:
+                prospecto?.folio_solicitud_credito,
+
+            evidencias:
+                prospecto?.evidencias,
+
+            calificacionRapidaLlena:
+                tieneCalificacionRapida({
+                    enganche_monto:
+                        prospecto?.enganche_monto,
+
+                    presupuesto_mensual:
+                        prospecto?.presupuesto_mensual,
+
+                    buro_estado:
+                        prospecto?.buro_estado,
+
+                    plazo_compra:
+                        prospecto?.plazo_compra,
+                }),
+
+            citaNoAsistio:
+                !asistio,
+
+            citaAsistio:
+                asistio,
+
+            engancheMonto:
+                prospecto?.enganche_monto,
+
+            presupuestoMensual:
+                prospecto?.presupuesto_mensual,
+
+            idCotizacion:
+                prospecto?.id_cotizacion,
+
+            estadoBase:
+                prospecto?.estado || "",
         });
 
-        await api.digitalesPatchProspecto(prospecto.id, { estado });
+        await api.digitalesPatchProspecto(
+            prospecto.id,
+            { estado }
+        );
     } catch (error) {
-        console.error("No se pudo sincronizar la etapa en la bandeja:", error);
+        console.error(
+            "No se pudo sincronizar la etapa en la bandeja:",
+            error
+        );
     }
 }
 
@@ -1508,13 +1640,27 @@ export default function RegistroCitas() {
     };
 
     const save = async () => {
-        if (!draft || saving) return;
-        if (!telIsOk) return;
+        if (!draft || saving) {
+            return;
+        }
+
+        if (!telIsOk) {
+            return;
+        }
+
         setTouchedSave(true);
-        if (missing.length) return;
+
+        if (missing.length) {
+            return;
+        }
+
         setSaving(true);
+
         try {
-            const agenciaFinal = isAdmin ? normalizeStr(draft.agencia || "") : normalizeStr(draft.agencia || userAgencia);
+            const agenciaFinal = isAdmin
+                ? normalizeStr(draft.agencia || "")
+                : normalizeStr(draft.agencia || userAgencia);
+
             const payload = {
                 agencia: agenciaFinal,
 
@@ -1522,36 +1668,78 @@ export default function RegistroCitas() {
                     ? { cliente_id: draft.cliente_id }
                     : {}),
 
-                nombre: draft.cliente_nombre || "",
-                telefono: normalizeStr(draft.cliente_telefono),
-                auto_interes: draft.auto_interes || "",
-                fecha_hora_cita: fromDTLocalToISO(draft.fecha_hora_cita),
-                asistencia: !!draft.asistencia,
-                tipo_cita: draft.tipo_cita || "",
-                motivo_cita: draft.motivo_cita || "",
-                vin: esAvaluo(draft.motivo_cita) ? String(draft.vin || "").trim().toUpperCase() : "",
-                avaluo_cerrado: esAvaluo(draft.motivo_cita) ? !!draft.avaluo_cerrado : false,
-                prueba_manejo: !!draft.prueba_manejo,
-                fuente_prospeccion: draft.fuente_prospeccion || "",
-                asesor_digital: draft.asesor_digital || "",
-                asesor_piso: draft.asesor_piso || "",
-                comentarios: draft.comentarios || "",
+                nombre:
+                    draft.cliente_nombre || "",
+
+                telefono:
+                    normalizeStr(draft.cliente_telefono),
+
+                auto_interes:
+                    draft.auto_interes || "",
+
+                fecha_hora_cita:
+                    fromDTLocalToISO(draft.fecha_hora_cita),
+
+                asistencia:
+                    !!draft.asistencia,
+
+                tipo_cita:
+                    draft.tipo_cita || "",
+
+                motivo_cita:
+                    draft.motivo_cita || "",
+
+                vin: esAvaluo(draft.motivo_cita)
+                    ? String(draft.vin || "")
+                        .trim()
+                        .toUpperCase()
+                    : "",
+
+                avaluo_cerrado:
+                    esAvaluo(draft.motivo_cita)
+                        ? !!draft.avaluo_cerrado
+                        : false,
+
+                prueba_manejo:
+                    !!draft.prueba_manejo,
+
+                fuente_prospeccion:
+                    draft.fuente_prospeccion || "",
+
+                asesor_digital:
+                    draft.asesor_digital || "",
+
+                asesor_piso:
+                    draft.asesor_piso || "",
+
+                comentarios:
+                    draft.comentarios || "",
             };
+
             if (mode === "create") {
                 await apiCitas.create(payload);
             } else {
-                await apiCitas.patch(draft.id, payload);
+                await apiCitas.patch(
+                    draft.id,
+                    payload
+                );
             }
             await sincronizarExpedienteConCita(payload);
-            await sincronizarEtapaConAsistencia({
-                cliente: { telefono: payload.telefono },
-                telefono: payload.telefono,
-                fecha_hora_cita: payload.fecha_hora_cita,
-                asistencia: payload.asistencia,
-            });
-            await refreshList(); closeModal();
-        } catch (e) { console.error(e); alert("Error guardando la cita (revisa consola)."); }
-        finally { setSaving(false); }
+
+            await sincronizarEtapaConAsistencia(payload);
+
+            await refreshList();
+
+            closeModal();
+        } catch (error) {
+            console.error(error);
+
+            alert(
+                "Error guardando la cita (revisa consola)."
+            );
+        } finally {
+            setSaving(false);
+        }
     };
 
     const toggleAsistenciaInline = async (row) => {
