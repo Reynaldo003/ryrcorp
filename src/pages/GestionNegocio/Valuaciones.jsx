@@ -32,6 +32,7 @@ import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { apiAvaluos } from "../../lib/apiAvaluos";
+import { useAuth } from "../../auth/AuthContext";
 
 // RECURSOS VISUALES E IMÁGENES DEDICADAS A VALUACIONES / AVALÚOS
 const IMAGEN_VALUACIONES = "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80";
@@ -147,6 +148,12 @@ function normalizarAvaluos(lista) {
             agenciaFinal = "VW Cordoba";
         } else if (lowerAgencia.includes("orizaba")) {
             agenciaFinal = "VW Orizaba";
+        } else if (lowerAgencia.includes("poza")) {
+            agenciaFinal = "VW Poza Rica";
+        } else if (lowerAgencia.includes("tuxpan")) {
+            agenciaFinal = "VW Tuxpan";
+        } else if (lowerAgencia.includes("tuxtepec")) {
+            agenciaFinal = "VW Tuxtepec";
         }
 
         const fechaRaw = extraerValor(item, "fecha_hora_cita", "fecha", "creado_en", "fecha_creacion", "fecha_avaluo");
@@ -183,11 +190,49 @@ export default function Valuaciones({ rows: initialRows }) {
     const mesActual = hoy.getMonth();
     const años = useMemo(() => Array.from({ length: 5 }, (_, i) => añoActual - i), [añoActual]);
 
+    // RESTRICCIÓN POR AGENCIA: los usuarios con agencia asignada solo ven datos de su(s) agencia(s).
+    const { user, hasAnyPermission } = useAuth();
+    const isAdmin = hasAnyPermission(["USUARIOS_ADMIN"]);
+
+    const userAgencias = useMemo(() => {
+        return String(user?.agencia || "")
+            .split("|")
+            .map((a) => a.trim().toLowerCase())
+            .filter(Boolean);
+    }, [user?.agencia]);
+
+    const agenciasVisibles = useMemo(() => {
+        if (isAdmin || userAgencias.length === 0) return AGENCIAS;
+
+        const coincidencias = AGENCIAS.filter((agencia) => {
+            const ag = agencia.toLowerCase();
+            return userAgencias.some((ua) => ag.includes(ua) || ua.includes(ag));
+        });
+
+        return coincidencias.length > 0 ? coincidencias : AGENCIAS;
+    }, [isAdmin, userAgencias]);
+
+    const soloMisAgencias = !isAdmin && userAgencias.length > 0 && agenciasVisibles.length < AGENCIAS.length;
+
     // FILTROS
     const [añoSel, setAñoSel] = useState(añoActual);
     const [mesSel, setMesSel] = useState(mesActual);
     const [agenciaSel, setAgenciaSel] = useState(null);
     const [tipoVentaSel, setTipoVentaSel] = useState("Todos");
+
+    // Si el usuario está restringido a sus agencias, fija el filtro por defecto en su agencia.
+    useEffect(() => {
+        if (isAdmin) {
+            if (agenciaSel && !AGENCIAS.includes(agenciaSel)) setAgenciaSel(null);
+            return;
+        }
+
+        if (agenciasVisibles.length === 1) {
+            if (agenciaSel !== agenciasVisibles[0]) setAgenciaSel(agenciasVisibles[0]);
+        } else if (agenciasVisibles.length > 1) {
+            if (agenciaSel && !agenciasVisibles.includes(agenciaSel)) setAgenciaSel(agenciasVisibles[0]);
+        }
+    }, [isAdmin, agenciasVisibles, agenciaSel]);
 
     // DESPLEGABLE ASESOR
     const [asesorExpandido, setAsesorExpandido] = useState(null);
@@ -673,18 +718,20 @@ export default function Valuaciones({ rows: initialRows }) {
             <div className="w-full py-0.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <button
-                            type="button"
-                            onClick={() => setAgenciaSel(null)}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
-                                ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                                : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
-                                }`}
-                        >
-                            <span>Todas las agencias</span>
-                        </button>
+                        {!soloMisAgencias && (
+                            <button
+                                type="button"
+                                onClick={() => setAgenciaSel(null)}
+                                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
+                                    ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                                    : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                                    }`}
+                            >
+                                <span>Todas las agencias</span>
+                            </button>
+                        )}
 
-                        {AGENCIAS.map((agencia) => {
+                        {agenciasVisibles.map((agencia) => {
                             const active = agenciaSel === agencia;
                             return (
                                 <button

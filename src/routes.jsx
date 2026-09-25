@@ -12,6 +12,7 @@ import TimeForAction from "./pages/TimeForAction/TimeForAction";
 import ProtectedLayout from "./auth/ProtectedLayout";
 import RequirePermission from "./auth/RequirePermission";
 import { useAuth } from "./auth/AuthContext";
+import { INTERFACES } from "./config/interfaces";
 
 import AppShell from "./app/AppShell";
 import Home from "./pages/Home";
@@ -143,6 +144,27 @@ function tienePermiso(permisos = [], permisosPermitidos = []) {
 }
 
 function obtenerRutaInicialPorUsuario(user) {
+    // Administradores: siempre Inicio.
+    if ((user?.permisos || []).includes("ALL")) {
+        return "/";
+    }
+
+    const interfaces = user?.interfaces;
+
+    // Usuarios con interfaces manuales: la ruta inicial es la primera
+    // interfaz habilitada (en el orden del menú), o "/" (Inicio).
+    if (Array.isArray(interfaces)) {
+        for (const item of INTERFACES) {
+            if (item.alwaysOn) continue;
+
+            if (interfaces.includes(item.key)) {
+                return item.to;
+            }
+        }
+
+        return "/";
+    }
+
     const permisos = user?.permisos || [];
 
     if (
@@ -188,6 +210,12 @@ function InicioPorPermisos() {
 
     if (ready === false) {
         return null;
+    }
+
+    // Usuarios con interfaces manuales: "Inicio" abre la página de inicio
+    // (no redirigir a su primera sección, que impide volver al menú).
+    if (Array.isArray(user?.interfaces)) {
+        return <Home />;
     }
 
     const rutaInicial = obtenerRutaInicialPorUsuario(user);
@@ -317,9 +345,15 @@ function GestionUsadosIndexPorPermisos() {
 
     const permisos = user?.permisos || [];
 
-    // Administradores: Partes es su primera pestaña disponible.
+    // Administradores: Avallos es su primera pestaña disponible.
     if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
         return <Navigate to="/usados/avaluos" replace />;
+    }
+
+    // Usuarios con interfaces manuales: mantenerlos dentro de la sección
+    // habilitada para evitar el redirect en bucle hacia "/".
+    if (Array.isArray(user?.interfaces)) {
+        return <UsadosIndex />;
     }
 
     // Seguridad adicional por si alguien entra sin permisos válidos.

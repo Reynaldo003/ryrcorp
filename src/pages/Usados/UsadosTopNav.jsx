@@ -5,6 +5,7 @@ import { Globe, CalendarDays, Building2, createLucideIcon, MessageCircle, Bankno
 import vwDark from "../../assets/vw_dark.png";
 import { steeringWheel } from "@lucide/lab";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 const SteeringWheelLab = createLucideIcon("SteeringWheelLab", steeringWheel);
@@ -24,10 +25,13 @@ function VWLogo({ logoSrc }) {
 
 export default function ComercialTopNav() {
     const location = useLocation();
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
 
     const inProspectos = location.pathname.startsWith("/usados/valuaciones");
     const canSeeContacto = hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"]);
+    // Si la interfaz "usados" está activada manualmente, mostrar todas las pestañas
+    // del módulo (el administrador ya le otorgó el módulo completo).
+    const usadosActivo = interfazActivada(user, "usados");
 
     const tabs = useMemo(() => {
         const items = [
@@ -35,7 +39,7 @@ export default function ComercialTopNav() {
                 label: "Avaluos",
                 href: "/usados/avaluos",
                 icon: BanknoteArrowUp,
-                show: hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD"]),
+                show: usadosActivo || hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD"]),
             },
             {
                 label: "Valuaciones",
@@ -47,12 +51,12 @@ export default function ComercialTopNav() {
                 label: "Inventario",
                 href: "/usados/inventario",
                 icon: LayoutList,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+                show: usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
             },
         ];
 
         return items.filter((x) => x.show);
-    }, [hasAnyPermission, canSeeContacto, inProspectos]);
+    }, [hasAnyPermission, canSeeContacto, inProspectos, usadosActivo]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

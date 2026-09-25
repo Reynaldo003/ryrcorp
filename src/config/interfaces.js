@@ -257,3 +257,8 @@ export function interfazVisible(item, permisos = [], interfaces = null) {
 export function interfacesDesdePermisos(permisos = []) {
     return INTERFACES.filter((item) => interfazVisible(item, permisos, null)).map((item) => item.key);
 }
+
+// true si el usuario tiene la interfaz manual activada (clave del catálogo).
+export function interfazActivada(user, key) {
+    return Array.isArray(user?.interfaces) && user.interfaces.includes(key);
+}

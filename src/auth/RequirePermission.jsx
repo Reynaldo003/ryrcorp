@@ -1,6 +1,7 @@
 // src/auth/RequirePermission.jsx
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { INTERFACES } from "../config/interfaces";
 
 function tieneAlguno(permisos = [], permitidos = []) {
     if (permisos.includes("ALL")) return true;
@@ -8,7 +9,35 @@ function tieneAlguno(permisos = [], permitidos = []) {
     return permitidos.some((permiso) => permisos.includes(permiso));
 }
 
+// True si la ruta actual pertenece a la interfaz (route prefix match).
+function rutaPerteneceAInterfaz(pathname, item) {
+    if (item.to === "/") return pathname === "/";
+
+    return pathname === item.to || pathname.startsWith(item.to + "/");
+}
+
 export function obtenerRutaInicialPorUsuario(user) {
+    // Administradores: siempre Inicio.
+    if ((user?.permisos || []).includes("ALL")) {
+        return "/";
+    }
+
+    const interfaces = user?.interfaces;
+
+    // Usuarios con interfaces manuales: la ruta inicial es la primera
+    // interfaz habilitada (en el orden del menú), o "/" (Inicio).
+    if (Array.isArray(interfaces)) {
+        for (const item of INTERFACES) {
+            if (item.alwaysOn) continue;
+
+            if (interfaces.includes(item.key)) {
+                return item.to;
+            }
+        }
+
+        return "/";
+    }
+
     const permisos = user?.permisos || [];
 
     if (permisos.includes("ALL")) {
@@ -63,7 +92,20 @@ export default function RequirePermission({ anyOf = [], children }) {
     }
 
     const permisos = user?.permisos || [];
+    const interfaces = user?.interfaces;
     const autorizado = tieneAlguno(permisos, anyOf);
+
+    // Usuarios con interfaces manuales: se autoriza si la ruta pertenece a
+    // una interfaz habilitada (mismo criterio que usa el sidebar).
+    if (Array.isArray(interfaces)) {
+        const interfazHabilitada = INTERFACES.some(
+            (item) =>
+                interfaces.includes(item.key) &&
+                rutaPerteneceAInterfaz(location.pathname, item)
+        );
+
+        if (interfazHabilitada) return children;
+    }
 
     if (autorizado) {
         return children;
