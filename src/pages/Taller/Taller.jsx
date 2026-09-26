@@ -1559,6 +1559,7 @@ function UnassignedCard({ order, onEdit }) {
 
     const estatus = order.estatus_agenda || "Programado";
     const terminado = estatus.toLowerCase() === "terminado";
+    const etapa = order.etapa;
     const asesor = normalizeStr(order.asesor);
 
     return (
@@ -1619,11 +1620,11 @@ function UnassignedCard({ order, onEdit }) {
                 ) : null}
                 <span
                     className={[
-                        "rounded-md text-[8px] px-1 w-15 font-black uppercase tracking-wide",
+                        "rounded-sm text-[8px] px-1 w-18 font-black uppercase tracking-wide",
                         terminado ? "bg-emerald-800 text-white" : "bg-blue-800 text-white",
                     ].join(" ")}
                 >
-                    {estatus}
+                    {etapa}
                 </span>
 
                 {asesor ? (
@@ -1890,11 +1891,21 @@ function ActivityBar({
         : order;
 
     const position = getActivityPosition(visibleOrder);
+
     const workType =
-        order.tipo_bloque === "trabajo" ? getWorkTypeMeta(order) : null;
+        order.tipo_bloque === "trabajo"
+            ? getWorkTypeMeta(order)
+            : null;
+
     const categoryKey = getCategoryKey(order);
-    const isDimmed = Boolean(highlightType) && categoryKey !== highlightType;
-    const isHighlighted = Boolean(highlightType) && categoryKey === highlightType;
+
+    const isDimmed =
+        Boolean(highlightType) &&
+        categoryKey !== highlightType;
+
+    const isHighlighted =
+        Boolean(highlightType) &&
+        categoryKey === highlightType;
 
     function handleDragStart(event) {
         if (resizingRef.current) {
@@ -1903,15 +1914,22 @@ function ActivityBar({
         }
 
         event.dataTransfer.effectAllowed = "move";
+
         event.dataTransfer.setData(
             "application/x-taller-order-id",
-            String(order.id),
+            String(order.id)
         );
-        event.dataTransfer.setData("text/plain", String(order.id));
+
+        event.dataTransfer.setData(
+            "text/plain",
+            String(order.id)
+        );
     }
 
     function handleOpen() {
-        if (!suppressClickRef.current) onEdit(order);
+        if (!suppressClickRef.current) {
+            onEdit(order);
+        }
     }
 
     function handleRemove(event) {
@@ -1925,17 +1943,22 @@ function ActivityBar({
         event.stopPropagation();
 
         const timelineRow = event.currentTarget.closest(
-            '[data-timeline-row="true"]',
+            '[data-timeline-row="true"]'
         );
-        const rowRectangle = timelineRow?.getBoundingClientRect();
+
+        const rowRectangle =
+            timelineRow?.getBoundingClientRect();
 
         if (!rowRectangle?.width) return;
 
         const originalStart =
-            timeToMinutes(order.hora_inicio) ?? MINUTOS_INICIO_AGENDA;
+            timeToMinutes(order.hora_inicio) ??
+            MINUTOS_INICIO_AGENDA;
+
         const originalEnd =
             timeToMinutes(order.hora_fin) ??
             originalStart + INTERVALO_MINUTOS;
+
         const pointerStartX = event.clientX;
 
         let latestStart = originalStart;
@@ -1945,10 +1968,12 @@ function ActivityBar({
         suppressClickRef.current = true;
 
         function handlePointerMove(pointerEvent) {
-            const deltaPixels = pointerEvent.clientX - pointerStartX;
+            const deltaPixels =
+                pointerEvent.clientX - pointerStartX;
+
             const deltaMinutes = roundToQuarter(
                 (deltaPixels / rowRectangle.width) *
-                MINUTOS_TOTALES_AGENDA,
+                MINUTOS_TOTALES_AGENDA
             );
 
             if (edge === "start") {
@@ -1956,18 +1981,20 @@ function ActivityBar({
                     MINUTOS_INICIO_AGENDA,
                     Math.min(
                         originalEnd - INTERVALO_MINUTOS,
-                        originalStart + deltaMinutes,
-                    ),
+                        originalStart + deltaMinutes
+                    )
                 );
+
                 latestEnd = originalEnd;
             } else {
                 latestStart = originalStart;
+
                 latestEnd = Math.max(
                     originalStart + INTERVALO_MINUTOS,
                     Math.min(
                         MINUTOS_FIN_AGENDA,
-                        originalEnd + deltaMinutes,
-                    ),
+                        originalEnd + deltaMinutes
+                    )
                 );
             }
 
@@ -1978,9 +2005,20 @@ function ActivityBar({
         }
 
         function finishResize() {
-            window.removeEventListener("pointermove", handlePointerMove);
-            window.removeEventListener("pointerup", finishResize);
-            window.removeEventListener("pointercancel", finishResize);
+            window.removeEventListener(
+                "pointermove",
+                handlePointerMove
+            );
+
+            window.removeEventListener(
+                "pointerup",
+                finishResize
+            );
+
+            window.removeEventListener(
+                "pointercancel",
+                finishResize
+            );
 
             resizingRef.current = false;
             setResizePreview(null);
@@ -1992,7 +2030,7 @@ function ActivityBar({
                 onResizeOrder(
                     order.id,
                     minutesToTime(latestStart),
-                    minutesToTime(latestEnd),
+                    minutesToTime(latestEnd)
                 );
             }
 
@@ -2001,30 +2039,49 @@ function ActivityBar({
             }, 120);
         }
 
-        window.addEventListener("pointermove", handlePointerMove);
-        window.addEventListener("pointerup", finishResize, { once: true });
-        window.addEventListener("pointercancel", finishResize, { once: true });
+        window.addEventListener(
+            "pointermove",
+            handlePointerMove
+        );
+
+        window.addEventListener(
+            "pointerup",
+            finishResize,
+            { once: true }
+        );
+
+        window.addEventListener(
+            "pointercancel",
+            finishResize,
+            { once: true }
+        );
     }
 
-    const isLunch = order.tipo_bloque === "comida";
-    const isTraining = order.tipo_bloque === "capacitacion";
+    const isLunch =
+        order.tipo_bloque === "comida";
 
-    const visualStyle = getActivityStyles(order);
+    const isTraining =
+        order.tipo_bloque === "capacitacion";
 
-    const primary =
-        isLunch
-            ? "COMIDA"
-            : isTraining
-                ? "CAPACITACIÓN"
-                : order.no_orden
-                    ? `OR ${order.no_orden}`
-                    : order.cliente || "Actividad";
+    const visualStyle =
+        getActivityStyles(order);
 
-    const secondary = isLunch || isTraining
-        ? `${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`
-        : [order.modelo, order.vin].filter(Boolean).join(" · ") ||
-        order.cliente ||
-        "Trabajo de taller";
+    const primary = isLunch
+        ? "COMIDA"
+        : isTraining
+            ? "CAPACITACIÓN"
+            : order.no_orden
+                ? `OR ${order.no_orden}`
+                : order.cliente || "Actividad";
+
+    const secondary =
+        isLunch || isTraining
+            ? `${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`
+            : [order.modelo, order.vin]
+                .filter(Boolean)
+                .join(" · ") ||
+            order.cliente ||
+            "Trabajo de taller";
 
     const detail =
         order.tipo_bloque === "trabajo"
@@ -2033,9 +2090,16 @@ function ActivityBar({
                 .filter(Boolean)
                 .join(" + ")
             : "";
-    const estatus = order.estatus_agenda || "Programado";
-    const terminado = estatus.toLowerCase() === "terminado";
-    const asesor = normalizeStr(order.asesor);
+
+    const etapa = order.etapa;
+    const estatus =
+        order.estatus_agenda || "Programado";
+
+    const terminado =
+        estatus.toLowerCase() === "terminado";
+
+    const asesor =
+        normalizeStr(order.asesor);
 
     return (
         <div
@@ -2046,17 +2110,31 @@ function ActivityBar({
             onDoubleClick={handleOpen}
             onClick={handleOpen}
             onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+                if (
+                    event.key === "Enter" ||
+                    event.key === " "
+                ) {
                     event.preventDefault();
                     handleOpen();
                 }
             }}
             className={[
-                "group absolute z-10 flex h-[55px] cursor-grab flex-col justify-center overflow-hidden rounded-lg border px-2.5 pr-7 pb-0.5 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
-                highlightType
-                    ? ""
-                    : "hover:z-30 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
-                isDimmed ? "opacity-25 saturate-50" : "",
+                "group absolute z-10",
+                "flex h-[64px] cursor-grab flex-col justify-center",
+                "overflow-hidden rounded-lg border",
+                "px-2.5 pr-7 py-1.5",
+                "text-left shadow-sm",
+                "transition-all duration-200",
+                "focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
+
+                !highlightType
+                    ? "hover:z-50 hover:min-w-[285px] hover:-translate-y-0.5 hover:shadow-lg active:cursor-grabbing"
+                    : "",
+
+                isDimmed
+                    ? "opacity-25 saturate-50"
+                    : "",
+
                 isHighlighted
                     ? "z-20 ring-2 ring-[#001E50]/50 ring-offset-1"
                     : "",
@@ -2068,10 +2146,13 @@ function ActivityBar({
             }}
             title={`${primary}\n${secondary}\n${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`}
         >
+            {/* Resize izquierda */}
             <button
                 type="button"
                 draggable={false}
-                onPointerDown={(event) => beginResize(event, "start")}
+                onPointerDown={(event) =>
+                    beginResize(event, "start")
+                }
                 onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -2081,49 +2162,86 @@ function ActivityBar({
             >
                 <span
                     className="h-5 w-[2px] rounded-full transition group-hover:brightness-75"
-                    style={{ backgroundColor: `${visualStyle.borderColor}55` }}
+                    style={{
+                        backgroundColor:
+                            `${visualStyle.borderColor}55`,
+                    }}
                 />
             </button>
 
-            <div className="flex min-w-0 items-center justify-between gap-1.5">
-                <span className="truncate text-[10px] font-black">
+            {/* Cliente / orden + tipo */}
+            <div className="flex min-w-0 items-center gap-2">
+                <span
+                    className="min-w-0 flex-1 truncate text-[11px] font-black leading-tight"
+                    title={primary}
+                >
                     {primary}
                 </span>
-                {!isLunch && !isTraining && workType ? (
-                    <span className="shrink-0 rounded-full bg-white/70 px-1 py-px text-[7px] font-black">
-                        {workType.label}
-                    </span>
-                ) : null}
+
+                {!isLunch &&
+                    !isTraining &&
+                    workType && (
+                        <span className="shrink-0 whitespace-nowrap rounded-full bg-white/75 px-1.5 py-0.5 text-[7px] font-black">
+                            {workType.label}
+                        </span>
+                    )}
             </div>
 
-            <div className="mt-px truncate text-[8px] font-bold opacity-80">
+            {/* Modelo + VIN */}
+            <div
+                className="mt-0.5 truncate text-[9px] font-bold leading-tight opacity-80"
+                title={secondary}
+            >
                 {secondary}
             </div>
 
+            {/* Asesor */}
             {!isLunch &&
                 !isTraining &&
-                asesor ? (
-                <div className="mt-px flex min-w-0 items-center gap-1 text-[8px] font-bold opacity-75">
-                    <User className="h-2.5 w-2.5 shrink-0" />
-                    <span className="truncate">
-                        Asesor: {asesor}
-                    </span>
-                </div>
-            ) : null}
-            {detail ? (
-                <div className="mt-px truncate text-[8px] font-semibold opacity-65">
-                    {detail}
+                asesor && (
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[9px] font-bold leading-tight opacity-75">
+                        <User className="h-3 w-3 shrink-0" />
 
-                    <span
-                        className={[
-                            "rounded-lg text-[8px] px-1 ml-2 w-15 font-black uppercase tracking-wide",
-                            terminado ? "bg-emerald-700 text-white" : "bg-blue-700 text-white",
-                        ].join(" ")}
-                    >
-                        {estatus}
-                    </span>
+                        <span
+                            className="min-w-0 truncate"
+                            title={`Asesor: ${asesor}`}
+                        >
+                            Asesor: {asesor}
+                        </span>
+                    </div>
+                )}
+
+            {/* Detalle + etapa */}
+            {!isLunch && !isTraining && (
+                <div className="mt-0.5 flex min-w-0 items-center gap-2">
+                    {detail && (
+                        <span
+                            className="min-w-0 flex-1 truncate text-[8px] font-semibold leading-tight opacity-65"
+                            title={detail}
+                        >
+                            {detail}
+                        </span>
+                    )}
+
+                    {etapa && (
+                        <span
+                            className={[
+                                "shrink-0 whitespace-nowrap",
+                                "rounded px-1.5 py-0.5",
+                                "text-[8px] font-black uppercase tracking-wide",
+                                terminado
+                                    ? "bg-emerald-700 text-white"
+                                    : "bg-blue-700 text-white",
+                            ].join(" ")}
+                            title={etapa}
+                        >
+                            {etapa}
+                        </span>
+                    )}
                 </div>
-            ) : null}
+            )}
+
+            {/* Eliminar */}
             <button
                 type="button"
                 onMouseDown={(event) => {
@@ -2131,16 +2249,19 @@ function ActivityBar({
                     event.stopPropagation();
                 }}
                 onClick={handleRemove}
-                className="absolute right-1.5 top-1 z-50 flex h-4 w-4 items-center justify-center rounded-md bg-white/60 opacity-0 shadow-sm transition hover:bg-red-600 hover:text-white group-hover:opacity-100"
+                className="absolute right-1.5 top-1 z-50 flex h-4 w-4 items-center justify-center rounded-md bg-white/70 opacity-0 shadow-sm transition hover:bg-red-600 hover:text-white group-hover:opacity-100"
                 title="Quitar de la agenda"
             >
                 <X className="h-2.5 w-2.5" />
             </button>
 
+            {/* Resize derecha */}
             <button
                 type="button"
                 draggable={false}
-                onPointerDown={(event) => beginResize(event, "end")}
+                onPointerDown={(event) =>
+                    beginResize(event, "end")
+                }
                 onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -2150,7 +2271,10 @@ function ActivityBar({
             >
                 <span
                     className="h-5 w-[2px] rounded-full transition group-hover:brightness-75"
-                    style={{ backgroundColor: `${visualStyle.borderColor}55` }}
+                    style={{
+                        backgroundColor:
+                            `${visualStyle.borderColor}55`,
+                    }}
                 />
             </button>
         </div>
@@ -3864,7 +3988,7 @@ export default function Taller() {
                 <div className="min-h-0 flex-1 overflow-auto p-3">
                     <div className="overflow-hidden rounded-xl bg-white shadow-lg">
                         <div className="overflow-x-auto">
-                            <table className="min-w-[1450px] text-left text-sm">
+                            <table className="min-w-full text-left text-sm">
                                 <thead className="bg-[#001E50] text-xs text-white">
                                     <tr>
                                         {[
