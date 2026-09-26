@@ -1,3 +1,4 @@
+//src/lib/apiHojaIngresos.js
 import { buildQuery, http } from "./apiClient";
 
 const BASE_URL = "/hojaingresos/api/hoja-ingresos";

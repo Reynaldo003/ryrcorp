@@ -860,8 +860,10 @@ function orderMatchesEtapas(order, etapas) {
 }
 
 function DraggableOrderCard({ order, onEdit }) {
-    const workType = order.tipo_bloque === "trabajo" ? getWorkTypeMeta(order) : null;
-
+    const workType =
+        order.tipo_bloque === "trabajo"
+            ? getWorkTypeMeta(order)
+            : null;
     function handleDragStart(event) {
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("application/x-taller-order-id", order.id);
@@ -869,8 +871,16 @@ function DraggableOrderCard({ order, onEdit }) {
     }
 
     const cliente =
-        order.cliente && order.cliente !== "Sin nombre" ? order.cliente : "";
-    const vehiculo = [order.modelo, order.vin].filter(Boolean).join(" · ");
+        order.cliente && order.cliente !== "Sin nombre"
+            ? order.cliente
+            : "";
+
+    const vehiculo = [order.modelo, order.vin]
+        .filter(Boolean)
+        .join(" · ");
+
+    const estatus = order.estatus_agenda || "Programado";
+    const status = order.etapa || "Sin estatus";
 
     return (
         <article
@@ -892,14 +902,21 @@ function DraggableOrderCard({ order, onEdit }) {
             <div className="flex items-center justify-between gap-2">
                 <span
                     className="truncate text-[11px] font-black tracking-wide"
-                    style={{ color: workType ? workType.color : "#334155" }}
+                    style={{
+                        color: workType ? workType.color : "#334155",
+                    }}
                 >
-                    {order.no_orden ? `OR ${order.no_orden}` : "SIN ORDEN"}
+                    {order.no_orden
+                        ? `OR ${order.no_orden}`
+                        : "SIN ORDEN"}
                 </span>
+
                 {workType ? (
                     <span
                         className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black text-white"
-                        style={{ backgroundColor: workType.borderColor }}
+                        style={{
+                            backgroundColor: workType.borderColor,
+                        }}
                     >
                         <workType.icon className="h-3 w-3" />
                         {workType.label}
@@ -917,19 +934,39 @@ function DraggableOrderCard({ order, onEdit }) {
                 </div>
             ) : null}
 
-            <div className="mt-1.5 flex items-center justify-between gap-2">
+            <div className="mt-1.5 flex items-center gap-1.5">
+                <span
+                    className={[
+                        "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-black",
+                        estatus === "Terminado"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-blue-200 bg-blue-50 text-blue-700",
+                    ].join(" ")}
+                >
+                    {estatus}
+                </span>
+
                 {order.tecnico ? (
-                    <span className="inline-flex min-w-0 items-center gap-1 text-[10px] font-bold text-slate-600">
+                    <span className="inline-flex min-w-0 flex-1 items-center gap-1 text-[10px] font-bold text-slate-600">
                         <UserCog className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{order.tecnico}</span>
+                        <span className="truncate">
+                            {order.tecnico}
+                        </span>
                     </span>
                 ) : (
-                    <span />
+                    <span className="flex-1" />
                 )}
+                <span className="inline-flex items-center rounded-full bg-[#001E50]/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#001E50]">
+                    {status}
+                </span>
                 {order.hora_inicio ? (
                     <span
                         className="inline-flex shrink-0 items-center gap-1 rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-black tabular-nums"
-                        style={{ color: workType ? workType.color : "#64748B" }}
+                        style={{
+                            color: workType
+                                ? workType.color
+                                : "#64748B",
+                        }}
                     >
                         <Clock3 className="h-3 w-3" />
                         {order.hora_inicio}
@@ -1520,6 +1557,10 @@ function UnassignedCard({ order, onEdit }) {
             ? order.cliente
             : "Sin nombre";
 
+    const estatus = order.estatus_agenda || "Programado";
+    const terminado = estatus.toLowerCase() === "terminado";
+    const asesor = normalizeStr(order.asesor);
+
     return (
         <article
             draggable
@@ -1575,6 +1616,23 @@ function UnassignedCard({ order, onEdit }) {
                         <Clock3 className="h-2.5 w-2.5" />
                         {order.hora_inicio}
                     </span>
+                ) : null}
+                <span
+                    className={[
+                        "rounded-md text-[8px] px-1 w-15 font-black uppercase tracking-wide",
+                        terminado ? "bg-emerald-800 text-white" : "bg-blue-800 text-white",
+                    ].join(" ")}
+                >
+                    {estatus}
+                </span>
+
+                {asesor ? (
+                    <div className="mt-px flex min-w-0 items-center gap-1 text-[8px] font-bold opacity-75">
+                        <User className="h-2.5 w-2.5 shrink-0" />
+                        <span className="truncate">
+                            Asesor: {asesor}
+                        </span>
+                    </div>
                 ) : null}
             </div>
         </article>
@@ -1975,6 +2033,9 @@ function ActivityBar({
                 .filter(Boolean)
                 .join(" + ")
             : "";
+    const estatus = order.estatus_agenda || "Programado";
+    const terminado = estatus.toLowerCase() === "terminado";
+    const asesor = normalizeStr(order.asesor);
 
     return (
         <div
@@ -1991,7 +2052,7 @@ function ActivityBar({
                 }
             }}
             className={[
-                "group absolute z-10 flex h-[44px] cursor-grab flex-col justify-center overflow-hidden rounded-lg border px-2.5 pr-7 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
+                "group absolute z-10 flex h-[55px] cursor-grab flex-col justify-center overflow-hidden rounded-lg border px-2.5 pr-7 pb-0.5 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#001E50]/30",
                 highlightType
                     ? ""
                     : "hover:z-30 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
@@ -2003,7 +2064,7 @@ function ActivityBar({
             style={{
                 ...position,
                 ...visualStyle,
-                top: `${order.lane * ALTURA_CARRIL + 11}px`,
+                top: `${order.lane * ALTURA_CARRIL + 2}px`,
             }}
             title={`${primary}\n${secondary}\n${visibleOrder.hora_inicio} - ${visibleOrder.hora_fin}`}
         >
@@ -2039,12 +2100,30 @@ function ActivityBar({
                 {secondary}
             </div>
 
+            {!isLunch &&
+                !isTraining &&
+                asesor ? (
+                <div className="mt-px flex min-w-0 items-center gap-1 text-[8px] font-bold opacity-75">
+                    <User className="h-2.5 w-2.5 shrink-0" />
+                    <span className="truncate">
+                        Asesor: {asesor}
+                    </span>
+                </div>
+            ) : null}
             {detail ? (
                 <div className="mt-px truncate text-[8px] font-semibold opacity-65">
                     {detail}
+
+                    <span
+                        className={[
+                            "rounded-lg text-[8px] px-1 ml-2 w-15 font-black uppercase tracking-wide",
+                            terminado ? "bg-emerald-700 text-white" : "bg-blue-700 text-white",
+                        ].join(" ")}
+                    >
+                        {estatus}
+                    </span>
                 </div>
             ) : null}
-
             <button
                 type="button"
                 onMouseDown={(event) => {
@@ -2605,6 +2684,8 @@ export default function Taller() {
 
                     agencia: row.agencia || "",
                     no_orden: row.no_orden || "",
+
+                    asesor: normalizeStr(row.asesor || ""),
 
                     cliente:
                         row.cliente_nombre ||
