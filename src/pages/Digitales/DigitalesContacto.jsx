@@ -7019,6 +7019,20 @@ export default function DigitalesContacto() {
                                                         </select>
                                                     </label>
 
+                                                    {String(headerEstado || "").trim().toLowerCase() === "cita programada" ? (
+                                                        <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2.5">
+                                                            <span className="block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">
+                                                                Fecha de la cita
+                                                            </span>
+
+                                                            <div className="mt-1 text-sm font-black text-[#131E5C]">
+                                                                {prospecto?.ultima_cita_agendada
+                                                                    ? `${formatearFechaConDia(prospecto.ultima_cita_agendada)} · ${formatMessageTime(prospecto.ultima_cita_agendada)}`
+                                                                    : "Sin fecha registrada"}
+                                                            </div>
+                                                        </div>
+                                                    ) : null}
+
                                                     {String(headerEstado || "").toLowerCase() === "descalificado" ? (
                                                         <label className="block">
                                                             <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-red-600">
