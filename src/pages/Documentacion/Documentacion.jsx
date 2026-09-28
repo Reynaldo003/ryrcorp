@@ -550,7 +550,7 @@ function ExpedienteCard({
                         <span className="h-1 w-1 rounded-full bg-slate-300" />
 
                         <span className="text-[10px] font-semibold text-slate-400">
-                            {avance.completados} de {avance.total} documentos
+                            {avance.completados} de {avance.total} obligatorios
                         </span>
                     </div>
                 </td>
