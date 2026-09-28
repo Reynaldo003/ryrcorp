@@ -157,23 +157,29 @@ function recortar(texto, max = 22) {
 }
 
 // Las encuestas internas (formularios de QR) no traen un campo de "satisfacción
-// general": traen varias preguntas de 1 a 5. Para compararlas con JD Power se
-// promedia igual que en Home.jsx (puntuacionEncuesta) y RegistroServicio.jsx
-// (obtenerPromedio).
+// general": traen varias preguntas de 1 a 5. El score que se muestra es el
+// promedio (igual que en Home.jsx: puntuacionEncuesta y RegistroServicio.jsx:
+// obtenerPromedio), pero la SEVERIDAD se toma de la peor pregunta, que es lo
+// comparable con JD Power, donde q1_satisfaccion_general es una sola pregunta.
 const PREGUNTAS_PUNTUACION = {
     "Enc. Entrega": ["atencion_asesor", "seguimiento_asesor", "tiempo_entrega_unidad", "experiencia_recepcion"],
     "Enc. Servicio": ["satisfaccion_atencion_asesor", "percepcion_calidad_precio", "satisfaccion_servicio_ryr"],
 };
 
+function calificacionesInternas(item, fuente) {
+    const preguntas = PREGUNTAS_PUNTUACION[fuente];
+    if (!preguntas) return null;
+    return preguntas
+        .map((key) => Number(item[key]))
+        .filter((n) => Number.isFinite(n) && n > 0);
+}
+
 // Busca el valor de satisfacción sin importar el nombre exacto del campo
 // ni si viene como string o número. Cubre todos los casos posibles.
 function extraerSatisfaccion(item, fuente) {
     // 1) Encuestas internas: promedio de sus preguntas de 1 a 5.
-    const preguntas = PREGUNTAS_PUNTUACION[fuente];
-    if (preguntas) {
-        const valores = preguntas
-            .map((key) => Number(item[key]))
-            .filter((n) => Number.isFinite(n) && n > 0);
+    const valores = calificacionesInternas(item, fuente);
+    if (valores) {
         return valores.length ? valores.reduce((acc, n) => acc + n, 0) / valores.length : 0;
     }
 
@@ -225,6 +231,14 @@ function mapearEncuestaComun(item, fuente) {
     const satisfaccionRaw = extraerSatisfaccion(item, fuente);
     const satisfaccion5 = normalizarEscalaCinco(satisfaccionRaw);
 
+    // Severidad: en JD Power manda la calificación general redondeada; en las
+    // encuestas internas manda la peor pregunta, porque promediar varias
+    // esconde la dimensión donde el cliente sí se quejó.
+    const calificaciones = calificacionesInternas(item, fuente);
+    const severidad = calificaciones
+        ? (calificaciones.length ? Math.min(...calificaciones) : 0)
+        : Math.round(satisfaccion5);
+
    
     const esInterna = fuente === "Enc. Servicio" || fuente === "Enc. Entrega";
 
@@ -266,6 +280,10 @@ function mapearEncuestaComun(item, fuente) {
         chasis: chasisFinal,
         q1_satisfaccion_general: satisfaccion5,
         satisfaccion_raw: satisfaccionRaw,
+        // Estrella que define si es NC y su gravedad. En JD Power es el redondeo
+        // de la calificación general; en las encuestas internas es la peor
+        // pregunta, para que "3 estrellas" signifique lo mismo en todas las fuentes.
+        severidad: severidad,
         p3_recomendacion_distribuidor: numeroSeguro(item.p3_recomendacion_distribuidor || item.q3_recomendacion),
         p1_satisfaccion_producto: numeroSeguro(item.p1_satisfaccion_producto),
         comentario:
@@ -284,7 +302,7 @@ function mapearEncuestaComun(item, fuente) {
 }
 
 function esNoConformidad(item) {
-    const s = Math.round(item.q1_satisfaccion_general);
+    const s = item.severidad;
     return s >= 1 && s <= 3;
 }
 
@@ -298,7 +316,7 @@ function agruparPor(datos, obtenerClave, limite = 10) {
         }
         const actual = map.get(clave);
         actual.total += 1;
-        const r = Math.round(item.q1_satisfaccion_general);
+        const r = item.severidad;
         if (r === 1) actual.rating1 += 1;
         else if (r === 2) actual.rating2 += 1;
         else if (r === 3) actual.rating3 += 1;
@@ -1227,9 +1245,9 @@ function ChartCard({ title, subtitle, children, className = "" }) {
 
 function VistaGraficas({ datos }) {
     const total = datos.length;
-    const rating1 = datos.filter((d) => Math.round(d.q1_satisfaccion_general) === 1).length;
-    const rating2 = datos.filter((d) => Math.round(d.q1_satisfaccion_general) === 2).length;
-    const rating3 = datos.filter((d) => Math.round(d.q1_satisfaccion_general) === 3).length;
+    const rating1 = datos.filter((d) => d.severidad === 1).length;
+    const rating2 = datos.filter((d) => d.severidad === 2).length;
+    const rating3 = datos.filter((d) => d.severidad === 3).length;
 
     const porMes = useMemo(() => {
         const map = new Map();
@@ -1241,7 +1259,7 @@ function VistaGraficas({ datos }) {
             }
             const a = map.get(key);
             a.total += 1;
-            const r = Math.round(item.q1_satisfaccion_general);
+            const r = item.severidad;
             if (r === 1) a.rating1 += 1;
             else if (r === 2) a.rating2 += 1;
             else if (r === 3) a.rating3 += 1;
@@ -1482,9 +1500,11 @@ export default function NoConformidad() {
 
     // Se acumulan en cada carga (antes de filtrar por año) para que el <select>
     // de años no se quede con una sola opción al elegir un año concreto.
+    // OJO: el <select> entrega strings y aniosConDatos números; sin el
+    // Number() el Set mezclaría 2024 y "2024" y el año saldría duplicado.
     const aniosDisponibles = useMemo(() => {
         const set = new Set(aniosConDatos);
-        if (anio !== "Todos") set.add(anio);
+        if (anio !== "Todos" && !Number.isNaN(Number(anio))) set.add(Number(anio));
         return [...set].sort((a, b) => b - a);
     }, [aniosConDatos, anio]);
 
@@ -1613,9 +1633,9 @@ export default function NoConformidad() {
 
     const resumen = useMemo(() => {
         const total = datosFiltrados.length;
-        const critico = datosFiltrados.filter((d) => Math.round(d.q1_satisfaccion_general) === 1).length;
-        const grave = datosFiltrados.filter((d) => Math.round(d.q1_satisfaccion_general) === 2).length;
-        const leve = datosFiltrados.filter((d) => Math.round(d.q1_satisfaccion_general) === 3).length;
+        const critico = datosFiltrados.filter((d) => d.severidad === 1).length;
+        const grave = datosFiltrados.filter((d) => d.severidad === 2).length;
+        const leve = datosFiltrados.filter((d) => d.severidad === 3).length;
         const conComentario = datosFiltrados.filter((d) => d.comentario).length;
         return { total, critico, grave, leve, conComentario };
     }, [datosFiltrados]);
@@ -1708,7 +1728,7 @@ export default function NoConformidad() {
                         <div className="relative">
                             <select
                                 value={anio}
-                                onChange={(e) => setAnio(e.target.value)}
+                                onChange={(e) => { setAnio(e.target.value); setMes("Todos"); }}
                                 className="h-10 appearance-none rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] pl-3 pr-8 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1555C7]"
                             >
                                 <option value="Todos">Todos los años</option>
