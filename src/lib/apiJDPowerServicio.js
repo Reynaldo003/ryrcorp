@@ -1,5 +1,5 @@
 // src/lib/apiJDPowerServicio.js
-import { http } from "./apiPruebas";
+import { http } from "./apiClient";
 
 function esFiltroVacio(valor) {
   return (

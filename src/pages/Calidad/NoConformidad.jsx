@@ -35,7 +35,6 @@ import {
     RefreshCw,
     Save,
     Search,
-    SlidersHorizontal,
     Star,
     TableProperties,
     Tag,
@@ -60,6 +59,7 @@ import {
     obtenerEncuestasJDPower,
     obtenerOpcionesJDPower,
 } from "../../lib/apiJDPower";
+import { obtenerEncuestasJDPowerServicio } from "../../lib/apiJDPowerServicio";
 import { apiServicio } from "../../lib/apiServicio";
 import { apiEncuestas } from "../../lib/apiEncuestas";
 import { api } from "../../lib/api";
@@ -75,7 +75,6 @@ const CHART_COLORS = ["#D85A30", "#F0A500", "#FCD34D", "#0E718A", "#86B8C8", "#7
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const MESES_CORTOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-const ANIO_ACTUAL = String(new Date().getFullYear());
 
 const TooltipStyle = {
     fontSize: 12,
@@ -94,6 +93,10 @@ const CONCESIONARIAS = {
     "2927": "VW Poza Rica",
     "2929": "VW Tuxpan",
 };
+
+// Orden en que se pintan los botones de agencia en la barra de filtros.
+const ORDEN_AGENCIAS = ["1905", "2923", "2924", "2927", "2929"];
+const AGENCIAS = ORDEN_AGENCIAS.map((codigo) => ({ codigo, nombre: CONCESIONARIAS[codigo] }));
 
 function nombreConcesionaria(codigo) {
     return CONCESIONARIAS[String(codigo)] || null;
@@ -123,6 +126,21 @@ function normalizarTexto(valor) {
         .trim();
 }
 
+// Un registro pertenece a la agencia si su código coincide o si el nombre
+// normalizado coincide con el del botón (ignorando prefijos "VW" y acentos).
+function coincideAgencia(item, agencia) {
+    if (!agencia) return true;
+
+    const codigo = String(item.codigo_concesionaria ?? "").trim();
+    if (codigo && codigo === agencia.codigo) return true;
+
+    const objetivo = normalizarTexto(agencia.nombre).replace(/^vw\s*/, "");
+    const nombre = normalizarTexto(item.concesionaria).replace(/^vw\s*/, "");
+    if (!nombre || !objetivo) return false;
+
+    return nombre.includes(objetivo) || objetivo.includes(nombre);
+}
+
 function numero(valor) {
     return numeroSeguro(valor).toLocaleString("es-MX");
 }
@@ -138,9 +156,28 @@ function recortar(texto, max = 22) {
     return v.length <= max ? v : `${v.slice(0, max)}…`;
 }
 
+// Las encuestas internas (formularios de QR) no traen un campo de "satisfacción
+// general": traen varias preguntas de 1 a 5. Para compararlas con JD Power se
+// promedia igual que en Home.jsx (puntuacionEncuesta) y RegistroServicio.jsx
+// (obtenerPromedio).
+const PREGUNTAS_PUNTUACION = {
+    "Enc. Entrega": ["atencion_asesor", "seguimiento_asesor", "tiempo_entrega_unidad", "experiencia_recepcion"],
+    "Enc. Servicio": ["satisfaccion_atencion_asesor", "percepcion_calidad_precio", "satisfaccion_servicio_ryr"],
+};
+
 // Busca el valor de satisfacción sin importar el nombre exacto del campo
 // ni si viene como string o número. Cubre todos los casos posibles.
-function extraerSatisfaccion(item) {
+function extraerSatisfaccion(item, fuente) {
+    // 1) Encuestas internas: promedio de sus preguntas de 1 a 5.
+    const preguntas = PREGUNTAS_PUNTUACION[fuente];
+    if (preguntas) {
+        const valores = preguntas
+            .map((key) => Number(item[key]))
+            .filter((n) => Number.isFinite(n) && n > 0);
+        return valores.length ? valores.reduce((acc, n) => acc + n, 0) / valores.length : 0;
+    }
+
+    // 2) JD Power: un único campo de satisfacción general.
     const candidatos = [
         "q1_satisfaccion_general",
         "satisfaccion_general",
@@ -185,7 +222,7 @@ function mapearEncuestaComun(item, fuente) {
     const periodoMostrar = fechaBase ? String(fechaBase).slice(0, 10) : "";
 
    
-    const satisfaccionRaw = extraerSatisfaccion(item);
+    const satisfaccionRaw = extraerSatisfaccion(item, fuente);
     const satisfaccion5 = normalizarEscalaCinco(satisfaccionRaw);
 
    
@@ -195,6 +232,7 @@ function mapearEncuestaComun(item, fuente) {
         item.id_ventas ||
         item.id_servicio ||
         item.nombre_OS_cliente ||
+        item.nombre_cliente ||
         String(item.id_encuesta || item.id || "");
 
     const idEncuesta = String(item.id_encuesta || item.id_muestra || "");
@@ -1424,24 +1462,13 @@ function VistaGraficas({ datos }) {
     );
 }
 
-// ─── Estilos de botón activo — igual al TopNav del CRM ───────────────────────
-const BTN_ACTIVO_STYLE = {
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderColor: "rgba(255,255,255,0.35)",
-    color: "#ffffff",
-};
-const BTN_INACTIVO_CLASS =
-    "border-gray-300 bg-white text-gray-600 hover:border-red-300 hover:text-red-600";
-const BTN_INACTIVO_MES_CLASS =
-    "border-gray-200 bg-white text-gray-600 hover:border-red-300 hover:bg-red-50";
-
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function NoConformidad() {
     const [vista, setVista] = useState("graficas");
-    const [anio, setAnio] = useState(ANIO_ACTUAL);
+    const [anio, setAnio] = useState("Todos");
     const [mes, setMes] = useState("Todos");
     const [fuenteActiva, setFuenteActiva] = useState("Todas");
-    const [concesionariaActiva, setConcesionariaActiva] = useState("Todas");
+    const [agenciaSel, setAgenciaSel] = useState(null);
     const [busqueda, setBusqueda] = useState("");
     const [itemDetalle, setItemDetalle] = useState(null);
 
@@ -1449,11 +1476,17 @@ export default function NoConformidad() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [aniosConDatos, setAniosConDatos] = useState([]);
 
+    const periodoTodo = anio === "Todos" && mes === "Todos";
+
+    // Se acumulan en cada carga (antes de filtrar por año) para que el <select>
+    // de años no se quede con una sola opción al elegir un año concreto.
     const aniosDisponibles = useMemo(() => {
-        const set = new Set(datos.map((d) => d.anio).filter(Boolean));
+        const set = new Set(aniosConDatos);
+        if (anio !== "Todos") set.add(anio);
         return [...set].sort((a, b) => b - a);
-    }, [datos]);
+    }, [aniosConDatos, anio]);
 
     // ← mesesDisponibles ya no se usa para bloquear, solo para info
     const mesesDisponibles = useMemo(() => {
@@ -1479,13 +1512,13 @@ export default function NoConformidad() {
                         return lista.map((item) => mapearEncuestaComun(item, "JD Power Ventas"));
                     })(),
                     (async () => {
+                        const data = await obtenerEncuestasJDPowerServicio(filtrosBase, { signal: controller.signal });
+                        const lista = Array.isArray(data) ? data : data.results ?? [];
+                        return lista.map((item) => mapearEncuestaComun(item, "JD Power Servicio"));
+                    })(),
+                    (async () => {
                         const data = await apiServicio.list();
                         const lista = Array.isArray(data) ? data : data.results ?? [];
-
-                        // 🔍 DEBUG: ver la forma real del primer registro crudo
-                        console.log("🔬 Primer item crudo de Enc. Servicio:", lista[0]);
-                        console.log("🔬 Keys disponibles:", lista[0] ? Object.keys(lista[0]) : "sin datos");
-
                         return lista.map((item) => mapearEncuestaComun(item, "Enc. Servicio"));
                     })(),
                     (async () => {
@@ -1497,12 +1530,15 @@ export default function NoConformidad() {
 
                 // Visibilidad: si alguna fuente falla, que se note en consola en vez de
                 // desaparecer en silencio.
-                const NOMBRES_FUENTE = ["JD Power Ventas", "Enc. Servicio", "Enc. Entrega"];
+                const NOMBRES_FUENTE = [
+                    "JD Power Ventas",
+                    "JD Power Servicio",
+                    "Enc. Servicio",
+                    "Enc. Entrega",
+                ];
                 resultados.forEach((r, i) => {
                     if (r.status === "rejected") {
                         console.error(`❌ Falló "${NOMBRES_FUENTE[i]}":`, r.reason);
-                    } else {
-                        console.log(`✅ "${NOMBRES_FUENTE[i]}" trajo ${r.value.length} registros`);
                     }
                 });
 
@@ -1510,33 +1546,21 @@ export default function NoConformidad() {
                     .filter((r) => r.status === "fulfilled")
                     .flatMap((r) => r.value);
 
-                // 🔍 DEBUG: distribución real de estrellas por fuente, ANTES de cualquier filtro
-                const distribucion = {};
-                todosSinFiltrarNC.forEach((d) => {
-                    const key = d.fuente;
-                    if (!distribucion[key]) distribucion[key] = { total: 0, porEstrella: {} };
-                    distribucion[key].total += 1;
-                    const r = Math.round(d.q1_satisfaccion_general);
-                    distribucion[key].porEstrella[r] = (distribucion[key].porEstrella[r] || 0) + 1;
-                });
-                console.log("📊 Distribución de estrellas por fuente:", JSON.stringify(distribucion, null, 2));
-
                 let todos = todosSinFiltrarNC.filter(esNoConformidad);
-                console.log(`🔎 Después de filtro esNoConformidad (≤3★): ${todos.length} de ${todosSinFiltrarNC.length}`);
+
+                // Años vistos en esta carga (antes de filtrar) para el <select> de periodo.
+                const aniosCarga = [...new Set(todos.map((d) => d.anio).filter(Boolean))];
+                setAniosConDatos((prev) => {
+                    const union = [...new Set([...prev, ...aniosCarga])].sort((a, b) => b - a);
+                    return union.length === prev.length && union.every((y, i) => y === prev[i]) ? prev : union;
+                });
 
                 if (anio !== "Todos") {
-                    const antes = todos.length;
                     todos = todos.filter((d) => String(d.anio) === String(anio));
-                    console.log(`📅 Filtro por año (${anio}): ${todos.length} de ${antes}`);
                 }
                 if (mes !== "Todos") {
-                    const antes = todos.length;
                     todos = todos.filter((d) => String(d.mes) === String(mes));
-                    console.log(`📅 Filtro por mes (${mes}): ${todos.length} de ${antes}`);
                 }
-
-                console.log(`✅ TOTAL final que se muestra en pantalla: ${todos.length}`);
-                setDatos(todos);
 
                 setDatos(todos);
             } catch (err) {
@@ -1559,8 +1583,8 @@ export default function NoConformidad() {
             d = d.filter((item) => item.fuente === fuenteActiva);
         }
 
-        if (concesionariaActiva !== "Todas") {
-            d = d.filter((item) => String(item.codigo_concesionaria) === String(concesionariaActiva));
+        if (agenciaSel) {
+            d = d.filter((item) => coincideAgencia(item, agenciaSel));
         }
 
         const texto = normalizarTexto(busqueda);
@@ -1585,7 +1609,7 @@ export default function NoConformidad() {
         }
 
         return d;
-    }, [datos, fuenteActiva, concesionariaActiva, busqueda]);
+    }, [datos, fuenteActiva, agenciaSel, busqueda]);
 
     const resumen = useMemo(() => {
         const total = datosFiltrados.length;
@@ -1674,56 +1698,69 @@ export default function NoConformidad() {
                 </div>
             </div>
 
-            {/* Filtros */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            {/* Filtros — mismo layout que /gestion_negocio/prospectos_digitales */}
+            <div className="rounded-xl border border-[#9EA9BD] bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    {/* Periodo */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <CalendarDays size={18} className="text-[#131E5C]" />
+                        <span className="text-sm font-black uppercase tracking-[0.08em] text-[#131E5C]">Periodo</span>
+                        <div className="relative">
+                            <select
+                                value={anio}
+                                onChange={(e) => setAnio(e.target.value)}
+                                className="h-10 appearance-none rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] pl-3 pr-8 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1555C7]"
+                            >
+                                <option value="Todos">Todos los años</option>
+                                {aniosDisponibles.map((item) => (
+                                    <option key={item} value={String(item)}>{item}</option>
+                                ))}
+                            </select>
+                            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[#7A859C]" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => { setAnio("Todos"); setMes("Todos"); }}
+                            className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold uppercase tracking-wide transition ${
+                                periodoTodo
+                                    ? "bg-[#131E5C] text-white"
+                                    : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                }`}
+                        >
+                            TODO
+                        </button>
+                    </div>
 
-                {/* ── Años ── fondo NAVY como el TopNav */}
-                <div
-                    className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-3"
-                    style={{ backgroundColor: NAVY }}
-                >
-                    <SlidersHorizontal size={15} className="text-white/50" />
-                    {aniosDisponibles.map((item) => {
-                        const activo = anio === String(item);
-                        return (
+                    {/* Agencia */}
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setAgenciaSel(null)}
+                            className={`rounded-lg px-4 py-2 text-sm font-bold transition ${!agenciaSel
+                                ? "bg-[#131E5C] text-white"
+                                : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"
+                                }`}
+                        >
+                            Todas
+                        </button>
+                        {AGENCIAS.map((agencia) => (
                             <button
-                                key={item}
-                                onClick={() => { setAnio(activo ? "Todos" : String(item)); setMes("Todos"); }}
-                                className="rounded-full border px-4 py-1.5 text-sm font-semibold transition"
-                                style={
-                                    activo
-                                        ? BTN_ACTIVO_STYLE
-                                        : { borderColor: "rgba(255,255,255,0.20)", backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.75)" }
-                                }
+                                key={agencia.codigo}
+                                type="button"
+                                onClick={() => setAgenciaSel(agencia)}
+                                className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold transition ${agenciaSel?.codigo === agencia.codigo
+                                    ? "bg-[#131E5C] text-white"
+                                    : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                    }`}
                             >
-                                {item}
+                                {agencia.nombre}
                             </button>
-                        );
-                    })}
-                    {/* Botón "Todos" */}
-                    {(() => {
-                        const activo = anio === "Todos";
-                        return (
-                            <button
-                                onClick={() => { setAnio("Todos"); setMes("Todos"); }}
-                                className="rounded-full border px-4 py-1.5 text-sm font-semibold transition"
-                                style={
-                                    activo
-                                        ? BTN_ACTIVO_STYLE
-                                        : { borderColor: "rgba(255,255,255,0.20)", backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.75)" }
-                                }
-                            >
-                                Todos
-                            </button>
-                        );
-                    })()}
+                        ))}
+                    </div>
                 </div>
 
-                {/* ── Meses — siempre navegables, fondo NAVY más suave ── */}
-                <div
-                    className="flex flex-wrap items-center gap-1 border-b border-white/10 px-4 py-3"
-                    style={{ backgroundColor: "#111d50" }}
-                >
+                {/* Meses */}
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
                     {MESES_CORTOS.map((item, index) => {
                         const mesNumero = index + 1;
                         const activo = mes === String(mesNumero);
@@ -1732,15 +1769,15 @@ export default function NoConformidad() {
                         return (
                             <button
                                 key={item}
+                                type="button"
                                 onClick={() => setMes(activo ? "Todos" : String(mesNumero))}
-                                className="rounded-full border px-3 py-1.5 text-sm font-semibold transition"
-                                style={
+                                className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 text-sm font-bold transition ${
                                     activo
-                                        ? BTN_ACTIVO_STYLE
+                                        ? "bg-[#131E5C] text-white shadow"
                                         : tieneDatos
-                                            ? { borderColor: "rgba(255,255,255,0.20)", backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.75)" }
-                                            : { borderColor: "rgba(255,255,255,0.08)", backgroundColor: "transparent", color: "rgba(255,255,255,0.30)" }
-                                }
+                                            ? "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                            : "bg-white text-[#131E5C]/30 hover:bg-[#131E5C] hover:text-white"
+                                    }`}
                             >
                                 {item}
                             </button>
@@ -1748,21 +1785,14 @@ export default function NoConformidad() {
                     })}
                 </div>
 
-                {/* Fuente + Concesionaria + búsqueda */}
-                <div className="flex flex-wrap items-end gap-4 px-4 py-3">
+                {/* Fuente + búsqueda */}
+                <div className="mt-4 flex flex-wrap items-end gap-4 border-t border-[#E1E6EF] pt-4">
                     <SelectField label="Fuente" value={fuenteActiva} onChange={setFuenteActiva}>
                         <option value="Todas">Todas</option>
                         <option value="JD Power Ventas">JD Power Ventas</option>
                         <option value="JD Power Servicio">JD Power Servicio</option>
                         <option value="Enc. Entrega">Enc. Entrega</option>
                         <option value="Enc. Servicio">Enc. Servicio</option>
-                    </SelectField>
-
-                    <SelectField label="Concesionaria" value={concesionariaActiva} onChange={setConcesionariaActiva}>
-                        <option value="Todas">Todas</option>
-                        {Object.entries(CONCESIONARIAS).map(([codigo, nombre]) => (
-                            <option key={codigo} value={codigo}>{nombre}</option>
-                        ))}
                     </SelectField>
 
                     <div className="min-w-[260px] flex-1">
@@ -1779,7 +1809,7 @@ export default function NoConformidad() {
                     </div>
 
                     <button
-                        onClick={() => { setAnio(ANIO_ACTUAL); setMes("Todos"); setFuenteActiva("Todas"); setConcesionariaActiva("Todas"); setBusqueda(""); }}
+                        onClick={() => { setAnio("Todos"); setMes("Todos"); setFuenteActiva("Todas"); setAgenciaSel(null); setBusqueda(""); }}
                         className="h-[38px] rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                     >
                         Limpiar
