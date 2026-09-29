@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/Presupuestos.jsx
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
     CalendarDays,
     ChevronDown,
@@ -30,6 +30,7 @@ import {
     getOpcionesPresupuestos,
     getPresupuestos,
     getPresupuestosDashboard,
+    getPresupuestosRefacciones,
 } from "../../lib/apiPresupuestos";
 
 /* ============================================================
@@ -168,7 +169,9 @@ function normalizarAsesores(items = []) {
     return [...items]
         .sort((a, b) => numero(b.presupuestos) - numero(a.presupuestos))
         .map((item, index) => ({
-            name: item.cod_func != null ? `Asesor ${item.cod_func}` : "Sin asignar",
+            name:
+                item.nm_funcionario ||
+                (item.cod_func != null ? `Asesor ${item.cod_func}` : "Sin asignar"),
             value: numero(item.presupuestos),
             color: PALETA_VW[index % PALETA_VW.length],
         }));
@@ -185,9 +188,13 @@ function normalizarEstatus(items = []) {
 
 function normalizarSeguimiento(items = []) {
     if (!Array.isArray(items)) return [];
+
     return items.map((item) => ({
-        asesor: item.cod_func != null ? `Asesor ${item.cod_func}` : "Sin asignar",
+        asesor:
+            item.nm_funcionario ||
+            (item.cod_func != null ? `Asesor ${item.cod_func}` : "Sin asignar"),
         presupuesto: item.nr_orcamento,
+        agencia: item.agencia || "",
         fecha: formatearFecha(item.dt_emissao),
         sit: item.sit || "",
         vin: item.chassi || "",
@@ -833,7 +840,69 @@ function BloquePresupuesto({ titulo, data, icono, tipo }) {
 ============================================================ */
 function DesgloseAsesores({ asesores, seguimiento, exportarAExcel }) {
     const [asesorExpandido, setAsesorExpandido] = useState(null);
+    const [presupuestoExpandido, setPresupuestoExpandido] = useState(null);
+    const [refaccionesPorPresupuesto, setRefaccionesPorPresupuesto] = useState({});
+    const [cargandoRefacciones, setCargandoRefacciones] = useState({});
+    const [errorRefacciones, setErrorRefacciones] = useState({});
+
     const maxVal = Math.max(...asesores.map(a => a.value), 1);
+
+    const clavePresupuesto = (row) =>
+        `${row.agencia || "SIN_AGENCIA"}-${row.presupuesto}`;
+
+    const togglePresupuesto = async (row) => {
+        const clave = clavePresupuesto(row);
+
+        if (presupuestoExpandido === clave) {
+            setPresupuestoExpandido(null);
+            return;
+        }
+
+        setPresupuestoExpandido(clave);
+
+        if (refaccionesPorPresupuesto[clave]) {
+            return;
+        }
+
+        setCargandoRefacciones((prev) => ({
+            ...prev,
+            [clave]: true,
+        }));
+
+        setErrorRefacciones((prev) => ({
+            ...prev,
+            [clave]: "",
+        }));
+
+        try {
+            const respuesta = await getPresupuestosRefacciones({
+                agencia: row.agencia,
+                nr_orcamento: row.presupuesto,
+                page_size: 500,
+            });
+
+            setRefaccionesPorPresupuesto((prev) => ({
+                ...prev,
+                [clave]: Array.isArray(respuesta?.results)
+                    ? respuesta.results
+                    : [],
+            }));
+        } catch (error) {
+            console.error("Error cargando conceptos del presupuesto:", error);
+
+            setErrorRefacciones((prev) => ({
+                ...prev,
+                [clave]:
+                    error?.message ||
+                    "No fue posible cargar los conceptos del presupuesto.",
+            }));
+        } finally {
+            setCargandoRefacciones((prev) => ({
+                ...prev,
+                [clave]: false,
+            }));
+        }
+    };
 
     return (
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col space-y-4">
@@ -921,22 +990,163 @@ function DesgloseAsesores({ asesores, seguimiento, exportarAExcel }) {
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        sublista.map((row, index) => (
-                                                            <tr key={`${row.presupuesto}-${index}`} className="hover:bg-[#F8FAFC] transition-colors">
-                                                                <td className="px-3 py-1.5 whitespace-nowrap font-medium text-[#001E50]">
-                                                                    {row.presupuesto}
-                                                                </td>
-                                                                <td className="px-3 py-1.5 whitespace-nowrap text-center text-slate-500">
-                                                                    {row.fecha}
-                                                                </td>
-                                                                <td className="px-3 py-1.5 text-center">
-                                                                    <EstatusSit value={row.sit} />
-                                                                </td>
-                                                                <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">
-                                                                    {row.vin}
-                                                                </td>
-                                                            </tr>
-                                                        ))
+                                                        sublista.map((row, index) => {
+                                                            const clave = clavePresupuesto(row);
+                                                            const abierto = presupuestoExpandido === clave;
+
+                                                            const piezas = refaccionesPorPresupuesto[clave] || [];
+                                                            const cargando = cargandoRefacciones[clave];
+                                                             const error = errorRefacciones[clave];
+
+                                                            const totalConceptos = piezas.reduce(
+                                                                (total, pieza) =>
+                                                                    total + numero(pieza.vr_liq_pc),
+                                                                0
+                                                            );
+
+                                                            return (
+                                                                <Fragment key={`${clave}-${index}`}>
+                                                                    <tr
+                                                                        key={`${clave}-${index}`}
+                                                                        onClick={() => togglePresupuesto(row)}
+                                                                        className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                                                                    >
+                                                                        <td className="px-3 py-1.5 whitespace-nowrap font-medium text-[#001E50]">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <ChevronRight
+                                                                                    className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                                                                                        abierto ? "rotate-90" : ""
+                                                                                    }`}
+                                                                                />
+                                                                                <span>{row.presupuesto}</span>
+                                                                            </div>
+                                                                        </td>
+
+                                                                        <td className="px-3 py-1.5 whitespace-nowrap text-center text-slate-500">
+                                                                            {row.fecha}
+                                                                        </td>
+
+                                                                        <td className="px-3 py-1.5 text-center">
+                                                                            <EstatusSit value={row.sit} />
+                                                                        </td>
+
+                                                                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">
+                                                                            {row.vin}
+                                                                        </td>
+                                                                    </tr>
+
+                                                                    {abierto && (
+                                                                        <tr key={`${clave}-detalle`}>
+                                                                            <td colSpan={4} className="bg-[#F7F8FC] p-0">
+                                                                                <div className="border-y border-slate-200 px-4 py-4">
+                                                                                    <div className="mb-3">
+                                                                                        <div className="font-vw-head font-bold text-[#001E50]">
+                                                                                            Conceptos del presupuesto {row.presupuesto}
+                                                                                        </div>
+
+                                                                                        <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                                                                                            {row.agencia || "Sin agencia"}
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {cargando ? (
+                                                                                        <div className="py-6 text-center text-xs font-semibold text-slate-400">
+                                                                                            Cargando conceptos...
+                                                                                        </div>
+                                                                                    ) : error ? (
+                                                                                        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-600">
+                                                                                            {error}
+                                                                                        </div>
+                                                                                    ) : piezas.length > 0 ? (
+                                                                                        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                                                                            <table className="min-w-[850px] w-full text-xs">
+                                                                                                <thead>
+                                                                                                    <tr className="bg-[#E9EDF5] text-[#001E50] font-vw-head font-bold">
+                                                                                                        <th className="px-3 py-2 text-left">
+                                                                                                            Código
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2 text-left">
+                                                                                                            Descripción
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2 text-right">
+                                                                                                            Cantidad
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2 text-right">
+                                                                                                            Precio
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2 text-right">
+                                                                                                            Descuento
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2 text-right">
+                                                                                                            Total
+                                                                                                        </th>
+                                                                                                    </tr>
+                                                                                                </thead>
+
+                                                                                                <tbody>
+                                                                                                    {piezas.map((pieza, piezaIndex) => (
+                                                                                                        <tr
+                                                                                                            key={
+                                                                                                                pieza.rowid ??
+                                                                                                                `${pieza.cod_prod}-${piezaIndex}`
+                                                                                                            }
+                                                                                                            className="border-t border-slate-100 hover:bg-slate-50"
+                                                                                                        >
+                                                                                                            <td className="px-3 py-2 font-bold text-[#001E50]">
+                                                                                                                {pieza.cod_prod || "—"}
+                                                                                                            </td>
+
+                                                                                                            <td className="px-3 py-2">
+                                                                                                                {pieza.nm_prod || "—"}
+                                                                                                            </td>
+
+                                                                                                            <td className="px-3 py-2 text-right tabular-nums">
+                                                                                                                {numero(pieza.qt_prod)}
+                                                                                                            </td>
+
+                                                                                                            <td className="px-3 py-2 text-right tabular-nums">
+                                                                                                                ${dinero(pieza.preco_pc)}
+                                                                                                            </td>
+
+                                                                                                            <td className="px-3 py-2 text-right tabular-nums">
+                                                                                                                ${dinero(pieza.vr_desc_pc)}
+                                                                                                            </td>
+
+                                                                                                            <td className="px-3 py-2 text-right font-bold text-[#001E50] tabular-nums">
+                                                                                                                ${dinero(pieza.vr_liq_pc)}
+                                                                                                            </td>
+                                                                                                        </tr>
+                                                                                                    ))}
+                                                                                                </tbody>
+
+                                                                                                <tfoot>
+                                                                                                    <tr className="border-t-2 border-[#001E50] bg-[#EEF2F8] text-[#001E50]">
+                                                                                                        <td
+                                                                                                            colSpan={5}
+                                                                                                            className="px-3 py-2 text-right font-black uppercase"
+                                                                                                        >
+                                                                                                            Total
+                                                                                                        </td>
+
+                                                                                                        <td className="px-3 py-2 text-right font-black tabular-nums">
+                                                                                                            ${dinero(totalConceptos)}
+                                                                                                        </td>
+                                                                                                    </tr>
+                                                                                                </tfoot>
+                                                                                            </table>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-xs font-semibold text-slate-400">
+                                                                                            No se encontraron conceptos para este presupuesto.
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </Fragment>
+                                                            );
+                                                        })
                                                     )}
                                                 </tbody>
                                             </table>
