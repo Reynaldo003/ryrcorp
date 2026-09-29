@@ -1,7 +1,7 @@
 ﻿//volkswagen
 //src/pages/Digitales/DigitalesProspectos.jsx
 import { useMemo, useState, useRef, useEffect, useDeferredValue, useCallback } from "react";
-import { Plus, Search, X, Save, User, Van, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MessageSquareShare, Building2, FileText, FileDown, Car, Trash2, Loader2, CalendarPlus, CalendarCheck, Phone, LayoutList, UserStar, ClipboardCheck, BrainCircuit, CalendarRange, Table2, BarChart3, Clock3, AlertCircle, TrendingUp, Activity, Target, Paperclip, UploadCloud, Users, Bot, UserCheck, HandCoins, Gauge, LayoutTemplate } from "lucide-react";
+import { Plus, Search, X, Save, User, Van, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MessageSquareShare, Building2, FileText, FileDown, Car, Trash2, Loader2, CalendarPlus, CalendarCheck, Phone, LayoutList, UserStar, ClipboardCheck, BrainCircuit, CalendarRange, Table2, BarChart3, Clock3, AlertCircle, TrendingUp, Activity, Target, Paperclip, UploadCloud, Users, Bot, UserCheck, HandCoins, Gauge, LayoutTemplate, Check, Eye } from "lucide-react";
 import CONCESIONARIO from "/concesionario.png";
 import WAP from "/whatsapp.svg";
 import FB from "/facebook.svg";
@@ -33,6 +33,27 @@ import {
 } from "../../config/lineasWhatsApp";
 
 const PAGE_SIZE = 200;
+const STORAGE_COLUMNAS_PROSPECTOS = "prospectos_columnas_visibles";
+const COLUMNAS_PROSPECTOS = [
+    { key: "agencia", label: "Dealer", sortKey: "agencia" },
+    { key: "cliente", label: "Cliente" },
+    { key: "fecha_registro", label: "Fecha registro", sortKey: "fecha_reclamacion" },
+    { key: "primer_contacto", label: "1er contacto", sortKey: "primer_contacto_at" },
+    { key: "ultimo_contacto", label: "Último contacto", sortKey: "ultimo_contacto_at" },
+    { key: "respuesta", label: "Respuesta" },
+    { key: "business", label: "Business" },
+    { key: "interes", label: "Interés" },
+    { key: "prioridad", label: "Prioridad" },
+    { key: "estado", label: "Estado", sortKey: "estado" },
+    { key: "canal", label: "Canal" },
+    { key: "asesor_digital", label: "Asesor Digital" },
+    { key: "asesor_piso", label: "Asesor Piso" },
+    { key: "score", label: "Score" },
+    { key: "perfil_financiero", label: "Perfil financiero" },
+    { key: "perfil_compra", label: "Perfil compra" },
+    { key: "resumen", label: "Resumen" },
+    { key: "acciones", label: "Acciones" },
+];
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = {
     Nuevos: { Icon: Car, label: "Nuevos" },
@@ -921,12 +942,55 @@ function badgeCls(value) {
 function Skeleton({ className = "" }) {
     return <div className={cls("animate-pulse rounded-md bg-black/10", className)} />;
 }
-function SkeletonRow() {
+function SkeletonRow({ columnas = 5 }) {
     return (<tr className="animate-pulse">
-        {[32, 40, 28, 28, 20].map((w, i) => (<td key={i} className="px-4 py-3">
-            <div className={`h-4 w-${w} rounded bg-slate-200/60`} />
+        {Array.from({ length: columnas }).map((_, i) => (<td key={i} className="px-3 py-2.5">
+            <div className="h-4 w-16 rounded bg-slate-200/60" />
         </td>))}
     </tr>);
+}
+
+function ColumnChooser({ columns, visible, onChange, onClose }) {
+    const ref = useRef(null);
+
+    useEffect(() => {
+        function onDoc(e) {
+            if (ref.current && !ref.current.contains(e.target))
+                onClose();
+        }
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, [onClose]);
+
+    function toggle(key) {
+        const next = new Set(visible);
+        if (next.has(key))
+            next.delete(key);
+        else
+            next.add(key);
+        onChange(next);
+    }
+
+    return (<div ref={ref} className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-[#131E5C]/15 bg-white shadow-2xl">
+        <div className="border-b border-[#131E5C]/10 bg-slate-50 px-3 py-2.5">
+            <p className="text-xs font-bold text-[#131E5C]">Columnas visibles</p>
+            <div className="mt-2 flex items-center gap-2">
+                <button type="button" onClick={() => onChange(new Set(columns.map((c) => c.key)))} className="flex-1 rounded-lg bg-[#131E5C] px-2 py-1.5 text-[10px] font-bold text-white transition hover:bg-[#0A1340]">Mostrar todas</button>
+                <button type="button" onClick={() => onChange(new Set(COLUMNAS_PROSPECTOS.map((c) => c.key)))} className="flex-1 rounded-lg border border-[#131E5C]/20 bg-white px-2 py-1.5 text-[10px] font-bold text-[#131E5C] transition hover:bg-slate-50">Restablecer</button>
+            </div>
+        </div>
+        <div className="max-h-[320px] overflow-y-auto p-1.5">
+            {columns.map((col) => {
+                const activa = visible.has(col.key);
+                return (<button key={col.key} type="button" onClick={() => toggle(col.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-50">
+                    <span className={cls("flex h-4 w-4 shrink-0 items-center justify-center rounded border transition", activa ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-300 bg-white")}>
+                        {activa && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className={cls("truncate text-[11px] font-semibold", activa ? "text-[#131E5C]" : "text-slate-400")}>{col.label}</span>
+                </button>);
+            })}
+        </div>
+    </div>);
 }
 function ModalSkeleton() {
     return (<div className="grid gap-3 md:grid-cols-2">
@@ -1271,6 +1335,21 @@ export default function DigitalesProspectos() {
     const [viewMode, setViewMode] = useState("tabla");
     const [highlightedRow, setHighlightedRow] = useState(null);
     const [telefonosConChat, setTelefonosConChat] = useState(() => new Set());
+    const [showColumnas, setShowColumnas] = useState(false);
+    const [visibleColumnas, setVisibleColumnas] = useState(() => {
+        try {
+            const guardadas = JSON.parse(localStorage.getItem(STORAGE_COLUMNAS_PROSPECTOS));
+            if (Array.isArray(guardadas) && guardadas.length > 0) {
+                const validas = guardadas.filter((key) => COLUMNAS_PROSPECTOS.some((col) => col.key === key));
+                if (validas.length > 0)
+                    return new Set(validas);
+            }
+        } catch {
+            // Ignorar
+        }
+        return new Set(COLUMNAS_PROSPECTOS.map((col) => col.key));
+    });
+    const columnasVisibles = useMemo(() => COLUMNAS_PROSPECTOS.filter((col) => visibleColumnas.has(col.key)), [visibleColumnas]);
     const VIEW_MODES = [
         { key: "tabla", label: "Tabla", Icon: Table2 },
         { key: "ejecutivo", label: "Ejecutivo BDC", Icon: TrendingUp },
@@ -1759,6 +1838,18 @@ export default function DigitalesProspectos() {
     }, [isAdmin, isCoordinador, numerosUsuarioSesion, numerosPermitidosCoordinador]);
     function toggleSort(key) {
        setPage(1); setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
+    }
+    function cambiarColumnas(next) {
+        const set = new Set(next);
+        // Nunca dejar la tabla sin columnas: siempre se conserva "Acciones".
+        if (!set.has("acciones"))
+            set.add("acciones");
+        setVisibleColumnas(set);
+        try {
+            localStorage.setItem(STORAGE_COLUMNAS_PROSPECTOS, JSON.stringify(Array.from(set)));
+        } catch {
+            // Ignorar
+        }
     }
     const updateFilter = (key, value) => {
         setPage(1);
@@ -2710,6 +2801,13 @@ export default function DigitalesProspectos() {
         setSelectedNumeroAsesor(isAdmin ? "Todos" : numeroUsuarioSesion || "");
         setPage(1);
     };
+    const hayFiltrosActivos = useMemo(() => {
+        return (
+            Object.keys(INITIAL_FILTERS).some((key) => filters[key] !== INITIAL_FILTERS[key]) ||
+            (filters.q || "").trim() !== "" ||
+            (isAdmin ? selectedNumeroAsesor !== "Todos" : selectedNumeroAsesor !== (numeroUsuarioSesion || ""))
+        );
+    }, [filters, selectedNumeroAsesor, isAdmin, numeroUsuarioSesion]);
     const now = new Date();
     const todayStr = formatDateYMDLocal(now);
     const yesterdayStr = formatDateYMDLocal(addDays(now, -1));
@@ -2860,7 +2958,6 @@ export default function DigitalesProspectos() {
                                 <input type="date" title="Registro hasta" value={filters.fechaRegistroHasta} onChange={(e) => updateFilter("fechaRegistroHasta", e.target.value)} className="h-10 w-full min-w-0 cursor-pointer rounded-xl border border-[#131E5C]/15 bg-white px-2 text-xs font-bold text-[#131E5C] outline-none transition hover:bg-slate-50 focus:ring-4 focus:ring-[#131E5C]/10" />
                             </div>
                         </div>
-                        <button type="button" onClick={resetFilters} title="Borrar filtros" className="h-8 shrink-0 self-end whitespace-nowrap rounded-full border border-red-200 bg-white px-3 text-[11px] font-bold text-red-600 shadow-sm transition hover:bg-red-50 active:scale-[0.97] mb-2">Borrar filtros</button>
                     </div>
                 </div>
             </div>
@@ -2876,56 +2973,53 @@ export default function DigitalesProspectos() {
             {/* Tabla principal */}
             <div className="flex-1 min-w-0">
                 <div className="hidden rounded-2lg bg-white border border-black/[0.08] shadow-md lg:block">
+                    {/* Toolbar de la tabla */}
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                        <p className="text-xs font-semibold text-[#515778]">
+                            <span className="font-bold text-slate-700">{paginatedRows.length.toLocaleString("es-MX")}</span> visibles ·{" "}
+                            <span className="font-bold text-slate-700">{totalFiltrado.toLocaleString("es-MX")}</span> totales
+                        </p>
+                        <div className="relative flex items-center gap-2">
+                            <button type="button" onClick={resetFilters} disabled={!hayFiltrosActivos} title="Borrar filtros" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-[11px] font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40">
+                                <X className="h-3.5 w-3.5" /> Borrar filtros
+                            </button>
+                            <button type="button" onClick={() => setShowColumnas((prev) => !prev)} className={cls("inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold transition", showColumnas ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-200 text-[#131E5C] hover:bg-[#131E5C]/5")}>
+                                <Eye className="h-3.5 w-3.5" /> Columnas ({columnasVisibles.length}/{COLUMNAS_PROSPECTOS.length})
+                            </button>
+                            {showColumnas && <ColumnChooser columns={COLUMNAS_PROSPECTOS} visible={visibleColumnas} onChange={cambiarColumnas} onClose={() => setShowColumnas(false)} />}
+                        </div>
+                    </div>
                     <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 310px)" }}>
                         <table className="min-w-full text-left text-sm">
                             <thead className="bg-[#131E5C] sticky top-0 z-10">
                                 <tr>
-                                    {[
-                                        { key: "agencia", label: "Dealer" },
-                                        { key: null, label: "Cliente" },
-                                        { key: "fecha_reclamacion", label: "Fecha registro" },
-                                        { key: "primer_contacto_at", label: "1er contacto" },
-                                        { key: "ultimo_contacto_at", label: "Último contacto" },
-                                        { key: null, label: "Respuesta" },
-                                        { key: null, label: "Business" },
-                                        { key: null, label: "Interés" },
-                                        { key: null, label: "Prioridad" },
-                                        { key: "estado", label: "Estado" },
-                                        { key: null, label: "Canal" },
-                                        { key: null, label: "Asesor Digital" },
-                                        { key: null, label: "Asesor Piso" },
-                                        { key: null, label: "Score" },
-                                        { key: null, label: "Perfil financiero" },
-                                        { key: null, label: "Perfil compra" },
-                                        { key: null, label: "Resumen" },
-                                        { key: null, label: "Acciones" },
-                                    ].map(({ key, label }) => (<th key={label} className="px-3 py-3 whitespace-nowrap text-left">
-                                        {key ? (<button type="button" onClick={() => toggleSort(key)} className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-white/90 hover:text-white">
+                                    {columnasVisibles.map(({ key, label, sortKey }) => (<th key={key} className="px-3 py-3 whitespace-nowrap text-left">
+                                        {sortKey ? (<button type="button" onClick={() => toggleSort(sortKey)} className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-white/90 hover:text-white">
                                             {label}
-                                            <span className="opacity-60">{sort.key === key ? sort.dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3" />}</span>
+                                            <span className="opacity-60">{sort.key === sortKey ? sort.dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3" />}</span>
                                         </button>) : (<span className="text-[11px] font-bold uppercase tracking-wider text-white/90">{label}</span>)}
                                     </th>))}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {loadingCases
-                                    ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
+                                    ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} columnas={columnasVisibles.length} />)
                                     : paginatedRows.map((row) => {
                                         const score = calcLeadScore(row);
                                         const prioridad = getPrioridad(row);
                                         const perfilFin = getPerfilFinancieroDiagnostico(row);
                                         const isUpdating = !!updatingEstado[row.id_exp];
                                         const rowTieneChat = telefonosConChat.has(normalizaTelefonoMx(row.telefono));
-                                        return (<tr key={row.id_exp} onDoubleClick={() => openEdit(row)} onContextMenu={(e) => onRowContextMenu(e, row)} onClick={() => setHighlightedRow(row)} className={cls("cursor-pointer hover:bg-[#131E5C]/[0.04] transition-colors", highlightedRow?.id_exp === row.id_exp ? "bg-[#131E5C]/[0.06]" : "")}>
-                                            <td className="px-3 py-2.5 text-xs text-[#131E5C] font-semibold whitespace-nowrap">{row.agencia || "—"}</td>
-                                            <td className="px-3 py-2.5 min-w-[140px]">
+                                        const celdas = {
+                                            agencia: <td className="px-3 py-2.5 text-xs text-[#131E5C] font-semibold whitespace-nowrap">{row.agencia || "—"}</td>,
+                                            cliente: (<td className="px-3 py-2.5 min-w-[140px]">
                                                 <div className="text-xs font-bold text-[#131E5C] truncate max-w-[130px]">{`${row.cliente_nombre} ${row.cliente_apellidos}`.trim() || "Sin nombre"}</div>
                                                 <div className="text-[11px] text-slate-400">{formatTelefonoMx(row.telefono)}</div>
-                                            </td>
-                                            <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtDTIntl(row.creado) || row.fecha_reclamacion || "—"}</td>
-                                            <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.primer_contacto_at ? fmtDTIntl(row.primer_contacto_at) : "—"}</td>
-                                            <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.ultimo_contacto_at ? fmtDTIntl(row.ultimo_contacto_at) : "—"}</td>
-                                            <td className="px-3 py-2.5 whitespace-nowrap">
+                                            </td>),
+                                            fecha_registro: <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtDTIntl(row.creado) || row.fecha_reclamacion || "—"}</td>,
+                                            primer_contacto: <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.primer_contacto_at ? fmtDTIntl(row.primer_contacto_at) : "—"}</td>,
+                                            ultimo_contacto: <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.ultimo_contacto_at ? fmtDTIntl(row.ultimo_contacto_at) : "—"}</td>,
+                                            respuesta: (<td className="px-3 py-2.5 whitespace-nowrap">
                                                 {(() => {
                                                     const t = calcTiempoRespuesta(row.creado, row.primer_contacto_at);
                                                     if (!t)
@@ -2934,13 +3028,13 @@ export default function DigitalesProspectos() {
                                                     const color = segundos <= 300 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : segundos <= 3600 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-50 text-red-700 border-red-200";
                                                     return <span className={cls("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold", color)}>{t}</span>;
                                                 })()}
-                                            </td>
-                                            <td className="px-3 py-2.5 text-xs text-[#131E5C] font-semibold">{row.linea || "—"}</td>
-                                            <td className="px-3 py-2.5 text-xs text-[#131E5C]">{row.cliente_interes || "—"}</td>
-                                            <td className="px-3 py-2.5">
+                                            </td>),
+                                            business: <td className="px-3 py-2.5 text-xs text-[#131E5C] font-semibold">{row.linea || "—"}</td>,
+                                            interes: <td className="px-3 py-2.5 text-xs text-[#131E5C]">{row.cliente_interes || "—"}</td>,
+                                            prioridad: (<td className="px-3 py-2.5">
                                                 <span className={cls("inline-flex text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap", prioridad.cls)}>{prioridad.label}</span>
-                                            </td>
-                                            <td className="px-3 py-2.5">
+                                            </td>),
+                                            estado: (<td className="px-3 py-2.5">
                                                 <div className="relative inline-flex items-center">
                                                     <select value={row.estado || "Contactado"} disabled={isUpdating} onClick={(e) => e.stopPropagation()} onChange={(e) => {
                                                         e.stopPropagation();
@@ -2952,28 +3046,28 @@ export default function DigitalesProspectos() {
                                                     </select>
                                                     <span className="pointer-events-none absolute right-1.5">{isUpdating ? <Loader2 className="h-3 w-3 animate-spin text-[#131E5C]" /> : <ChevronDown className="h-3 w-3 text-[#131E5C]/60" />}</span>
                                                 </div>
-                                            </td>
-                                            <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.origen || "—"}</td>
-                                            <td className="px-3 py-2.5">
+                                            </td>),
+                                            canal: <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.origen || "—"}</td>,
+                                            asesor_digital: (<td className="px-3 py-2.5">
                                                 <div className="flex items-center gap-1">
                                                     <div className={cls("h-1.5 w-1.5 rounded-full flex-shrink-0", row.asesor_digital?.toLowerCase().includes("ia") ? "bg-emerald-500" : "bg-slate-300")} />
                                                     <span className="text-xs text-[#131E5C] truncate max-w-[110px]" title={row.asesor_digital || ""}>
                                                         {row.asesor_digital || "—"}
                                                     </span>
                                                 </div>
-                                            </td>
-                                            <td className="px-3 py-2.5 min-w-[170px]">
+                                            </td>),
+                                            asesor_piso: (<td className="px-3 py-2.5 min-w-[170px]">
                                                 {row.asesor_solicita ? (<div>
                                                     <div className="text-xs font-bold text-[#131E5C] truncate max-w-[160px]" title={row.asesor_solicita}>
                                                         {row.asesor_solicita}
                                                     </div>
                                                     <div className="mt-0.5 text-[11px] text-slate-400">Asesor de piso/ventas</div>
                                                 </div>) : (<span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">Sin asignar</span>)}
-                                            </td>
-                                            <td className="px-3 py-2.5">
+                                            </td>),
+                                            score: (<td className="px-3 py-2.5">
                                                 <LeadScoreRing score={score} />
-                                            </td>
-                                            <td className="px-3 py-2.5 min-w-[220px]">
+                                            </td>),
+                                            perfil_financiero: (<td className="px-3 py-2.5 min-w-[220px]">
                                                 <div className="text-xs font-bold text-[#131E5C]">Eng. {formatMoneyMXN(row.enganche_monto)}</div>
                                                 <div className={cls("mt-0.5 text-[11px] font-semibold", perfilFin.engancheSuficiente ? "text-emerald-600" : "text-amber-700")}>Mín. 20%: {formatMoneyMXN(perfilFin.engancheMinimo)}</div>
                                                 {perfilFin.faltanteEnganche > 0 ? <div className="mt-0.5 text-[11px] font-bold text-red-500">Faltan {formatMoneyMXN(perfilFin.faltanteEnganche)}</div> : <div className="mt-0.5 text-[11px] font-bold text-emerald-600">Enganche suficiente</div>}
@@ -2983,15 +3077,15 @@ export default function DigitalesProspectos() {
                                                 <div className="mt-0.5 text-[11px] text-slate-400">
                                                     Buró {valueOrDash(row.buro_estado)} · {valueOrDash(row.forma_pago)}
                                                 </div>
-                                            </td>
-                                            <td className="px-3 py-2.5 min-w-[190px]">
+                                            </td>),
+                                            perfil_compra: (<td className="px-3 py-2.5 min-w-[190px]">
                                                 <div className="text-xs font-bold text-[#131E5C]">{valueOrDash(row.tipo_cliente)}</div>
                                                 <div className="mt-0.5 text-[11px] text-slate-500">Plazo: {valueOrDash(row.plazo_compra)}</div>
                                                 <div className="mt-0.5 text-[11px] text-slate-400 truncate max-w-[180px]" title={row.uso_vehiculo || ""}>
                                                     Uso: {valueOrDash(row.uso_vehiculo)} · Ing: {valueOrDash(row.comprobacion_ingresos)}
                                                 </div>
-                                            </td>
-                                            <td className="px-3 py-2.5 max-w-[200px]">
+                                            </td>),
+                                            resumen: (<td className="px-3 py-2.5 max-w-[200px]">
                                                 <div className="flex items-start gap-1.5">
                                                     <button type="button" onClick={(e) => {
                                                         e.stopPropagation();
@@ -3006,8 +3100,8 @@ export default function DigitalesProspectos() {
                                                         {generatingSummary[row.id_exp] ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#131E5C]" /> : <ClipboardCheck className="h-3.5 w-3.5 text-[#131E5C]" />}
                                                     </button>
                                                 </div>
-                                            </td>
-                                            <td className="px-3 py-2.5">
+                                            </td>),
+                                            acciones: (<td className="px-3 py-2.5">
                                                 <div className="flex items-center gap-1.5">
                                                     <button type="button" onClick={(e) => {
                                                         e.stopPropagation();
@@ -3022,11 +3116,14 @@ export default function DigitalesProspectos() {
                                                         <MessageSquareShare className="h-4 w-4" />
                                                     </button>) : null}
                                                 </div>
-                                            </td>
+                                            </td>),
+                                        };
+                                        return (<tr key={row.id_exp} onDoubleClick={() => openEdit(row)} onContextMenu={(e) => onRowContextMenu(e, row)} onClick={() => setHighlightedRow(row)} className={cls("cursor-pointer hover:bg-[#131E5C]/[0.04] transition-colors", highlightedRow?.id_exp === row.id_exp ? "bg-[#131E5C]/[0.06]" : "")}>
+                                            {columnasVisibles.map((col) => celdas[col.key] ?? null)}
                                         </tr>);
                                     })}
                                 {!loadingCases && paginatedRows.length === 0 && (<tr>
-                                    <td colSpan={18} className="px-4 py-12 text-center text-slate-400">
+                                    <td colSpan={columnasVisibles.length} className="px-4 py-12 text-center text-slate-400">
                                         No hay resultados con esos filtros.
                                     </td>
                                 </tr>)}
@@ -3034,10 +3131,7 @@ export default function DigitalesProspectos() {
                         </table>
                     </div>
                     {/* Paginación */}
-                    {sorted.length > 0 && (<div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/60">
-                        <div className="text-xs text-slate-500">
-                            Mostrando <span className="font-semibold text-[#131E5C]">{(page - 1) * PAGE_SIZE + 1}</span>–<span className="font-semibold text-[#131E5C]">{Math.min(page * PAGE_SIZE, totalFiltrado)}</span> de <span className="font-semibold text-[#131E5C]">{totalFiltrado}</span> registros
-                        </div>
+                    {sorted.length > 0 && (<div className="flex items-center justify-end rounded-b-2xl px-5 py-3 border-t border-slate-100 bg-slate-50/60">
                         <div className="flex items-center gap-1">
                             <button type="button" onClick={() => setPage(1)} disabled={page === 1} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#131E5C]/15 bg-white text-[#131E5C] transition hover:bg-[#131E5C] hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-[#131E5C] shadow-sm" title="Primera página">
                                 <ChevronsLeft className="h-4 w-4" />
