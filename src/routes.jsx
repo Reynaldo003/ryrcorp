@@ -370,18 +370,21 @@ function GestionUsadosIndexPorPermisos() {
 
     const permisos = user?.permisos || [];
 
-    // Administradores: Avallos es su primera pestaña disponible.
-    if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
+    // Administrador y valuador entran directamente a Avalúos.
+    if (
+        tienePermiso(permisos, [
+            "USUARIOS_ADMIN",
+            "CRM_VALUADOR",
+        ])
+    ) {
         return <Navigate to="/usados/avaluos" replace />;
     }
 
-    // Usuarios con interfaces manuales: mantenerlos dentro de la sección
-    // habilitada para evitar el redirect en bucle hacia "/".
+    // Usuarios con interfaces asignadas manualmente.
     if (Array.isArray(user?.interfaces)) {
         return <UsadosIndex />;
     }
 
-    // Seguridad adicional por si alguien entra sin permisos válidos.
     return <Navigate to="/" replace />;
 }
 
@@ -882,11 +885,10 @@ export const router = createBrowserRouter(
                                 },
                             ],
                         },
-
                         {
                             path: "usados",
                             element: (
-                                <RequirePermission anyOf={["CRM_RECLAMACIONES", "CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VALUADOR",]}>
+                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VALUADOR"]}>
                                     <UsadosLayout />
                                 </RequirePermission>
                             ),
@@ -898,7 +900,7 @@ export const router = createBrowserRouter(
                                 {
                                     path: "valuaciones",
                                     element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_VALUADOR"]}>
                                             <Valuaciones />
                                         </RequirePermission>
                                     ),
@@ -906,7 +908,7 @@ export const router = createBrowserRouter(
                                 {
                                     path: "inventario",
                                     element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_VALUADOR"]}>
                                             <UsadosInventario />
                                         </RequirePermission>
                                     ),
@@ -914,7 +916,7 @@ export const router = createBrowserRouter(
                                 {
                                     path: "avaluos",
                                     element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_VALUADOR"]}>
                                             <RegistroAvaluos />
                                         </RequirePermission>
                                     ),

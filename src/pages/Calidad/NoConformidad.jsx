@@ -7,7 +7,6 @@ import {
     Cell,
     Legend,
     Line,
-    LineChart,
     Pie,
     PieChart,
     ResponsiveContainer,
@@ -65,13 +64,11 @@ import { apiEncuestas } from "../../lib/apiEncuestas";
 import { api } from "../../lib/api";
 
 // ─── Colores ────────────────────────────────────────────────────────────────
-const NAVY = "#0B1F5E";
+const NAVY = "#131E5C";
+const CHART_COLOR = "#131E5C";
 const RED = "#D85A30";
-const RED_LIGHT = "#F4A68C";
 const ORANGE = "#F0A500";
 const AMBER = "#FCD34D";
-const GRAY = "#6B7280";
-const CHART_COLORS = ["#D85A30", "#F0A500", "#FCD34D", "#0E718A", "#86B8C8", "#7F77DD", "#D4537E", "#0B1F5E"];
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const MESES_CORTOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -95,8 +92,15 @@ const CONCESIONARIAS = {
 };
 
 // Orden en que se pintan los botones de agencia en la barra de filtros.
-const ORDEN_AGENCIAS = ["1905", "2923", "2924", "2927", "2929"];
+const ORDEN_AGENCIAS = ["2923", "2924", "1905", "2927", "2929"];
 const AGENCIAS = ORDEN_AGENCIAS.map((codigo) => ({ codigo, nombre: CONCESIONARIAS[codigo] }));
+
+const FUENTES = [
+    "JD Power Ventas",
+    "JD Power Servicio",
+    "Enc. Entrega",
+    "Enc. Servicio",
+];
 
 function nombreConcesionaria(codigo) {
     return CONCESIONARIAS[String(codigo)] || null;
@@ -216,7 +220,7 @@ function extraerSatisfaccion(item, fuente) {
 }
 
 function mapearEncuestaComun(item, fuente) {
-   
+
     const fechaBase =
         item.periodo ||
         item.fecha_encuesta ||
@@ -227,7 +231,7 @@ function mapearEncuestaComun(item, fuente) {
     const fecha = parseFechaLocal(fechaBase);
     const periodoMostrar = fechaBase ? String(fechaBase).slice(0, 10) : "";
 
-   
+
     const satisfaccionRaw = extraerSatisfaccion(item, fuente);
     const satisfaccion5 = normalizarEscalaCinco(satisfaccionRaw);
 
@@ -239,7 +243,7 @@ function mapearEncuestaComun(item, fuente) {
         ? (calificaciones.length ? Math.min(...calificaciones) : 0)
         : Math.round(satisfaccion5);
 
-   
+
     const esInterna = fuente === "Enc. Servicio" || fuente === "Enc. Entrega";
 
     const idVentas =
@@ -455,28 +459,10 @@ function DashboardPanel({ title, icon: Icon, children, className = "" }) {
 function StatCard({ label, value, sub, color }) {
     return (
         <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-            <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl" style={{ backgroundColor: color || RED }} />
+            <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-[#131E5C]" />
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
             <p className="text-2xl font-black text-gray-800">{value}</p>
             {sub ? <p className="mt-1 text-xs text-gray-400">{sub}</p> : null}
-        </div>
-    );
-}
-
-function SelectField({ label, value, onChange, children }) {
-    return (
-        <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</label>
-            <div className="relative">
-                <select
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="h-[38px] min-w-[145px] appearance-none rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-red-200"
-                >
-                    {children}
-                </select>
-                <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
-            </div>
         </div>
     );
 }
@@ -1288,9 +1274,9 @@ function VistaGraficas({ datos }) {
     );
 
     const pieData = [
-        { name: "1 ★  Crítico", value: rating1, color: RED },
-        { name: "2 ★  Grave", value: rating2, color: ORANGE },
-        { name: "3 ★  Leve", value: rating3, color: AMBER },
+        { name: "1 ★  Crítico", value: rating1, color: CHART_COLOR, opacity: 1 },
+        { name: "2 ★  Grave", value: rating2, color: CHART_COLOR, opacity: 0.92 },
+        { name: "3 ★  Leve", value: rating3, color: CHART_COLOR, opacity: 0.85 },
     ].filter((d) => d.value > 0);
 
     const CustomTooltipRating = ({ active, payload }) => {
@@ -1313,7 +1299,7 @@ function VistaGraficas({ datos }) {
                             <PieChart>
                                 <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={45}>
                                     {pieData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.color} />
+                                        <Cell key={i} fill={entry.color} fillOpacity={entry.opacity} />
                                     ))}
                                 </Pie>
                                 <Tooltip content={<CustomTooltipRating />} />
@@ -1322,12 +1308,12 @@ function VistaGraficas({ datos }) {
                         </ResponsiveContainer>
                         <div className="grid w-full grid-cols-3 gap-2 text-center">
                             {[
-                                { label: "1 ★ Crítico", value: rating1, color: RED },
-                                { label: "2 ★ Grave", value: rating2, color: ORANGE },
-                                { label: "3 ★ Leve", value: rating3, color: AMBER },
+                                { label: "1 ★ Crítico", value: rating1, opacity: 1 },
+                                { label: "2 ★ Grave", value: rating2, opacity: 0.72 },
+                                { label: "3 ★ Leve", value: rating3, opacity: 0.45 },
                             ].map((item) => (
-                                <div key={item.label} className="rounded-lg p-2" style={{ backgroundColor: `${item.color}15` }}>
-                                    <p className="text-xl font-black" style={{ color: item.color }}>{numero(item.value)}</p>
+                                <div key={item.label} className="rounded-lg bg-[#131E5C]/[0.07] p-2">
+                                    <p className="text-xl font-black" style={{ color: CHART_COLOR, opacity: item.opacity }}>{numero(item.value)}</p>
                                     <p className="text-[10px] font-semibold text-gray-500">{item.label}</p>
                                 </div>
                             ))}
@@ -1342,9 +1328,9 @@ function VistaGraficas({ datos }) {
                             <XAxis dataKey="name" interval={0} angle={-25} textAnchor="end" height={60} tick={{ fontSize: 10, fill: "#6b7280" }} />
                             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                             <Tooltip contentStyle={TooltipStyle} />
-                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={RED} />
-                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={ORANGE} />
-                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={AMBER} radius={[5, 5, 0, 0]} />
+                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
+                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
+                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
                         </BarChart>
                     </ResponsiveContainer>
@@ -1413,10 +1399,10 @@ function VistaGraficas({ datos }) {
                         <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                         <Tooltip contentStyle={TooltipStyle} />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={RED} />
-                        <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={ORANGE} />
-                        <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={AMBER} radius={[5, 5, 0, 0]} />
-                        <Line type="monotone" dataKey="total" name="Total" stroke={NAVY} strokeWidth={2.5} dot={{ r: 3 }} />
+                        <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
+                        <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
+                        <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
+                        <Line type="monotone" dataKey="total" name="Total" stroke={CHART_COLOR} strokeWidth={2.5} dot={{ r: 3, fill: CHART_COLOR }} />
                     </BarChart>
                 </ResponsiveContainer>
             </ChartCard>
@@ -1433,9 +1419,9 @@ function VistaGraficas({ datos }) {
                             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                             <Tooltip contentStyle={TooltipStyle} />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
-                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={RED} />
-                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={ORANGE} />
-                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={AMBER} radius={[5, 5, 0, 0]} />
+                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
+                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
+                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartCard>
@@ -1451,9 +1437,9 @@ function VistaGraficas({ datos }) {
                             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                             <Tooltip contentStyle={TooltipStyle} />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
-                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={RED} />
-                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={ORANGE} />
-                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={AMBER} radius={[5, 5, 0, 0]} />
+                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
+                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
+                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartCard>
@@ -1470,9 +1456,9 @@ function VistaGraficas({ datos }) {
                         <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                         <Tooltip contentStyle={TooltipStyle} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={RED} />
-                        <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={ORANGE} />
-                        <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={AMBER} radius={[5, 5, 0, 0]} />
+                        <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
+                        <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
+                        <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
             </ChartCard>
@@ -1686,9 +1672,6 @@ export default function NoConformidad() {
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-black text-gray-800">No Conformidad</h2>
-                    <p className="text-xs text-gray-500">
-                        Encuestas con calificación ≤ 3 estrellas en todas las fuentes — generadas automáticamente.
-                    </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <button
@@ -1741,24 +1724,56 @@ export default function NoConformidad() {
                         <button
                             type="button"
                             onClick={() => { setAnio("Todos"); setMes("Todos"); }}
-                            className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold uppercase tracking-wide transition ${
-                                periodoTodo
-                                    ? "bg-[#131E5C] text-white"
-                                    : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                            className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold uppercase tracking-wide transition ${periodoTodo
+                                ? "bg-[#131E5C] text-white"
+                                : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
                                 }`}
                         >
                             TODO
                         </button>
                     </div>
 
+                    {/* Fuente */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="mr-1 text-xs font-black uppercase tracking-[0.08em] text-[#131E5C]">
+                            Fuente
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setFuenteActiva("Todas")}
+                            className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold transition ${fuenteActiva === "Todas"
+                                ? "bg-[#131E5C] text-white"
+                                : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                }`}
+                        >
+                            Todas
+                        </button>
+                        {FUENTES.map((fuente) => (
+                            <button
+                                key={fuente}
+                                type="button"
+                                onClick={() => setFuenteActiva(fuente)}
+                                className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold transition ${fuenteActiva === fuente
+                                    ? "bg-[#131E5C] text-white"
+                                    : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                    }`}
+                            >
+                                {fuente}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Agencia */}
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="mr-1 text-xs font-black uppercase tracking-[0.08em] text-[#131E5C]">
+                            Agencia
+                        </span>
                         <button
                             type="button"
                             onClick={() => setAgenciaSel(null)}
-                            className={`rounded-lg px-4 py-2 text-sm font-bold transition ${!agenciaSel
+                            className={`rounded-lg border border-[#131E5C] px-4 py-2 text-sm font-bold transition ${!agenciaSel
                                 ? "bg-[#131E5C] text-white"
-                                : "bg-[#EEF2F8] text-[#152754] hover:bg-[#E3E9F3]"
+                                : "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
                                 }`}
                         >
                             Todas
@@ -1791,12 +1806,11 @@ export default function NoConformidad() {
                                 key={item}
                                 type="button"
                                 onClick={() => setMes(activo ? "Todos" : String(mesNumero))}
-                                className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 text-sm font-bold transition ${
-                                    activo
-                                        ? "bg-[#131E5C] text-white shadow"
-                                        : tieneDatos
-                                            ? "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
-                                            : "bg-white text-[#131E5C]/30 hover:bg-[#131E5C] hover:text-white"
+                                className={`min-w-[92px] flex-1 rounded-lg border border-[#131E5C] px-3 py-2 text-sm font-bold transition ${activo
+                                    ? "bg-[#131E5C] text-white shadow"
+                                    : tieneDatos
+                                        ? "bg-white text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                        : "bg-white text-[#131E5C]/30 hover:bg-[#131E5C] hover:text-white"
                                     }`}
                             >
                                 {item}
@@ -1805,16 +1819,8 @@ export default function NoConformidad() {
                     })}
                 </div>
 
-                {/* Fuente + búsqueda */}
+                {/*búsqueda */}
                 <div className="mt-4 flex flex-wrap items-end gap-4 border-t border-[#E1E6EF] pt-4">
-                    <SelectField label="Fuente" value={fuenteActiva} onChange={setFuenteActiva}>
-                        <option value="Todas">Todas</option>
-                        <option value="JD Power Ventas">JD Power Ventas</option>
-                        <option value="JD Power Servicio">JD Power Servicio</option>
-                        <option value="Enc. Entrega">Enc. Entrega</option>
-                        <option value="Enc. Servicio">Enc. Servicio</option>
-                    </SelectField>
-
                     <div className="min-w-[260px] flex-1">
                         <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Buscar</label>
                         <div className="relative">
