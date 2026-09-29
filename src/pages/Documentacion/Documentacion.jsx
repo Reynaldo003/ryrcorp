@@ -727,36 +727,127 @@ function ExpedienteCard({
 
                                                     const key =
                                                         `${expediente.id_expediente}-${requisito.id}`;
+                                                    
+                                                    // ── CASO ESPECIAL: SUBTABLA DINÁMICA PARA "OTROS" ──────────────
+                                                    if (requisito.id === "otros") {
+                                                    const otrosDocs = expediente.documentos_otros || [];
+                                                    const isUploading = !!uploading[key];
 
+                                                    return (
+                                                        <tr key={requisito.id} className="border-b bg-slate-50/70">
+                                                        <td colSpan={5} className="p-4">
+                                                            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                <span className="font-semibold text-slate-800 text-sm">
+                                                                    {requisito.nombre}
+                                                                </span>
+                                                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                                                    {otrosDocs.length} archivo{otrosDocs.length === 1 ? "" : "s"}
+                                                                </span>
+                                                                </div>
+                                                                <p className="text-xs text-slate-500 mt-0.5">
+                                                                {requisito.descripcion || "Documentos varios no contemplados en el catálogo"}
+                                                                </p>
+                                                            </div>
+
+                                                            {editable && (
+                                                                <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium rounded shadow transition ${
+                                                                isUploading ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                                                                }`}>
+                                                                <span>{isUploading ? "Subiendo..." : "+ Adjuntar documento"}</span>
+                                                                <input
+                                                                    type="file"
+                                                                    accept=".pdf"
+                                                                    disabled={isUploading}
+                                                                    className="hidden"
+                                                                    onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) {
+                                                                        onSeleccionar(expediente, requisito, file);
+                                                                    }
+                                                                    e.target.value = "";
+                                                                    }}
+                                                                />
+                                                                </label>
+                                                            )}
+                                                            </div>
+
+                                                            {otrosDocs.length > 0 ? (
+                                                            <div className="overflow-x-auto rounded border border-slate-200 bg-white shadow-sm">
+                                                                <table className="min-w-full text-xs text-left divide-y divide-slate-100">
+                                                                <thead className="bg-slate-100 text-slate-600 font-semibold">
+                                                                    <tr>
+                                                                    <th className="py-2 px-3">Nombre del archivo</th>
+                                                                    <th className="py-2 px-3">Tamaño</th>
+                                                                    <th className="py-2 px-3 text-right">Acciones</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-100">
+                                                                    {otrosDocs.map((doc) => {
+                                                                        const isDeleting = !!uploading[`del-${doc.id_documento}`];
+
+                                                                        return (
+                                                                            <tr key={doc.id_documento} className="hover:bg-slate-50 transition-colors">
+                                                                                <td className="py-2 px-3 font-medium text-slate-800">
+                                                                                    <span className="text-red-500 font-bold mr-2">PDF</span>
+                                                                                    <span className="truncate max-w-sm inline-block align-middle" title={doc.nombre_original}>
+                                                                                        {doc.nombre_original}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="py-2 px-3 text-slate-500">
+                                                                                    {formatBytes(doc.tamano_bytes)}
+                                                                                </td>
+                                                                                <td className="py-2 px-3 text-right">
+                                                                                    <div className="flex items-center justify-end gap-2">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => onVer(doc)}
+                                                                                            className="px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded font-medium transition"
+                                                                                        >
+                                                                                            Ver
+                                                                                        </button>
+                                                                                        {editable && (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                disabled={isDeleting}
+                                                                                                onClick={() => onEliminar(expediente, requisito, doc)}
+                                                                                                className="px-2.5 py-1 text-red-600 hover:bg-red-50 rounded font-medium transition disabled:opacity-50"
+                                                                                            >
+                                                                                                {isDeleting ? "Eliminando..." : "Eliminar"}
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                                </table>
+                                                            </div>
+                                                            ) : (
+                                                            <div className="text-xs text-slate-400 italic py-3 text-center border border-dashed border-slate-300 rounded bg-white">
+                                                                No hay documentos adicionales adjuntos en este expediente.
+                                                            </div>
+                                                            )}
+                                                        </td>
+                                                        </tr>
+                                                    );
+                                                    }
+
+                                                    // ── CASO GENERAL: LOS OTROS 32 REQUISITOS HABITUALES ───────────
                                                     return (
                                                         <DocumentoCard
                                                             key={requisito.id}
                                                             requisito={requisito}
                                                             documento={documento}
                                                             uploading={
-                                                                !!uploading[key]
+                                                                !!uploading[key] || !!uploading[`del-${documento?.id_documento}`]
                                                             }
                                                             editable={editable}
-                                                            onSeleccionar={(
-                                                                req,
-                                                                file
-                                                            ) =>
-                                                                onSeleccionar(
-                                                                    expediente,
-                                                                    req,
-                                                                    file
-                                                                )
-                                                            }
+                                                            onSeleccionar={(req, file) => onSeleccionar(expediente, req, file)}
                                                             onVer={onVer}
-                                                            onEliminar={(
-                                                                doc
-                                                            ) =>
-                                                                onEliminar(
-                                                                    expediente,
-                                                                    requisito,
-                                                                    doc
-                                                                )
-                                                            }
+                                                            onEliminar={(doc) => onEliminar(expediente, requisito, doc)}
                                                         />
                                                     );
                                                 }
@@ -1230,7 +1321,9 @@ export default function Documentacion() {
     };
 
     const subirDocumento = async (expediente, requisito, file) => {
-        if (expediente.documentos?.[requisito.id]) return mostrarMensaje("error", "Este requisito ya tiene un documento. Elimínalo antes de cargar otro.");
+        if (requisito.id !== "otros" && expediente.documentos?.[requisito.id]) {
+            return mostrarMensaje("error", "Este requisito ya tiene un documento. Elimínalo antes de cargar otro.");
+        }
 
         const validacion = await validarPdf(file);
         if (!validacion.ok) return mostrarMensaje("error", validacion.error);
@@ -1260,9 +1353,9 @@ export default function Documentacion() {
         if (!documento?.id_documento) return mostrarMensaje("error", "No se encontró el ID del documento.");
 
         const idExpediente = expediente.id_expediente;
-        const key = `${idExpediente}-${requisito.id}`;
+        const delKey = `del-${documento.id_documento}`;
 
-        setUploading((prev) => ({ ...prev, [key]: true }));
+        setUploading((prev) => ({ ...prev, [delKey]: true }));
 
         try {
             await apiDocumentacion.removeDocumento(documento.id_documento);
@@ -1274,7 +1367,7 @@ export default function Documentacion() {
         } finally {
             setUploading((prev) => {
                 const next = { ...prev };
-                delete next[key];
+                delete next[delKey];
                 return next;
             });
         }
