@@ -21,15 +21,15 @@ const PdfIcon = () => (
  * Acepta el array ya formateado o un objeto plano { clave: valor }.
  */
 function normalizarResumen(filters) {
-  if (!filters)
-    return [];
+    if (!filters)
+        return [];
 
-  if (Array.isArray(filters))
-    return filters.filter((f) => f && (f.label || f.value));
+    if (Array.isArray(filters))
+        return filters.filter((f) => f && (f.label || f.value));
 
-  return Object.entries(filters)
-    .filter(([, value]) => value !== "" && value !== null && value !== undefined && value !== "Todos")
-    .map(([label, value]) => ({ label, value: String(value) }));
+    return Object.entries(filters)
+        .filter(([, value]) => value !== "" && value !== null && value !== undefined && value !== "Todos")
+        .map(([label, value]) => ({ label, value: String(value) }));
 }
 
 export default function ExportReportModal({
@@ -174,16 +174,14 @@ export default function ExportReportModal({
                     <div className="erm-format-grid">
                         <button
                             type="button"
-                            className={`erm-format-card ${
-                                format === "excel" ? "selected" : ""
-                            }`}
+                            className={`erm-format-card ${format === "excel" ? "selected" : ""
+                                }`}
                             aria-pressed={format === "excel"}
                             onClick={() => setFormat("excel")}
                         >
                             <span
-                                className={`erm-radio ${
-                                    format === "excel" ? "checked" : ""
-                                }`}
+                                className={`erm-radio ${format === "excel" ? "checked" : ""
+                                    }`}
                             />
 
                             <ExcelIcon />
@@ -196,16 +194,14 @@ export default function ExportReportModal({
 
                         <button
                             type="button"
-                            className={`erm-format-card ${
-                                format === "pdf" ? "selected" : ""
-                            }`}
+                            className={`erm-format-card ${format === "pdf" ? "selected" : ""
+                                }`}
                             aria-pressed={format === "pdf"}
                             onClick={() => setFormat("pdf")}
                         >
                             <span
-                                className={`erm-radio ${
-                                    format === "pdf" ? "checked" : ""
-                                }`}
+                                className={`erm-radio ${format === "pdf" ? "checked" : ""
+                                    }`}
                             />
 
                             <PdfIcon />
@@ -236,9 +232,8 @@ export default function ExportReportModal({
                     </label>
 
                     <div
-                        className={`erm-summary-card ${
-                            !useCurrentFilters ? "disabled" : ""
-                        }`}
+                        className={`erm-summary-card ${!useCurrentFilters ? "disabled" : ""
+                            }`}
                     >
                         <div className="erm-summary-data">
                             {resumen.length > 0 ? (
@@ -287,9 +282,8 @@ export default function ExportReportModal({
                     </label>
 
                     <div
-                        className={`erm-columns-card ${
-                            !useCurrentColumns ? "disabled" : ""
-                        }`}
+                        className={`erm-columns-card ${!useCurrentColumns ? "disabled" : ""
+                            }`}
                     >
                         <div className="erm-columns-top">
                             <strong>

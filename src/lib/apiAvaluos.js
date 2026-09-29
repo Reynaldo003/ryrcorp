@@ -23,7 +23,9 @@ function buildAvaluoFormData(payload = {}) {
       return;
     }
 
-    if (value === undefined || value === null) return;
+    if (value === undefined || value === null) {
+      return;
+    }
 
     formData.append(key, String(value));
   });
@@ -45,31 +47,125 @@ function buildAvaluoFormData(payload = {}) {
   return formData;
 }
 
+function buildQuery(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    searchParams.set(key, String(value));
+  });
+
+  const query = searchParams.toString();
+
+  return query ? `?${query}` : "";
+}
+
+function normalizarRespuestaPaginada(data) {
+  if (Array.isArray(data)) {
+    return {
+      count: data.length,
+      next: null,
+      previous: null,
+      results: data,
+    };
+  }
+
+  return {
+    count: Number(data?.count || 0),
+    next: data?.next || null,
+    previous: data?.previous || null,
+    results: Array.isArray(data?.results) ? data.results : [],
+  };
+}
+
+async function listarPagina(params = {}) {
+  const query = buildQuery(params);
+
+  const data = await http(`/usados/api/avaluos/${query}`);
+
+  return normalizarRespuestaPaginada(data);
+}
+
+async function listarTodos(params = {}) {
+  const pageSize = Math.min(Number(params.page_size || 100), 100);
+
+  const baseParams = {
+    ...params,
+    page_size: pageSize,
+  };
+
+  delete baseParams.page;
+
+  let page = 1;
+  let resultados = [];
+  let total = null;
+
+  while (true) {
+    const data = await listarPagina({
+      ...baseParams,
+      page,
+    });
+
+    resultados = [...resultados, ...data.results];
+
+    if (total === null) {
+      total = data.count;
+    }
+
+    if (!data.next) {
+      break;
+    }
+
+    if (total !== null && resultados.length >= total) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return resultados;
+}
+
 export const apiAvaluos = {
-  list: () => http("/usados/api/avaluos/"),
+  list: (params = {}) => {
+    return listarPagina(params);
+  },
 
-  get: (id) => http(`/usados/api/avaluos/${id}/`),
+  listAll: (params = {}) => {
+    return listarTodos(params);
+  },
 
-  create: (payload) =>
-    http("/usados/api/avaluos/", {
+  get: (id) => {
+    return http(`/usados/api/avaluos/${id}/`);
+  },
+
+  create: (payload) => {
+    return http("/usados/api/avaluos/", {
       method: "POST",
       body: buildAvaluoFormData(payload),
-    }),
+    });
+  },
 
-  update: (id, payload) =>
-    http(`/usados/api/avaluos/${id}/`, {
+  update: (id, payload) => {
+    return http(`/usados/api/avaluos/${id}/`, {
       method: "PUT",
       body: buildAvaluoFormData(payload),
-    }),
+    });
+  },
 
-  patch: (id, payload) =>
-    http(`/usados/api/avaluos/${id}/`, {
+  patch: (id, payload) => {
+    return http(`/usados/api/avaluos/${id}/`, {
       method: "PATCH",
       body: buildAvaluoFormData(payload),
-    }),
+    });
+  },
 
-  remove: (id) =>
-    http(`/usados/api/avaluos/${id}/`, {
+  remove: (id) => {
+    return http(`/usados/api/avaluos/${id}/`, {
       method: "DELETE",
-    }),
+    });
+  },
 };

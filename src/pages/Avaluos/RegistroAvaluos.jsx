@@ -32,8 +32,6 @@ import {
     TableProperties,
     BarChart3,
     FileSpreadsheet,
-
-
 } from "lucide-react";
 import { apiAvaluos } from "../../lib/apiAvaluos";
 import { createPortal } from "react-dom";
@@ -44,6 +42,9 @@ import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 
 const BRAND_BLUE = "#131E5C";
+const MAX_ARCHIVO_BYTES = 50 * 1024 * 1024;
+const MAX_TOTAL_EVIDENCIAS_BYTES = 100 * 1024 * 1024;
+const PAGE_SIZE_DEFAULT = 50;
 const API_BASE = (
     import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com"
 ).replace(/\/$/, "");
@@ -163,6 +164,73 @@ function FilterBlock({ label, children }) {
                 {label}
             </div>
             {children}
+        </div>
+    );
+}
+
+function obtenerMensajeError(error) {
+    const data = error?.data || error?.response?.data || error?.body;
+
+    if (typeof data === "string" && data.trim()) return data;
+
+    if (data && typeof data === "object") {
+        const mensajes = Object.entries(data).flatMap(([campo, valor]) => {
+            const lista = Array.isArray(valor) ? valor : [valor];
+            return lista
+                .filter(Boolean)
+                .map((mensaje) => `${campo}: ${String(mensaje)}`);
+        });
+
+        if (mensajes.length) return mensajes.join("\n");
+    }
+
+    return error?.message || "Error guardando el avalúo.";
+}
+
+function PaginationControls({ page, pageSize, total, onPageChange, onPageSizeChange }) {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const inicio = total === 0 ? 0 : (page - 1) * pageSize + 1;
+    const fin = Math.min(page * pageSize, total);
+
+    return (
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs font-semibold text-slate-500">
+                Mostrando {inicio}-{fin} de {total} registros
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+                <select
+                    value={pageSize}
+                    onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                    className="rounded-lg border border-[#131E5C]/30 bg-white px-2 py-2 text-xs font-semibold text-[#131E5C] outline-none"
+                >
+                    <option value={25}>25 por página</option>
+                    <option value={50}>50 por página</option>
+                    <option value={100}>100 por página</option>
+                </select>
+
+                <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => onPageChange(page - 1)}
+                    className="rounded-lg border border-[#131E5C]/20 px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    Anterior
+                </button>
+
+                <span className="px-2 text-xs font-bold text-[#131E5C]">
+                    Página {page} de {totalPages}
+                </span>
+
+                <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => onPageChange(page + 1)}
+                    className="rounded-lg border border-[#131E5C]/20 px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    Siguiente
+                </button>
+            </div>
         </div>
     );
 }
@@ -1159,6 +1227,12 @@ export default function RegistroAvaluos() {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
     const [touchedSave, setTouchedSave] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT);
+    const [totalRegistros, setTotalRegistros] = useState(0);
+    const [debouncedQ, setDebouncedQ] = useState("");
+    const [graficasRows, setGraficasRows] = useState([]);
+    const [loadingGraficas, setLoadingGraficas] = useState(false);
 
     const DEALERS = useMemo(
         () => [
@@ -1409,6 +1483,7 @@ export default function RegistroAvaluos() {
     }, []);
 
     function toggleSort(key) {
+        setPage(1);
         setSort((prev) => {
             if (prev.key !== key) return { key, dir: "asc" };
             return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
@@ -1421,126 +1496,56 @@ export default function RegistroAvaluos() {
         setCtxMenu({ open: true, x: e.clientX, y: e.clientY, row });
     };
 
-    const refreshList = async () => {
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            setDebouncedQ(filters.q.trim());
+            setPage(1);
+        }, 350);
+
+        return () => window.clearTimeout(timer);
+    }, [filters.q]);
+
+    const refreshList = useCallback(async (pageOverride = null) => {
+        const paginaSolicitada = pageOverride || page;
         setLoadingList(true);
+
         try {
-            const data = await apiAvaluos.list();
-            setAvaluos(Array.isArray(data) ? data : []);
+            const data = await apiAvaluos.list({
+                page: paginaSolicitada,
+                pageSize,
+                search: debouncedQ,
+                agencia: filters.agencia,
+                desde: filters.rangoDesde,
+                hasta: filters.rangoHasta,
+                ordering: `${sort.dir === "desc" ? "-" : ""}${sort.key}`,
+            });
+
+            setAvaluos(data.results);
+            setTotalRegistros(data.count);
         } catch (error) {
-            console.error(error);
+            console.error("Error cargando avalúos:", error);
             setAvaluos([]);
+            setTotalRegistros(0);
         } finally {
             setLoadingList(false);
         }
-    };
+    }, [page, pageSize, debouncedQ, filters.agencia, filters.rangoDesde, filters.rangoHasta, sort]);
 
     useEffect(() => {
         refreshList();
-    }, []);
+    }, [refreshList]);
 
-    // ── dealers: solo muestra las agencias del usuario (igual que RegistroCredito) ──
+    // Dealers disponibles. La tabla ya llega filtrada y paginada desde el backend.
     const dealers = useMemo(() => {
-        const set = new Set(
-            (avaluos || []).map((item) => normalizeStr(item.agencia)).filter(Boolean)
-        );
-        const all = ["Todos", ...Array.from(set)];
-
         if (!isAdmin && userAgencias.length > 0) {
             return ["Todos", ...userAgencias];
         }
 
-        return all;
-    }, [avaluos, isAdmin, userAgencias]);
+        return ["Todos", ...DEALERS];
+    }, [DEALERS, isAdmin, userAgencias]);
 
-    // ── filtered: excluye registros de otras agencias para no-admins ───────────
-    const filtered = useMemo(() => {
-        const q = filters.q.trim().toLowerCase();
-        const desdeInt = ymdToInt(filters.rangoDesde);
-        const hastaInt = ymdToInt(filters.rangoHasta);
-
-        return (avaluos || []).filter((item) => {
-            // Restricción por agencia del usuario
-            if (!isAdmin && userAgencias.length > 0 && !userTieneAgencia(item.agencia)) {
-                return false;
-            }
-
-            const nombreCliente = normalizeStr(item?.cliente?.nombre);
-            const telefonoCliente = normalizeStr(item?.cliente?.telefono);
-
-            const matchQ =
-                !q ||
-                normalizeStr(item.agencia).toLowerCase().includes(q) ||
-                normalizeStr(item.asesor_ventas).toLowerCase().includes(q) ||
-                normalizeStr(item.marca_auto).toLowerCase().includes(q) ||
-                normalizeStr(item.modelo).toLowerCase().includes(q) ||
-                normalizeStr(item.anio_modelo).toLowerCase().includes(q) ||
-                normalizeStr(item.serie).toLowerCase().includes(q) ||
-                normalizeStr(item.kilometraje).toLowerCase().includes(q) ||
-                normalizeStr(item.precio_guia).toLowerCase().includes(q) ||
-                normalizeStr(item.costo_reparacion).toLowerCase().includes(q) ||
-                normalizeStr(item.costo_estimado).toLowerCase().includes(q) ||
-                normalizeStr(item.oferta_economica).toLowerCase().includes(q) ||
-                normalizeStr(item.color).toLowerCase().includes(q) ||
-                normalizeStr(item.descripcion).toLowerCase().includes(q) ||
-                normalizeStr(item.ganador_subasta).toLowerCase().includes(q) ||
-                normalizeStr(item.etapa_proceso).toLowerCase().includes(q) ||
-                normalizeStr(item.comentarios).toLowerCase().includes(q) ||
-                nombreCliente.toLowerCase().includes(q) ||
-                telefonoCliente.toLowerCase().includes(q);
-
-            const matchAgencia =
-                filters.agencia === "Todos" ||
-                normalizeStr(item.agencia) === normalizeStr(filters.agencia);
-
-            let matchRango = true;
-
-            if (desdeInt !== null || hastaInt !== null) {
-                const ymd = item.fecha_avaluo ? toYMDLocal(item.fecha_avaluo) : "";
-                const ymdInt = ymdToInt(ymd);
-
-                if (!ymdInt) return false;
-                if (desdeInt !== null && ymdInt < desdeInt) matchRango = false;
-                if (hastaInt !== null && ymdInt > hastaInt) matchRango = false;
-            }
-
-            return matchQ && matchAgencia && matchRango;
-        });
-    }, [avaluos, filters, isAdmin, userAgencias, userTieneAgencia]);
-
-    const sorted = useMemo(() => {
-        const data = [...filtered];
-        const { key, dir } = sort;
-        const mult = dir === "asc" ? 1 : -1;
-
-        return data.sort((a, b) => {
-            if (key === "fecha_avaluo") {
-                const ta = a.fecha_avaluo ? new Date(a.fecha_avaluo).getTime() : 0;
-                const tb = b.fecha_avaluo ? new Date(b.fecha_avaluo).getTime() : 0;
-                return (ta - tb) * mult;
-            }
-
-            if (key === "cliente_nombre") {
-                const va = normalizeStr(a?.cliente?.nombre).toLowerCase();
-                const vb = normalizeStr(b?.cliente?.nombre).toLowerCase();
-                if (va < vb) return -1 * mult;
-                if (va > vb) return 1 * mult;
-                return 0;
-            }
-
-            if (key === "evidencias_count") {
-                const va = Array.isArray(a?.evidencias) ? a.evidencias.length : 0;
-                const vb = Array.isArray(b?.evidencias) ? b.evidencias.length : 0;
-                return (va - vb) * mult;
-            }
-
-            const va = normalizeStr(a?.[key]).toLowerCase();
-            const vb = normalizeStr(b?.[key]).toLowerCase();
-
-            if (va < vb) return -1 * mult;
-            if (va > vb) return 1 * mult;
-            return 0;
-        });
-    }, [filtered, sort]);
+    // Con paginación de servidor no debemos volver a filtrar solamente la página visible.
+    const sorted = avaluos;
 
     // ── Exportar Excel ──────────────────────────────────────────────────────────
     const filaAvaluoExport = (row) => ({
@@ -1578,7 +1583,15 @@ export default function RegistroAvaluos() {
         setExportando("excel");
 
         try {
-            const registros = sorted.map(filaAvaluoExport);
+            const rowsExport = await apiAvaluos.listAll({
+                search: debouncedQ,
+                agencia: filters.agencia,
+                desde: filters.rangoDesde,
+                hasta: filters.rangoHasta,
+                ordering: `${sort.dir === "desc" ? "-" : ""}${sort.key}`,
+            });
+
+            const registros = rowsExport.map(filaAvaluoExport);
 
             const ws = XLSX.utils.json_to_sheet(registros);
 
@@ -1648,7 +1661,15 @@ export default function RegistroAvaluos() {
                 "Comentarios",
             ];
 
-            const body = sorted.map((row) => [
+            const rowsExport = await apiAvaluos.listAll({
+                search: debouncedQ,
+                agencia: filters.agencia,
+                desde: filters.rangoDesde,
+                hasta: filters.rangoHasta,
+                ordering: `${sort.dir === "desc" ? "-" : ""}${sort.key}`,
+            });
+
+            const body = rowsExport.map((row) => [
                 toDTLocal(row.fecha_avaluo).replace("T", " "),
                 row.agencia || "—",
                 row.asesor_ventas || "—",
@@ -1897,7 +1918,38 @@ export default function RegistroAvaluos() {
         const files = Array.from(fileList || []);
         if (!files.length) return;
 
-        const nuevos = files.map((file) => buildLocalEvidenceItem(file));
+        const actuales = (draft?.evidencias_nuevas || []).reduce(
+            (acc, item) => acc + Number(item?.file?.size || 0),
+            0
+        );
+
+        const demasiadoGrandes = files.filter(
+            (file) => file.size > MAX_ARCHIVO_BYTES
+        );
+
+        if (demasiadoGrandes.length) {
+            alert(
+                `Estos archivos superan 50 MB y no se agregarán: ${demasiadoGrandes.map((file) => file.name).join("")}`
+            );
+        }
+
+        const permitidos = files.filter((file) => file.size <= MAX_ARCHIVO_BYTES);
+        let acumulado = actuales;
+        const aceptados = [];
+
+        for (const file of permitidos) {
+            if (acumulado + file.size > MAX_TOTAL_EVIDENCIAS_BYTES) {
+                alert("El total de evidencias nuevas no puede superar 100 MB por guardado.");
+                break;
+            }
+
+            aceptados.push(file);
+            acumulado += file.size;
+        }
+
+        if (!aceptados.length) return;
+
+        const nuevos = aceptados.map((file) => buildLocalEvidenceItem(file));
 
         setDraft((prev) => {
             if (!prev) return prev;
@@ -1945,15 +1997,27 @@ export default function RegistroAvaluos() {
 
     const save = async () => {
         if (!draft || saving) return;
-        if (!telIsOk) return;
 
         setTouchedSave(true);
-        if (missing.length) return;
+
+        if (missing.length || !telIsOk) {
+            return;
+        }
+
+        const conceptosInvalidos = (draft.conceptos || []).some((item) => {
+            const descripcion = String(item?.descripcion || "").trim();
+            const costo = montoANumero(item?.costo);
+            return costo > 0 && !descripcion;
+        });
+
+        if (conceptosInvalidos) {
+            alert("Todo concepto con costo debe tener una descripción.");
+            return;
+        }
 
         setSaving(true);
 
         try {
-            // Agencia final: si no es admin, se usa la primera agencia del usuario
             const agenciaFinal = isAdmin
                 ? normalizeStr(draft.agencia || "")
                 : normalizeStr(draft.agencia || userAgencias[0] || "");
@@ -1993,23 +2057,48 @@ export default function RegistroAvaluos() {
                 ),
             };
 
-            if (mode === "create") {
-                await apiAvaluos.create(payload);
-            } else {
-                await apiAvaluos.update(draft.id, payload);
+            const guardado = mode === "create"
+                ? await apiAvaluos.create(payload)
+                : await apiAvaluos.update(draft.id, payload);
+
+            // El POST/PUT ya terminó correctamente. Cerramos inmediatamente el modal.
+            // La recarga de la tabla queda separada del estado "Guardando...".
+            cleanupDraftResources(draft);
+            setOpenModal(false);
+            setDraft(null);
+            setTouchedSave(false);
+
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
             }
 
-            await refreshList();
-            closeModal();
+            if (mode === "create") {
+                setPage(1);
+                setTotalRegistros((prev) => prev + 1);
+
+                if (page === 1 && guardado?.id) {
+                    setAvaluos((prev) => [guardado, ...prev].slice(0, pageSize));
+                }
+            } else if (guardado?.id) {
+                setAvaluos((prev) =>
+                    prev.map((item) => (item.id === guardado.id ? guardado : item))
+                );
+            }
+
+            // Refrescamos aparte; si este GET tarda, ya no mantiene el botón en Guardando.
+            window.setTimeout(() => {
+                refreshList(mode === "create" ? 1 : page);
+            }, 0);
         } catch (error) {
-            console.error(error);
-            alert(error.message || "Error guardando el avalúo.");
+            console.error("Error guardando avalúo:", error);
+            alert(obtenerMensajeError(error));
         } finally {
             setSaving(false);
         }
     };
 
     const resetFilters = () => {
+        setPage(1);
         setFilters({
             q: "",
             agencia: "Todos",
@@ -2020,6 +2109,7 @@ export default function RegistroAvaluos() {
     //----------
 
     const setHoy = () => {
+        setPage(1);
         const hoy = toYMDLocal(new Date());
         setFilters((prev) => ({
             ...prev,
@@ -2028,6 +2118,7 @@ export default function RegistroAvaluos() {
         }));
     };
     const setAyer = () => {
+        setPage(1);
         const ayer = new Date();
         ayer.setDate(ayer.getDate() - 1);
 
@@ -2041,6 +2132,7 @@ export default function RegistroAvaluos() {
     };
 
     const setSemana = () => {
+        setPage(1);
         const hoy = new Date();
         const inicio = new Date(hoy);
 
@@ -2057,6 +2149,7 @@ export default function RegistroAvaluos() {
     };
 
     const setUltimos7Dias = () => {
+        setPage(1);
         const hoy = new Date();
         const inicio = new Date(hoy);
 
@@ -2070,6 +2163,7 @@ export default function RegistroAvaluos() {
     };
 
     const setUltimos30Dias = () => {
+        setPage(1);
         const hoy = new Date();
         const inicio = new Date(hoy);
 
@@ -2083,6 +2177,7 @@ export default function RegistroAvaluos() {
     };
 
     const setEsteMes = () => {
+        setPage(1);
         const hoy = new Date();
         const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
@@ -2093,6 +2188,38 @@ export default function RegistroAvaluos() {
         }));
     };
 
+
+    useEffect(() => {
+        if (viewMode !== "graficas" || openModal) return;
+
+        let cancelado = false;
+
+        const cargarGraficas = async () => {
+            setLoadingGraficas(true);
+            try {
+                const rows = await apiAvaluos.listAll({
+                    search: debouncedQ,
+                    agencia: filters.agencia,
+                    desde: filters.rangoDesde,
+                    hasta: filters.rangoHasta,
+                    ordering: `${sort.dir === "desc" ? "-" : ""}${sort.key}`,
+                });
+
+                if (!cancelado) setGraficasRows(rows);
+            } catch (error) {
+                console.error("Error cargando datos para gráficas:", error);
+                if (!cancelado) setGraficasRows([]);
+            } finally {
+                if (!cancelado) setLoadingGraficas(false);
+            }
+        };
+
+        cargarGraficas();
+
+        return () => {
+            cancelado = true;
+        };
+    }, [viewMode, openModal, debouncedQ, filters.agencia, filters.rangoDesde, filters.rangoHasta, sort]);
 
     const totalEvidenciasDraft =
         (draft?.evidencias_existentes?.length || 0) +
@@ -2213,9 +2340,10 @@ export default function RegistroAvaluos() {
                         <FilterBlock label="Dealer">
                             <select
                                 value={filters.agencia}
-                                onChange={(e) =>
-                                    setFilters((prev) => ({ ...prev, agencia: e.target.value }))
-                                }
+                                onChange={(e) => {
+                                    setPage(1);
+                                    setFilters((prev) => ({ ...prev, agencia: e.target.value }));
+                                }}
                                 className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
                             >
                                 {dealers.map((dealer) => (
@@ -2294,12 +2422,13 @@ export default function RegistroAvaluos() {
                             <input
                                 type="date"
                                 value={filters.rangoDesde}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                    setPage(1);
                                     setFilters((prev) => ({
                                         ...prev,
                                         rangoDesde: e.target.value,
-                                    }))
-                                }
+                                    }));
+                                }}
                                 className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
                             />
                         </FilterBlock>
@@ -2310,12 +2439,13 @@ export default function RegistroAvaluos() {
                             <input
                                 type="date"
                                 value={filters.rangoHasta}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                    setPage(1);
                                     setFilters((prev) => ({
                                         ...prev,
                                         rangoHasta: e.target.value,
-                                    }))
-                                }
+                                    }));
+                                }}
                                 className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
                             />
                         </FilterBlock>
@@ -2324,7 +2454,13 @@ export default function RegistroAvaluos() {
             </div>
 
             {!openModal && viewMode === "graficas" ? (
-                <GraficasAvaluos rows={sorted} />
+                loadingGraficas ? (
+                    <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm font-bold text-[#131E5C]">
+                        Cargando datos para gráficas...
+                    </div>
+                ) : (
+                    <GraficasAvaluos rows={graficasRows} />
+                )
             ) : null}
 
             {!openModal && viewMode === "tabla" ? (
@@ -2575,6 +2711,17 @@ export default function RegistroAvaluos() {
                             />
                         </div>
                     </div>
+
+                    <PaginationControls
+                        page={page}
+                        pageSize={pageSize}
+                        total={totalRegistros}
+                        onPageChange={(newPage) => setPage(newPage)}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setPage(1);
+                        }}
+                    />
 
                 </>
             ) : null}
@@ -2976,7 +3123,7 @@ export default function RegistroAvaluos() {
                                             Agregar fotos, videos o archivos
                                         </div>
                                         <div className="text-xs font-semibold text-slate-500">
-                                            Puedes seleccionar varios archivos al mismo tiempo. Límite sugerido: 50 MB por archivo.
+                                            Máximo 50 MB por archivo y 100 MB en total por cada guardado.
                                         </div>
                                     </div>
                                 </button>
