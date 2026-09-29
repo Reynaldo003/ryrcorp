@@ -5,9 +5,15 @@ import { useAuth } from "../../auth/AuthContext";
 
 export default function FinancierosIndex() {
     const navigate = useNavigate();
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
 
     useEffect(() => {
+        // Usuarios con interfaces manuales: aterrizar en su submódulo.
+        if (Array.isArray(user?.interfaces)) {
+            navigate("/financieros/credito", { replace: true });
+            return;
+        }
+
         const puedeVerFinancieros = hasAnyPermission(["CRM_DIGITALES", "CRM_FINANCIEROS", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES", "CRM_ASESOR_PISO",]);
 
         if (puedeVerFinancieros) {
@@ -16,7 +22,7 @@ export default function FinancierosIndex() {
         }
 
         navigate("/", { replace: true });
-    }, [hasAnyPermission, navigate]);
+    }, [hasAnyPermission, navigate, user?.interfaces]);
 
     return null;
 }

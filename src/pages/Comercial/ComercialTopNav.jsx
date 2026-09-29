@@ -20,6 +20,7 @@ import {
 import vwDark from "../../assets/vw_dark.png";
 import { steeringWheel } from "@lucide/lab";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -40,7 +41,10 @@ function VWLogo({ logoSrc }) {
 
 export default function ComercialTopNav() {
     const location = useLocation();
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
+
+    // Si la interfaz "comercial" está activada manualmente, mostrar todos los submódulos.
+    const comercialActivo = interfazActivada(user, "comercial");
 
     const inProspectos = location.pathname.startsWith("/comercial/prospectos");
 
@@ -64,7 +68,7 @@ export default function ComercialTopNav() {
                 label: "Prospectos",
                 href: "/comercial/prospectos",
                 icon: Globe,
-                show: hasAnyPermission([
+                show: comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
@@ -75,31 +79,31 @@ export default function ComercialTopNav() {
                 label: "Plantillas",
                 href: "/comercial/prospectos/plantillas",
                 icon: LayoutPanelTop,
-                show: canSeeContacto && inProspectos,
+                show: (comercialActivo || canSeeContacto) && inProspectos,
             },
             {
                 label: "Contacto",
                 href: "/comercial/prospectos/contacto",
                 icon: MessageCircle,
-                show: canSeeContacto && inProspectos,
+                show: (comercialActivo || canSeeContacto) && inProspectos,
             },
             {
                 label: "Bandeja",
                 href: "/comercial/prospectos/bandeja",
                 icon: KanbanSquare,
-                show: canSeeContacto && inProspectos,
+                show: (comercialActivo || canSeeContacto) && inProspectos,
             },
             {
                 label: "Rendimiento Digital",
                 href: "/comercial/prospectos/rendimiento_digitales",
                 icon: ChartNoAxesCombined,
-                show: canSeeRendimiento && inProspectos,
+                show: (comercialActivo || canSeeRendimiento) && inProspectos,
             },
             {
                 label: "Citas",
                 href: "/comercial/citas",
                 icon: CalendarDays,
-                show: hasAnyPermission([
+                show: comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
@@ -111,7 +115,7 @@ export default function ComercialTopNav() {
                 label: "Tráfico piso",
                 href: "/comercial/trafico_piso",
                 icon: UsersRound,
-                show: hasAnyPermission([
+                show: comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
@@ -123,7 +127,7 @@ export default function ComercialTopNav() {
                 label: "Pruebas",
                 href: "/comercial/pruebas_manejo",
                 icon: SteeringWheelLab,
-                show: hasAnyPermission([
+                show: comercialActivo || hasAnyPermission([
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
@@ -135,7 +139,7 @@ export default function ComercialTopNav() {
                 label: "Entregas",
                 href: "/comercial/entregas",
                 icon: PackageCheck,
-                show: hasAnyPermission([
+                show: comercialActivo || hasAnyPermission([
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
@@ -148,7 +152,7 @@ export default function ComercialTopNav() {
                 label: "Campañas Meta",
                 href: "/comercial/campanas_meta",
                 icon: BarChart2,
-                show: hasAnyPermission([
+                show: comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
@@ -159,7 +163,7 @@ export default function ComercialTopNav() {
         ];
 
         return items.filter((item) => item.show);
-    }, [hasAnyPermission, canSeeContacto, inProspectos]);
+    }, [hasAnyPermission, canSeeContacto, canSeeRendimiento, inProspectos, comercialActivo]);
 
     const isActive = (href) => {
         /**

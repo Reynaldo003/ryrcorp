@@ -722,11 +722,9 @@ function UserModal({
             ? ""
             : usuario.length > 10
                 ? "Máximo 10 caracteres."
-                : !REGEX_USUARIO.test(usuario)
-                    ? "Solo letras, números, punto, guion y _."
-                    : usuarioDuplicado
-                        ? "Ese usuario ya existe."
-                        : "";
+                : usuarioDuplicado
+                    ? "Ese usuario ya existe."
+                    : "";
 
     const errorCorreo =
         !correo

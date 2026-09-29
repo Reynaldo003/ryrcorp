@@ -3,24 +3,27 @@ import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, C
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
 export default function GestionTopNav() {
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
+    // Si la interfaz "partes" está activada manualmente, mostrar todos los submódulos.
+    const partesActivo = interfazActivada(user, "partes");
 
     const tabs = [
         {
             label: "Obsolescencia de Refacciones",
             to: "/partes/refacciones_obsolescencia",
             icon: Cog,
-            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
         {
             label: "Compra de Refacciones",
             to: "/partes/compra_refacciones",
             icon: ShoppingCart,
-            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
     ].filter((tab) => tab.show);
     return (

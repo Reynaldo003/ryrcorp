@@ -12,7 +12,7 @@ import TimeForAction from "./pages/TimeForAction/TimeForAction";
 import ProtectedLayout from "./auth/ProtectedLayout";
 import RequirePermission from "./auth/RequirePermission";
 import { useAuth } from "./auth/AuthContext";
-import { INTERFACES } from "./config/interfaces";
+import { INTERFACES, interfazActivada } from "./config/interfaces";
 
 import AppShell from "./app/AppShell";
 import Home from "./pages/Home";
@@ -234,6 +234,11 @@ function ComercialIndexPorPermisos() {
         return null;
     }
 
+    // Usuarios con interfaces manuales: aterrizar en la primera pestaña del módulo.
+    if (Array.isArray(user?.interfaces)) {
+        return <Navigate to="/comercial/prospectos" replace />;
+    }
+
     const permisos = user?.permisos || [];
 
     const puedeVerIndexComercial = tienePermiso(permisos, [
@@ -260,6 +265,11 @@ function PostVentaIndexPorPermisos() {
         return null;
     }
 
+    // Usuarios con interfaces manuales: aterrizar en la primera pestaña del módulo.
+    if (Array.isArray(user?.interfaces)) {
+        return <Navigate to="/postventa/pedidos_piezas" replace />;
+    }
+
     const permisos = user?.permisos || [];
 
     const puedeVerIndexPostVenta = tienePermiso(permisos, [
@@ -280,6 +290,11 @@ function GestionNegocioIndexPorPermisos() {
     const { user, ready } = useAuth();
 
     if (ready === false) return null;
+
+    // Usuarios con interfaces manuales: aterrizar en la primera pestaña del módulo.
+    if (Array.isArray(user?.interfaces)) {
+        return <Navigate to="/gestion_negocio/autos_nuevos" replace />;
+    }
 
     const permisos = user?.permisos || [];
 
@@ -302,6 +317,11 @@ function GestionPartesIndexPorPermisos() {
 
     if (ready === false) return null;
 
+    // Usuarios con interfaces manuales: aterrizar en la primera pestaña del módulo.
+    if (Array.isArray(user?.interfaces)) {
+        return <Navigate to="/partes/refacciones_obsolescencia" replace />;
+    }
+
     const permisos = user?.permisos || [];
 
     // Administradores: Partes es su primera pestaña disponible.
@@ -322,6 +342,11 @@ function GestionServicioIndexPorPermisos() {
     const { user, ready } = useAuth();
 
     if (ready === false) return null;
+
+    // Usuarios con interfaces manuales: aterrizar en la primera pestaña del módulo.
+    if (Array.isArray(user?.interfaces)) {
+        return <Navigate to="/servicio/presupuestos" replace />;
+    }
 
     const permisos = user?.permisos || [];
 

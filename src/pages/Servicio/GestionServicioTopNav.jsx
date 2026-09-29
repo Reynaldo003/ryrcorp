@@ -3,18 +3,21 @@ import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, C
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
 export default function GestionTopNav() {
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
+    // Si la interfaz "servicio" está activada manualmente, mostrar todos los submódulos.
+    const servicioActivo = interfazActivada(user, "servicio");
 
     const tabs = [
         {
             label: "Presupuestos de Servicio",
             to: "/servicio/presupuestos",
             icon: LayoutList,
-            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
     ].filter((tab) => tab.show);
     return (

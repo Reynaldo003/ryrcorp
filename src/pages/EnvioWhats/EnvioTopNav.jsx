@@ -4,12 +4,16 @@ import { Link, useLocation } from "react-router-dom";
 import { Package } from "lucide-react";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
 export default function PostVentaTopNav() {
     const location = useLocation();
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
+
+    // Si la interfaz "encuesta_whats" está activada manualmente, mostrar el submódulo.
+    const encuestaActivo = interfazActivada(user, "encuesta_whats");
 
     const inProspectos = location.pathname.startsWith("/encuesta_whats/envio_satisfaccion");
     const canSeeContacto = hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA"]);
@@ -20,11 +24,11 @@ export default function PostVentaTopNav() {
                 label: "Envio de Encuestas",
                 href: "/encuesta_whats/envio_satisfaccion",
                 icon: Package,
-                show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA"]),
+                show: encuestaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA"]),
             },
         ];
         return items.filter((x) => x.show);
-    }, [hasAnyPermission, canSeeContacto, inProspectos]);
+    }, [hasAnyPermission, canSeeContacto, inProspectos, encuestaActivo]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

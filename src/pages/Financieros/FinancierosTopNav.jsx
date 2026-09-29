@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { CreditCard, CarFront } from "lucide-react";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -22,7 +23,10 @@ function VWLogo({ logoSrc }) {
 
 export default function FinancierosTopNav() {
     const location = useLocation();
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
+
+    // Si la interfaz "financieros" está activada manualmente, mostrar todos los submódulos.
+    const financierosActivo = interfazActivada(user, "financieros");
 
     const tabs = useMemo(() => {
         const permisosDigitales = [
@@ -44,22 +48,22 @@ export default function FinancierosTopNav() {
                 label: "Solicitudes Crédito",
                 href: "/financieros/credito",
                 icon: CreditCard,
-                show: hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosDigitales),
+                show: financierosActivo || hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosDigitales),
             },
             {
                 label: "Long Drive",
                 href: "/financieros/long_drive",
                 icon: CarFront,
-                show: hasAnyPermission(permisosFinancieros),
+                show: financierosActivo || hasAnyPermission(permisosFinancieros),
             },
             {
                 label: "Documentacion",
                 href: "/financieros/documentacion",
                 icon: CarFront,
-                show: hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosPiso),
+                show: financierosActivo || hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosPiso),
             },
         ].filter((item) => item.show);
-    }, [hasAnyPermission]);
+    }, [hasAnyPermission, financierosActivo]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

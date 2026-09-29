@@ -3,18 +3,21 @@ import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, C
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
+import { interfazActivada } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
 export default function GestionTopNav() {
-    const { hasAnyPermission } = useAuth();
+    const { hasAnyPermission, user } = useAuth();
+    // Si la interfaz "gestion_negocio" está activada manualmente, mostrar todos los submódulos.
+    const gestionActivo = interfazActivada(user, "gestion_negocio");
 
     const tabs = [
         {
             label: "Inventario",
             to: "/gestion_negocio/inventario",
             icon: LayoutList,
-            show: hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: gestionActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
         {
             label: "Autos Nuevos",
