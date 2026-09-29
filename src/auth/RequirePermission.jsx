@@ -17,15 +17,15 @@ function rutaPerteneceAInterfaz(pathname, item) {
 }
 
 export function obtenerRutaInicialPorUsuario(user) {
-    // Administradores: siempre Inicio.
-    if ((user?.permisos || []).includes("ALL")) {
+    const permisos = user?.permisos || [];
+    const interfaces = user?.interfaces;
+
+    if (permisos.includes("ALL")) {
         return "/";
     }
 
-    const interfaces = user?.interfaces;
-
-    // Usuarios con interfaces manuales: la ruta inicial es la primera
-    // interfaz habilitada (en el orden del menú), o "/" (Inicio).
+    // Si tiene interfaces asignadas manualmente,
+    // usamos la primera interfaz disponible.
     if (Array.isArray(interfaces)) {
         for (const item of INTERFACES) {
             if (item.alwaysOn) continue;
@@ -38,18 +38,17 @@ export function obtenerRutaInicialPorUsuario(user) {
         return "/";
     }
 
-    const permisos = user?.permisos || [];
-
-    if (permisos.includes("ALL")) {
-        return "/";
-    }
-
     if (permisos.includes("USUARIOS_ADMIN")) {
         return "/";
     }
 
     if (permisos.includes("CRM_CALIDAD")) {
         return "/";
+    }
+
+    // Valuador entra directamente a Autos Usados
+    if (permisos.includes("CRM_VALUADOR")) {
+        return "/usados";
     }
 
     if (permisos.includes("CRM_CALL_CENTER")) {
@@ -74,6 +73,10 @@ export function obtenerRutaInicialPorUsuario(user) {
 
     if (permisos.includes("CRM_RRHH")) {
         return "/administrativos";
+    }
+
+    if (permisos.includes("CRM_ASESOR_PISO")) {
+        return "/financieros";
     }
 
     return "/";

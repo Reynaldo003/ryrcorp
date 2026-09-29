@@ -11,7 +11,7 @@ export default function ComercialIndex() {
             navigate("/usados/valuaciones", { replace: true });
             return;
         }
-        if (hasAnyPermission(["CRM_VENTAS", "CRM_CALIDAD"])) {
+        if (hasAnyPermission(["CRM_VENTAS", "CRM_CALIDAD", "CRM_VALUADOR"])) {
             navigate("/usados/ventas_cruzadas", { replace: true });
             return;
         }

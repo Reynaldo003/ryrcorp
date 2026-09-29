@@ -102,7 +102,7 @@ function Modal({ open, title, onClose, children, footer }) {
     return (
         <div className="fixed inset-0 z-[60]">
             <div
-                className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+                className="absolute inset-0 bg-black/55"
                 onClick={onClose}
             />
             <div className="absolute inset-0 flex items-end justify-center p-3 sm:items-center">
@@ -126,7 +126,7 @@ function Modal({ open, title, onClose, children, footer }) {
                         </button>
                     </div>
 
-                    <div className="max-h-[80vh] overflow-auto p-5">{children}</div>
+                    <div className="max-h-[80vh] overflow-auto overscroll-contain p-5">{children}</div>
 
                     {footer ? (
                         <div className="flex flex-col gap-2 border-t border-white/10 bg-white/[0.03] px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
@@ -373,12 +373,15 @@ function EvidenceCard({ item, onRemove }) {
                     <img
                         src={url}
                         alt={nombre}
+                        loading="lazy"
+                        decoding="async"
                         className="aspect-video max-h-52 w-full object-cover"
                     />
                 ) : tipo === "video" && url ? (
                     <video
                         src={url}
                         controls
+                        preload="metadata"
                         className="aspect-video max-h-52 w-full bg-black object-cover"
                     />
                 ) : (
@@ -1377,7 +1380,7 @@ export default function RegistroAvaluos() {
     const telInvalid = !!telError;
 
     const inputBase =
-        "w-full rounded-lg border shadow-lg px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none";
+        "w-full rounded-lg border px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none transition-colors duration-150";
     const inputOk = "border-black/10 bg-neutral-100";
     const inputBad = "border-red-500 bg-red-50";
 
@@ -2320,11 +2323,11 @@ export default function RegistroAvaluos() {
                 </div>
             </div>
 
-            {viewMode === "graficas" ? (
+            {!openModal && viewMode === "graficas" ? (
                 <GraficasAvaluos rows={sorted} />
             ) : null}
 
-            {viewMode === "tabla" ? (
+            {!openModal && viewMode === "tabla" ? (
                 <>
 
 
@@ -3056,12 +3059,17 @@ export default function RegistroAvaluos() {
                                                     {(draft.conceptos || []).map((concepto, index) => (
                                                         <tr key={`concepto-${concepto.id || index}`}>
                                                             <td className="px-4 py-3 align-top">
-                                                                <input
+                                                                <textarea
                                                                     value={concepto.descripcion}
                                                                     onChange={(e) =>
                                                                         actualizarConcepto(index, "descripcion", e.target.value)
                                                                     }
-                                                                    className={[inputBase, inputOk].join(" ")}
+                                                                    rows={3}
+                                                                    className={[
+                                                                        inputBase,
+                                                                        inputOk,
+                                                                        "min-h-[84px] resize-y leading-5",
+                                                                    ].join(" ")}
                                                                     placeholder="Ej. Hojalatería de fascia delantera"
                                                                 />
                                                             </td>

@@ -28,7 +28,7 @@ export default function ComercialTopNav() {
     const { hasAnyPermission, user } = useAuth();
 
     const inProspectos = location.pathname.startsWith("/usados/valuaciones");
-    const canSeeContacto = hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"]);
+    const canSeeContacto = hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VALUADOR"]);
     // Si la interfaz "usados" está activada manualmente, mostrar todas las pestañas
     // del módulo (el administrador ya le otorgó el módulo completo).
     const usadosActivo = interfazActivada(user, "usados");
@@ -39,7 +39,7 @@ export default function ComercialTopNav() {
                 label: "Avaluos",
                 href: "/usados/avaluos",
                 icon: BanknoteArrowUp,
-                show: usadosActivo || hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD"]),
+                show: usadosActivo || hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_VALUADOR"]),
             },
             {
                 label: "Valuaciones",
@@ -51,7 +51,7 @@ export default function ComercialTopNav() {
                 label: "Inventario",
                 href: "/usados/inventario",
                 icon: LayoutList,
-                show: usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+                show: usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_VALUADOR"]),
             },
         ];
 
