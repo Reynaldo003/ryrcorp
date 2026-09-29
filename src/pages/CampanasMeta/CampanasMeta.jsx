@@ -10,14 +10,13 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronRight,
-  FileSpreadsheet,
-  FileText,
-  LoaderCircle,
+  FileDown,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import ExportReportModal from "../../components/ExportReportModal";
 
 // CONSTANTES 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -25,6 +24,73 @@ const MESES_CORTOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "ju
 const SEMANAS = Array.from({ length: 52 }, (_, i) => i + 1);
 const CHART_COLORS = ["#378ADD", "#1D9E75", "#D85A30", "#7F77DD", "#D4537E", "#F0A500", "#00B8D9"];
 const NAVY = "#131E5C";
+
+const COLUMNAS_REPORTE_META = [
+  { key: "nombre_campana", label: "Campaña", width: 42 },
+  { key: "sucursal", label: "Dealer", width: 24 },
+  { key: "canal", label: "Canal", width: 16 },
+  { key: "estado_campana", label: "Estado", width: 16 },
+  { key: "objetivo_campana", label: "Objetivo", width: 24 },
+  { key: "indicador_resultados", label: "Indicador de resultados", width: 24 },
+  { key: "inicio_campana", label: "Inicio campaña", width: 17 },
+  { key: "fin_campana", label: "Fin campaña", width: 17 },
+  { key: "inicio_informe", label: "Inicio informe", width: 17 },
+  { key: "fin_informe", label: "Fin informe", width: 17 },
+  { key: "total_resultados", label: "Resultados", width: 14, type: "number" },
+  { key: "resultados_fb", label: "Resultados Facebook", width: 16, type: "number" },
+  { key: "resultados_ig", label: "Resultados Instagram", width: 16, type: "number" },
+  { key: "resultados_wp", label: "Resultados WhatsApp", width: 16, type: "number" },
+  { key: "alcance", label: "Alcance", width: 16, type: "number" },
+  { key: "alcance_fb", label: "Alcance Facebook", width: 16, type: "number" },
+  { key: "alcance_ig", label: "Alcance Instagram", width: 16, type: "number" },
+  { key: "alcance_wsp", label: "Alcance WhatsApp", width: 16, type: "number" },
+  { key: "impresiones", label: "Impresiones", width: 16, type: "number" },
+  { key: "impresiones_fb", label: "Impresiones Facebook", width: 18, type: "number" },
+  { key: "impresiones_ig", label: "Impresiones Instagram", width: 18, type: "number" },
+  { key: "impresiones_wsp", label: "Impresiones WhatsApp", width: 18, type: "number" },
+  { key: "presupuesto_anuncio", label: "Presupuesto", width: 16, type: "money" },
+  { key: "coste_resultados", label: "Costo por resultado", width: 18, type: "money" },
+  { key: "importe_gastado", label: "Inversión", width: 16, type: "money" },
+  { key: "importe_gastado_fb", label: "Inversión Facebook", width: 18, type: "money" },
+  { key: "importe_gastado_ig", label: "Inversión Instagram", width: 18, type: "money" },
+  { key: "importe_gastado_wsp", label: "Inversión WhatsApp", width: 18, type: "money" },
+  { key: "edad_audiencia", label: "Edad audiencia", width: 18 },
+  { key: "intereses_audiencia", label: "Intereses audiencia", width: 30 },
+  { key: "comportamiento_audiencia", label: "Comportamiento audiencia", width: 30 },
+  { key: "messaging_first_reply", label: "Primeras respuestas", width: 18, type: "number" },
+  { key: "messaging_conversation_started_7d", label: "Conversaciones iniciadas", width: 20, type: "number" },
+  { key: "conversation_lead", label: "Leads por conversación", width: 20, type: "number" },
+  { key: "lead", label: "Leads", width: 14, type: "number" },
+  { key: "link_click", label: "Clics en enlace", width: 16, type: "number" },
+  { key: "likes", label: "Me gusta", width: 14, type: "number" },
+  { key: "comment", label: "Comentarios", width: 14, type: "number" },
+  { key: "post_engagement", label: "Interacción publicación", width: 20, type: "number" },
+  { key: "page_engagement", label: "Interacción página", width: 18, type: "number" },
+  { key: "video_view", label: "Vistas de video", width: 16, type: "number" },
+  { key: "post_save", label: "Guardados", width: 14, type: "number" },
+];
+
+const COLUMNAS_META_DEFAULT = [
+  "nombre_campana", "sucursal", "canal", "estado_campana", "objetivo_campana",
+  "inicio_campana", "fin_campana", "alcance", "impresiones", "importe_gastado",
+  "total_resultados", "coste_resultados", "messaging_first_reply",
+];
+
+const SECCIONES_REPORTE_META = [
+  { key: "summary", label: "Resumen ejecutivo", description: "KPIs, filtros y comparación del período.", defaultSelected: true },
+  { key: "charts", label: "Dashboard gráfico", description: "Todas las visualizaciones analíticas de META ADS.", defaultSelected: true },
+  { key: "table", label: "Detalle de campañas", description: "Tabla con las columnas seleccionadas.", defaultSelected: true },
+];
+
+const GRAFICAS_REPORTE_META = [
+  { key: "resumen_visual", label: "Resumen visual y estatus", description: "Impresiones, alcance, resultados, inversión y distribución por estatus.", type: "donut", category: "Resumen", metric: "KPIs", defaultSelected: true, recommended: true },
+  { key: "pautas", label: "Pautas del período", description: "Resultados y profundidad de mensajes de las principales campañas.", type: "bar", category: "Campañas", metric: "Resultados", defaultSelected: true, recommended: true },
+  { key: "dealer", label: "Gasto por dealer", description: "Distribución de la inversión publicitaria entre dealers.", type: "donut", category: "Inversión", metric: "Gasto", defaultSelected: true, recommended: true },
+  { key: "canal", label: "Rendimiento por canal", description: "Inversión total y costo por resultado para cada canal.", type: "bar", category: "Rendimiento", metric: "Costo / resultado", defaultSelected: true, recommended: true },
+  { key: "cronograma", label: "Cronograma de pautas", description: "Calendario visual de inicio y fin de las campañas.", type: "bar", category: "Planeación", metric: "Duración", defaultSelected: false, recommended: false },
+  { key: "evolucion", label: "Evolución de alcance", description: "Tendencia mensual de alcance e inversión del período.", type: "area", category: "Tendencia", metric: "Alcance", defaultSelected: true, recommended: true },
+  { key: "comparacion", label: "Comparación de gasto", description: "Comparación visual entre períodos cuando el modo comparación está activo.", type: "bar", category: "Comparación", metric: "Gasto", defaultSelected: true, recommended: true },
+];
 
 // ─── GRUPOS DE DEALERS POR CIUDAD ───────────────────────────────────────────
 // Los valores del array deben coincidir EXACTAMENTE con el campo "sucursal"
@@ -95,6 +161,7 @@ function mapearCampana(c) {
   const fecha = parseFechaLocal(fechaBase);
   const nombreCampana = c.nombre_campana ?? "Sin nombre";
   return {
+    ...c,
     id_campana: String(c.id_campana),
     nombre_campana: nombreCampana,
     canal: obtenerCanalPorNombreCampana(nombreCampana),
@@ -179,6 +246,32 @@ function descargarBlob(blob, nombreArchivo) {
   enlace.click();
   enlace.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function obtenerColumnasReporte(keys = []) {
+  const seleccionadas = new Set(keys);
+  const columnas = COLUMNAS_REPORTE_META.filter((columna) => seleccionadas.has(columna.key));
+  return columnas.length ? columnas : COLUMNAS_REPORTE_META.filter((columna) => COLUMNAS_META_DEFAULT.includes(columna.key));
+}
+
+function valorColumnaReporte(campana, columna) {
+  const valor = typeof columna.value === "function" ? columna.value(campana) : campana?.[columna.key];
+  if (columna.type === "number") return numeroSeguro(valor);
+  if (columna.type === "money") return decimalSeguro(valor);
+  return valor ?? "";
+}
+
+function formatearValorPdf(valor, columna) {
+  if (columna.type === "money") return `$${decimalSeguro(valor).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (columna.type === "number") return numeroSeguro(valor).toLocaleString("es-MX");
+  return String(valor ?? "");
+}
+
+function nombreArchivoDesdeConfig(config, fallback) {
+  const personalizado = limpiarNombreArchivo(String(config?.fileName || "").replace(/\.(xlsx|pdf)$/i, ""));
+  if (!personalizado) return fallback;
+  const extension = config.format === "pdf" ? "pdf" : "xlsx";
+  return `${personalizado}.${extension}`;
 }
 
 async function esperarRenderCompleto() {
@@ -307,50 +400,32 @@ function agregarHojaResumenExcel(workbook, {
   return hoja;
 }
 
-function agregarHojaDatosExcel(workbook, nombreHoja, nombreTabla, datos, etiquetaPeriodo) {
+function agregarHojaDatosExcel(workbook, nombreHoja, nombreTabla, datos, etiquetaPeriodo, columnasKeys = COLUMNAS_META_DEFAULT) {
+  const columnas = obtenerColumnasReporte(columnasKeys);
   const hoja = workbook.addWorksheet(nombreHoja, {
     views: [{ state: "frozen", ySplit: 1 }],
     pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
 
-  const columnas = [
-    { name: "Campaña", width: 42, value: (c) => c.nombre_campana },
-    { name: "Dealer", width: 24, value: (c) => c.sucursal },
-    { name: "Canal", width: 16, value: (c) => c.canal },
-    { name: "Estado", width: 16, value: (c) => c.estado_campana },
-    { name: "Año", width: 10, value: (c) => c.año },
-    { name: "Mes", width: 14, value: (c) => MESES[c.mes - 1] ?? c.mes },
-    { name: "Semana", width: 11, value: (c) => c.semana },
-    { name: "Alcance", width: 16, value: (c) => c.alcance },
-    { name: "Impresiones", width: 16, value: (c) => c.impresiones },
-    { name: "Gasto ($)", width: 16, value: (c) => c.importe_gastado },
-    { name: "Resultados", width: 14, value: (c) => c.total_resultados },
-    { name: "Objetivo", width: 24, value: (c) => c.objetivo_campana ?? "" },
-    { name: "Inicio campaña", width: 17, value: (c) => c.inicio_campana ?? "" },
-    { name: "Fin campaña", width: 17, value: (c) => c.fin_campana ?? "" },
-    { name: "Inicio informe", width: 17, value: (c) => c.inicio_informe ?? "" },
-    { name: "Fin informe", width: 17, value: (c) => c.fin_informe ?? "" },
-  ];
-
-  hoja.columns = columnas.map((columna, indice) => ({ key: `col_${indice}`, width: columna.width }));
+  hoja.columns = columnas.map((columna, indice) => ({ key: `col_${indice}`, width: columna.width || 18 }));
   hoja.addTable({
     name: nombreTabla,
     ref: "A1",
     headerRow: true,
     totalsRow: false,
     style: { theme: "TableStyleMedium2", showRowStripes: true },
-    columns: columnas.map((columna) => ({ name: columna.name, filterButton: true })),
-    rows: datos.map((campana) => columnas.map((columna) => columna.value(campana))),
+    columns: columnas.map((columna) => ({ name: columna.label, filterButton: true })),
+    rows: datos.map((campana) => columnas.map((columna) => valorColumnaReporte(campana, columna))),
   });
 
-  hoja.getColumn(8).numFmt = "#,##0";
-  hoja.getColumn(9).numFmt = "#,##0";
-  hoja.getColumn(10).numFmt = '$#,##0.00';
-  hoja.getColumn(11).numFmt = "#,##0";
+  columnas.forEach((columna, indice) => {
+    if (columna.type === "number") hoja.getColumn(indice + 1).numFmt = "#,##0";
+    if (columna.type === "money") hoja.getColumn(indice + 1).numFmt = '$#,##0.00';
+  });
+
   hoja.properties.defaultRowHeight = 19;
   hoja.headerFooter.oddHeader = `&L&16&B${etiquetaPeriodo}&R&D`;
   hoja.headerFooter.oddFooter = "&LReporte META ADS&RPágina &P de &N";
-
   return hoja;
 }
 
@@ -379,7 +454,7 @@ function agregarHojaGraficasExcel(workbook, canvas, filtrosReporte) {
   return hoja;
 }
 
-function agregarCanvasPaginadoPdf(doc, canvas) {
+function agregarCanvasPaginadoPdf(doc, canvas, orientation = "landscape") {
   const margen = 8;
   const anchoPagina = doc.internal.pageSize.getWidth();
   const altoPagina = doc.internal.pageSize.getHeight();
@@ -392,7 +467,7 @@ function agregarCanvasPaginadoPdf(doc, canvas) {
   let primeraPagina = true;
 
   while (posicionY < canvas.height) {
-    if (!primeraPagina) doc.addPage("a4", "landscape");
+    if (!primeraPagina) doc.addPage("a4", orientation);
     primeraPagina = false;
 
     const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
@@ -411,67 +486,37 @@ function agregarCanvasPaginadoPdf(doc, canvas) {
   }
 }
 
-function agregarTablaPdf(doc, datos, titulo) {
-  doc.addPage("a4", "landscape");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(19, 30, 92);
-  doc.text(titulo, 10, 12);
+function agregarTablaPdf(doc, datos, titulo, columnasKeys = COLUMNAS_META_DEFAULT, orientation = "landscape") {
+  const columnas = obtenerColumnasReporte(columnasKeys);
+  const grupos = [];
+  const tamanoGrupo = orientation === "portrait" ? 6 : 8;
+  for (let i = 0; i < columnas.length; i += tamanoGrupo) grupos.push(columnas.slice(i, i + tamanoGrupo));
 
-  autoTable(doc, {
-    startY: 17,
-    head: [["Campaña", "Dealer", "Canal", "Estado", "Año", "Mes", "Alcance", "Impresiones", "Gasto ($)", "Resultados"]],
-    body: datos.map((c) => [
-      c.nombre_campana,
-      c.sucursal,
-      c.canal,
-      c.estado_campana,
-      c.año,
-      MESES[c.mes - 1] ?? c.mes,
-      c.alcance.toLocaleString("es-MX"),
-      c.impresiones.toLocaleString("es-MX"),
-      c.importe_gastado.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      c.total_resultados.toLocaleString("es-MX"),
-    ]),
-    theme: "grid",
-    styles: {
-      font: "helvetica",
-      fontSize: 6.5,
-      cellPadding: 1.4,
-      overflow: "linebreak",
-      valign: "middle",
-      textColor: [55, 65, 81],
-      lineColor: [229, 231, 235],
-      lineWidth: 0.15,
-    },
-    headStyles: {
-      fillColor: [19, 30, 92],
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      halign: "center",
-    },
-    alternateRowStyles: { fillColor: [249, 250, 251] },
-    columnStyles: {
-      0: { cellWidth: 52 },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 20 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 13, halign: "center" },
-      5: { cellWidth: 19 },
-      6: { cellWidth: 23, halign: "right" },
-      7: { cellWidth: 23, halign: "right" },
-      8: { cellWidth: 23, halign: "right" },
-      9: { cellWidth: 20, halign: "right" },
-    },
-    margin: { left: 8, right: 8, bottom: 10 },
-    didDrawPage: () => {
-      const ancho = doc.internal.pageSize.getWidth();
-      const alto = doc.internal.pageSize.getHeight();
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
-      doc.setTextColor(107, 114, 128);
-      doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
-    },
+  grupos.forEach((grupo, indiceGrupo) => {
+    doc.addPage("a4", orientation);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(19, 30, 92);
+    doc.text(grupos.length > 1 ? `${titulo} · bloque ${indiceGrupo + 1}/${grupos.length}` : titulo, 10, 12);
+
+    autoTable(doc, {
+      startY: 17,
+      head: [grupo.map((columna) => columna.label)],
+      body: datos.map((campana) => grupo.map((columna) => formatearValorPdf(valorColumnaReporte(campana, columna), columna))),
+      theme: "grid",
+      styles: { font: "helvetica", fontSize: 6.5, cellPadding: 1.4, overflow: "linebreak", valign: "middle", textColor: [55, 65, 81], lineColor: [229, 231, 235], lineWidth: 0.15 },
+      headStyles: { fillColor: [19, 30, 92], textColor: [255, 255, 255], fontStyle: "bold", halign: "center" },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      margin: { left: 8, right: 8, bottom: 10 },
+      didDrawPage: () => {
+        const ancho = doc.internal.pageSize.getWidth();
+        const alto = doc.internal.pageSize.getHeight();
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(107, 114, 128);
+        doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
+      },
+    });
   });
 }
 
@@ -549,7 +594,12 @@ const CustomBarLabel = (props) => {
   );
 };
 
-function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
+function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB, charts = null }) {
+  const graficasActivas = useMemo(() => {
+    if (!Array.isArray(charts)) return new Set(GRAFICAS_REPORTE_META.map((item) => item.key));
+    return new Set(charts);
+  }, [charts]);
+  const mostrar = (key) => graficasActivas.has(key);
   const porCampana = [...datos]
     .sort((a, b) => b.total_resultados - a.total_resultados)
     .slice(0, 10)
@@ -665,7 +715,7 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {mostrar("resumen_visual") && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-[14px] text-gray-400 uppercase tracking-wide font-semibold mb-1">Total de Impresiones</p>
           <p className="text-[12px] text-gray-400 mb-2">Cantidad de visualizaciones en social media</p>
@@ -718,10 +768,10 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
             ))}
           </div>
         </div>
-      </div>
+      </div>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 lg:col-span-2">
+      {(mostrar("pautas") || mostrar("dealer")) && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {mostrar("pautas") && <div className={`bg-white rounded-xl border border-gray-200 p-5 ${mostrar("dealer") ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <p className="text-lg font-bold mb-1" style={{ color: NAVY }}>Pautas del Período</p>
           <p className="text-[14px] text-gray-400 mb-4">En relación a la cantidad de resultados generados en META</p>
           <ResponsiveContainer width="100%" height={280}>
@@ -737,9 +787,9 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
               <Line type="monotone" dataKey="msg5" stroke="#D4537E" name="+ 5 mensajes" dot={{ r: 3 }} strokeWidth={2} />
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        {mostrar("dealer") && <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-lg font-bold mb-1" style={{ color: NAVY }}>Gasto por Dealer</p>
           <p className="text-[14px] text-gray-400 mb-4">Distribución de inversión</p>
           <ResponsiveContainer width="100%" height={200}>
@@ -761,10 +811,10 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
               </div>
             ))}
           </div>
-        </div>
-      </div>
+        </div>}
+      </div>}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      {mostrar("canal") && <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex flex-col gap-1 mb-4">
           <p className="text-lg font-bold" style={{ color: NAVY }}>Rendimiento por Canal</p>
           <p className="text-[14px] text-gray-400">Comparativa de inversión total y costo por resultado entre Nuevos, Usados y Comerciales</p>
@@ -799,9 +849,9 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      {mostrar("cronograma") && <div className="bg-white rounded-xl border border-gray-200 p-5">
         <p className="text-lg font-bold mb-1" style={{ color: NAVY }}>Cronograma de Pautas</p>
         <p className="text-[14px] text-gray-400 mb-4">Fechas de inicio y final de la programación de las pautas</p>
         <div className="overflow-x-auto">
@@ -836,9 +886,9 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      {mostrar("evolucion") && <div className="bg-white rounded-xl border border-gray-200 p-5">
         <p className="text-lg font-bold mb-1" style={{ color: NAVY }}>
           Evolución de Alcance {modoComp ? `— ${labelA} vs ${labelB}` : "Mensual"}
         </p>
@@ -868,9 +918,9 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB }) {
             </ComposedChart>
           )}
         </ResponsiveContainer>
-      </div>
+      </div>}
 
-      {modoComp && (
+      {modoComp && mostrar("comparacion") && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-bold mb-4" style={{ color: NAVY }}>Comparación de Gasto — {labelA} vs {labelB}</p>
           <ResponsiveContainer width="100%" height={220}>
@@ -929,7 +979,10 @@ export default function CampanasMeta() {
   const [error, setError] = useState(null);
 
   const cacheRef = useRef(new Map());
+  const reportCacheRef = useRef(new Map());
   const reporteVisualRef = useRef(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [reporteExportacion, setReporteExportacion] = useState(null);
   const [exportando, setExportando] = useState(null);
   const [errorExportacion, setErrorExportacion] = useState(null);
 
@@ -944,6 +997,22 @@ export default function CampanasMeta() {
     const lista = Array.isArray(data) ? data : data.results ?? [];
     const mapeado = lista.map(mapearCampana);
     cacheRef.current.set(cacheKey, mapeado);
+    return mapeado;
+  }, []);
+
+  const cargarCampanasReporte = useCallback(async (filtros) => {
+    const query = construirQueryCampanas(filtros);
+    const cacheKey = query || "sin-filtros";
+    if (reportCacheRef.current.has(cacheKey)) return reportCacheRef.current.get(cacheKey);
+
+    const url = `${META_ENDPOINT}/reporte/${query ? `?${query}` : ""}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Error al preparar el reporte: ${res.status}`);
+
+    const data = await res.json();
+    const lista = Array.isArray(data) ? data : data.results ?? [];
+    const mapeado = lista.map(mapearCampana);
+    reportCacheRef.current.set(cacheKey, mapeado);
     return mapeado;
   }, []);
 
@@ -1111,6 +1180,77 @@ export default function CampanasMeta() {
     { etiqueta: "Comparación", valor: modoComp ? `${labelA} vs ${labelB}` : "No aplicada" },
   ]), [descripcionPeriodo, descripcionDealer, semana, modoComp, labelA, labelB]);
 
+  const filtrosConfiguradorReporte = useMemo(() => ([
+    {
+      key: "anio",
+      label: "Año",
+      type: "select",
+      options: [{ value: "Todos", label: "Todos los años" }, ...añosDisponibles.map((item) => ({ value: String(item), label: String(item) }))],
+    },
+    {
+      key: "mes",
+      label: "Mes",
+      type: "select",
+      options: [{ value: "Todos", label: "Todos los meses" }, ...MESES.map((item, index) => ({ value: String(index + 1), label: item }))],
+    },
+    {
+      key: "semana",
+      label: "Semana",
+      type: "select",
+      options: [{ value: "Todas", label: "Todas las semanas" }, ...SEMANAS.map((item) => ({ value: String(item), label: `Semana ${item}` }))],
+    },
+    {
+      key: "ciudad",
+      label: "Dealer / ciudad",
+      type: "select",
+      options: [{ value: "Todas", label: "Todos los dealers" }, ...Object.keys(GRUPOS_DEALER).map((item) => ({ value: item, label: item }))],
+    },
+    {
+      key: "comparar",
+      label: "Comparar períodos",
+      type: "select",
+      options: [
+        { value: "no", label: "No comparar" },
+        { value: "si", label: "Sí, comparar" },
+      ],
+    },
+    {
+      key: "tipo_comp",
+      label: "Tipo de comparación",
+      type: "select",
+      visibleWhen: (filtros) => filtros.comparar === "si",
+      options: [
+        { value: "meses", label: "Mes vs Mes" },
+        { value: "años", label: "Año vs Año" },
+      ],
+    },
+    {
+      key: "comp_a",
+      label: "Período A",
+      type: "select",
+      visibleWhen: (filtros) => filtros.comparar === "si",
+      options: (filtros) => filtros.tipo_comp === "años" ? opcionesAño : opcionesAñoMes,
+    },
+    {
+      key: "comp_b",
+      label: "Período B",
+      type: "select",
+      visibleWhen: (filtros) => filtros.comparar === "si",
+      options: (filtros) => filtros.tipo_comp === "años" ? opcionesAño : opcionesAñoMes,
+    },
+  ]), [añosDisponibles, opcionesAño, opcionesAñoMes]);
+
+  const filtrosActualesReporte = useMemo(() => ({
+    anio: String(año),
+    mes: String(mes),
+    semana: String(semana),
+    ciudad: ciudadSeleccionada,
+    comparar: modoComp ? "si" : "no",
+    tipo_comp: tipoComp,
+    comp_a: compA,
+    comp_b: compB,
+  }), [año, mes, semana, ciudadSeleccionada, modoComp, tipoComp, compA, compB]);
+
   const capturarReporteVisual = useCallback(async () => {
     if (!reporteVisualRef.current) throw new Error("No se encontró el contenido visual del reporte.");
 
@@ -1139,129 +1279,218 @@ export default function CampanasMeta() {
     return canvas;
   }, []);
 
-  const generarExcel = useCallback(async () => {
-    if (datosActivos.length === 0 || exportando) return;
+  const prepararDatosReporte = useCallback(async (config) => {
+    const filtros = {
+      ...filtrosActualesReporte,
+      ...(config?.filters || {}),
+    };
+
+    const comparar = filtros.comparar === "si";
+    const tipoComparacion = filtros.tipo_comp || "meses";
+
+    const aplicarFiltrosLocales = (lista) => {
+      let resultado = [...lista];
+
+      if (filtros.ciudad && filtros.ciudad !== "Todas") {
+        const sucursales = GRUPOS_DEALER[filtros.ciudad] ?? [];
+        resultado = resultado.filter((campana) => sucursales.some((sucursalGrupo) => normalizarTexto(campana.sucursal) === normalizarTexto(sucursalGrupo)));
+      }
+
+      if (filtros.semana && filtros.semana !== "Todas") {
+        const semanaNumero = Number(filtros.semana);
+        resultado = resultado.filter((campana) => campana.semana === semanaNumero);
+      }
+
+      return resultado;
+    };
+
+    const filtrosPeriodo = (valor) => {
+      if (tipoComparacion === "años") {
+        return { anio: valor, mes: "Todos", sucursal: "Todas" };
+      }
+      const [anioPeriodo, mesPeriodo] = String(valor || "").split("-");
+      return { anio: anioPeriodo || "Todos", mes: mesPeriodo || "Todos", sucursal: "Todas" };
+    };
+
+    const etiquetaPeriodo = (valor) => {
+      if (tipoComparacion === "años") return String(valor || "");
+      const [anioPeriodo, mesPeriodo] = String(valor || "").split("-");
+      return `${MESES[Number(mesPeriodo) - 1] || "Mes"} ${anioPeriodo || ""}`.trim();
+    };
+
+    let datosPrimarios = [];
+    let datosComparacion = [];
+    let etiquetaA = "";
+    let etiquetaB = "";
+
+    if (comparar) {
+      const [listaA, listaB] = await Promise.all([
+        cargarCampanasReporte(filtrosPeriodo(filtros.comp_a)),
+        cargarCampanasReporte(filtrosPeriodo(filtros.comp_b)),
+      ]);
+      datosPrimarios = aplicarFiltrosLocales(listaA);
+      datosComparacion = aplicarFiltrosLocales(listaB);
+      etiquetaA = etiquetaPeriodo(filtros.comp_a);
+      etiquetaB = etiquetaPeriodo(filtros.comp_b);
+    } else {
+      const lista = await cargarCampanasReporte({ anio: filtros.anio, mes: filtros.mes, sucursal: "Todas" });
+      datosPrimarios = aplicarFiltrosLocales(lista);
+      etiquetaA = `${filtros.mes === "Todos" ? "Todos los meses" : MESES[Number(filtros.mes) - 1]} · ${filtros.anio === "Todos" ? "Todos los años" : filtros.anio}`;
+    }
+
+    if (!datosPrimarios.length) throw new Error("No hay campañas para los filtros configurados en el reporte.");
+
+    const descripcionPeriodoReporte = comparar ? `${etiquetaA} vs ${etiquetaB}` : etiquetaA;
+    const descripcionDealerReporte = filtros.ciudad === "Todas" ? "Todos los dealers" : filtros.ciudad;
+    const filtrosResumenReporte = [
+      { etiqueta: "Período", valor: descripcionPeriodoReporte },
+      { etiqueta: "Dealer", valor: descripcionDealerReporte },
+      { etiqueta: "Semana", valor: filtros.semana === "Todas" ? "Todas las semanas" : `Semana ${filtros.semana}` },
+      { etiqueta: "Comparación", valor: comparar ? `${etiquetaA} vs ${etiquetaB}` : "No aplicada" },
+    ];
+
+    return {
+      config,
+      filtros,
+      datosActivos: datosPrimarios,
+      datosComp: datosComparacion,
+      modoComp: comparar,
+      labelA: etiquetaA,
+      labelB: etiquetaB,
+      descripcionPeriodo: descripcionPeriodoReporte,
+      descripcionDealer: descripcionDealerReporte,
+      filtrosReporte: filtrosResumenReporte,
+      totA: agg(datosPrimarios),
+      totB: agg(datosComparacion),
+    };
+  }, [cargarCampanasReporte, filtrosActualesReporte]);
+
+  const generarExcel = useCallback(async (config) => {
+    if (exportando) return;
 
     try {
       setExportando("excel");
       setErrorExportacion(null);
 
-      const canvas = await capturarReporteVisual();
+      const reporte = await prepararDatosReporte(config);
+      setReporteExportacion(reporte);
+
+      const incluyeResumen = config.sections.includes("summary");
+      const incluyeTabla = config.sections.includes("table");
+      const incluyeGraficas = config.sections.includes("charts") && Array.isArray(config.charts) && config.charts.length > 0;
+      const canvas = incluyeGraficas ? await capturarReporteVisual() : null;
+
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "CRM Grupo Automotriz R&R";
       workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
       workbook.created = new Date();
       workbook.modified = new Date();
       workbook.subject = "Reporte de campañas META ADS";
-      workbook.title = `Reporte META ADS - ${descripcionPeriodo}`;
+      workbook.title = config.title || `Reporte META ADS - ${reporte.descripcionPeriodo}`;
 
-      agregarHojaResumenExcel(workbook, {
-        filtrosReporte,
-        totales: totA,
-        cantidadRegistros: datosActivos.length,
-        modoComp,
-        labelA,
-        labelB,
-        totalesComparacion: totB,
-        cantidadComparacion: datosComp.length,
-      });
-
-      agregarHojaDatosExcel(
-        workbook,
-        modoComp ? "Datos período A" : "Datos filtrados",
-        "TablaDatosFiltrados",
-        datosActivos,
-        modoComp ? labelA : descripcionPeriodo,
-      );
-
-      if (modoComp && datosComp.length > 0) {
-        agregarHojaDatosExcel(
-          workbook,
-          "Datos período B",
-          "TablaDatosComparacion",
-          datosComp,
-          labelB,
-        );
+      if (incluyeResumen) {
+        agregarHojaResumenExcel(workbook, {
+          filtrosReporte: reporte.filtrosReporte,
+          totales: reporte.totA,
+          cantidadRegistros: reporte.datosActivos.length,
+          modoComp: reporte.modoComp,
+          labelA: reporte.labelA,
+          labelB: reporte.labelB,
+          totalesComparacion: reporte.totB,
+          cantidadComparacion: reporte.datosComp.length,
+        });
       }
 
-      agregarHojaGraficasExcel(workbook, canvas, filtrosReporte);
+      if (incluyeTabla) {
+        agregarHojaDatosExcel(
+          workbook,
+          reporte.modoComp ? "Datos período A" : "Datos filtrados",
+          "TablaDatosFiltrados",
+          reporte.datosActivos,
+          reporte.modoComp ? reporte.labelA : reporte.descripcionPeriodo,
+          config.columns,
+        );
+
+        if (reporte.modoComp && reporte.datosComp.length > 0) {
+          agregarHojaDatosExcel(
+            workbook,
+            "Datos período B",
+            "TablaDatosComparacion",
+            reporte.datosComp,
+            reporte.labelB,
+            config.columns,
+          );
+        }
+      }
+
+      if (incluyeGraficas && canvas) agregarHojaGraficasExcel(workbook, canvas, reporte.filtrosReporte);
 
       const buffer = await workbook.xlsx.writeBuffer();
-      const archivo = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-
-      descargarBlob(archivo, crearNombreReporte({
-        periodo: descripcionPeriodo,
-        dealer: descripcionDealer,
-        extension: "xlsx",
-      }));
+      const archivo = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const fallback = crearNombreReporte({ periodo: reporte.descripcionPeriodo, dealer: reporte.descripcionDealer, extension: "xlsx" });
+      descargarBlob(archivo, nombreArchivoDesdeConfig({ ...config, format: "excel" }, fallback));
     } catch (err) {
       console.error("Error generando Excel:", err);
       setErrorExportacion(err?.message || "No fue posible generar el reporte Excel.");
+      throw err;
     } finally {
+      setReporteExportacion(null);
       setExportando(null);
     }
-  }, [
-    datosActivos,
-    datosComp,
-    exportando,
-    capturarReporteVisual,
-    filtrosReporte,
-    totA,
-    totB,
-    modoComp,
-    labelA,
-    labelB,
-    descripcionPeriodo,
-    descripcionDealer,
-  ]);
+  }, [exportando, prepararDatosReporte, capturarReporteVisual]);
 
-  const generarPdf = useCallback(async () => {
-    if (datosActivos.length === 0 || exportando) return;
+  const generarPdf = useCallback(async (config) => {
+    if (exportando) return;
 
     try {
       setExportando("pdf");
       setErrorExportacion(null);
 
-      const canvas = await capturarReporteVisual();
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+      const reporte = await prepararDatosReporte(config);
+      setReporteExportacion(reporte);
+
+      const incluyeResumen = config.sections.includes("summary");
+      const incluyeTabla = config.sections.includes("table");
+      const incluyeGraficas = config.sections.includes("charts") && Array.isArray(config.charts) && config.charts.length > 0;
+      const incluyeVisual = incluyeResumen || incluyeGraficas;
+      const canvas = incluyeVisual ? await capturarReporteVisual() : null;
+
+      const orientation = config.orientation === "portrait" ? "portrait" : "landscape";
+      const doc = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
       doc.setProperties({
-        title: `Reporte META ADS - ${descripcionPeriodo}`,
-        subject: "Reporte de tabla y gráficas de campañas META ADS",
+        title: config.title || `Reporte META ADS - ${reporte.descripcionPeriodo}`,
+        subject: "Reporte configurable de campañas META ADS",
         author: "CRM Grupo Automotriz R&R",
         creator: "CRM Grupo Automotriz R&R",
       });
 
-      agregarCanvasPaginadoPdf(doc, canvas);
-      agregarTablaPdf(doc, datosActivos, modoComp ? `Tabla de campañas - ${labelA}` : "Tabla de campañas filtradas");
+      if (canvas) agregarCanvasPaginadoPdf(doc, canvas, orientation);
 
-      if (modoComp && datosComp.length > 0) {
-        agregarTablaPdf(doc, datosComp, `Tabla de comparación - ${labelB}`);
+      if (incluyeTabla) {
+        agregarTablaPdf(doc, reporte.datosActivos, reporte.modoComp ? `Tabla de campañas - ${reporte.labelA}` : "Tabla de campañas filtradas", config.columns, orientation);
+        if (reporte.modoComp && reporte.datosComp.length > 0) {
+          agregarTablaPdf(doc, reporte.datosComp, `Tabla de comparación - ${reporte.labelB}`, config.columns, orientation);
+        }
       }
 
-      doc.save(crearNombreReporte({
-        periodo: descripcionPeriodo,
-        dealer: descripcionDealer,
-        extension: "pdf",
-      }));
+      if (!canvas && incluyeTabla && doc.getNumberOfPages() > 1) doc.deletePage(1);
+
+      const fallback = crearNombreReporte({ periodo: reporte.descripcionPeriodo, dealer: reporte.descripcionDealer, extension: "pdf" });
+      doc.save(nombreArchivoDesdeConfig({ ...config, format: "pdf" }, fallback));
     } catch (err) {
       console.error("Error generando PDF:", err);
       setErrorExportacion(err?.message || "No fue posible generar el reporte PDF.");
+      throw err;
     } finally {
+      setReporteExportacion(null);
       setExportando(null);
     }
-  }, [
-    datosActivos,
-    datosComp,
-    exportando,
-    capturarReporteVisual,
-    modoComp,
-    labelA,
-    labelB,
-    descripcionPeriodo,
-    descripcionDealer,
-  ]);
+  }, [exportando, prepararDatosReporte, capturarReporteVisual]);
+
+  const generarReporte = useCallback(async (config) => {
+    if (config.format === "pdf") return generarPdf(config);
+    return generarExcel(config);
+  }, [generarExcel, generarPdf]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
@@ -1281,6 +1510,20 @@ export default function CampanasMeta() {
     </div>
   );
 
+  const reporteVisual = reporteExportacion || {
+    config: { sections: ["summary", "charts"], charts: GRAFICAS_REPORTE_META.map((item) => item.key), title: "Reporte de Marketing | META ADS" },
+    datosActivos,
+    datosComp,
+    modoComp,
+    labelA,
+    labelB,
+    filtrosReporte,
+    totA,
+    totB,
+  };
+  const visualIncluyeResumen = reporteVisual.config?.sections?.includes("summary");
+  const visualIncluyeGraficas = reporteVisual.config?.sections?.includes("charts") && (reporteVisual.config?.charts?.length ?? 0) > 0;
+
   return (
     <div className="space-y-0 p-1">
 
@@ -1291,23 +1534,14 @@ export default function CampanasMeta() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={generarExcel}
+            type="button"
+            onClick={() => setShowExportModal(true)}
             disabled={datosActivos.length === 0 || Boolean(exportando)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Generar Excel con resumen, datos filtrados y gráficas"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-[#131E5C]/20 bg-white text-[#131E5C] hover:bg-[#131E5C]/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Configurar y generar reporte"
           >
-            {exportando === "excel" ? <LoaderCircle size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-            {exportando === "excel" ? "Generando..." : "Exportar Excel"}
-          </button>
-
-          <button
-            onClick={generarPdf}
-            disabled={datosActivos.length === 0 || Boolean(exportando)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Generar PDF con resumen, gráficas y tabla paginada"
-          >
-            {exportando === "pdf" ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}
-            {exportando === "pdf" ? "Generando..." : "Exportar PDF"}
+            <FileDown size={16} />
+            Configurar reporte
           </button>
 
           <div className="w-px h-8 bg-gray-200 mx-1 hidden sm:block" />
@@ -1534,10 +1768,7 @@ export default function CampanasMeta() {
         : <VistaGraficas datos={datosActivos} datosComp={datosComp} modoComp={modoComp} labelA={labelA} labelB={labelB} />
       }
 
-      {/*
-        Este bloque permanece fuera de la pantalla, pero sí está renderizado.
-        Así se pueden exportar todas las gráficas aunque el usuario esté viendo la tabla.
-      */}
+      {/* Reporte oculto: renderiza la configuración elegida en el modal sin tocar la vista principal. */}
       <div
         id="reporte-meta-exportacion"
         ref={reporteVisualRef}
@@ -1554,35 +1785,56 @@ export default function CampanasMeta() {
         }}
       >
         <div className="mb-6 border-b border-gray-200 pb-5">
-          <h1 className="text-3xl font-black" style={{ color: NAVY }}>Reporte de Marketing | META ADS</h1>
-          <p className="mt-1 text-sm text-gray-500">Tabla y gráficas generadas con los filtros aplicados en el CRM</p>
+          <h1 className="text-3xl font-black" style={{ color: NAVY }}>{reporteVisual.config?.title || "Reporte de Marketing | META ADS"}</h1>
+          <p className="mt-1 text-sm text-gray-500">Reporte generado desde el configurador del CRM</p>
           <p className="mt-1 text-xs text-gray-400">Generado: {new Date().toLocaleString("es-MX")}</p>
         </div>
 
-        <div className="grid grid-cols-4 gap-3 mb-5">
-          {filtrosReporte.map((filtro) => (
-            <div key={filtro.etiqueta} className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">{filtro.etiqueta}</p>
-              <p className="mt-1 text-sm font-bold text-gray-700">{filtro.valor}</p>
-            </div>
-          ))}
-        </div>
+        {visualIncluyeResumen && (<>
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            {reporteVisual.filtrosReporte.map((filtro) => (
+              <div key={filtro.etiqueta} className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">{filtro.etiqueta}</p>
+                <p className="mt-1 text-sm font-bold text-gray-700">{filtro.valor}</p>
+              </div>
+            ))}
+          </div>
 
-        <div className="grid grid-cols-4 gap-4 mb-5">
-          <StatCard label="Campañas" value={datosActivos.length} sub={modoComp ? `${datosComp.length} en ${labelB}` : undefined} color="#378ADD" delta={modoComp ? pct(datosActivos.length, datosComp.length) : null} />
-          <StatCard label="Alcance total" value={totA.alcance.toLocaleString()} sub={modoComp ? `${totB.alcance.toLocaleString()} en ${labelB}` : "personas únicas"} color="#1D9E75" delta={modoComp ? pct(totA.alcance, totB.alcance) : null} />
-          <StatCard label="Impresiones" value={totA.impresiones.toLocaleString()} sub={modoComp ? `${totB.impresiones.toLocaleString()} en ${labelB}` : "total"} color="#7F77DD" delta={modoComp ? pct(totA.impresiones, totB.impresiones) : null} />
-          <StatCard label="Gasto total" value={`$${totA.importe_gastado.toFixed(2)}`} sub={modoComp ? `$${totB.importe_gastado.toFixed(2)} en ${labelB}` : "importe gastado"} color="#D85A30" delta={modoComp ? pct(totA.importe_gastado, totB.importe_gastado) : null} />
-        </div>
+          <div className="grid grid-cols-4 gap-4 mb-5">
+            <StatCard label="Campañas" value={reporteVisual.datosActivos.length} sub={reporteVisual.modoComp ? `${reporteVisual.datosComp.length} en ${reporteVisual.labelB}` : undefined} color="#378ADD" delta={reporteVisual.modoComp ? pct(reporteVisual.datosActivos.length, reporteVisual.datosComp.length) : null} />
+            <StatCard label="Alcance total" value={reporteVisual.totA.alcance.toLocaleString()} sub={reporteVisual.modoComp ? `${reporteVisual.totB.alcance.toLocaleString()} en ${reporteVisual.labelB}` : "personas únicas"} color="#1D9E75" delta={reporteVisual.modoComp ? pct(reporteVisual.totA.alcance, reporteVisual.totB.alcance) : null} />
+            <StatCard label="Impresiones" value={reporteVisual.totA.impresiones.toLocaleString()} sub={reporteVisual.modoComp ? `${reporteVisual.totB.impresiones.toLocaleString()} en ${reporteVisual.labelB}` : "total"} color="#7F77DD" delta={reporteVisual.modoComp ? pct(reporteVisual.totA.impresiones, reporteVisual.totB.impresiones) : null} />
+            <StatCard label="Gasto total" value={`$${reporteVisual.totA.importe_gastado.toFixed(2)}`} sub={reporteVisual.modoComp ? `$${reporteVisual.totB.importe_gastado.toFixed(2)} en ${reporteVisual.labelB}` : "importe gastado"} color="#D85A30" delta={reporteVisual.modoComp ? pct(reporteVisual.totA.importe_gastado, reporteVisual.totB.importe_gastado) : null} />
+          </div>
+        </>)}
 
-        <VistaGraficas
-          datos={datosActivos}
-          datosComp={datosComp}
-          modoComp={modoComp}
-          labelA={labelA}
-          labelB={labelB}
-        />
+        {visualIncluyeGraficas && (
+          <VistaGraficas
+            datos={reporteVisual.datosActivos}
+            datosComp={reporteVisual.datosComp}
+            modoComp={reporteVisual.modoComp}
+            labelA={reporteVisual.labelA}
+            labelB={reporteVisual.labelB}
+            charts={reporteVisual.config?.charts}
+          />
+        )}
       </div>
+
+      <ExportReportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        moduleName="Marketing | META ADS"
+        storageKey="campanas-meta"
+        currentFilters={filtrosActualesReporte}
+        filterDefinitions={filtrosConfiguradorReporte}
+        currentColumns={COLUMNAS_REPORTE_META.filter((columna) => COLUMNAS_META_DEFAULT.includes(columna.key))}
+        availableColumns={COLUMNAS_REPORTE_META}
+        totalRecords={datosActivos.length}
+        formats={["excel", "pdf"]}
+        sectionOptions={SECCIONES_REPORTE_META}
+        chartOptions={GRAFICAS_REPORTE_META}
+        onGenerate={generarReporte}
+      />
     </div>
   );
 }

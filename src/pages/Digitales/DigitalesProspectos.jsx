@@ -11,7 +11,14 @@ import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { apiCitas } from "../../lib/apiCitas";
 import { useAuth } from "../../auth/AuthContext";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import html2canvas from "html2canvas-pro";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    PieChart, Pie, Cell, LineChart, Line, Legend,
+} from "recharts";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 import ResultadosIA from "./ResultadosIA";
@@ -55,6 +62,229 @@ const COLUMNAS_PROSPECTOS = [
     { key: "resumen", label: "Resumen" },
     { key: "acciones", label: "Acciones" },
 ];
+
+const COLUMNAS_REPORTE_PROSPECTOS = [
+    { key: "agencia", label: "Dealer" },
+    { key: "cliente", label: "Cliente" },
+    { key: "telefono", label: "Teléfono" },
+    { key: "correo", label: "Correo" },
+    { key: "business", label: "Business" },
+    { key: "canal", label: "Canal de contacto" },
+    { key: "pauta", label: "Pauta de origen" },
+    { key: "estado", label: "Estado" },
+    { key: "motivo_descalificacion", label: "Motivo de descalificación" },
+    { key: "asesor_digital", label: "Asesor Digital" },
+    { key: "asesor_piso", label: "Asesor Piso" },
+    { key: "interes", label: "VW de sus sueños" },
+    { key: "fecha_registro", label: "Fecha de registro" },
+    { key: "primer_contacto", label: "Primer contacto" },
+    { key: "ultimo_contacto", label: "Último contacto" },
+    { key: "respuesta", label: "Tiempo de respuesta" },
+    { key: "prioridad", label: "Prioridad" },
+    { key: "score", label: "Lead score" },
+    { key: "enganche", label: "Enganche" },
+    { key: "presupuesto_mensual", label: "Presupuesto mensual" },
+    { key: "buro", label: "Buró" },
+    { key: "forma_pago", label: "Forma de pago" },
+    { key: "tipo_cliente", label: "Tipo de cliente" },
+    { key: "uso_vehiculo", label: "Uso del vehículo" },
+    { key: "plazo_compra", label: "Plazo de compra" },
+    { key: "comprobacion_ingresos", label: "Comprobación de ingresos" },
+    { key: "perfil_financiero", label: "Perfil financiero" },
+    { key: "perfil_compra", label: "Perfil de compra" },
+    { key: "cotizacion_pendiente", label: "Cotización pendiente" },
+    { key: "requiere_asesor", label: "Requiere asesor" },
+    { key: "ia_pausada", label: "IA pausada" },
+    { key: "ultima_cita", label: "Última cita agendada" },
+    { key: "asistencia", label: "Asistencia" },
+    { key: "comentarios", label: "Comentarios" },
+    { key: "resumen", label: "Resumen IA" },
+];
+
+const SECCIONES_REPORTE_PROSPECTOS = [
+    { key: "summary", label: "Resumen ejecutivo", description: "Filtros aplicados, total de prospectos y contexto del reporte.", defaultSelected: true },
+    { key: "charts", label: "Análisis gráfico", description: "Gráficas seleccionables para entender distribución, calidad y evolución.", defaultSelected: true },
+    { key: "table", label: "Detalle de prospectos", description: "Tabla configurable con las columnas elegidas.", defaultSelected: true },
+];
+
+const GRAFICAS_REPORTE_PROSPECTOS = [
+    { key: "estado", label: "Pipeline por estado", description: "Cantidad de prospectos agrupados por estado comercial.", type: "bar", category: "Pipeline", metric: "Prospectos", defaultSelected: true, recommended: true },
+    { key: "dealer", label: "Prospectos por dealer", description: "Distribución del volumen de prospectos entre agencias.", type: "bar", category: "Distribución", metric: "Prospectos", defaultSelected: true, recommended: true },
+    { key: "business", label: "Distribución por business", description: "Participación de Nuevos, Usados, Comerciales y otros business.", type: "donut", category: "Distribución", metric: "Prospectos", defaultSelected: true, recommended: true },
+    { key: "asesor", label: "Top asesores digitales", description: "Top de asesores por cantidad de prospectos atendidos.", type: "bar", category: "Operación", metric: "Prospectos", defaultSelected: true, recommended: true },
+    { key: "forma_pago", label: "Forma de pago", description: "Composición del perfil comercial por forma de pago.", type: "donut", category: "Perfil comercial", metric: "Prospectos", defaultSelected: false, recommended: false },
+    { key: "score", label: "Distribución de Lead Score", description: "Agrupa prospectos por nivel de score para visualizar calidad de oportunidad.", type: "bar", category: "Calidad", metric: "Lead Score", defaultSelected: true, recommended: true },
+    { key: "evolucion", label: "Evolución de registros", description: "Prospectos registrados por fecha dentro del período configurado.", type: "line", category: "Tendencia", metric: "Registros", defaultSelected: true, recommended: true },
+];
+
+const COLORES_REPORTE_PROSPECTOS = ["#131E5C", "#378ADD", "#1D9E75", "#D85A30", "#7F77DD", "#D4537E", "#F0A500", "#00B8D9"];
+const TOOLTIP_REPORTE = { fontSize: 11, borderRadius: 10, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,.08)" };
+
+function agruparReporte(rows, getter, limit = null) {
+    const map = new Map();
+    rows.forEach((row) => {
+        const raw = typeof getter === "function" ? getter(row) : row?.[getter];
+        const key = String(raw || "Sin dato").trim() || "Sin dato";
+        map.set(key, (map.get(key) || 0) + 1);
+    });
+    const data = Array.from(map.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+    return limit ? data.slice(0, limit) : data;
+}
+
+function ReporteGraficasProspectos({ rows = [], charts = [] }) {
+    const activos = useMemo(() => new Set(charts), [charts]);
+    const porEstado = useMemo(() => agruparReporte(rows, "estado", 10), [rows]);
+    const porDealer = useMemo(() => agruparReporte(rows, "agencia", 10), [rows]);
+    const porBusiness = useMemo(() => agruparReporte(rows, "linea", 8), [rows]);
+    const porAsesor = useMemo(() => agruparReporte(rows, "asesor_digital", 10), [rows]);
+    const porFormaPago = useMemo(() => agruparReporte(rows, (row) => valueOrDash(row.forma_pago), 8), [rows]);
+    const porScore = useMemo(() => {
+        const buckets = { "0-34 Bajo": 0, "35-59 Medio": 0, "60-79 Alto": 0, "80-100 Muy alto": 0 };
+        rows.forEach((row) => {
+            const score = calcLeadScore(row);
+            if (score >= 80) buckets["80-100 Muy alto"] += 1;
+            else if (score >= 60) buckets["60-79 Alto"] += 1;
+            else if (score >= 35) buckets["35-59 Medio"] += 1;
+            else buckets["0-34 Bajo"] += 1;
+        });
+        return Object.entries(buckets).map(([name, value]) => ({ name, value }));
+    }, [rows]);
+    const evolucion = useMemo(() => {
+        const map = new Map();
+        rows.forEach((row) => {
+            const fecha = onlyDate(row.fecha_reclamacion || row.creado);
+            if (!fecha) return;
+            map.set(fecha, (map.get(fecha) || 0) + 1);
+        });
+        return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([fecha, value]) => ({ fecha, value }));
+    }, [rows]);
+
+    function Card({ title, subtitle, children, wide = false }) {
+        return (
+            <div className={cls("rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", wide && "xl:col-span-2")}>
+                <h4 className="text-base font-black text-[#131E5C]">{title}</h4>
+                <p className="mb-4 mt-1 text-xs text-slate-400">{subtitle}</p>
+                {children}
+            </div>
+        );
+    }
+
+    function Barras({ data, dataKey = "value" }) {
+        return (
+            <ResponsiveContainer width="100%" height={270}>
+                <BarChart data={data} margin={{ top: 8, right: 10, left: -20, bottom: 55 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                    <XAxis dataKey="name" interval={0} angle={-28} textAnchor="end" tick={{ fontSize: 9, fill: "#64748b" }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                    <Tooltip contentStyle={TOOLTIP_REPORTE} />
+                    <Bar dataKey={dataKey} fill="#131E5C" radius={[5, 5, 0, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
+        );
+    }
+
+    function Dona({ data }) {
+        return (
+            <div className="grid items-center gap-3 md:grid-cols-[1fr_180px]">
+                <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={90}>
+                            {data.map((item, index) => <Cell key={item.name} fill={COLORES_REPORTE_PROSPECTOS[index % COLORES_REPORTE_PROSPECTOS.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={TOOLTIP_REPORTE} />
+                    </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2">
+                    {data.slice(0, 8).map((item, index) => (
+                        <div key={item.name} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="flex min-w-0 items-center gap-2 text-slate-500"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COLORES_REPORTE_PROSPECTOS[index % COLORES_REPORTE_PROSPECTOS.length] }} /><span className="truncate">{item.name}</span></span>
+                            <strong className="text-slate-700">{item.value}</strong>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid gap-4 xl:grid-cols-2">
+            {activos.has("estado") && <Card title="Pipeline por estado" subtitle="Distribución actual del proceso comercial"><Barras data={porEstado} /></Card>}
+            {activos.has("dealer") && <Card title="Prospectos por dealer" subtitle="Volumen generado por agencia"><Barras data={porDealer} /></Card>}
+            {activos.has("business") && <Card title="Distribución por business" subtitle="Participación por línea de negocio"><Dona data={porBusiness} /></Card>}
+            {activos.has("asesor") && <Card title="Top asesores digitales" subtitle="Prospectos asociados a cada asesor"><Barras data={porAsesor} /></Card>}
+            {activos.has("forma_pago") && <Card title="Forma de pago" subtitle="Perfil comercial declarado"><Dona data={porFormaPago} /></Card>}
+            {activos.has("score") && <Card title="Distribución de Lead Score" subtitle="Calidad de las oportunidades según scoring"><Barras data={porScore} /></Card>}
+            {activos.has("evolucion") && (
+                <Card title="Evolución de registros" subtitle="Prospectos registrados por fecha" wide>
+                    <ResponsiveContainer width="100%" height={270}>
+                        <LineChart data={evolucion} margin={{ top: 8, right: 15, left: -15, bottom: 25 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                            <XAxis dataKey="fecha" tick={{ fontSize: 9, fill: "#64748b" }} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                            <Tooltip contentStyle={TOOLTIP_REPORTE} />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Line type="monotone" dataKey="value" name="Prospectos" stroke="#131E5C" strokeWidth={3} dot={{ r: 3 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </Card>
+            )}
+        </div>
+    );
+}
+
+async function esperarRenderReporteProspectos() {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 220));
+}
+
+function descargarBlobReporte(blob, nombreArchivo) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nombreArchivo;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function nombreReporteProspectos(config, extension) {
+    const ahora = new Date();
+    const sello = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}_${String(ahora.getHours()).padStart(2, "0")}-${String(ahora.getMinutes()).padStart(2, "0")}`;
+    const base = String(config?.fileName || "").trim().replace(/\.(xlsx|pdf)$/i, "").replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, "_").replace(/^_+|_+$/g, "");
+    return `${base || `reporte_prospectos_${sello}`}.${extension}`;
+}
+
+function agregarCanvasPdfProspectos(doc, canvas) {
+    const margen = 8;
+    const anchoPagina = doc.internal.pageSize.getWidth();
+    const altoPagina = doc.internal.pageSize.getHeight();
+    const anchoUtil = anchoPagina - margen * 2;
+    const altoUtil = altoPagina - margen * 2;
+    const pixelesPorMm = canvas.width / anchoUtil;
+    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+    let y = 0;
+    let primera = true;
+
+    while (y < canvas.height) {
+        if (!primera) doc.addPage();
+        primera = false;
+        const altoActual = Math.min(altoCortePx, canvas.height - y);
+        const corte = document.createElement("canvas");
+        corte.width = canvas.width;
+        corte.height = altoActual;
+        const ctx = corte.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, corte.width, corte.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, altoActual, 0, 0, canvas.width, altoActual);
+        doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoActual / pixelesPorMm, undefined, "FAST");
+        y += altoActual;
+    }
+}
+
 const ImgIcon = (src, alt) => (props) => <img src={src} alt={alt} {...props} />;
 const lineaMeta = {
     Nuevos: { Icon: Car, label: "Nuevos" },
@@ -832,9 +1062,9 @@ async function listarProspectosDigitalesCompletos(params = {}) {
 
     let next = primeraPagina?.next
         ? String(primeraPagina.next).replace(
-              /^https?:\/\/[^/]+/,
-              ""
-          )
+            /^https?:\/\/[^/]+/,
+            ""
+        )
         : "";
 
     while (
@@ -851,9 +1081,9 @@ async function listarProspectosDigitalesCompletos(params = {}) {
 
         next = pagina?.next
             ? String(pagina.next).replace(
-                  /^https?:\/\/[^/]+/,
-                  ""
-              )
+                /^https?:\/\/[^/]+/,
+                ""
+            )
             : "";
     }
 
@@ -1342,7 +1572,7 @@ function ContextMenu({ ctxMenu, onDelete, onClose }) {
 export default function DigitalesProspectos() {
     const navigate = useNavigate();
     const { user, ready } = useAuth();
-        const {
+    const {
         nombresAsesoresActivos,
     } = useAsesoresGestionComercial();
     const [cases, setCases] = useState([]);
@@ -1382,6 +1612,8 @@ export default function DigitalesProspectos() {
         const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
         return !isAdmin && (["coordinador digital", "coordinador_digital"].includes(rolUsuario) || permisos.includes("CRM_COORDINADOR_DIGITAL"));
     }, [isAdmin, rolUsuario, user?.permisos]);
+
+    const puedeExportarReportes = isAdmin || isCoordinador;
 
     const userAgencias = useMemo(() => String(user?.agencia || "").split("|").map((a) => a.trim()).filter(Boolean), [user?.agencia]);
 
@@ -1442,7 +1674,9 @@ export default function DigitalesProspectos() {
     const [loadingFullCases, setLoadingFullCases] = useState(false);
     const [fullCasesBDC, setFullCasesBDC] = useState([]);
     const [loadingFullCasesBDC, setLoadingFullCasesBDC] = useState(false);
-    const [exportandoExcel, setExportandoExcel] = useState(false);
+    const [exportandoReporte, setExportandoReporte] = useState(false);
+    const [reporteProspectosExportacion, setReporteProspectosExportacion] = useState(null);
+    const reporteProspectosRef = useRef(null);
     const [openAgendaModal, setOpenAgendaModal] = useState(false);
     const [agendaInfo, setAgendaInfo] = useState(null);
     const [drafter, setDrafter] = useState({ agencia: "", fecha_cita: "", asesor_digital: "", asesor_solicita: "", tipo_cita: "Digital" });
@@ -1508,7 +1742,7 @@ export default function DigitalesProspectos() {
         }
     }, [numeroAsesorActivo, numeroUsuarioSesion]);
 
-        const usaPaginacionServidor = !(
+    const usaPaginacionServidor = !(
         isCoordinador &&
         selectedNumeroAsesor === "Todos"
     );
@@ -1851,8 +2085,36 @@ export default function DigitalesProspectos() {
             .filter((numero) => Boolean(LINEAS_WHATSAPP[numero]))
             .slice(0, 1);
     }, [isAdmin, isCoordinador, numerosUsuarioSesion, numerosPermitidosCoordinador]);
+    const columnasReporteActuales = useMemo(() => {
+        const visibles = new Set(Array.from(visibleColumnas).filter((key) => key !== "acciones"));
+        const columnas = COLUMNAS_REPORTE_PROSPECTOS.filter((columna) => visibles.has(columna.key));
+        return columnas.length ? columnas : COLUMNAS_REPORTE_PROSPECTOS.slice(0, 12);
+    }, [visibleColumnas]);
+
+    const filtrosConfiguradorReporte = useMemo(() => ([
+        { key: "q", label: "Búsqueda", type: "text", placeholder: "Cliente, teléfono, correo..." },
+        { key: "estado", label: "Estado", type: "select", options: estados.map((item) => ({ value: item, label: item })) },
+        { key: "agencia", label: "Dealer", type: "select", options: dealers.map((item) => ({ value: item, label: item })) },
+        { key: "linea", label: "Business", type: "select", options: businessOptions.map((item) => ({ value: item, label: item })) },
+        { key: "buro", label: "Buró", type: "select", options: buroOptions.map((item) => ({ value: item, label: valueOrDash(item) })) },
+        { key: "formaPago", label: "Forma de pago", type: "select", options: formaPagoOptions.map((item) => ({ value: item, label: valueOrDash(item) })) },
+        { key: "tipoCliente", label: "Tipo de cliente", type: "select", options: tipoClienteOptions.map((item) => ({ value: item, label: valueOrDash(item) })) },
+        { key: "fechaRegistroDesde", label: "Fecha desde", type: "date" },
+        { key: "fechaRegistroHasta", label: "Fecha hasta", type: "date" },
+        {
+            key: "linea_whatsapp",
+            label: "Línea de WhatsApp",
+            type: "select",
+            options: phoneOptions.map((numero) => ({
+                value: numero,
+                label: numero === "Todos"
+                    ? "Todas las líneas permitidas"
+                    : `${getAsesorDigitalPorNumero(numero, user) || getEtiquetaDigitalPorNumero(numero) || "Línea"} · ${formatTelefonoMx(numero)}`,
+            })),
+        },
+    ]), [estados, dealers, businessOptions, buroOptions, formaPagoOptions, tipoClienteOptions, phoneOptions, user]);
     function toggleSort(key) {
-       setPage(1); setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
+        setPage(1); setSort((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
     }
     function cambiarColumnas(next) {
         const set = new Set(next);
@@ -2019,7 +2281,7 @@ export default function DigitalesProspectos() {
 
     const kpis =
         usaPaginacionServidor &&
-        serverKpis
+            serverKpis
             ? serverKpis
             : kpisLocales;
 
@@ -2248,317 +2510,316 @@ export default function DigitalesProspectos() {
         versionOperativaBDC,
     ]);
 
-    async function exportarExcelProspectos() {
-        if (exportandoExcel) return;
+    async function generarReporteProspectos(config = {}) {
+        if (!puedeExportarReportes) {
+            throw new Error("No tienes permisos para generar reportes de prospectos.");
+        }
+        if (exportandoReporte) return;
 
-        setExportandoExcel(true);
+        setExportandoReporte(true);
 
         try {
-            let filasExportar = [];
+            const reportFilters = {
+                ...filters,
+                linea_whatsapp: selectedNumeroAsesor || "Todos",
+                ...(config.filters || {}),
+            };
 
-            // El coordinador en "Todos" ya tiene el conjunto completo cargado.
-            if (!usaPaginacionServidor) {
-                filasExportar = sorted;
-            } else {
-                const params = {
-                    ligero: 1,
-                };
+            const crearParams = (numeroLinea = "", todos = false) => {
+                const params = { ligero: 1 };
+                if (todos) params.todos = 1;
+                if (numeroLinea) params.numero_asesor = normalizaTelefonoMx(numeroLinea);
 
-                if (
-                    isAdmin &&
-                    selectedNumeroAsesor === "Todos"
-                ) {
-                    params.todos = 1;
-                } else {
-                    const numero =
-                        isAdmin || isCoordinador
-                            ? normalizaTelefonoMx(
-                                selectedNumeroAsesor
-                            )
-                            : numeroAsesorActivo ||
-                            numeroUsuarioSesion;
-
-                    if (numero) {
-                        params.numero_asesor = numero;
-                    }
-                }
-
-                const search = deferredQ.trim();
-
-                if (search) {
-                    params.search = search;
-                }
-
-                if (filters.agencia !== "Todos") {
-                    params.agencia = filters.agencia;
-                }
-
-                if (filters.estado !== "Todos") {
-                    params.estado = filters.estado;
-                }
-
-                if (filters.linea !== "Todos") {
-                    params.business = filters.linea;
-                }
-
-                if (filters.buro !== "Todos") {
-                    params.buro = filters.buro;
-                }
-
-                if (filters.formaPago !== "Todos") {
-                    params.forma_pago =
-                        filters.formaPago;
-                }
-
-                if (filters.tipoCliente !== "Todos") {
-                    params.tipo_cliente =
-                        filters.tipoCliente;
-                }
-
-                if (filters.fechaRegistroDesde) {
-                    params.fecha_registro_desde =
-                        filters.fechaRegistroDesde;
-                }
-
-                if (filters.fechaRegistroHasta) {
-                    params.fecha_registro_hasta =
-                        filters.fechaRegistroHasta;
-                }
-
+                const search = String(reportFilters.q || "").trim();
+                if (search) params.search = search;
+                if (reportFilters.agencia && reportFilters.agencia !== "Todos") params.agencia = reportFilters.agencia;
+                if (reportFilters.estado && reportFilters.estado !== "Todos") params.estado = reportFilters.estado;
+                if (reportFilters.linea && reportFilters.linea !== "Todos") params.business = reportFilters.linea;
+                if (reportFilters.buro && reportFilters.buro !== "Todos") params.buro = reportFilters.buro;
+                if (reportFilters.formaPago && reportFilters.formaPago !== "Todos") params.forma_pago = reportFilters.formaPago;
+                if (reportFilters.tipoCliente && reportFilters.tipoCliente !== "Todos") params.tipo_cliente = reportFilters.tipoCliente;
+                if (reportFilters.fechaRegistroDesde) params.fecha_registro_desde = reportFilters.fechaRegistroDesde;
+                if (reportFilters.fechaRegistroHasta) params.fecha_registro_hasta = reportFilters.fechaRegistroHasta;
                 if (sort.key) {
                     params.sort_key = sort.key;
                     params.sort_dir = sort.dir;
                 }
+                return params;
+            };
 
-                const data =
-                    await listarProspectosDigitalesCompletos(
-                        params
-                    );
+            const lineaSolicitada = reportFilters.linea_whatsapp;
+            let filasRaw = [];
 
-                filasExportar = getListItems(data).map(
-                    normalizeProspecto
+            if (isAdmin) {
+                const todos = !lineaSolicitada || lineaSolicitada === "Todos";
+                filasRaw = await listarProspectosDigitalesCompletos(
+                    crearParams(todos ? "" : lineaSolicitada, todos)
                 );
-            }
-
-            if (!filasExportar.length) {
-                alert(
-                    "No hay registros para exportar con los filtros actuales."
-                );
-                return;
-            }
-
-            const ahora = new Date();
-
-            const fecha =
-                `${ahora.getFullYear()}-` +
-                `${String(
-                    ahora.getMonth() + 1
-                ).padStart(2, "0")}-` +
-                `${String(
-                    ahora.getDate()
-                ).padStart(2, "0")}`;
-
-            const hora =
-                `${String(
-                    ahora.getHours()
-                ).padStart(2, "0")}-` +
-                `${String(
-                    ahora.getMinutes()
-                ).padStart(2, "0")}`;
-
-            const registros = filasExportar.map(
-                (row) => ({
-                    ID: limpiarValorExcel(row.id_exp),
-
-                    Dealer: limpiarValorExcel(
-                        row.agencia
-                    ),
-
-                    Cliente: limpiarValorExcel(
-                        `${row.cliente_nombre || ""} ${
-                            row.cliente_apellidos || ""
-                        }`.trim()
-                    ),
-
-                    Teléfono: limpiarValorExcel(
-                        formatTelefonoMx(row.telefono)
-                    ),
-
-                    Correo: limpiarValorExcel(
-                        row.correo
-                    ),
-
-                    Business: limpiarValorExcel(
-                        row.linea
-                    ),
-
-                    "Canal de Contacto":
-                        limpiarValorExcel(row.origen),
-
-                    "Pauta de Origen":
-                        limpiarValorExcel(row.pauta),
-
-                    Estado: limpiarValorExcel(
-                        row.estado
-                    ),
-
-                    "Motivo de descalificación":
-                        limpiarValorExcel(
-                            row.motivo_descalificacion
-                        ),
-
-                    "Asesor Digital":
-                        limpiarValorExcel(
-                            row.asesor_digital
-                        ),
-
-                    "Asignado a":
-                        limpiarValorExcel(
-                            row.asesor_solicita
-                        ),
-
-                    "VW de sus sueños":
-                        limpiarValorExcel(
-                            row.cliente_interes
-                        ),
-
-                    "Fecha de Registro":
-                        limpiarValorExcel(
-                            row.fecha_reclamacion
-                        ),
-
-                    "Primer Contacto":
-                        limpiarValorExcel(
-                            fmtDTIntl(
-                                row.primer_contacto_at
-                            )
-                        ),
-
-                    "Último Contacto":
-                        limpiarValorExcel(
-                            fmtDTIntl(
-                                row.ultimo_contacto_at
-                            )
-                        ),
-
-                    Enganche: limpiarValorExcel(
-                        formatMoneyMXN(
-                            row.enganche_monto
+            } else {
+                if (!lineaSolicitada || lineaSolicitada === "Todos") {
+                    const respuestas = await Promise.all(
+                        numerosPermitidosCoordinador.map((numero) =>
+                            listarProspectosDigitalesCompletos(crearParams(numero, false))
                         )
-                    ),
-
-                    "Presupuesto mensual":
-                        limpiarValorExcel(
-                            formatMoneyMXN(
-                                row.presupuesto_mensual
-                            )
-                        ),
-
-                    Buró: limpiarValorExcel(
-                        valueOrDash(row.buro_estado)
-                    ),
-
-                    "Forma de pago":
-                        limpiarValorExcel(
-                            valueOrDash(
-                                row.forma_pago
-                            )
-                        ),
-
-                    "Tipo cliente":
-                        limpiarValorExcel(
-                            valueOrDash(
-                                row.tipo_cliente
-                            )
-                        ),
-
-                    "Uso vehículo":
-                        limpiarValorExcel(
-                            row.uso_vehiculo
-                        ),
-
-                    "Plazo compra":
-                        limpiarValorExcel(
-                            row.plazo_compra
-                        ),
-
-                    "Comprobación ingresos":
-                        limpiarValorExcel(
-                            row.comprobacion_ingresos
-                        ),
-
-                    "Cotización pendiente":
-                        row.cotizacion_pendiente
-                            ? "Sí"
-                            : "No",
-
-                    "Requiere asesor":
-                        row.requiere_asesor
-                            ? "Sí"
-                            : "No",
-
-                    "IA pausada":
-                        row.ia_pausada
-                            ? "Sí"
-                            : "No",
-
-                    "Última cita agendada":
-                        limpiarValorExcel(
-                            fmtDTIntl(
-                                row.ultima_cita_agendada
-                            )
-                        ),
-
-                    Asistencia: row.asistencia
-                        ? "Sí"
-                        : "No",
-
-                    Comentarios:
-                        limpiarValorExcel(
-                            row.comentarios
-                        ),
-
-                    "Resumen IA":
-                        limpiarValorExcel(
-                            row.resumen
-                        ),
-                })
-            );
-
-            const ws =
-                XLSX.utils.json_to_sheet(registros);
-
-            ws["!cols"] = Array(32).fill({
-                wch: 22,
-            });
-
-            const wb =
-                XLSX.utils.book_new();
-
-            XLSX.utils.book_append_sheet(
-                wb,
-                ws,
-                "Prospectos"
-            );
-
-            XLSX.writeFile(
-                wb,
-                `reporte_prospectos_${fecha}_${hora}.xlsx`,
-                {
-                    compression: true,
+                    );
+                    const mapa = new Map();
+                    respuestas.flat().forEach((item) => mapa.set(item.id, item));
+                    filasRaw = Array.from(mapa.values());
+                } else {
+                    const numero = normalizaTelefonoMx(lineaSolicitada);
+                    if (!numerosPermitidosCoordinador.includes(numero)) {
+                        throw new Error("La línea seleccionada no está permitida para este coordinador.");
+                    }
+                    filasRaw = await listarProspectosDigitalesCompletos(crearParams(numero, false));
                 }
-            );
-        } catch (error) {
-            console.error(
-                "Error exportando prospectos:",
-                error
+            }
+
+            const filasExportar = getListItems(filasRaw).map(normalizeProspecto);
+            if (!filasExportar.length) {
+                throw new Error("No hay registros para exportar con los filtros configurados.");
+            }
+
+            const columnasSolicitadas = config.columns?.length
+                ? config.columns
+                : columnasReporteActuales.map((item) => item.key);
+            const columnasSeleccionadas = COLUMNAS_REPORTE_PROSPECTOS.filter((columna) =>
+                columnasSolicitadas.includes(columna.key)
             );
 
-            alert(
-                "No se pudo generar el Excel. Revisa la consola."
-            );
+            const incluyeResumen = config.sections?.includes("summary") ?? true;
+            const incluyeGraficas = config.sections?.includes("charts") && Array.isArray(config.charts) && config.charts.length > 0;
+            const incluyeTabla = config.sections?.includes("table") ?? true;
+
+            function valorReporte(row, key) {
+                const perfilFinanciero = getPerfilFinancieroDiagnostico(row);
+                switch (key) {
+                    case "agencia": return row.agencia;
+                    case "cliente": return `${row.cliente_nombre || ""} ${row.cliente_apellidos || ""}`.trim();
+                    case "telefono": return formatTelefonoMx(row.telefono);
+                    case "correo": return row.correo;
+                    case "business": return row.linea;
+                    case "canal": return row.origen;
+                    case "pauta": return row.pauta;
+                    case "estado": return row.estado;
+                    case "motivo_descalificacion": return row.motivo_descalificacion;
+                    case "asesor_digital": return row.asesor_digital;
+                    case "asesor_piso": return row.asesor_solicita;
+                    case "interes": return row.cliente_interes;
+                    case "fecha_registro": return row.fecha_reclamacion;
+                    case "primer_contacto": return fmtDTIntl(row.primer_contacto_at);
+                    case "ultimo_contacto": return fmtDTIntl(row.ultimo_contacto_at);
+                    case "respuesta": return calcTiempoRespuesta(row.creado, row.primer_contacto_at) || "—";
+                    case "prioridad": return getPrioridad(row).label;
+                    case "score": return calcLeadScore(row);
+                    case "enganche": return formatMoneyMXN(row.enganche_monto);
+                    case "presupuesto_mensual": return formatMoneyMXN(row.presupuesto_mensual);
+                    case "buro": return valueOrDash(row.buro_estado);
+                    case "forma_pago": return valueOrDash(row.forma_pago);
+                    case "tipo_cliente": return valueOrDash(row.tipo_cliente);
+                    case "uso_vehiculo": return row.uso_vehiculo;
+                    case "plazo_compra": return row.plazo_compra;
+                    case "comprobacion_ingresos": return row.comprobacion_ingresos;
+                    case "perfil_financiero": {
+                        const partes = [];
+                        if (perfilFinanciero.enganche) partes.push(`Enganche ${formatMoneyMXN(perfilFinanciero.enganche)}`);
+                        if (perfilFinanciero.mensualidad) partes.push(`Mensualidad ${formatMoneyMXN(perfilFinanciero.mensualidad)}`);
+                        if (row.buro_estado) partes.push(`Buró ${valueOrDash(row.buro_estado)}`);
+                        return partes.join(" · ") || "Sin datos";
+                    }
+                    case "perfil_compra": {
+                        const partes = [row.forma_pago, row.tipo_cliente, row.plazo_compra]
+                            .filter(Boolean)
+                            .map(valueOrDash);
+                        return partes.join(" · ") || "Sin datos";
+                    }
+                    case "cotizacion_pendiente": return row.cotizacion_pendiente ? "Sí" : "No";
+                    case "requiere_asesor": return row.requiere_asesor ? "Sí" : "No";
+                    case "ia_pausada": return row.ia_pausada ? "Sí" : "No";
+                    case "ultima_cita": return fmtDTIntl(row.ultima_cita_agendada);
+                    case "asistencia": return row.asistencia ? "Sí" : "No";
+                    case "comentarios": return row.comentarios;
+                    case "resumen": return row.resumen;
+                    default: return row[key] ?? "";
+                }
+            }
+
+            const filtrosLegibles = filtrosConfiguradorReporte
+                .map((definicion) => ({ label: definicion.label, value: reportFilters[definicion.key] }))
+                .filter(({ value }) => value !== undefined && value !== null && value !== "" && value !== "Todos" && value !== "Todas");
+
+            let canvas = null;
+            if (incluyeResumen || incluyeGraficas) {
+                setReporteProspectosExportacion({
+                    title: config.title || "Reporte de Prospectos Digitales",
+                    rows: filasExportar,
+                    filters: filtrosLegibles,
+                    charts: incluyeGraficas ? config.charts : [],
+                    includeSummary: incluyeResumen,
+                    includeCharts: incluyeGraficas,
+                });
+                await esperarRenderReporteProspectos();
+
+                if (!reporteProspectosRef.current) {
+                    throw new Error("No se pudo preparar la vista visual del reporte.");
+                }
+
+                canvas = await html2canvas(reporteProspectosRef.current, {
+                    scale: 1.35,
+                    useCORS: true,
+                    allowTaint: false,
+                    backgroundColor: "#ffffff",
+                    logging: false,
+                    windowWidth: 1280,
+                    scrollX: 0,
+                    scrollY: 0,
+                });
+            }
+
+            if (config.format === "pdf") {
+                const orientation = config.orientation === "portrait" ? "portrait" : "landscape";
+                const doc = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
+                doc.setProperties({
+                    title: config.title || "Reporte de Prospectos Digitales",
+                    subject: "Reporte configurable de prospectos digitales",
+                    author: "CRM Grupo Automotriz R&R",
+                    creator: "CRM Grupo Automotriz R&R",
+                });
+
+                let tieneContenido = false;
+                if (canvas) {
+                    agregarCanvasPdfProspectos(doc, canvas);
+                    tieneContenido = true;
+                }
+
+                if (incluyeTabla) {
+                    if (tieneContenido) doc.addPage();
+                    const columnasPorPagina = orientation === "portrait" ? 4 : 7;
+                    const grupos = [];
+                    for (let i = 0; i < columnasSeleccionadas.length; i += columnasPorPagina) {
+                        grupos.push(columnasSeleccionadas.slice(i, i + columnasPorPagina));
+                    }
+
+                    grupos.forEach((grupo, indice) => {
+                        if (indice > 0) doc.addPage();
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(12);
+                        doc.setTextColor(19, 30, 92);
+                        doc.text(`${config.title || "Reporte de Prospectos Digitales"} · Detalle ${indice + 1}/${grupos.length}`, 8, 10);
+
+                        autoTable(doc, {
+                            startY: 14,
+                            head: [grupo.map((columna) => columna.label)],
+                            body: filasExportar.map((row) => grupo.map((columna) => String(valorReporte(row, columna.key) ?? ""))),
+                            theme: "grid",
+                            styles: {
+                                font: "helvetica",
+                                fontSize: 6.2,
+                                cellPadding: 1.4,
+                                overflow: "linebreak",
+                                valign: "middle",
+                                textColor: [55, 65, 81],
+                                lineColor: [226, 232, 240],
+                                lineWidth: 0.12,
+                            },
+                            headStyles: {
+                                fillColor: [19, 30, 92],
+                                textColor: [255, 255, 255],
+                                fontStyle: "bold",
+                                halign: "center",
+                            },
+                            alternateRowStyles: { fillColor: [248, 250, 252] },
+                            margin: { left: 7, right: 7, bottom: 9 },
+                        });
+                    });
+                    tieneContenido = true;
+                }
+
+                if (!tieneContenido) {
+                    throw new Error("El reporte no tiene contenido seleccionado.");
+                }
+
+                doc.save(nombreReporteProspectos(config, "pdf"));
+            } else {
+                const workbook = new ExcelJS.Workbook();
+                workbook.creator = "CRM Grupo Automotriz R&R";
+                workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
+                workbook.created = new Date();
+                workbook.modified = new Date();
+                workbook.title = config.title || "Reporte de Prospectos Digitales";
+
+                if (incluyeResumen) {
+                    const hoja = workbook.addWorksheet("Resumen", { views: [{ showGridLines: false }] });
+                    hoja.columns = [{ width: 28 }, { width: 48 }];
+                    hoja.mergeCells("A1:B2");
+                    hoja.getCell("A1").value = config.title || "Reporte de Prospectos Digitales";
+                    hoja.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
+                    hoja.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+                    hoja.getCell("A1").alignment = { vertical: "middle" };
+                    hoja.getCell("A4").value = "Generado";
+                    hoja.getCell("B4").value = new Date().toLocaleString("es-MX");
+                    hoja.getCell("A5").value = "Prospectos";
+                    hoja.getCell("B5").value = filasExportar.length;
+                    hoja.getCell("A7").value = "Filtros configurados";
+                    hoja.getCell("A7").font = { bold: true, color: { argb: "FF131E5C" } };
+                    filtrosLegibles.forEach((filtro, index) => {
+                        const fila = 8 + index;
+                        hoja.getCell(`A${fila}`).value = filtro.label;
+                        hoja.getCell(`A${fila}`).font = { bold: true };
+                        hoja.getCell(`B${fila}`).value = String(filtro.value);
+                    });
+                }
+
+                if (incluyeTabla) {
+                    const hoja = workbook.addWorksheet("Prospectos", {
+                        views: [{ state: "frozen", ySplit: 1 }],
+                    });
+                    hoja.columns = columnasSeleccionadas.map((columna) => ({
+                        header: columna.label,
+                        key: columna.key,
+                        width: ["comentarios", "resumen", "perfil_financiero", "perfil_compra"].includes(columna.key) ? 42 : 22,
+                    }));
+                    filasExportar.forEach((row) => {
+                        const registro = {};
+                        columnasSeleccionadas.forEach((columna) => {
+                            registro[columna.key] = valorReporte(row, columna.key);
+                        });
+                        hoja.addRow(registro);
+                    });
+                    hoja.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+                    hoja.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+                    hoja.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+                    hoja.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: Math.max(1, columnasSeleccionadas.length) } };
+                }
+
+                if (incluyeGraficas && canvas) {
+                    const hoja = workbook.addWorksheet("Gráficas", { views: [{ showGridLines: false, zoomScale: 70 }] });
+                    hoja.getCell("A1").value = config.title || "Reporte de Prospectos Digitales";
+                    hoja.getCell("A1").font = { bold: true, size: 16, color: { argb: "FF131E5C" } };
+                    const imageId = workbook.addImage({ base64: canvas.toDataURL("image/png"), extension: "png" });
+                    const ancho = 1200;
+                    const alto = Math.round((canvas.height / canvas.width) * ancho);
+                    hoja.addImage(imageId, { tl: { col: 0, row: 2 }, ext: { width: ancho, height: alto } });
+                    for (let i = 1; i <= 18; i += 1) hoja.getColumn(i).width = 11;
+                }
+
+                if (!workbook.worksheets.length) {
+                    throw new Error("El reporte no tiene contenido seleccionado.");
+                }
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                descargarBlobReporte(
+                    new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                    nombreReporteProspectos(config, "xlsx")
+                );
+            }
+
+            setShowExportModal(false);
+        } catch (error) {
+            console.error("Error exportando prospectos:", error);
+            throw error;
         } finally {
-            setExportandoExcel(false);
+            setReporteProspectosExportacion(null);
+            setExportandoReporte(false);
         }
     }
     const closeProspectoModal = () => setProspectoModal((p) => ({ ...p, open: false }));
@@ -2882,9 +3143,17 @@ export default function DigitalesProspectos() {
                         <Icon className="h-4 w-4" /> {label}
                     </button>))}
                 </div>
-                {!["ejecutivo", "resultados"].includes(viewMode) ? (<button type="button" onClick={() => setShowExportModal(true)} disabled={loadingCases || sorted.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm hover:bg-slate-100 disabled:opacity-50">
-                    <FileDown className="h-4 w-4" /> Exportar
-                </button>) : null}
+                {puedeExportarReportes && !["ejecutivo", "resultados"].includes(viewMode) ? (
+                    <button
+                        type="button"
+                        onClick={() => setShowExportModal(true)}
+                        disabled={loadingCases || sorted.length === 0 || exportandoReporte}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
+                        title="Configurar reporte Excel/PDF"
+                    >
+                        <FileDown className="h-4 w-4" /> Reportes
+                    </button>
+                ) : null}
                 <button onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80">
                     <Plus className="h-4 w-4" /> Nuevo Prospecto
                 </button>
@@ -2997,7 +3266,7 @@ export default function DigitalesProspectos() {
         {/* Vista Ejecutivo BDC */}
         {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC rows={usaPaginacionServidor ? fullCasesBDC : accessibleCases} versionOperativa={versionOperativaBDC} asesoresPermitidos={asesoresPermitidosBDC} accesoTotal={isAdmin} />)}
         {/* Vista Gráficos */}
-        {viewMode === "graficos" && <VistaGraficos rows={usaPaginacionServidor ? fullCases: sorted} />}
+        {viewMode === "graficos" && <VistaGraficos rows={usaPaginacionServidor ? fullCases : sorted} />}
         {/* Vista Tabla */}
         {viewMode === "tabla" && (<div className="min-w-0">
             {/* Tabla principal */}
@@ -3305,31 +3574,74 @@ export default function DigitalesProspectos() {
                 {errorMsg && <div className="md:col-span-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{errorMsg}</div>}
             </div>)}
         </Modal>
-        <ExportReportModal
-            isOpen={showExportModal}
-            onClose={() => setShowExportModal(false)}
-            moduleName="Prospectos Digitales"
-            currentFilters={{
-                ...filters,
-                linea_whatsapp: selectedNumeroAsesor === "Todos" ? "" : selectedNumeroAsesor,
-            }}
-            filterSummary={filtrosResumen}
-            currentColumns={columnasVisibles}
-            availableColumns={COLUMNAS_PROSPECTOS}
-            totalRecords={totalFiltrado}
-            onModifyFilters={() => setShowExportModal(false)}
-            onModifyColumns={() => {
-                setShowExportModal(false);
-                setViewMode("tabla");
-                setShowColumnas(true);
-            }}
-            onGenerate={async (config) => {
-                // TODO: conectar con el endpoint de Django que genere Excel/PDF.
-                console.log("Configuración de reporte:", config);
-                if (config.format === "excel")
-                    await exportarExcelProspectos();
-                setShowExportModal(false);
-            }}
-        />
+        {reporteProspectosExportacion && (
+            <div
+                ref={reporteProspectosRef}
+                aria-hidden="true"
+                style={{
+                    position: "fixed",
+                    left: "-20000px",
+                    top: 0,
+                    width: "1200px",
+                    padding: "32px",
+                    backgroundColor: "#ffffff",
+                    zIndex: -1,
+                    pointerEvents: "none",
+                }}
+            >
+                <div className="mb-6 border-b border-slate-200 pb-5">
+                    <h1 className="text-3xl font-black text-[#131E5C]">{reporteProspectosExportacion.title}</h1>
+                    <p className="mt-1 text-sm text-slate-500">Reporte configurable de Gestión de Prospectos</p>
+                    <p className="mt-1 text-xs text-slate-400">Generado: {new Date().toLocaleString("es-MX")}</p>
+                </div>
+
+                {reporteProspectosExportacion.includeSummary && (
+                    <>
+                        <div className="mb-5 grid grid-cols-4 gap-3">
+                            <div className="rounded-xl bg-[#131E5C] p-4 text-white">
+                                <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Prospectos</p>
+                                <p className="mt-2 text-4xl font-black">{reporteProspectosExportacion.rows.length.toLocaleString("es-MX")}</p>
+                            </div>
+                            <div className="col-span-3 grid grid-cols-3 gap-3">
+                                {reporteProspectosExportacion.filters.slice(0, 6).map((filtro) => (
+                                    <div key={filtro.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{filtro.label}</p>
+                                        <p className="mt-1 truncate text-sm font-black text-slate-700">{String(filtro.value)}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {reporteProspectosExportacion.includeCharts && (
+                    <ReporteGraficasProspectos
+                        rows={reporteProspectosExportacion.rows}
+                        charts={reporteProspectosExportacion.charts}
+                    />
+                )}
+            </div>
+        )}
+
+        {puedeExportarReportes && (
+            <ExportReportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                moduleName="Prospectos Digitales"
+                storageKey="prospectos-digitales"
+                currentFilters={{
+                    ...filters,
+                    linea_whatsapp: selectedNumeroAsesor || "Todos",
+                }}
+                filterDefinitions={filtrosConfiguradorReporte}
+                currentColumns={columnasReporteActuales}
+                availableColumns={COLUMNAS_REPORTE_PROSPECTOS}
+                totalRecords={totalFiltrado}
+                formats={["excel", "pdf"]}
+                sectionOptions={SECCIONES_REPORTE_PROSPECTOS}
+                chartOptions={GRAFICAS_REPORTE_PROSPECTOS}
+                onGenerate={generarReporteProspectos}
+            />
+        )}
     </div>);
 }
