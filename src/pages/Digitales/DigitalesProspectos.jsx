@@ -17,6 +17,7 @@ import NuevoProspectoModal from "./NuevoProspectoModal";
 import ResultadosIA from "./ResultadosIA";
 import DashboardEjecutivoBDC from "./DashboardEjecutivoBDC";
 import { ETIQUETAS_ESTADO } from "./estadosProspecto";
+import ExportReportModal from "../../components/ExportReportModal";
 
 import {
     canonicalAsesorDigital,
@@ -117,6 +118,19 @@ const INITIAL_FILTERS = {
 };
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
+
+const ETIQUETAS_FILTRO = {
+    q: "Búsqueda",
+    estado: "Estado",
+    agencia: "Dealer",
+    linea: "Business",
+    buro: "Buró",
+    formaPago: "Forma de pago",
+    tipoCliente: "Tipo cliente",
+    fechaRegistroDesde: "Fecha desde",
+    fechaRegistroHasta: "Fecha hasta",
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function normalizaTelefonoMx(tel) {
     const digits = String(tel || "").replace(/\D/g, "");
@@ -1336,6 +1350,7 @@ export default function DigitalesProspectos() {
     const [highlightedRow, setHighlightedRow] = useState(null);
     const [telefonosConChat, setTelefonosConChat] = useState(() => new Set());
     const [showColumnas, setShowColumnas] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
     const [visibleColumnas, setVisibleColumnas] = useState(() => {
         try {
             const guardadas = JSON.parse(localStorage.getItem(STORAGE_COLUMNAS_PROSPECTOS));
@@ -2808,6 +2823,21 @@ export default function DigitalesProspectos() {
             (isAdmin ? selectedNumeroAsesor !== "Todos" : selectedNumeroAsesor !== (numeroUsuarioSesion || ""))
         );
     }, [filters, selectedNumeroAsesor, isAdmin, numeroUsuarioSesion]);
+    // Resumen legible de los filtros activos para el modal de exportación.
+    const filtrosResumen = useMemo(() => {
+        const items = Object.keys(ETIQUETAS_FILTRO)
+            .map((key) => ({ label: ETIQUETAS_FILTRO[key], value: filters[key] }))
+            .filter(({ value }) => value && value !== "Todos");
+
+        if (selectedNumeroAsesor && !(!isAdmin && selectedNumeroAsesor === numeroUsuarioSesion)) {
+            items.push({
+                label: "Línea de WhatsApp",
+                value: `${getAsesorDigitalPorNumero(selectedNumeroAsesor, user) || getEtiquetaDigitalPorNumero(selectedNumeroAsesor)} · ${formatTelefonoMx(selectedNumeroAsesor)}`,
+            });
+        }
+
+        return items;
+    }, [filters, selectedNumeroAsesor, isAdmin, numeroUsuarioSesion, user]);
     const now = new Date();
     const todayStr = formatDateYMDLocal(now);
     const yesterdayStr = formatDateYMDLocal(addDays(now, -1));
@@ -2852,8 +2882,8 @@ export default function DigitalesProspectos() {
                         <Icon className="h-4 w-4" /> {label}
                     </button>))}
                 </div>
-                {!["ejecutivo", "resultados"].includes(viewMode) ? (<button type="button" onClick={exportarExcelProspectos} disabled={loadingCases || sorted.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm hover:bg-slate-100 disabled:opacity-50">
-                    <FileDown className="h-4 w-4" /> Exportar Excel
+                {!["ejecutivo", "resultados"].includes(viewMode) ? (<button type="button" onClick={() => setShowExportModal(true)} disabled={loadingCases || sorted.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 py-2 text-sm font-semibold text-[#131E5C] shadow-sm hover:bg-slate-100 disabled:opacity-50">
+                    <FileDown className="h-4 w-4" /> Exportar
                 </button>) : null}
                 <button onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm text-white shadow-sm hover:bg-[#131E5C]/80">
                     <Plus className="h-4 w-4" /> Nuevo Prospecto
@@ -3275,5 +3305,31 @@ export default function DigitalesProspectos() {
                 {errorMsg && <div className="md:col-span-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{errorMsg}</div>}
             </div>)}
         </Modal>
+        <ExportReportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            moduleName="Prospectos Digitales"
+            currentFilters={{
+                ...filters,
+                linea_whatsapp: selectedNumeroAsesor === "Todos" ? "" : selectedNumeroAsesor,
+            }}
+            filterSummary={filtrosResumen}
+            currentColumns={columnasVisibles}
+            availableColumns={COLUMNAS_PROSPECTOS}
+            totalRecords={totalFiltrado}
+            onModifyFilters={() => setShowExportModal(false)}
+            onModifyColumns={() => {
+                setShowExportModal(false);
+                setViewMode("tabla");
+                setShowColumnas(true);
+            }}
+            onGenerate={async (config) => {
+                // TODO: conectar con el endpoint de Django que genere Excel/PDF.
+                console.log("Configuración de reporte:", config);
+                if (config.format === "excel")
+                    await exportarExcelProspectos();
+                setShowExportModal(false);
+            }}
+        />
     </div>);
 }
