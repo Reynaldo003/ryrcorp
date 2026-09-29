@@ -30,7 +30,6 @@ export default function WhatsappNotificationsBell({
             setNoLeidas(0);
         } catch (error) {
             if (error?.code === "SESSION_EXPIRED") return;
-            console.error("Error reiniciando notificaciones WhatsApp:", error);
         } finally {
             cargandoRef.current = false;
         }

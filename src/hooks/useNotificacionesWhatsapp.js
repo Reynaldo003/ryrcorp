@@ -235,6 +235,16 @@ export function useNotificacionesWhatsapp({
       return undefined;
     }
 
+    /*
+     * Usuario sin número de teléfono asignado: no abrimos el WebSocket.
+     * Así no se muestra ningún error rojo en la consola del navegador;
+     * simplemente no hay línea de WhatsApp que escuchar.
+     */
+    if (!numeroAsesor) {
+      setEstado("sin_numero");
+      return undefined;
+    }
+
     cierreManualRef.current = false;
 
     function programarReconexion(esperaForzada = null) {
@@ -524,7 +534,7 @@ export function useNotificacionesWhatsapp({
       document.removeEventListener("visibilitychange", manejarVisibilidad);
       window.removeEventListener("whatsapp:mensaje-local", manejarMensajeLocal);
     };
-  }, [activo, ready, isAuthenticated, usuario, agencia]);
+  }, [activo, ready, isAuthenticated, usuario, numeroAsesor, agencia]);
 
   return {
     activo,
