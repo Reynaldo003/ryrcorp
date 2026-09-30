@@ -1403,115 +1403,139 @@ function TablaUsuarios({
 function PerfilUsuario({
     token,
     user,
+    onBack,
 }) {
-    const userId =
-        user?.id_usuario ||
-        user?.id;
-
+    const [perfil, setPerfil] = useState(user || {});
     const [form, setForm] = useState({
         nombre: user?.nombre || "",
         apellidos: user?.apellidos || "",
         usuario: user?.usuario || "",
         correo: user?.correo || "",
     });
-
-    const [telefonos, setTelefonos] = useState(
-        separarTelefonos(user?.telefono)
-    );
-
+    const [telefonos, setTelefonos] = useState(separarTelefonos(user?.telefono));
     const [foto, setFoto] = useState(null);
+    const [fotoPreview, setFotoPreview] = useState("");
     const [msg, setMsg] = useState("");
     const [loading, setLoading] = useState(false);
-
+    const [loadingPerfil, setLoadingPerfil] = useState(false);
     const [showPass, setShowPass] = useState(false);
     const [pass, setPass] = useState("");
     const [pass2, setPass2] = useState("");
     const [passMsg, setPassMsg] = useState("");
     const [passLoading, setPassLoading] = useState(false);
 
+    const cargarPerfil = useCallback(async () => {
+        if (!token) return;
+        setLoadingPerfil(true);
+
+        try {
+            const access = await obtenerTokenVigente(token);
+            const res = await fetch(`${API}/conformidad/api/perfil/`, {
+                headers: {
+                    Authorization: `Bearer ${access}`,
+                },
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(mensajeApi(data, "No se pudo cargar el perfil."));
+            }
+
+            setPerfil(data);
+            setForm({
+                nombre: data?.nombre || "",
+                apellidos: data?.apellidos || "",
+                usuario: data?.usuario || "",
+                correo: data?.correo || "",
+            });
+            setTelefonos(separarTelefonos(data?.telefono));
+        } catch (error) {
+            setMsg(`Error: ${error.message}`);
+        } finally {
+            setLoadingPerfil(false);
+        }
+    }, [token]);
+
+    useEffect(() => {
+        cargarPerfil();
+    }, [cargarPerfil]);
+
+    useEffect(() => {
+        if (!foto) {
+            setFotoPreview("");
+            return undefined;
+        }
+
+        const url = URL.createObjectURL(foto);
+        setFotoPreview(url);
+
+        return () => URL.revokeObjectURL(url);
+    }, [foto]);
+
+    const seleccionarFoto = event => {
+        const archivo = event.target.files?.[0] || null;
+        event.target.value = "";
+
+        if (!archivo) return;
+
+        if (!archivo.type.startsWith("image/")) {
+            return setMsg("Selecciona un archivo de imagen válido.");
+        }
+
+        if (archivo.size > 5 * 1024 * 1024) {
+            return setMsg("La foto no puede superar los 5 MB.");
+        }
+
+        setMsg("");
+        setFoto(archivo);
+    };
+
     const guardar = async () => {
-        if (!userId) {
-            return setMsg(
-                "No se encontró el ID del usuario."
-            );
-        }
+        const nombre = form.nombre.trim();
+        const usuario = form.usuario.trim();
+        const correo = form.correo.trim().toLowerCase();
 
-        if (
-            hayTelefonosDuplicados(
-                telefonos
-            )
-        ) {
-            return setMsg(
-                "No repitas el mismo teléfono dentro de tu perfil."
-            );
-        }
+        if (!nombre) return setMsg("Captura tu nombre.");
+        if (!usuario) return setMsg("Captura tu usuario.");
+        if (usuario.length > 10) return setMsg("El usuario no puede superar 10 caracteres.");
+        if (!correo) return setMsg("Captura tu correo.");
+        if (!REGEX_CORREO.test(correo)) return setMsg("Correo electrónico inválido.");
+        if (hayTelefonosDuplicados(telefonos)) return setMsg("No repitas el mismo teléfono dentro de tu perfil.");
 
-        const invalido =
-            telefonoInvalido(telefonos);
-
-        if (invalido) {
-            return setMsg(
-                `El teléfono ${invalido} está incompleto.`
-            );
-        }
+        const invalido = telefonoInvalido(telefonos);
+        if (invalido) return setMsg(`El teléfono ${invalido} está incompleto.`);
 
         setLoading(true);
         setMsg("");
 
         const fd = new FormData();
-
-        Object.entries(form).forEach(
-            ([campo, valor]) =>
-                fd.append(campo, valor)
-        );
-
-        fd.append(
-            "telefono",
-            limpiarTelefonos(
-                telefonos
-            ).join("|")
-        );
-
-        if (foto) {
-            fd.append("foto", foto);
-        }
+        fd.append("nombre", nombre);
+        fd.append("apellidos", form.apellidos.trim());
+        fd.append("usuario", usuario);
+        fd.append("correo", correo);
+        fd.append("telefono", limpiarTelefonos(telefonos).join("|"));
+        if (foto) fd.append("foto", foto);
 
         try {
-            const access =
-                await obtenerTokenVigente(token);
-
-            const res = await fetch(
-                `${API}/conformidad/api/perfil/`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        Authorization: `Bearer ${access}`,
-                    },
-                    body: fd,
-                }
-            );
-
-            const data =
-                await res.json().catch(
-                    () => ({})
-                );
+            const access = await obtenerTokenVigente(token);
+            const res = await fetch(`${API}/conformidad/api/perfil/`, {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${access}`,
+                },
+                body: fd,
+            });
+            const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                throw new Error(
-                    mensajeApi(
-                        data,
-                        "No se pudo actualizar el perfil."
-                    )
-                );
+                throw new Error(mensajeApi(data, "No se pudo actualizar el perfil."));
             }
 
-            setMsg(
-                "✓ Datos actualizados correctamente"
-            );
+            setFoto(null);
+            setMsg("✓ Perfil actualizado correctamente");
+            await cargarPerfil();
         } catch (error) {
-            setMsg(
-                `Error: ${error.message}`
-            );
+            setMsg(`Error: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -1519,21 +1543,11 @@ function PerfilUsuario({
 
     const cambiarPass = async () => {
         if (!passwordValido(pass)) {
-            return setPassMsg(
-                "La contraseña debe tener 8+ caracteres, mayúscula, número y símbolo."
-            );
+            return setPassMsg("La contraseña debe tener 8+ caracteres, mayúscula, número y símbolo.");
         }
 
         if (pass !== pass2) {
-            return setPassMsg(
-                "Las contraseñas no coinciden."
-            );
-        }
-
-        if (!userId) {
-            return setPassMsg(
-                "No se encontró el ID del usuario."
-            );
+            return setPassMsg("Las contraseñas no coinciden.");
         }
 
         setPassLoading(true);
@@ -1543,38 +1557,21 @@ function PerfilUsuario({
         fd.append("contrasena", pass);
 
         try {
-            const access =
-                await obtenerTokenVigente(token);
-
-            const res = await fetch(
-                `${API}/conformidad/api/admin/usuarios/${userId}/`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        Authorization: `Bearer ${access}`,
-                    },
-                    body: fd,
-                }
-            );
-
-            const data =
-                await res.json().catch(
-                    () => ({})
-                );
+            const access = await obtenerTokenVigente(token);
+            const res = await fetch(`${API}/conformidad/api/perfil/`, {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${access}`,
+                },
+                body: fd,
+            });
+            const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                throw new Error(
-                    mensajeApi(
-                        data,
-                        "No se pudo cambiar la contraseña."
-                    )
-                );
+                throw new Error(mensajeApi(data, "No se pudo cambiar la contraseña."));
             }
 
-            setPassMsg(
-                "✓ Contraseña actualizada"
-            );
-
+            setPassMsg("✓ Contraseña actualizada");
             setTimeout(() => {
                 setShowPass(false);
                 setPass("");
@@ -1582,12 +1579,16 @@ function PerfilUsuario({
                 setPassMsg("");
             }, 800);
         } catch (error) {
-            setPassMsg(
-                `Error: ${error.message}`
-            );
+            setPassMsg(`Error: ${error.message}`);
         } finally {
             setPassLoading(false);
         }
+    };
+
+    const avatarUsuario = {
+        ...perfil,
+        ...form,
+        foto_url: fotoPreview || perfil?.foto_url || perfil?.photo || "",
     };
 
     return (
@@ -1596,67 +1597,78 @@ function PerfilUsuario({
 
             <div className="crm-card">
                 <div className="crm-profile-banner">
-                    <div>
-                        <Avatar
-                            usuario={user}
-                            size={72}
-                        />
+                    <div className="crm-profile-photo-wrap">
+                        <Avatar usuario={avatarUsuario} size={82} />
+                        <label className="crm-profile-photo-edit" title="Cambiar foto de perfil">
+                            <Upload size={14} />
+                            <input type="file" accept="image/*" onChange={seleccionarFoto} />
+                        </label>
                     </div>
 
-                    <div>
-                        <h2>
-                            {form.nombre}{" "}
-                            {form.apellidos}
-                        </h2>
-
+                    <div className="crm-profile-banner-info">
+                        <span className="crm-profile-kicker">Mi perfil</span>
+                        <h2>{form.nombre || "Usuario"} {form.apellidos}</h2>
                         <p>
-                            @{form.usuario} ·{" "}
-                            {user?.rol ||
-                                user?.nombre_rol ||
-                                "Usuario"}
+                            @{form.usuario || "usuario"} · {perfil?.rol || perfil?.nombre_rol || user?.rol || "Usuario"}
                         </p>
                     </div>
+
+                    {loadingPerfil && <span className="crm-profile-loading">Actualizando...</span>}
                 </div>
 
                 <div className="crm-form">
+                    <div className="crm-profile-photo-card">
+                        <div className="crm-profile-photo-card-avatar">
+                            <Avatar usuario={avatarUsuario} size={64} />
+                        </div>
+
+                        <div className="crm-profile-photo-card-text">
+                            <strong>Foto de perfil</strong>
+                            <span>JPG, PNG o WEBP. Tamaño máximo recomendado: 5 MB.</span>
+                            {foto && <small>Nueva imagen: {foto.name}</small>}
+                        </div>
+
+                        <label className="crm-btn secondary crm-profile-upload-btn">
+                            <Upload size={14} />
+                            {foto ? "Cambiar selección" : "Seleccionar imagen"}
+                            <input type="file" accept="image/*" onChange={seleccionarFoto} />
+                        </label>
+
+                        {foto && (
+                            <button
+                                type="button"
+                                className="crm-profile-cancel-photo"
+                                onClick={() => setFoto(null)}
+                            >
+                                Cancelar cambio
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="crm-section-title crm-profile-section-title">Datos personales</div>
+
                     <div className="crm-grid-2">
                         <InputCampo
                             icon={User}
                             label="Nombre(s)"
                             value={form.nombre}
-                            onChange={e =>
-                                setForm(prev => ({
-                                    ...prev,
-                                    nombre:
-                                        e.target.value,
-                                }))
-                            }
+                            onChange={e => setForm(prev => ({ ...prev, nombre: e.target.value }))}
                         />
 
                         <InputCampo
                             icon={User}
                             label="Apellidos"
                             value={form.apellidos}
-                            onChange={e =>
-                                setForm(prev => ({
-                                    ...prev,
-                                    apellidos:
-                                        e.target.value,
-                                }))
-                            }
+                            onChange={e => setForm(prev => ({ ...prev, apellidos: e.target.value }))}
                         />
 
                         <InputCampo
                             icon={AtSign}
                             label="Usuario"
                             value={form.usuario}
-                            onChange={e =>
-                                setForm(prev => ({
-                                    ...prev,
-                                    usuario:
-                                        e.target.value,
-                                }))
-                            }
+                            onChange={e => setForm(prev => ({ ...prev, usuario: e.target.value }))}
+                            contador={`${form.usuario.length}/10`}
+                            error={form.usuario.length > 10 ? "Máximo 10 caracteres." : ""}
                         />
 
                         <InputCampo
@@ -1664,83 +1676,56 @@ function PerfilUsuario({
                             label="Correo"
                             type="email"
                             value={form.correo}
-                            onChange={e =>
-                                setForm(prev => ({
-                                    ...prev,
-                                    correo:
-                                        e.target.value,
-                                }))
-                            }
+                            onChange={e => setForm(prev => ({ ...prev, correo: e.target.value }))}
+                            error={form.correo && !REGEX_CORREO.test(form.correo.trim()) ? "Correo inválido." : ""}
                         />
                     </div>
 
                     <div className="crm-block">
-                        <TelefonosMultiples
-                            telefonos={telefonos}
-                            onChange={setTelefonos}
-                        />
+                        <TelefonosMultiples telefonos={telefonos} onChange={setTelefonos} />
                     </div>
 
-                    <label className="crm-upload">
-                        <Upload size={16} />
+                    <div className="crm-profile-security-row">
+                        <div>
+                            <strong>Seguridad</strong>
+                            <span>Cambia tu contraseña sin salir de tu perfil.</span>
+                        </div>
 
-                        <span>
-                            {foto
-                                ? foto.name
-                                : "Seleccionar foto de perfil"
-                            }
-                        </span>
-
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={e =>
-                                setFoto(
-                                    e.target.files?.[0] ||
-                                    null
-                                )
-                            }
-                        />
-                    </label>
-
-                    <button
-                        type="button"
-                        className="crm-btn secondary"
-                        style={{
-                            marginTop: 12,
-                        }}
-                        onClick={() =>
-                            setShowPass(true)
-                        }
-                    >
-                        <Lock size={14} />
-                        Cambiar contraseña
-                    </button>
+                        <button
+                            type="button"
+                            className="crm-btn secondary"
+                            onClick={() => setShowPass(true)}
+                        >
+                            <Lock size={14} />
+                            Cambiar contraseña
+                        </button>
+                    </div>
 
                     <div style={{ marginTop: 14 }}>
                         <Alerta mensaje={msg} />
                     </div>
 
                     <div className="crm-actions">
-                        <Link
-                            className="crm-btn secondary"
-                            to="/"
-                        >
-                            <ArrowLeft size={14} />
-                            Volver
-                        </Link>
+                        {onBack ? (
+                            <button type="button" className="crm-btn secondary" onClick={onBack}>
+                                <ArrowLeft size={14} />
+                                Gestión de usuarios
+                            </button>
+                        ) : (
+                            <Link className="crm-btn secondary" to="/">
+                                <ArrowLeft size={14} />
+                                Volver
+                            </Link>
+                        )}
 
                         <button
+                            type="button"
                             className="crm-btn primary"
-                            disabled={loading}
+                            disabled={loading || loadingPerfil}
                             onClick={guardar}
                         >
                             <Save size={14} />
-
-                            {loading
-                                ? "Guardando..."
-                                : "Guardar cambios"
-                            }
+                            {loading ? "Guardando..." : "Guardar cambios"}
                         </button>
                     </div>
                 </div>
@@ -1749,10 +1734,7 @@ function PerfilUsuario({
             {showPass && (
                 <div
                     className="crm-overlay"
-                    onMouseDown={e =>
-                        e.target === e.currentTarget &&
-                        setShowPass(false)
-                    }
+                    onMouseDown={e => e.target === e.currentTarget && setShowPass(false)}
                 >
                     <div className="crm-modal-small">
                         <div className="crm-modal-head">
@@ -1761,13 +1743,7 @@ function PerfilUsuario({
                                 Cambiar contraseña
                             </span>
 
-                            <button
-                                onClick={() =>
-                                    setShowPass(false)
-                                }
-                            >
-                                ×
-                            </button>
+                            <button onClick={() => setShowPass(false)}>×</button>
                         </div>
 
                         <div className="crm-modal-body">
@@ -1776,54 +1752,37 @@ function PerfilUsuario({
                                     sinIcono
                                     label="Nueva contraseña"
                                     value={pass}
-                                    onChange={e =>
-                                        setPass(e.target.value)
-                                    }
+                                    onChange={e => setPass(e.target.value)}
                                 />
 
                                 <PasswordCampo
                                     sinIcono
                                     label="Confirmar"
                                     value={pass2}
-                                    onChange={e =>
-                                        setPass2(e.target.value)
-                                    }
-                                    error={
-                                        pass2 &&
-                                            pass !== pass2
-                                            ? "No coincide"
-                                            : ""
-                                    }
+                                    onChange={e => setPass2(e.target.value)}
+                                    error={pass2 && pass !== pass2 ? "No coincide" : ""}
                                 />
                             </div>
 
-                            <RequisitosPassword
-                                value={pass}
-                            />
-
-                            <Alerta
-                                mensaje={passMsg}
-                            />
+                            <RequisitosPassword value={pass} />
+                            <Alerta mensaje={passMsg} />
 
                             <div className="crm-modal-actions">
                                 <button
+                                    type="button"
                                     className="crm-btn secondary"
-                                    onClick={() =>
-                                        setShowPass(false)
-                                    }
+                                    onClick={() => setShowPass(false)}
                                 >
                                     Cancelar
                                 </button>
 
                                 <button
+                                    type="button"
                                     className="crm-btn primary"
                                     disabled={passLoading}
                                     onClick={cambiarPass}
                                 >
-                                    {passLoading
-                                        ? "Guardando..."
-                                        : "Actualizar"
-                                    }
+                                    {passLoading ? "Guardando..." : "Actualizar"}
                                 </button>
                             </div>
                         </div>
@@ -2682,6 +2641,180 @@ function GlobalStyles() {
         color: #c7d2fe;
       }
 
+      .crm-profile-photo-wrap {
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .crm-profile-banner .crm-avatar,
+      .crm-profile-banner .crm-avatar-img {
+        border: 3px solid rgba(255,255,255,.95);
+        box-shadow: 0 8px 24px rgba(0,0,0,.16);
+      }
+
+      .crm-profile-photo-edit {
+        position: absolute;
+        right: -3px;
+        bottom: -3px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #fff;
+        color: #131E5C;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,.16);
+      }
+
+      .crm-profile-photo-edit input,
+      .crm-profile-upload-btn input {
+        display: none;
+      }
+
+      .crm-profile-banner-info {
+        min-width: 0;
+      }
+
+      .crm-profile-kicker {
+        display: block;
+        margin-bottom: 3px;
+        color: #a5b4fc;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+
+      .crm-profile-loading {
+        margin-left: auto;
+        padding: 5px 9px;
+        border: 1px solid rgba(255,255,255,.2);
+        border-radius: 20px;
+        color: #dbeafe;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .crm-profile-photo-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 15px 16px;
+        margin-bottom: 24px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fafcff;
+      }
+
+      .crm-profile-photo-card-avatar {
+        flex: 0 0 auto;
+      }
+
+      .crm-profile-photo-card-avatar .crm-avatar,
+      .crm-profile-photo-card-avatar .crm-avatar-img {
+        border: 2px solid #fff;
+        box-shadow: 0 3px 12px rgba(15,23,42,.10);
+      }
+
+      .crm-profile-photo-card-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .crm-profile-photo-card-text strong {
+        font-size: 13px;
+        color: #0f172a;
+      }
+
+      .crm-profile-photo-card-text span,
+      .crm-profile-photo-card-text small {
+        font-size: 11px;
+        color: #94a3b8;
+      }
+
+      .crm-profile-photo-card-text small {
+        color: #131E5C;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .crm-profile-upload-btn {
+        flex: 0 0 auto;
+      }
+
+      .crm-profile-cancel-photo {
+        border: 0;
+        background: transparent;
+        color: #dc2626;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .crm-profile-section-title {
+        margin-top: 4px;
+      }
+
+      .crm-profile-security-row {
+        margin-top: 22px;
+        padding: 14px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .crm-profile-security-row > div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .crm-profile-security-row strong {
+        font-size: 13px;
+      }
+
+      .crm-profile-security-row span {
+        color: #94a3b8;
+        font-size: 11px;
+      }
+
+      .crm-profile-button {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid rgba(255,255,255,.24);
+        border-radius: 10px;
+        background: rgba(255,255,255,.11);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background .15s ease, transform .15s ease;
+      }
+
+      .crm-profile-button:hover {
+        background: rgba(255,255,255,.18);
+        transform: translateY(-1px);
+      }
+
+      .crm-profile-button .crm-avatar,
+      .crm-profile-button .crm-avatar-img {
+        border: 1px solid rgba(255,255,255,.6);
+      }
+
       .crm-summary {
         display: grid;
         grid-template-columns: repeat(2,180px);
@@ -2794,6 +2927,44 @@ function GlobalStyles() {
         }
       }
 
+      @media(max-width: 700px) {
+        .crm-profile-banner {
+          align-items: flex-start;
+        }
+
+        .crm-profile-loading {
+          display: none;
+        }
+
+        .crm-profile-photo-card {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+
+        .crm-profile-photo-card-text {
+          min-width: calc(100% - 82px);
+        }
+
+        .crm-profile-upload-btn {
+          width: 100%;
+        }
+
+        .crm-profile-security-row {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .crm-profile-security-row .crm-btn {
+          width: 100%;
+        }
+
+        .crm-profile-button {
+          margin-left: 0;
+          width: 100%;
+          justify-content: center;
+        }
+      }
+
       @media(max-width: 430px) {
         .crm-agencies-grid,
         .crm-agencies-grid.edit {
@@ -2837,6 +3008,7 @@ function GlobalStyles() {
 
 export default function Settings() {
     const { token, user } = useAuth();
+    const [vistaConfiguracion, setVistaConfiguracion] = useState("usuarios");
 
     const isAdminUI = useMemo(() => {
         const permisos =
@@ -3360,6 +3532,16 @@ export default function Settings() {
         );
     }
 
+    if (vistaConfiguracion === "perfil") {
+        return (
+            <PerfilUsuario
+                token={token}
+                user={user}
+                onBack={() => setVistaConfiguracion("usuarios")}
+            />
+        );
+    }
+
     return (
         <div className="crm-page">
             <GlobalStyles />
@@ -3371,15 +3553,22 @@ export default function Settings() {
                     </div>
 
                     <div>
-                        <h2>
-                            Gestión de usuarios
-                        </h2>
+                        <h2>Gestión de usuarios</h2>
 
                         <Link to="/">
                             <ArrowLeft size={12} />
                             Volver
                         </Link>
                     </div>
+
+                    <button
+                        type="button"
+                        className="crm-profile-button"
+                        onClick={() => setVistaConfiguracion("perfil")}
+                    >
+                        <Avatar usuario={user} size={26} />
+                        Mi perfil
+                    </button>
                 </div>
 
                 <form
