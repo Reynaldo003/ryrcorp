@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, BarChart3, CalendarDays, Car, CreditCard, Eraser,
-  CircleDollarSign, Database, ImageDown, LoaderCircle, RefreshCw, RotateCcw, Search, SlidersHorizontal, Tags, User,
-  Table2, TrendingUp, WalletCards, X,
+  CircleDollarSign, Database, ImageDown, LoaderCircle, RefreshCw, RotateCcw,
+  Search, SlidersHorizontal, Tags, User, Users, CheckCircle2, Globe,
+  Table2, TrendingUp, WalletCards, X, Check, Plus, ChevronDown,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, ComposedChart, Line, PieChart, Pie, Cell, Sector,
@@ -67,6 +68,10 @@ const FILTROS_INICIALES = {
   venta_digital: "",
 };
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
 const PIE_COLORS = ["#131E5C", "#2445A2", "#3D63C8", "#6681D4", "#8B9DDE", "#AEB9E8", "#42526E", "#7A869A"];
 const PRESETS_FECHA = [
   { id: "mes_actual", label: "Este mes" },
@@ -160,6 +165,18 @@ export default function VentasVN() {
     graficas: { por_mes: [], por_asesor: [], por_familia: [], por_condicion_pago: [] },
     opciones: { agencias: [], asesores: [], familias: [], condiciones_pago: [] },
   });
+  const hoy = new Date();
+  const anioActual = hoy.getFullYear();
+  const mesActual = hoy.getMonth();
+
+  const anios = useMemo(
+    () => Array.from({ length: 5 }, (_, i) => anioActual - i),
+    [anioActual]
+  );
+
+  const [anioSel, setAnioSel] = useState(anioActual);
+  const [mesSel, setMesSel] = useState(mesActual);
+
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [errorDashboard, setErrorDashboard] = useState("");
   const [registros, setRegistros] = useState([]);
@@ -169,7 +186,10 @@ export default function VentasVN() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [vistaActiva, setVistaActiva] = useState("detalle");
-  const [filtros, setFiltros] = useState(FILTROS_INICIALES);
+  const [filtros, setFiltros] = useState(() => ({
+    ...FILTROS_INICIALES,
+    ...obtenerRangoMes(mesActual + 1, anioActual),
+  }));
   const [qBuscado, setQBuscado] = useState("");
 
   useEffect(() => {
@@ -306,8 +326,22 @@ export default function VentasVN() {
     setFiltros((prev) => ({ ...prev, [campo]: value }));
   }
   function limpiarFiltros() {
-    setFiltros(FILTROS_INICIALES);
     setPagina(1);
+
+    setAnioSel(anioActual);
+    setMesSel("sin_filtro");
+
+    setFiltros({
+      ...FILTROS_INICIALES,
+      agencia: "",
+      q: "",
+      familia: "",
+      condicion_pago: "",
+      asesor: "",
+      venta_digital: "",
+      fecha_desde: "",
+      fecha_hasta: "",
+    });
   }
   function aplicarAgencia(agencia) {
     setPagina(1);
@@ -318,6 +352,69 @@ export default function VentasVN() {
     setPagina(1);
     setFiltros((prev) => ({ ...prev, ...rango }));
   }
+  function aplicarMes(mesIndex) {
+    setPagina(1);
+
+    // Si vuelve a presionar el mismo mes, quitar el filtro de fecha
+    if (mesSel === mesIndex) {
+      setMesSel("sin_filtro");
+
+      setFiltros((prev) => ({
+        ...prev,
+        fecha_desde: "",
+        fecha_hasta: "",
+      }));
+
+      return;
+    }
+
+    setMesSel(mesIndex);
+
+    // "Todo el año"
+    if (mesIndex === null) {
+      setFiltros((prev) => ({
+        ...prev,
+        fecha_desde: `${anioSel}-01-01`,
+        fecha_hasta: `${anioSel}-12-31`,
+      }));
+
+      return;
+    }
+
+    const rango = obtenerRangoMes(mesIndex + 1, anioSel);
+
+    setFiltros((prev) => ({
+      ...prev,
+      ...rango,
+    }));
+  }
+
+  function aplicarAnio(anio) {
+  const nuevoAnio = Number(anio);
+
+  setAnioSel(nuevoAnio);
+  setPagina(1);
+
+  if (mesSel === "sin_filtro") {
+    return;
+  }
+
+  if (mesSel === null) {
+    setFiltros((prev) => ({
+      ...prev,
+      fecha_desde: `${nuevoAnio}-01-01`,
+      fecha_hasta: `${nuevoAnio}-12-31`,
+    }));
+    return;
+  }
+
+  const rango = obtenerRangoMes(mesSel + 1, nuevoAnio);
+
+  setFiltros((prev) => ({
+    ...prev,
+    ...rango,
+  }));
+}
   function actualizarTodo() { cargarDatos(); cargarDashboard(); }
 
   const chartRefs = useRef({});
@@ -368,6 +465,17 @@ export default function VentasVN() {
     }
   }
 
+  const maxVentasAsesor = Math.max(
+    1,
+    ...topAsesores.map((item) => numero(item.unidades_vendidas))
+  );
+
+  const porcentajeDigital = dashboard.totales.unidades_vendidas
+    ? (numero(dashboard.totales.ventas_digitales) /
+        numero(dashboard.totales.unidades_vendidas)) *
+      100
+    : 0;
+
   return (
     <div className="min-h-screen">
       <main className="space-y-5 py-4">
@@ -389,155 +497,506 @@ export default function VentasVN() {
             </button>
           </div>
         </div>
+        {/* FILTROS PRINCIPALES - ESTILO GESTIÓN DE NEGOCIO */}
+          <div className="space-y-3">
+            {/* AGENCIAS */}
+            <div className="flex flex-wrap items-center gap-2">
+              {["Todos", ...dashboard.opciones.agencias].map((agencia) => {
+                const activa =
+                  agencia === "Todos"
+                    ? !filtros.agencia
+                    : filtros.agencia === agencia;
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <KPICard
-            icon={Car}
-            label="Unidades vendidas"
-            value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.unidades_vendidas)}
-            sub={`${formatoNumero(dashboard.totales.productos)} operaciones`}
-            accent="#059669"
-            spark={datosMes.map((d) => d.unidades_vendidas)}
-          />
-          <KPICard
-            icon={CircleDollarSign}
-            label="Ingresos"
-            value={loadingDashboard ? "—" : money(dashboard.totales.ingresos)}
-            sub={rangoActual}
-            accent="#0EA5E9"
-            spark={datosMes.map((d) => d.ingresos)}
-          />
-          <KPICard
-            icon={WalletCards}
-            label="Costo"
-            value={loadingDashboard ? "—" : money(dashboard.totales.costo)}
-            sub="Costo acumulado"
-            accent="#F59E0B"
-            spark={datosMes.map((d) => d.costo)}
-          />
-          <KPICard
-            icon={TrendingUp}
-            label="Utilidad estimada"
-            value={loadingDashboard ? "—" : money(utilidad)}
-            sub={`Margen ${margen.toFixed(1)}%`}
-            accent={utilidad >= 0 ? "#0EA5E9" : "#EF4444"}
-            spark={datosMes.map((d) => d.utilidad)}
-          />
-          <KPICard
-            icon={Database}
-            label="Operaciones"
-            value={loadingDashboard ? "—" : formatoNumero(dashboard.totales.productos)}
-            sub={filtros.agencia || "Todas las agencias"}
-            accent="#8B5CF6"
-            spark={datosMes.map((d) => d.productos)}
-          />
-          <KPICard
-            icon={Car}
-            label="Ventas digitales"
-            value={
-              loadingDashboard
-                ? "—"
-                : formatoNumero(dashboard.totales.ventas_digitales)
-            }
-            sub="Prospectos digitales facturados"
-            accent="#2563EB"
-          />
-        </div>
-        <div className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-md">
-          <FilterButtonGroup label="Dealer" value={filtros.agencia || "Todos"} options={["Todos", ...dashboard.opciones.agencias]} onChange={(value) => aplicarAgencia(value === "Todos" ? "" : value)} />
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: "#E4E7F0", boxShadow: "0 8px 24px rgba(19,30,92,.06)" }}>
-          <div className="flex items-center justify-between gap-3 border-b border-[#E4E7F0] px-4 py-3.5">
-            <div className="flex items-center gap-2.5">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]">
-                <SlidersHorizontal className="h-[18px] w-[18px] text-[#131E5C]" />
-              </span>
-              <div>
-                <h2 className="text-sm font-black tracking-wide text-[#1A1F3C]">Filtros</h2>
-                <p className="text-[11px] font-medium text-[#8891AD]">Se aplican al instante al elegir una opción</p>
-              </div>
+                return (
+                  <button
+                    key={agencia}
+                    type="button"
+                    onClick={() =>
+                      aplicarAgencia(agencia === "Todos" ? "" : agencia)
+                    }
+                    className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-xs font-vw-head font-bold transition-all ${
+                      activa
+                        ? "border-[#001E50] bg-[#001E50] text-white"
+                        : "border-slate-200 bg-white text-[#001E50] hover:bg-slate-50"
+                    }`}
+                  >
+                    {agencia === "Todos" ? "Todas las agencias" : agencia}
+                  </button>
+                );
+              })}
             </div>
-            <button type="button" onClick={limpiarFiltros} disabled={!hayFiltros} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E4E7F0] bg-white px-3 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white">
-              <Eraser className="h-3.5 w-3.5" />Limpiar
-            </button>
-          </div>
+            {/* FILTROS COMPLEMENTARIOS DE AUTOS NUEVOS */}
+              <div className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-2.5">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-vw-head font-bold text-white">
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span>Filtros de Autos Nuevos</span>
+                  </div>
 
-          <div className="space-y-4 p-4">
-            {/* Búsqueda + rango rápido */}
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <div className="relative min-w-0 flex-1">
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-[#8891AD]">Buscar</label>
-                <Search className="pointer-events-none absolute left-3 top-[37px] h-4 w-4 text-[#8891AD]" />
-                <input type="text" value={filtros.q} onChange={(e) => cambiarFiltro("q", e.target.value)} placeholder="Serie, cliente, modelo..." className="h-11 w-full rounded-xl border border-[#E4E7F0] bg-[#F7F8FC] pl-10 pr-9 text-sm font-semibold text-[#1A1F3C] outline-none transition placeholder:text-[#C4CADD] focus:border-[#131E5C]/50 focus:bg-white focus:ring-4 focus:ring-[#131E5C]/10" />
-                {filtros.q ? <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-[33px] inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button> : null}
+                  <button
+                    type="button"
+                    onClick={limpiarFiltros}
+                    disabled={!hayFiltros}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[10px] font-vw-head font-bold text-[#001E50] shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Eraser className="h-3 w-3" />
+                    Limpiar filtros
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-5">
+
+                  {/* BUSCAR */}
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                      Buscar
+                    </label>
+
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+
+                      <input
+                        type="text"
+                        value={filtros.q}
+                        onChange={(e) => cambiarFiltro("q", e.target.value)}
+                        placeholder="Serie, cliente, modelo..."
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs font-vw-text text-[#001E50] outline-none transition placeholder:text-slate-300 focus:border-[#1677FF]"
+                      />
+
+                      {filtros.q ? (
+                        <button
+                          type="button"
+                          onClick={() => cambiarFiltro("q", "")}
+                          className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* FAMILIA / MODELO */}
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                      Familia / Modelo
+                    </label>
+
+                    <select
+                      value={filtros.familia}
+                      onChange={(e) => cambiarFiltro("familia", e.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                    >
+                      <option value="">Todas las familias</option>
+                      {dashboard.opciones.familias.map((familia) => (
+                        <option key={familia} value={familia}>
+                          {familia}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* CONDICIÓN DE PAGO */}
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                      Condición de Pago
+                    </label>
+
+                    <select
+                      value={filtros.condicion_pago}
+                      onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                    >
+                      <option value="">Todas las condiciones</option>
+                      {dashboard.opciones.condiciones_pago.map((condicion) => (
+                        <option key={condicion} value={condicion}>
+                          {condicion}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* ASESOR */}
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                      Asesor
+                    </label>
+
+                    <select
+                      value={filtros.asesor}
+                      onChange={(e) => cambiarFiltro("asesor", e.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                    >
+                      <option value="">Todos los asesores</option>
+                      {dashboard.opciones.asesores.map((asesor) => (
+                        <option key={asesor} value={asesor}>
+                          {asesor}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* TIPO DE VENTA */}
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                      Tipo de Venta
+                    </label>
+
+                    <select
+                      value={filtros.venta_digital}
+                      onChange={(e) => cambiarFiltro("venta_digital", e.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                    >
+                      <option value="">Todas las ventas</option>
+                      <option value="1">Venta digital</option>
+                    </select>
+                  </div>
+                </div>
+
+                {(filtros.asesor ||
+                  filtros.familia ||
+                  filtros.condicion_pago ||
+                  filtros.venta_digital) && (
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 pt-2">
+                    <span className="mr-1 text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                      Aplicados:
+                    </span>
+
+                    {filtros.asesor && (
+                      <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
+                        {filtros.asesor}
+                      </span>
+                    )}
+
+                    {filtros.familia && (
+                      <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
+                        {filtros.familia}
+                      </span>
+                    )}
+
+                    {filtros.condicion_pago && (
+                      <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
+                        {filtros.condicion_pago}
+                      </span>
+                    )}
+
+                    {filtros.venta_digital === "1" && (
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#1677FF]">
+                        Venta digital
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="flex flex-wrap items-end gap-1.5">
-                {[
-                  { id: "hoy", label: "Hoy", inactive: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100", active: "bg-emerald-600 text-white ring-4 ring-emerald-100" },
-                  { id: "ayer", label: "Ayer", inactive: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100", active: "bg-amber-500 text-white ring-4 ring-amber-100" },
-                  { id: "esta_semana", label: "Semana", inactive: "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100", active: "bg-sky-600 text-white ring-4 ring-sky-100" },
-                  { id: "ultimos_7", label: "7 días", inactive: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100", active: "bg-violet-600 text-white ring-4 ring-violet-100" },
-                  { id: "ultimos_30", label: "30 días", inactive: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100", active: "bg-indigo-600 text-white ring-4 ring-indigo-100" },
-                  { id: "mes_actual", label: "Este mes", inactive: "border-[#131E5C]/20 bg-blue-50 text-[#131E5C] hover:bg-blue-100", active: "bg-[#131E5C] text-white ring-4 ring-[#131E5C]/10" },
-                  { id: "mes_anterior", label: "Mes anterior", inactive: "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100", active: "bg-slate-700 text-white ring-4 ring-slate-100" },
-                ].map(({ id, label, inactive, active }) => (
-                  <button key={id} type="button" onClick={() => aplicarRangoRapido(id)} className={`h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 text-xs font-bold shadow-sm transition active:scale-[0.97] ${presetFechaActivo === id ? active : inactive}`}>{label}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* Campos de filtro */}
-            <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-6">
-              <FilterField label="Familia / modelo" icon={Tags}>
-                <select value={filtros.familia} onChange={(e) => cambiarFiltro("familia", e.target.value)} className={inputClass}>
-                  <option value="">Todas las familias</option>
-                  {dashboard.opciones.familias.map((familia) => <option key={familia} value={familia}>{familia}</option>)}
-                </select>
-              </FilterField>
-              <FilterField label="Condición de pago" icon={CreditCard}>
-                <select value={filtros.condicion_pago} onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)} className={inputClass}>
-                  <option value="">Todas las condiciones</option>
-                  {dashboard.opciones.condiciones_pago.map((condicion) => <option key={condicion} value={condicion}>{condicion}</option>)}
-                </select>
-              </FilterField>
-              <FilterField label="Asesor" icon={User}>
-                <select value={filtros.asesor} onChange={(e) => cambiarFiltro("asesor", e.target.value)} className={inputClass}>
-                  <option value="">Todos los asesores</option>
-                  {dashboard.opciones.asesores.map((asesor) => <option key={asesor} value={asesor}>{asesor}</option>)}
-                </select>
-              </FilterField>
-              <FilterField label="Desde" icon={CalendarDays}>
-                <input type="date" value={filtros.fecha_desde} onChange={(e) => cambiarFiltro("fecha_desde", e.target.value)} className={inputClass} />
-              </FilterField>
-              <FilterField label="Hasta" icon={CalendarDays}>
-                <input type="date" value={filtros.fecha_hasta} onChange={(e) => cambiarFiltro("fecha_hasta", e.target.value)} className={inputClass} />
-              </FilterField>
-              <FilterField label="Tipo de venta" icon={Car}>
+            {/* AÑO + MESES */}
+            <div className="bg-white rounded-xl p-2.5 border border-slate-200 flex items-center gap-3">
+              <div className="relative inline-block shrink-0">
                 <select
-                  value={filtros.venta_digital}
-                  onChange={(e) => cambiarFiltro("venta_digital", e.target.value)}
-                  className={inputClass}
+                  value={anioSel}
+                  onChange={(e) => aplicarAnio(e.target.value)}
+                  className="appearance-none bg-white border border-slate-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-vw-head font-bold text-[#001E50] focus:outline-none cursor-pointer"
                 >
-                  <option value="">Todas las ventas</option>
-                  <option value="1">Venta digital</option>
+                  {anios.map((anio) => (
+                    <option key={anio} value={anio}>
+                      {anio}
+                    </option>
+                  ))}
                 </select>
-              </FilterField>
-            </div>
 
-            {/* Aplicados */}
-            {(filtros.fecha_desde || filtros.fecha_hasta || filtros.asesor || filtros.familia || filtros.condicion_pago) ? (
-              <div className="flex flex-wrap items-center gap-2 border-t border-[#E4E7F0] pt-3 text-[11px] font-semibold text-slate-500">
-                <span className="font-black uppercase tracking-wide text-[#131E5C]/60">Aplicados:</span>
-                <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]">{rangoActual}</span>
-                {filtros.asesor && <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]"><User className="mr-1 inline h-3 w-3" />{filtros.asesor}</span>}
-                {filtros.familia && <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]"><Tags className="mr-1 inline h-3 w-3" />{filtros.familia}</span>}
-                {filtros.condicion_pago && <span className="rounded-full bg-[#131E5C]/[0.07] px-2.5 py-1 font-bold text-[#131E5C]"><CreditCard className="mr-1 inline h-3 w-3" />{filtros.condicion_pago}</span>}
+                <ChevronDown className="h-3.5 w-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-            ) : null}
+
+              <div className="flex gap-1.5 overflow-x-auto w-full pb-1 scrollbar-thin">
+
+                {/* TODO EL AÑO */}
+                <button
+                  type="button"
+                  onClick={() => aplicarMes(null)}
+                  className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-3 py-1.5 text-xs transition-all ${
+                    mesSel === null
+                      ? "bg-[#001E50] text-white font-vw-head font-bold"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
+                  }`}
+                >
+                  {mesSel === null ? (
+                    <Check className="h-3 w-3 text-white" />
+                  ) : (
+                    <Plus className="h-3 w-3 text-slate-400" />
+                  )}
+
+                  <span>Todo el año</span>
+                </button>
+
+                {/* MESES */}
+                {MESES.map((mes, index) => {
+                  const futuro =
+                    anioSel === anioActual && index > mesActual;
+
+                  const activo = mesSel === index;
+
+                  return (
+                    <button
+                      key={mes}
+                      type="button"
+                      disabled={futuro}
+                      onClick={() => aplicarMes(index)}
+                      className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-xs transition-all ${
+                        activo
+                          ? "bg-[#001E50] text-white font-vw-head font-bold"
+                          : futuro
+                          ? "border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed font-vw-head font-bold"
+                          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
+                      }`}
+                    >
+                      {activo ? (
+                        <Check className="h-3 w-3 text-white" />
+                      ) : (
+                        <Plus className="h-3 w-3 text-slate-400" />
+                      )}
+
+                      <span>{mes.toLowerCase()}</span>
+                    </button>
+                  );
+                })}
+
+              </div>
+
+              <button
+                type="button"
+                onClick={actualizarTodo}
+                disabled={loading || loadingDashboard}
+                title="Recargar"
+                className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 text-[#001E50] transition shrink-0"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    loading || loadingDashboard ? "animate-spin" : ""
+                  }`}
+                />
+              </button>
+            </div>
           </div>
-        </div>
+
+        {/* RESUMEN EJECUTIVO + DESGLOSE POR ASESOR */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+
+            {/* CONSOLIDADO GENERAL */}
+            <section className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between shadow-sm">
+              <div className="relative h-28 w-full overflow-hidden bg-[#001E50] shrink-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#001E50] via-[#0A3975] to-[#1677FF]" />
+
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 opacity-20">
+                  <Car className="h-24 w-24 text-white" />
+                </div>
+
+                <div className="absolute top-2 left-2 bg-[#001E50] text-white text-[10px] font-vw-head font-bold px-2.5 py-0.5 rounded-full border border-white/20">
+                  Consolidado General
+                </div>
+
+                <div className="absolute bottom-2 left-2 flex items-center gap-1.5 text-white">
+                  <Car className="h-3.5 w-3.5 text-sky-400" />
+                  <span className="text-xs font-vw-head font-bold tracking-wide">
+                    VW Autos Nuevos
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-vw-head font-bold text-[#1677FF] uppercase tracking-wider">
+                      Ventas Autos Nuevos
+                    </span>
+
+                    <span className="bg-emerald-50 text-emerald-700 text-[9px] font-vw-head font-bold px-2 py-0.5 rounded border border-emerald-200">
+                      Consolidado
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center py-1 text-center my-auto">
+                  <h4 className="text-[11px] font-vw-head font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+                    Resumen Ejecutivo de Ventas
+                  </h4>
+
+                  <div className="text-5xl font-vw-head font-extrabold text-[#001E50] leading-none tracking-tight">
+                    {loadingDashboard
+                      ? "..."
+                      : formatoNumero(dashboard.totales.unidades_vendidas)}
+                  </div>
+
+                  <div className="text-[10px] font-vw-head font-bold text-[#1677FF] uppercase tracking-wider mt-1.5">
+                    Total Unidades Vendidas
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100">
+                  <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
+                    <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
+                      <Database className="h-2.5 w-2.5 text-emerald-600" />
+                      <span>Operaciones</span>
+                    </div>
+                    <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
+                      {loadingDashboard
+                        ? "..."
+                        : formatoNumero(dashboard.totales.productos)}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
+                    <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
+                      <Globe className="h-2.5 w-2.5 text-[#1677FF]" />
+                      <span>Digitales</span>
+                    </div>
+                    <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
+                      {loadingDashboard
+                        ? "..."
+                        : formatoNumero(dashboard.totales.ventas_digitales)}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
+                    <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
+                      <TrendingUp className="h-2.5 w-2.5 text-emerald-600" />
+                      <span>Margen</span>
+                    </div>
+                    <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
+                      {loadingDashboard ? "..." : `${margen.toFixed(1)}%`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* DESGLOSE POR ASESOR */}
+            <section className="lg:col-span-8 bg-[#F8FAFC] rounded-2xl border border-slate-200 p-3.5 md:p-4 space-y-3 flex flex-col shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] text-white px-3.5 py-1 text-xs font-vw-head font-bold">
+                  <Users className="h-3.5 w-3.5 text-white shrink-0" />
+                  <span>Desglose por Asesor Comercial</span>
+                </div>
+
+                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-vw-head font-bold text-[#001E50] shadow-sm">
+                  Top {topAsesores.length} asesores
+                </div>
+              </div>
+
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                {loadingDashboard ? (
+                  <div className="flex h-[180px] items-center justify-center">
+                    <LoaderCircle className="h-5 w-5 animate-spin text-[#001E50]" />
+                  </div>
+                ) : topAsesores.length === 0 ? (
+                  <div className="flex h-[180px] items-center justify-center text-xs text-slate-400 italic bg-white rounded-xl border border-slate-200">
+                    Sin datos de asesores en el periodo seleccionado
+                  </div>
+                ) : (
+                  topAsesores.map((item, idx) => {
+                    const pctWidth =
+                      (numero(item.unidades_vendidas) / maxVentasAsesor) * 100;
+
+                    const activo = filtros.asesor === item.asesor;
+
+                    return (
+                      <button
+                        key={`${item.asesor}-${idx}`}
+                        type="button"
+                        onClick={() => alternarFiltro("asesor", item.asesor)}
+                        className={`w-full rounded-xl border overflow-hidden transition-all duration-150 text-left ${
+                          activo
+                            ? "border-[#1677FF] bg-blue-50"
+                            : "border-slate-200/80 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2.5 w-52 min-w-0 shrink-0">
+                            <div
+                              className={`h-6 w-6 rounded-md flex items-center justify-center font-vw-head font-bold text-[10px] shrink-0 ${
+                                idx === 0
+                                  ? "bg-[#001E50] text-white"
+                                  : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              VW{idx + 1}
+                            </div>
+
+                            <span
+                              className="font-vw-head font-bold text-[#001E50] text-xs truncate"
+                              title={item.asesor || "Sin asesor"}
+                            >
+                              {item.asesor || "Sin asesor"}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-slate-700 font-vw-head font-bold shrink-0 min-w-[90px]">
+                            {formatoNumero(item.unidades_vendidas)} unidades
+                          </div>
+
+                          <div className="flex-1 mx-2">
+                            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-[#001E50] h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    Math.max(4, pctWidth)
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="text-[10px] font-vw-head font-bold text-[#1677FF] shrink-0">
+                            {money(item.ingresos)}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="mt-auto grid grid-cols-3 gap-2 border-t border-slate-200/60 pt-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                    Ingresos
+                  </div>
+                  <div
+                    className="mt-0.5 truncate text-xs font-vw-head font-bold text-[#001E50]"
+                    title={money(dashboard.totales.ingresos)}
+                  >
+                    {loadingDashboard ? "..." : money(dashboard.totales.ingresos)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                    Costo
+                  </div>
+                  <div
+                    className="mt-0.5 truncate text-xs font-vw-head font-bold text-[#001E50]"
+                    title={money(dashboard.totales.costo)}
+                  >
+                    {loadingDashboard ? "..." : money(dashboard.totales.costo)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                    Utilidad estimada
+                  </div>
+                  <div
+                    className={`mt-0.5 truncate text-xs font-vw-head font-bold ${
+                      utilidad >= 0 ? "text-emerald-700" : "text-red-600"
+                    }`}
+                    title={money(utilidad)}
+                  >
+                    {loadingDashboard ? "..." : money(utilidad)}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
 
         {errorDashboard && <ErrorBox>{errorDashboard}</ErrorBox>}
         {error && <ErrorBox>{error}</ErrorBox>}
