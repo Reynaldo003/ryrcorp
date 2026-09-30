@@ -170,6 +170,137 @@ function DetallePopup({ registro, columns, onClose }) {
   );
 }
 
+function ProspectoDigitalPopup({ prospecto, onClose }) {
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    function onEsc(e) {
+      if (e.key === "Escape") cerrar();
+    }
+
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function cerrar() {
+    setClosing(true);
+    setTimeout(onClose, 180);
+  }
+
+  const mostrar = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    return String(value);
+  };
+
+  const fecha = (value) => {
+    if (!value) return "—";
+
+    const d = new Date(value);
+
+    if (Number.isNaN(d.getTime())) return mostrar(value);
+
+    return d.toLocaleString("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
+
+  const moneda = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    return money(value);
+  };
+
+  const datos = [
+    { e: "Nombre", v: mostrar(prospecto?.nombre) },
+    { e: "Teléfono", v: mostrar(prospecto?.telefono) },
+    { e: "Correo", v: mostrar(prospecto?.correo) },
+    { e: "Estado", v: mostrar(prospecto?.estado) },
+    { e: "Agencia", v: mostrar(prospecto?.agencia) },
+    { e: "Auto de interés", v: mostrar(prospecto?.auto_interes) },
+    { e: "Asesor digital", v: mostrar(prospecto?.asesor_digital) },
+    { e: "Asesor de ventas", v: mostrar(prospecto?.asesor_ventas) },
+    { e: "Enganche", v: moneda(prospecto?.enganche_monto) },
+    { e: "Presupuesto mensual", v: moneda(prospecto?.presupuesto_mensual) },
+    { e: "Forma de pago", v: mostrar(prospecto?.forma_pago) },
+    { e: "Plazo de compra", v: mostrar(prospecto?.plazo_compra) },
+    { e: "VIN facturado", v: mostrar(prospecto?.vin_facturado) },
+    { e: "Fecha de facturación", v: fecha(prospecto?.facturado_at) },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6">
+      <div
+        className="absolute inset-0 bg-[#0A1340]/60 backdrop-blur-sm"
+        onClick={cerrar}
+      />
+
+      <div
+        className={cn(
+          "relative w-full max-w-2xl overflow-hidden rounded-3xl border bg-white shadow-2xl transition-all duration-200",
+          closing ? "scale-95 opacity-0" : "scale-100 opacity-100"
+        )}
+        style={{ borderColor: C.border }}
+      >
+        <div
+          className="relative overflow-hidden px-6 py-6 text-white"
+          style={{
+            background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyDark} 100%)`,
+          }}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-white/60">
+                Prospecto digital
+              </div>
+
+              <h2 className="mt-2 truncate text-2xl font-black tracking-tight">
+                {mostrar(prospecto?.nombre) !== "—"
+                  ? mostrar(prospecto?.nombre)
+                  : "Venta digital"}
+              </h2>
+
+              <p className="mt-1 truncate text-sm font-medium text-white/70">
+                {mostrar(prospecto?.vin_facturado)}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={cerrar}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/25"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[65vh] overflow-y-auto px-6 py-5">
+          <div className="grid gap-x-6 md:grid-cols-2">
+            {datos.map((item) => (
+              <div
+                key={item.e}
+                className="flex items-start justify-between gap-3 border-b border-slate-100 py-3"
+              >
+                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {item.e}
+                </span>
+
+                <span
+                  className="min-w-0 break-words text-right text-xs font-bold text-[#1A1F3C]"
+                  title={item.v}
+                >
+                  {item.v}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Badge({ light, children }) {
   return (
     <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold", light ? "bg-white/15 text-white" : "bg-[#131E5C]/[0.08] text-[#131E5C]")}>
@@ -338,6 +469,7 @@ export default function InteractiveTable({
     catch { return {}; }
   });
   const [seleccionado, setSeleccionado] = useState(null);
+  const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
   const [openFilter, setOpenFilter] = useState(null);
 
   useEffect(() => {
@@ -526,15 +658,47 @@ export default function InteractiveTable({
               >
                 {visibleCols.map((col) => {
                   const value = formatCell(registro[col.key], col.tipo);
-                  const monedaNegativa = col.tipo === "moneda" && numero(registro[col.key]) !== null && numero(registro[col.key]) < 0;
-                  return <td key={col.key} title={value} className={cn("max-w-[300px] whitespace-nowrap border-b border-r border-slate-100 px-3 py-2.5 text-xs", monedaNegativa ? "font-semibold text-red-600" : "text-slate-700")}><div className="max-w-[280px] truncate">{value}</div></td>;
+                  const monedaNegativa =
+                    col.tipo === "moneda" &&
+                    numero(registro[col.key]) !== null &&
+                    numero(registro[col.key]) < 0;
+
+                  const esTipoVentaDigital =
+                    col.key === "tipo_venta" &&
+                    registro.es_venta_digital &&
+                    registro.prospecto_digital;
+
+                  return (
+                    <td
+                      key={col.key}
+                      title={esTipoVentaDigital ? "Ver prospecto digital" : value}
+                      className={cn(
+                        "max-w-[300px] whitespace-nowrap border-b border-r border-slate-100 px-3 py-2.5 text-xs",
+                        monedaNegativa ? "font-semibold text-red-600" : "text-slate-700"
+                      )}
+                    >
+                      {esTipoVentaDigital ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProspectoSeleccionado(registro.prospecto_digital);
+                          }}
+                          className="rounded-lg bg-blue-50 px-2.5 py-1 font-bold text-[#131E5C] transition hover:bg-blue-100 hover:underline"
+                        >
+                          Venta digital
+                        </button>
+                      ) : (
+                        <div className="max-w-[280px] truncate">{value}</div>
+                      )}
+                    </td>
+                  );
                 })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
       {/* Footer */}
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: C.border, backgroundColor: C.surface }}>
         <div className="flex flex-wrap items-center gap-3">
@@ -555,10 +719,20 @@ export default function InteractiveTable({
           <button type="button" disabled={loading || page >= totalPages} onClick={onNext} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>
+            {detail && seleccionado && (
+              <DetallePopup
+                registro={seleccionado}
+                columns={columns}
+                onClose={() => setSeleccionado(null)}
+              />
+            )}
 
-      {detail && seleccionado && (
-        <DetallePopup registro={seleccionado} columns={columns} onClose={() => setSeleccionado(null)} />
-      )}
-    </div>
-  );
-}
+            {prospectoSeleccionado && (
+              <ProspectoDigitalPopup
+                prospecto={prospectoSeleccionado}
+                onClose={() => setProspectoSeleccionado(null)}
+              />
+            )}
+          </div>
+        );
+      }

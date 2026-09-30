@@ -53,9 +53,19 @@ const COLUMNAS = [
   { key: "nombre_condicion_pago", label: "Condición Pago" },
   { key: "asesor", label: "Asesor" },
   { key: "agencia", label: "Agencia" },
+  { key: "tipo_venta", label: "Tipo de Venta"},
 ];
 
-const FILTROS_INICIALES = { q: "", agencia: "", asesor: "", familia: "", condicion_pago: "", fecha_desde: "", fecha_hasta: "" };
+const FILTROS_INICIALES = {
+  q: "",
+  agencia: "",
+  asesor: "",
+  familia: "",
+  condicion_pago: "",
+  fecha_desde: "",
+  fecha_hasta: "",
+  venta_digital: "",
+};
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const PIE_COLORS = ["#131E5C", "#2445A2", "#3D63C8", "#6681D4", "#8B9DDE", "#AEB9E8", "#42526E", "#7A869A"];
 const PRESETS_FECHA = [
@@ -140,7 +150,13 @@ function porcentaje(value, total) { return total ? Math.round((numero(value) / t
 
 export default function VentasVN() {
   const [dashboard, setDashboard] = useState({
-    totales: { productos: 0, unidades_vendidas: 0, ingresos: 0, costo: 0 },
+    totales: {
+      productos: 0,
+      unidades_vendidas: 0,
+      ingresos: 0,
+      costo: 0,
+      ventas_digitales: 0,
+    },
     graficas: { por_mes: [], por_asesor: [], por_familia: [], por_condicion_pago: [] },
     opciones: { agencias: [], asesores: [], familias: [], condiciones_pago: [] },
   });
@@ -166,8 +182,13 @@ export default function VentasVN() {
     setErrorDashboard("");
     try {
       const response = await getVentasVNDashboard({
-        fecha_desde: filtros.fecha_desde, fecha_hasta: filtros.fecha_hasta, agencia: filtros.agencia,
-        asesor: filtros.asesor, familia: filtros.familia, condicion_pago: filtros.condicion_pago,
+        fecha_desde: filtros.fecha_desde,
+        fecha_hasta: filtros.fecha_hasta,
+        agencia: filtros.agencia,
+        asesor: filtros.asesor,
+        familia: filtros.familia,
+        condicion_pago: filtros.condicion_pago,
+        venta_digital: filtros.venta_digital,
       });
       setDashboard({
         totales: {
@@ -175,6 +196,7 @@ export default function VentasVN() {
           unidades_vendidas: Number(response?.totales?.unidades_vendidas || 0),
           ingresos: Number(response?.totales?.ingresos || 0),
           costo: Number(response?.totales?.costo || 0),
+          ventas_digitales: Number(response?.totales?.ventas_digitales || 0),
         },
         graficas: {
           por_mes: response?.graficas?.por_mes || [], por_asesor: response?.graficas?.por_asesor || [],
@@ -196,9 +218,18 @@ export default function VentasVN() {
     setError("");
     try {
       const query = buildQuery({
-        page: pagina, page_size: pageSize, q: qBuscado, agencia: filtros.agencia, asesor: filtros.asesor,
-        familia: filtros.familia, condicion_pago: filtros.condicion_pago, fecha_desde: filtros.fecha_desde, fecha_hasta: filtros.fecha_hasta,
+        page: pagina,
+        page_size: pageSize,
+        q: qBuscado,
+        agencia: filtros.agencia,
+        asesor: filtros.asesor,
+        familia: filtros.familia,
+        condicion_pago: filtros.condicion_pago,
+        fecha_desde: filtros.fecha_desde,
+        fecha_hasta: filtros.fecha_hasta,
+        venta_digital: filtros.venta_digital,
       });
+
       const response = await http(`/ventas-vn/api/${query}`);
       setRegistros(Array.isArray(response?.results) ? response.results : []);
       setTotal(Number(response?.count || 0));
@@ -210,9 +241,31 @@ export default function VentasVN() {
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { cargarDatos(); }, [pagina, pageSize, qBuscado, filtros.agencia, filtros.asesor, filtros.familia, filtros.condicion_pago, filtros.fecha_desde, filtros.fecha_hasta]);
-  useEffect(() => { cargarDashboard(); }, [filtros.agencia, filtros.asesor, filtros.familia, filtros.condicion_pago, filtros.fecha_desde, filtros.fecha_hasta]);
-
+  useEffect(() => {
+    cargarDatos();
+  }, [
+    pagina,
+    pageSize,
+    qBuscado,
+    filtros.agencia,
+    filtros.asesor,
+    filtros.familia,
+    filtros.condicion_pago,
+    filtros.fecha_desde,
+    filtros.fecha_hasta,
+    filtros.venta_digital,
+  ]);
+  useEffect(() => {
+    cargarDashboard();
+  }, [
+    filtros.agencia,
+    filtros.asesor,
+    filtros.familia,
+    filtros.condicion_pago,
+    filtros.fecha_desde,
+    filtros.fecha_hasta,
+    filtros.venta_digital,
+  ]);
   const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
   const hayFiltros = Object.values(filtros).some((value) => String(value || "").trim());
   const rangoActual = useMemo(() => formatoRango(filtros.fecha_desde, filtros.fecha_hasta), [filtros.fecha_desde, filtros.fecha_hasta]);
@@ -337,7 +390,7 @@ export default function VentasVN() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <KPICard
             icon={Car}
             label="Unidades vendidas"
@@ -378,8 +431,18 @@ export default function VentasVN() {
             accent="#8B5CF6"
             spark={datosMes.map((d) => d.productos)}
           />
+          <KPICard
+            icon={Car}
+            label="Ventas digitales"
+            value={
+              loadingDashboard
+                ? "—"
+                : formatoNumero(dashboard.totales.ventas_digitales)
+            }
+            sub="Prospectos digitales facturados"
+            accent="#2563EB"
+          />
         </div>
-
         <div className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-md">
           <FilterButtonGroup label="Dealer" value={filtros.agencia || "Todos"} options={["Todos", ...dashboard.opciones.agencias]} onChange={(value) => aplicarAgencia(value === "Todos" ? "" : value)} />
         </div>
@@ -426,7 +489,7 @@ export default function VentasVN() {
             </div>
 
             {/* Campos de filtro */}
-            <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 border-t border-[#E4E7F0] pt-4 md:grid-cols-2 xl:grid-cols-6">
               <FilterField label="Familia / modelo" icon={Tags}>
                 <select value={filtros.familia} onChange={(e) => cambiarFiltro("familia", e.target.value)} className={inputClass}>
                   <option value="">Todas las familias</option>
@@ -450,6 +513,16 @@ export default function VentasVN() {
               </FilterField>
               <FilterField label="Hasta" icon={CalendarDays}>
                 <input type="date" value={filtros.fecha_hasta} onChange={(e) => cambiarFiltro("fecha_hasta", e.target.value)} className={inputClass} />
+              </FilterField>
+              <FilterField label="Tipo de venta" icon={Car}>
+                <select
+                  value={filtros.venta_digital}
+                  onChange={(e) => cambiarFiltro("venta_digital", e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Todas las ventas</option>
+                  <option value="1">Venta digital</option>
+                </select>
               </FilterField>
             </div>
 
