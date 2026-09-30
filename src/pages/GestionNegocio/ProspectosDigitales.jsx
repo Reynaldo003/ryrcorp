@@ -16,6 +16,8 @@ import {
 } from "../../lib/apiProspectosDigitales";
 import { http, api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
+import { useAuth } from "../../auth/AuthContext";
+import { LINEAS_WHATSAPP } from "../../config/lineasWhatsApp";
 
 /* ============================================================
     CONFIGURACIÓN GENERAL & CONSTANTES
@@ -81,6 +83,312 @@ function normalizaTelefonoMx(tel) {
   if (digits.length === 10) return `52${digits}`;
   if (digits.length === 12 && digits.startsWith("52")) return digits;
   return digits;
+}
+
+function normalizaTexto(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizaAgenciaGrupo(value) {
+  const texto = normalizaTexto(value);
+
+  if (!texto) return "";
+  if (texto.includes("cordoba")) return "VW Cordoba";
+  if (texto.includes("orizaba")) return "VW Orizaba";
+  if (texto.includes("poza rica")) return "VW Poza Rica";
+  if (texto.includes("tuxtepec")) return "VW Tuxtepec";
+  if (texto.includes("tuxpan")) return "VW Tuxpan";
+
+  return quitaAccentos(value);
+}
+
+function extraerNumerosWhatsApp(value) {
+  const valores = Array.isArray(value)
+    ? value
+    : String(value || "").split(/[|,;\n]+/);
+
+  return [
+    ...new Set(
+      valores
+        .map(normalizaTelefonoMx)
+        .filter((numero) => /^52\d{10}$/.test(numero))
+    )
+  ];
+}
+
+function getNumerosUsuarioSesion(user) {
+  const fuentes = [
+    user?.telefonos_whatsapp,
+    user?.telefonos,
+    user?.telefono,
+    user?.numero_asesor,
+    user?.whatsapp_number,
+    user?.phone
+  ];
+
+  for (const fuente of fuentes) {
+    const numeros = extraerNumerosWhatsApp(fuente);
+
+    if (numeros.length) {
+      return numeros;
+    }
+  }
+
+  for (const key of ["auth", "crm.user", "user"]) {
+    try {
+      const raw = localStorage.getItem(key);
+
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+
+      const userGuardado =
+        parsed?.user && typeof parsed.user === "object"
+          ? parsed.user
+          : parsed;
+
+      const numeros = extraerNumerosWhatsApp(
+        userGuardado?.telefonos_whatsapp ||
+        userGuardado?.telefonos ||
+        userGuardado?.telefono ||
+        userGuardado?.numero_asesor ||
+        userGuardado?.whatsapp_number ||
+        userGuardado?.phone ||
+        ""
+      );
+
+      if (numeros.length) {
+        return numeros;
+      }
+    } catch {
+      // Continúa con la siguiente fuente.
+    }
+  }
+
+  return [];
+}
+
+function deduplicarRegistros(items = []) {
+  const mapa = new Map();
+
+  items.forEach((item) => {
+    const key =
+      item?.id ??
+      item?.id_cliente ??
+      item?.cliente?.id ??
+      normalizaTelefonoMx(
+        item?.telefono ||
+        item?.cliente?.telefono
+      );
+
+    if (key !== null && key !== undefined && key !== "") {
+      mapa.set(String(key), item);
+    }
+  });
+
+  return Array.from(mapa.values());
+}
+
+async function listarProspectosDashboard(params = {}) {
+  const registros = [];
+  let page = 1;
+
+  while (page <= 100) {
+    const respuesta = await api.digitalesListProspectos({
+      ...params,
+      page,
+      page_size: 1000,
+      limit: 1000
+    });
+
+    const items = extractArray(respuesta);
+
+    registros.push(...items);
+
+    if (Array.isArray(respuesta)) {
+      break;
+    }
+
+    if (!respuesta?.next) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return deduplicarRegistros(registros);
+}
+
+function combinarListaMetricas(listas = []) {
+  const mapa = new Map();
+
+  listas.flat().forEach((item) => {
+    if (!item) return;
+
+    const nombre =
+      item.nombre ||
+      item.name ||
+      item.canal ||
+      item.asesor ||
+      item.pauta ||
+      "";
+
+    const key = normalizaTexto(nombre);
+
+    if (!key) return;
+
+    if (!mapa.has(key)) {
+      mapa.set(key, { ...item });
+      return;
+    }
+
+    const actual = mapa.get(key);
+    const combinado = { ...actual };
+
+    Object.entries(item).forEach(([campo, valor]) => {
+      if (campo === "nombre" || campo === "name") {
+        return;
+      }
+
+      const numeroValor = Number(valor);
+
+      const esMetricaAcumulable =
+        valor !== "" &&
+        valor !== null &&
+        valor !== undefined &&
+        Number.isFinite(numeroValor) &&
+        !campo.toLowerCase().includes("porcentaje") &&
+        !campo.toLowerCase().includes("conversion") &&
+        !campo.toLowerCase().includes("tasa");
+
+      if (esMetricaAcumulable) {
+        combinado[campo] =
+          Number(combinado[campo] || 0) + numeroValor;
+      }
+    });
+
+    mapa.set(key, combinado);
+  });
+
+  return Array.from(mapa.values());
+}
+
+function combinarObjetosNumericos(objetos = []) {
+  const resultado = {};
+
+  objetos.filter(Boolean).forEach((objeto) => {
+    Object.entries(objeto).forEach(([key, value]) => {
+      const num = Number(value);
+
+      if (
+        value !== "" &&
+        value !== null &&
+        value !== undefined &&
+        Number.isFinite(num)
+      ) {
+        resultado[key] = Number(resultado[key] || 0) + num;
+      } else if (resultado[key] === undefined) {
+        resultado[key] = value;
+      }
+    });
+  });
+
+  return resultado;
+}
+
+function combinarNegocioStats(respuestas = []) {
+  const validas = respuestas.filter(Boolean);
+
+  if (!validas.length) {
+    return null;
+  }
+
+  const resultado = {
+    ...validas[0],
+    embudo: combinarListaMetricas(
+      validas.map((item) =>
+        Array.isArray(item?.embudo) ? item.embudo : []
+      )
+    ),
+    canales: combinarListaMetricas(
+      validas.map((item) =>
+        Array.isArray(item?.canales) ? item.canales : []
+      )
+    ),
+    asesores: combinarListaMetricas(
+      validas.map((item) =>
+        Array.isArray(item?.asesores) ? item.asesores : []
+      )
+    ),
+    actividad_periodo: combinarObjetosNumericos(
+      validas.map((item) => item?.actividad_periodo || {})
+    )
+  };
+
+  const totalOrigen = numero(resultado.embudo?.[0]?.total);
+
+  resultado.embudo = (resultado.embudo || []).map(
+    (etapa, index, lista) => {
+      const total = numero(etapa.total);
+      const anterior = index > 0
+        ? numero(lista[index - 1]?.total)
+        : total;
+
+      return {
+        ...etapa,
+        conversion_origen:
+          totalOrigen > 0
+            ? (total / totalOrigen) * 100
+            : 0,
+        conversion_anterior:
+          anterior > 0
+            ? (total / anterior) * 100
+            : 0
+      };
+    }
+  );
+
+  return resultado;
+}
+
+function combinarPautasStats(respuestas = []) {
+  return combinarListaMetricas(
+    respuestas.map((item) =>
+      Array.isArray(item?.pautas) ? item.pautas : []
+    )
+  );
+}
+
+function combinarCitasStats(respuestas = []) {
+  const citasConcertadas = respuestas.reduce(
+    (total, item) =>
+      total + numero(item?.citas_concertadas),
+    0
+  );
+
+  const citasEfectivas = respuestas.reduce(
+    (total, item) =>
+      total + numero(item?.citas_efectivas),
+    0
+  );
+
+  return {
+    citas_concertadas: citasConcertadas,
+    citas_efectivas: citasEfectivas,
+    tasa_asistencia:
+      citasConcertadas > 0
+        ? (citasEfectivas / citasConcertadas) * 100
+        : 0
+  };
+}
+
+function combinarCotizacionesStats(respuestas = []) {
+  return combinarObjetosNumericos(respuestas);
 }
 
 function extractArray(res) {
@@ -1165,45 +1473,222 @@ function EmbudoComercial({ etapas = [], canales = [], pautas = [], loading }) {
     COMPONENTE PRINCIPAL
 ============================================================ */
 export default function ProspectosDigitales() {
+  const { user, ready } = useAuth();
+
   const hoy = new Date();
   const añoActual = hoy.getFullYear();
   const mesActual = hoy.getMonth();
-  const años = useMemo(() => Array.from({ length: 5 }, (_, i) => añoActual - i), [añoActual]);
+
+  const años = useMemo(
+    () => Array.from({ length: 5 }, (_, i) => añoActual - i),
+    [añoActual]
+  );
 
   const [añoSel, setAñoSel] = useState(añoActual);
   const [mesSel, setMesSel] = useState(mesActual);
   const [agenciaSel, setAgenciaSel] = useState("Todas");
 
-  const filtrosParams = useMemo(() => {
-    const mesStart = `${añoSel}-${String(mesSel + 1).padStart(2, '0')}-01`;
-    const date = new Date(añoSel, mesSel + 1, 0);
-    const mesEnd = `${añoSel}-${String(mesSel + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const rolUsuario = useMemo(() => {
+    return normalizaTexto(
+      user?.rol?.nombre ||
+      user?.rol?.name ||
+      user?.rol ||
+      ""
+    );
+  }, [user]);
 
-    const p = {
+  const isAdmin = useMemo(() => {
+    const permisos = Array.isArray(user?.permisos)
+      ? user.permisos
+      : [];
+
+    return (
+      rolUsuario === "administrador" ||
+      rolUsuario === "admin" ||
+      permisos.includes("ALL") ||
+      permisos.includes("USUARIOS_ADMIN")
+    );
+  }, [rolUsuario, user?.permisos]);
+
+  const isCoordinador = useMemo(() => {
+    const permisos = Array.isArray(user?.permisos)
+      ? user.permisos
+      : [];
+
+    return (
+      !isAdmin &&
+      (
+        rolUsuario === "coordinador digital" ||
+        rolUsuario === "coordinador_digital" ||
+        permisos.includes("CRM_COORDINADOR_DIGITAL")
+      )
+    );
+  }, [isAdmin, rolUsuario, user?.permisos]);
+
+  const numerosUsuarioSesion = useMemo(() => {
+    return getNumerosUsuarioSesion(user);
+  }, [user]);
+
+  const numerosPermitidos = useMemo(() => {
+    if (isAdmin) {
+      return Object.keys(LINEAS_WHATSAPP)
+        .map(normalizaTelefonoMx)
+        .filter(Boolean);
+    }
+
+    const lineasConfiguradas = new Set(
+      Object.keys(LINEAS_WHATSAPP).map(normalizaTelefonoMx)
+    );
+
+    return [
+      ...new Set(
+        numerosUsuarioSesion
+          .map(normalizaTelefonoMx)
+          .filter((numero) =>
+            lineasConfiguradas.has(numero)
+          )
+      )
+    ];
+  }, [isAdmin, numerosUsuarioSesion]);
+
+  const agenciasUsuario = useMemo(() => {
+    return String(user?.agencia || "")
+      .split("|")
+      .map((agencia) => agencia.trim())
+      .filter(Boolean);
+  }, [user?.agencia]);
+
+  const agenciasPermitidas = useMemo(() => {
+    if (isAdmin) {
+      return AGENCIAS;
+    }
+
+    const agenciasLineas = numerosPermitidos
+      .map((numero) =>
+        LINEAS_WHATSAPP[numero]?.agencia || ""
+      )
+      .filter(Boolean);
+
+    const todas = [
+      ...agenciasUsuario,
+      ...agenciasLineas
+    ];
+
+    const mapa = new Map();
+
+    todas.forEach((agencia) => {
+      const normalizada = normalizaAgenciaGrupo(agencia);
+
+      if (!normalizada) return;
+
+      const agenciaCatalogo = AGENCIAS.find(
+        (item) =>
+          normalizaAgenciaGrupo(item) === normalizada
+      );
+
+      mapa.set(
+        normalizada,
+        agenciaCatalogo || agencia
+      );
+    });
+
+    return Array.from(mapa.values());
+  }, [
+    isAdmin,
+    agenciasUsuario,
+    numerosPermitidos
+  ]);
+
+  const lineasConsulta = useMemo(() => {
+    if (isAdmin) {
+      return [];
+    }
+
+    if (agenciaSel === "Todas") {
+      return numerosPermitidos;
+    }
+
+    const agenciaSeleccionada =
+      normalizaAgenciaGrupo(agenciaSel);
+
+    return numerosPermitidos.filter((numero) => {
+      const agenciaLinea =
+        LINEAS_WHATSAPP[numero]?.agencia || "";
+
+      return (
+        normalizaAgenciaGrupo(agenciaLinea) ===
+        agenciaSeleccionada
+      );
+    });
+  }, [
+    isAdmin,
+    numerosPermitidos,
+    agenciaSel
+  ]);
+
+  useEffect(() => {
+    if (agenciaSel === "Todas") {
+      return;
+    }
+
+    const permitida = agenciasPermitidas.some(
+      (agencia) =>
+        normalizaAgenciaGrupo(agencia) ===
+        normalizaAgenciaGrupo(agenciaSel)
+    );
+
+    if (!permitida) {
+      setAgenciaSel("Todas");
+    }
+  }, [agenciaSel, agenciasPermitidas]);
+
+  const filtrosParams = useMemo(() => {
+    const mesStart =
+      `${añoSel}-${String(mesSel + 1).padStart(2, "0")}-01`;
+
+    const ultimoDia = new Date(
+      añoSel,
+      mesSel + 1,
+      0
+    ).getDate();
+
+    const mesEnd =
+      `${añoSel}-${String(mesSel + 1).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+
+    const params = {
       anio: añoSel,
       mes: mesSel + 1,
+
       creado__gte: mesStart,
       creado__lte: `${mesEnd} 23:59:59`,
+
       fecha_registro_desde: mesStart,
       fecha_registro_hasta: mesEnd,
+
       fecha_desde: mesStart,
       fecha_hasta: mesEnd,
+
       created_at__gte: mesStart,
-      created_at__lte: mesEnd,
+      created_at__lte: `${mesEnd} 23:59:59`,
+
       asesor_digital__isnull: "false",
       con_asesor_digital: 1
     };
 
     if (agenciaSel !== "Todas") {
-      const agenciaNormalizada = quitaAccentos(agenciaSel);
-      p.agencia = agenciaNormalizada;
-      p.agencia_nombre = agenciaNormalizada;
-      p.sucursal = agenciaNormalizada;
+      const agencia = quitaAccentos(agenciaSel);
+
+      params.agencia = agencia;
+      params.agencia_nombre = agencia;
+      params.sucursal = agencia;
     }
 
-    return p;
-  }, [añoSel, mesSel, agenciaSel]);
-
+    return params;
+  }, [
+    añoSel,
+    mesSel,
+    agenciaSel
+  ]);
   const [data, setData] = useState(VACIO);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1213,109 +1698,310 @@ export default function ProspectosDigitales() {
   const [loadingCohorte, setLoadingCohorte] = useState(true);
 
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
     let activo = true;
-    setLoading(true);
-    setLoadingCohorte(true);
-    setError("");
 
-    const mesStart = `${añoSel}-${String(mesSel + 1).padStart(2, '0')}-01`;
-    const date = new Date(añoSel, mesSel + 1, 0);
-    const mesEnd = `${añoSel}-${String(mesSel + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    async function cargarDashboard() {
+      setLoading(true);
+      setLoadingCohorte(true);
+      setError("");
 
-    Promise.allSettled([
-      getNegocioStats(filtrosParams),
-      getPautasOrigen(filtrosParams),
-      getCitasStats(filtrosParams),
-      getCotizacionesStats(filtrosParams),
-    ]).then((resultados) => {
-      if (!activo) return;
-      const valor = (index, fallback) => resultados[index]?.status === "fulfilled" ? resultados[index].value : fallback;
-      const fallos = resultados.filter((r) => r.status === "rejected");
-
-      setData({
-        negocio: valor(0, null),
-        pautas: Array.isArray(valor(1, {}).pautas) ? valor(1, {}).pautas : [],
-        citas: {
-          citas_concertadas: numero(valor(2, {}).citas_concertadas),
-          citas_efectivas: numero(valor(2, {}).citas_efectivas),
-          tasa_asistencia: numero(valor(2, {}).tasa_asistencia)
-        },
-        cotizaciones: valor(3, null),
-      });
-
-      if (fallos.length) {
-        setError(`Se cargó el tablero con ${fallos.length} bloque${fallos.length === 1 ? "" : "s"} sin datos.`);
-      }
-    }).finally(() => { if (activo) setLoading(false); });
-
-    const fetchCohorteYCitas = async () => {
       try {
-        const paramsCitas = {
-          fecha_desde: mesStart,
-          fecha_hasta: mesEnd,
-        };
-        if (agenciaSel !== "Todas") {
-          paramsCitas.agencia = quitaAccentos(agenciaSel);
+        const mesStart =
+          `${añoSel}-${String(mesSel + 1).padStart(2, "0")}-01`;
+
+        const ultimoDia = new Date(
+          añoSel,
+          mesSel + 1,
+          0
+        ).getDate();
+
+        const mesEnd =
+          `${añoSel}-${String(mesSel + 1).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+
+        /*
+         * ADMIN:
+         * una consulta global con todos=1.
+         *
+         * COORDINADOR / USUARIO:
+         * una consulta por cada línea permitida.
+         */
+        const alcances = isAdmin
+          ? [null]
+          : lineasConsulta;
+
+        if (!isAdmin && alcances.length === 0) {
+          if (!activo) return;
+
+          setData(VACIO);
+          setProspectosRaw([]);
+          setCitasRaw([]);
+          setError(
+            "El usuario no tiene líneas de WhatsApp asignadas para el alcance seleccionado."
+          );
+
+          return;
         }
 
-        const [resProspectos, resCitas] = await Promise.allSettled([
-          (async () => {
-            let todosMap = new Map();
-            let page = 1;
-            let hasMore = true;
+        /*
+         * ============================
+         * ANALÍTICA POR LÍNEA
+         * ============================
+         */
+        const metricasPorLinea =
+          await Promise.allSettled(
+            alcances.map(async (numeroLinea) => {
+              const params = {
+                ...filtrosParams
+              };
 
-            const baseParams = {
-              ...filtrosParams,
-              page_size: 250,
-              limit: 250,
-              todos: 1,
-              ligero: 1
-            };
-
-            while (hasMore && page <= 10) {
-              const res = await api.digitalesListProspectos({ ...baseParams, page });
-              let items = extractArray(res);
-
-              if (items.length === 0) {
-                hasMore = false;
+              if (numeroLinea) {
+                params.numero_asesor =
+                  numeroLinea;
               } else {
-                items.forEach(item => {
-                  const key = item.id || item.id_cliente || item.cliente?.id || JSON.stringify(item);
-                  if (!todosMap.has(key)) todosMap.set(key, item);
-                });
-
-                const totalCount = res?.count || res?.data?.count || 0;
-                if (res?.next && todosMap.size < totalCount) {
-                  page++;
-                } else {
-                  hasMore = false;
-                }
+                params.todos = 1;
               }
-            }
-            return Array.from(todosMap.values());
-          })(),
-          apiCitas.list(paramsCitas).catch(() => [])
-        ]);
 
-        if (!activo) return;
+              const [
+                negocio,
+                pautas,
+                citas,
+                cotizaciones
+              ] = await Promise.allSettled([
+                getNegocioStats(params),
+                getPautasOrigen(params),
+                getCitasStats(params),
+                getCotizacionesStats(params)
+              ]);
 
-        if (resProspectos.status === "fulfilled") {
-          setProspectosRaw(resProspectos.value || []);
+              return {
+                negocio:
+                  negocio.status === "fulfilled"
+                    ? negocio.value
+                    : null,
+
+                pautas:
+                  pautas.status === "fulfilled"
+                    ? pautas.value
+                    : null,
+
+                citas:
+                  citas.status === "fulfilled"
+                    ? citas.value
+                    : null,
+
+                cotizaciones:
+                  cotizaciones.status === "fulfilled"
+                    ? cotizaciones.value
+                    : null
+              };
+            })
+          );
+
+        const metricasValidas =
+          metricasPorLinea
+            .filter(
+              (resultado) =>
+                resultado.status === "fulfilled"
+            )
+            .map((resultado) =>
+              resultado.value
+            );
+
+        /*
+         * ============================
+         * PROSPECTOS POR LÍNEA
+         * ============================
+         */
+        const prospectosPorLinea =
+          await Promise.allSettled(
+            alcances.map((numeroLinea) => {
+              const params = {
+                ...filtrosParams,
+                ligero: 1
+              };
+
+              if (numeroLinea) {
+                params.numero_asesor =
+                  numeroLinea;
+              } else {
+                params.todos = 1;
+              }
+
+              return listarProspectosDashboard(
+                params
+              );
+            })
+          );
+
+        const prospectos =
+          deduplicarRegistros(
+            prospectosPorLinea.flatMap(
+              (resultado) =>
+                resultado.status === "fulfilled"
+                  ? resultado.value
+                  : []
+            )
+          );
+
+        /*
+         * ============================
+         * CITAS
+         * ============================
+         *
+         * Citas no necesita definir el alcance
+         * final del usuario. Solo las usamos
+         * para enriquecer los prospectos que
+         * YA fueron autorizados arriba.
+         */
+        let agenciasCitas = [];
+
+        if (agenciaSel !== "Todas") {
+          agenciasCitas = [agenciaSel];
+        } else if (!isAdmin) {
+          agenciasCitas = agenciasPermitidas;
         }
-        if (resCitas.status === "fulfilled") {
-          setCitasRaw(Array.isArray(resCitas.value) ? resCitas.value : []);
+
+        let citas = [];
+
+        if (isAdmin && agenciaSel === "Todas") {
+          citas = await apiCitas.list({
+            fecha_desde: mesStart,
+            fecha_hasta: mesEnd
+          });
+        } else {
+          const respuestasCitas =
+            await Promise.allSettled(
+              agenciasCitas.map((agencia) =>
+                apiCitas.list({
+                  fecha_desde: mesStart,
+                  fecha_hasta: mesEnd,
+                  agencia: quitaAccentos(
+                    agencia
+                  )
+                })
+              )
+            );
+
+          citas = deduplicarRegistros(
+            respuestasCitas.flatMap(
+              (resultado) =>
+                resultado.status === "fulfilled"
+                  ? resultado.value
+                  : []
+            )
+          );
         }
-      } catch (e) {
-        console.error("Error cargando cohorte o API Citas:", e);
+
+        if (!activo) {
+          return;
+        }
+
+        const negocios =
+          metricasValidas.map(
+            (item) => item.negocio
+          );
+
+        const pautas =
+          metricasValidas.map(
+            (item) => item.pautas
+          );
+
+        const statsCitas =
+          metricasValidas.map(
+            (item) => item.citas
+          );
+
+        const cotizaciones =
+          metricasValidas.map(
+            (item) => item.cotizaciones
+          );
+
+        setData({
+          negocio:
+            combinarNegocioStats(
+              negocios
+            ),
+
+          pautas:
+            combinarPautasStats(
+              pautas
+            ),
+
+          citas:
+            combinarCitasStats(
+              statsCitas
+            ),
+
+          cotizaciones:
+            combinarCotizacionesStats(
+              cotizaciones
+            )
+        });
+
+        setProspectosRaw(
+          prospectos
+        );
+
+        setCitasRaw(
+          Array.isArray(citas)
+            ? citas
+            : []
+        );
+
+        const fallosMetricas =
+          metricasPorLinea.filter(
+            (resultado) =>
+              resultado.status === "rejected"
+          ).length;
+
+        const fallosProspectos =
+          prospectosPorLinea.filter(
+            (resultado) =>
+              resultado.status === "rejected"
+          ).length;
+
+        const totalFallos =
+          fallosMetricas +
+          fallosProspectos;
+
+        if (totalFallos > 0) {
+          setError(
+            `Se cargó el tablero, pero ${totalFallos} consulta${totalFallos === 1 ? "" : "s"} no pudieron completarse.`
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Error cargando ProspectosDigitales:",
+          error
+        );
+
+        if (activo) {
+          setData(VACIO);
+          setProspectosRaw([]);
+          setCitasRaw([]);
+          setError(
+            error?.message ||
+            "No fue posible cargar las métricas."
+          );
+        }
       } finally {
-        if (activo) setLoadingCohorte(false);
+        if (activo) {
+          setLoading(false);
+          setLoadingCohorte(false);
+        }
       }
+    }
+
+    cargarDashboard();
+
+    return () => {
+      activo = false;
     };
-
-    fetchCohorteYCitas();
-
-    return () => { activo = false; };
-  }, [filtrosParams, añoSel, mesSel, agenciaSel]);
+  }, [ready, isAdmin, lineasConsulta, agenciasPermitidas, filtrosParams, añoSel, mesSel, agenciaSel]);
 
   const negocio = data.negocio || {};
   const embudoOriginal = Array.isArray(negocio.embudo) ? negocio.embudo : [];
@@ -1391,19 +2077,79 @@ export default function ProspectosDigitales() {
 
   const prospectosCohorte = useMemo(() => {
     return prospectosRaw
-      .filter(p => esDelPeriodo(p, añoSel, mesSel + 1))
-      .filter(p => esProspectoDigitalValido(p, asesoresValidos))
-      .filter(p => {
-        if (agenciaSel === "Todas") return true;
-        const agCliente = quitaAccentos(p.agencia || p.sucursal || p.agencia_nombre || p.cliente?.agencia || "").toLowerCase();
-        const agSeleccionada = quitaAccentos(agenciaSel).toLowerCase();
-        return agCliente.includes(agSeleccionada) || agSeleccionada.includes(agCliente);
+      .filter((p) =>
+        esDelPeriodo(
+          p,
+          añoSel,
+          mesSel + 1
+        )
+      )
+
+      /*
+       * Importante:
+       * la seguridad/alcan­ce ya fue aplicada
+       * al cargar por numero_asesor.
+       *
+       * No debemos volver a descartar registros
+       * basándonos en negocio.asesores.
+       */
+      .filter((p) =>
+        esProspectoDigitalValido(p)
+      )
+
+      .filter((p) => {
+        const agenciaProspecto =
+          normalizaAgenciaGrupo(
+            p.agencia ||
+            p.sucursal ||
+            p.agencia_nombre ||
+            p.cliente?.agencia ||
+            ""
+          );
+
+        if (!agenciaProspecto) {
+          return false;
+        }
+
+        /*
+         * Primero respetamos el alcance
+         * permitido del usuario.
+         */
+        if (!isAdmin) {
+          const perteneceAlUsuario =
+            agenciasPermitidas.some(
+              (agencia) =>
+                normalizaAgenciaGrupo(
+                  agencia
+                ) === agenciaProspecto
+            );
+
+          if (!perteneceAlUsuario) {
+            return false;
+          }
+        }
+
+        /*
+         * Después aplicamos el filtro
+         * seleccionado en pantalla.
+         */
+        if (agenciaSel === "Todas") {
+          return true;
+        }
+
+        return (
+          agenciaProspecto ===
+          normalizaAgenciaGrupo(
+            agenciaSel
+          )
+        );
       })
-      .map(p => ({
+
+      .map((p) => ({
         ...p,
         _citaMatch: findCitaMatch(p)
       }));
-  }, [prospectosRaw, añoSel, mesSel, asesoresValidos, citasMap, agenciaSel]);
+  }, [prospectosRaw, añoSel, mesSel, citasMap, agenciaSel, isAdmin, agenciasPermitidas]);
 
   /* CÁLCULOS DE METRICAS INTEGRADAS */
   const totalProspectos = prospectosCohorte.length;
@@ -1487,11 +2233,29 @@ export default function ProspectosDigitales() {
       {/* FILTROS VW */}
       <div className="bg-white rounded-xl p-3 md:p-4 border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto scrollbar-thin pb-1 xl:pb-0">
-          <button onClick={() => setAgenciaSel("Todas")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === "Todas" ? "bg-[#001E50] text-white ring-2 ring-[#001E50]" : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"}`}>
-            Todas las agencias
+          <button
+            onClick={() => setAgenciaSel("Todas")}
+            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === "Todas"
+                ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+              }`}
+          >
+            {isAdmin
+              ? "Todas las agencias"
+              : "Todas mis agencias"}
           </button>
-          {AGENCIAS.map((agencia) => (
-            <button key={agencia} onClick={() => setAgenciaSel(agencia)} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === agencia ? "bg-[#001E50] text-white ring-2 ring-[#001E50]" : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"}`}>
+
+          {agenciasPermitidas.map((agencia) => (
+            <button
+              key={agencia}
+              onClick={() =>
+                setAgenciaSel(agencia)
+              }
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === agencia
+                  ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                  : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                }`}
+            >
               {agencia}
             </button>
           ))}

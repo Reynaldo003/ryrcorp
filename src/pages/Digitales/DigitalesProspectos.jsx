@@ -2029,12 +2029,7 @@ export default function DigitalesProspectos() {
             .map((numero) => LINEAS_WHATSAPP[normalizaTelefonoMx(numero)]?.agencia ||
                 "")
             .filter(Boolean);
-        const source = isAdmin
-            ? DEALERS
-            : [
-                ...userAgencias,
-                ...agenciasPorNumero,
-            ];
+        const source = isAdmin ? DEALERS : [...userAgencias, ...agenciasPorNumero,];
         const grupos = new Set(source
             .map(normalizeDealerGrupo)
             .filter(Boolean));
@@ -2047,11 +2042,7 @@ export default function DigitalesProspectos() {
             ...ordenados,
             ...extras,
         ];
-    }, [
-        isAdmin,
-        userAgencias,
-        numerosUsuarioSesion,
-    ]);
+    }, [isAdmin, userAgencias, numerosUsuarioSesion,]);
     const estados = useMemo(() => {
         const s = new Set(cases.map((c) => c.estado).filter(Boolean));
         return ["Todos", ...Array.from(s)];
@@ -2207,11 +2198,7 @@ export default function DigitalesProspectos() {
                     (page - 1) * PAGE_SIZE,
                     page * PAGE_SIZE
                 ),
-        [
-            sorted,
-            page,
-            usaPaginacionServidor,
-        ]
+        [sorted, page, usaPaginacionServidor,]
     );
 
     const kpisLocales = useMemo(() => {
@@ -2237,29 +2224,7 @@ export default function DigitalesProspectos() {
                 )
         ).length;
 
-        const tiemposResp = sorted
-            .filter(
-                (r) =>
-                    r.primer_contacto_at &&
-                    r.creado
-            )
-            .map(
-                (r) =>
-                    (
-                        new Date(
-                            r.primer_contacto_at
-                        ).getTime() -
-                        new Date(
-                            r.creado
-                        ).getTime()
-                    ) /
-                    60000
-            )
-            .filter(
-                (v) =>
-                    v > 0 &&
-                    v < 1440
-            );
+        const tiemposResp = sorted.filter((r) => r.primer_contacto_at && r.creado).map((r) => (new Date(r.primer_contacto_at).getTime() - new Date(r.creado).getTime()) / 60000).filter((v) => v > 0 && v < 1440);
 
         const avgResp = tiemposResp.length
             ? Math.round(
