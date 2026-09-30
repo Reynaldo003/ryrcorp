@@ -14,10 +14,16 @@ export default function FinancierosIndex() {
             return;
         }
 
-        const puedeVerFinancieros = hasAnyPermission(["CRM_DIGITALES", "CRM_FINANCIEROS", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES", "CRM_ASESOR_PISO",]);
+        const puedeVerFinancieros = hasAnyPermission(["CRM_DIGITALES", "CRM_FINANCIEROS", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_COORDINADOR_DIGITAL"]);
 
         if (puedeVerFinancieros) {
             navigate("/financieros/credito", { replace: true });
+            return;
+        }
+
+        // Asesor Piso solo accede al submódulo Documentación.
+        if (hasAnyPermission(["CRM_ASESOR_PISO"])) {
+            navigate("/financieros/documentacion", { replace: true });
             return;
         }
 
