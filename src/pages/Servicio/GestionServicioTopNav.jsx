@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign } from "lucide-react";
+import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign, Wrench } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
@@ -17,6 +17,12 @@ export default function GestionTopNav() {
             label: "Presupuestos de Servicio",
             to: "/servicio/presupuestos",
             icon: LayoutList,
+            show: servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+        },
+        {
+            label: "GOTA - Órdenes de Taller",
+            to: "/servicio/gota",
+            icon: Wrench,
             show: servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
         },
     ].filter((tab) => tab.show);

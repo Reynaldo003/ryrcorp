@@ -135,6 +135,7 @@ import Valuaciones from "./pages/GestionNegocio/Valuaciones";
 import CompraRefacciones from "./pages/Partes/CompraRefacciones";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 import Presupuestos from "./pages/Presupuestos/Presupuestos";
+import Gota from "./pages/Servicio/Gota";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -649,6 +650,14 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
                                             <Presupuestos />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "gota",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <Gota />
                                         </RequirePermission>
                                     ),
                                 },
