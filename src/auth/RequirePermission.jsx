@@ -76,7 +76,7 @@ export function obtenerRutaInicialPorUsuario(user) {
     }
 
     if (permisos.includes("CRM_ASESOR_PISO")) {
-        return "/financieros";
+        return "/financieros/documentacion";
     }
 
     return "/";
