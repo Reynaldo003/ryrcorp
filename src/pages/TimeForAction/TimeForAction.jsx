@@ -735,7 +735,7 @@ function TaskModal({ open, onClose, task, lists, teamId, onSaved }) {
         setEvidencias([]);
         setEvidenciasExistentes(Array.isArray(task?.evidencias) ? task.evidencias : []);
         setAssignedUsers(Array.isArray(task?.asignados) ? task.asignados.map(a => ({ id: a.user_id, name: a.name, email: a.email })) : []);
-    }, [open, task, lists]);
+    }, [open, task?.id]);
 
     function addSubtask() {
         const t = newSub.trim();
