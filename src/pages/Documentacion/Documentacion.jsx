@@ -5,7 +5,6 @@ import { Building2, CheckCircle2, ChevronDown, CircleAlert, Download, Eye, FileC
 import EditorFormatoPdf from "./EditorFormatoPDF";
 import { useAuth } from "../../auth/AuthContext";
 import { apiDocumentacion } from "../../lib/apiDocumentacion";
-import { http } from "../../lib/apiPruebas";
 import { AGENCIAS_DIGITALES, } from "../../config/asesoresGestionComercial";
 import { useAsesoresGestionComercial, } from "../../hooks/useAsesoresGestionComercial";
 
@@ -298,8 +297,9 @@ function DescargarExpedienteButton({ expediente }) {
     const tieneSolicitud =
         !!expediente?.solicitud_pdf_url;
 
-    const tieneArchivos =
-        tieneDocumentos || tieneSolicitud;
+    const tieneOtros = (expediente?.documentos_otros || []).length > 0;
+
+    const tieneArchivos = tieneDocumentos || tieneSolicitud || tieneOtros;
 
     const obtenerNombreArchivo = (
         contentDisposition
@@ -758,7 +758,7 @@ function ExpedienteCard({
                                                                 <span>{isUploading ? "Subiendo..." : "+ Adjuntar documento"}</span>
                                                                 <input
                                                                     type="file"
-                                                                    accept=".pdf"
+                                                                    accept=".pdf,application/pdf"
                                                                     disabled={isUploading}
                                                                     className="hidden"
                                                                     onChange={(e) => {
@@ -1031,11 +1031,13 @@ export default function Documentacion() {
     const timerRef = useRef(null);
 
     const rol = normalizar(user?.rol);
+    const idRol = Number(user?.id_rol ?? user?.rol_id ?? user?.rol ?? 0);
     const permisos = user?.permisos || [];
-
-    const isAdmin = rol === "administrador" || permisos.includes("ALL") || permisos.includes("USUARIOS_ADMIN");
+    // id_rol === 1 es Administrador, id_rol === 12 es Asesor Piso
+    const isAdmin = idRol === 1 || rol === "administrador" || permisos.includes("ALL") || permisos.includes("USUARIOS_ADMIN");
 
     const isGerente = (
+        idRol === 6 ||
         (rol.includes("gerente") && rol.includes("servicios") && rol.includes("financieros"))
         || permisos.includes("FINANCIEROS_GERENTE")
     );
@@ -1159,26 +1161,76 @@ export default function Documentacion() {
     }, [nuevo.tipo_persona, nuevo.financiamiento]);
 
     const dealersCreacion = useMemo(() => {
-        if (isAdmin) return AGENCIAS_DIGITALES;
+        if (isAdmin || userAgencias.length === 0) return AGENCIAS_DIGITALES;
         return userAgencias;
     }, [isAdmin, userAgencias]);
 
-    const dealersFiltro = useMemo(
-        () => [...new Set(expedientes.map((exp) => exp.agencia).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
-        [expedientes],
-    );
+    const dealersFiltro = useMemo(() => {
+        const agenciasDisponibles = expedientes.map((exp) => exp.agencia).filter(Boolean);
+        const unicas = [...new Set(agenciasDisponibles)];
+
+        if (isGerente && !isAdmin && userAgencias.length > 0) {
+            return unicas
+                .filter((agencia) => userAgencias.some((userAg) => normalizar(userAg) === normalizar(agencia)))
+                .sort((a, b) => a.localeCompare(b, "es"));
+        }
+
+        return unicas.sort((a, b) => a.localeCompare(b, "es"));
+    }, [expedientes, isGerente, isAdmin, userAgencias]);
 
     const asesoresFiltro = useMemo(
         () => [...new Set(expedientes.map((exp) => exp.asesor_nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
         [expedientes],
     );
 
+    const nombreActivo = normalizar(
+        user?.nombre_completo ||
+        (user?.nombre && user?.apellidos ? `${user.nombre} ${user.apellidos}` : "") ||
+        user?.nombre ||
+        user?.usuario ||
+        ""
+    );
+
     const expedientesVisibles = useMemo(() => {
         const q = normalizar(busqueda);
+        const nombreActivo = normalizar(
+            user?.nombre_completo ||
+            (user?.nombre && user?.apellidos ? `${user.nombre} ${user.apellidos}` : "") ||
+            user?.nombre ||
+            user?.usuario ||
+            ""
+        );
 
         return expedientes.filter((exp) => {
-            if (filtroDealer !== "Todos" && normalizar(exp.agencia) !== normalizar(filtroDealer)) return false;
-            if (filtroAsesor !== "Todos" && normalizar(exp.asesor_nombre) !== normalizar(filtroAsesor)) return false;
+            // 1. Si es Asesor Piso (no admin ni gerente), solo ve sus propios expedientes
+            if (!isAdmin && !isGerente) {
+                // Si aún no se determina el nombre en sesión, no mostrar registros por seguridad
+                if (!nombreActivo) return false;
+
+                const creado = normalizar(exp.creado_por);
+                const asesor = normalizar(exp.asesor_nombre);
+                const esMio = (
+                    (creado && (creado === nombreActivo || nombreActivo.includes(creado) || creado.includes(nombreActivo))) ||
+                    (asesor && (asesor === nombreActivo || nombreActivo.includes(asesor) || asesor.includes(nombreActivo)))
+                );
+                if (!esMio) return false;
+            }
+
+            // 2. Si es Gerente (no admin), solo ve los de sus Dealers asignados
+            if (isGerente && !isAdmin && userAgencias.length > 0) {
+                if (!userAgencias.some((ag) => normalizar(ag) === normalizar(exp.agencia))) return false;
+            }
+
+            // 3. Filtro de Dealer (aplica para Admin y Gerente)
+            if ((isAdmin || isGerente) && filtroDealer !== "Todos" && normalizar(exp.agencia) !== normalizar(filtroDealer)) {
+                return false;
+            }
+
+            // 4. Filtro de Asesor (solo Administrador)
+            if (isAdmin && filtroAsesor !== "Todos" && normalizar(exp.asesor_nombre) !== normalizar(filtroAsesor)) {
+                return false;
+            }
+
             if (!q) return true;
 
             return [
@@ -1191,23 +1243,46 @@ export default function Documentacion() {
                 nombreFinanciamiento(exp.financiamiento),
             ].some((value) => normalizar(value).includes(q));
         });
-    }, [expedientes, busqueda, filtroDealer, filtroAsesor]);
+    }, [expedientes, busqueda, filtroDealer, filtroAsesor, isAdmin, isGerente, userAgencias, user]);
 
     const puedeEditar = (expediente) => {
         if (isAdmin) return true;
 
-        if (!userAgencias.length) return true;
+        const creado = normalizar(expediente.creado_por);
+        const asesor = normalizar(expediente.asesor_nombre);
 
-        return userAgencias.some((agencia) => normalizar(agencia) === normalizar(expediente.agencia));
+        // Si es el asesor asignado o quien creó el expediente, SIEMPRE puede editarlo
+        if (nombreActivo) {
+            const esMio = (
+                (creado && (creado === nombreActivo || nombreActivo.includes(creado) || creado.includes(nombreActivo))) ||
+                (asesor && (asesor === nombreActivo || nombreActivo.includes(asesor) || asesor.includes(nombreActivo)))
+            );
+            if (esMio) return true;
+        }
+
+        // Si es gerente o usuario de agencia, puede editar si coincide su agencia
+        if (userAgencias.length > 0) {
+            return userAgencias.some((agencia) => normalizar(agencia) === normalizar(expediente.agencia));
+        }
+
+        return false;
     };
+
+    const nombreUsuarioSesion = (
+        user?.nombre_completo ||
+        (user?.nombre && user?.apellidos ? `${user.nombre} ${user.apellidos}` : "") ||
+        user?.nombre ||
+        user?.usuario ||
+        ""
+    ).trim();
 
     const abrirCrear = () => {
         setNuevo({
             tipo_persona: "",
             financiamiento: "",
             cliente: "",
-            agencia: isAdmin ? "" : userAgencias[0] || "",
-            asesor_nombre: "",
+            agencia: userAgencias.length === 1 ? userAgencias[0] : "",
+            asesor_nombre: !(isAdmin || isGerente) ? nombreUsuarioSesion : "",
         });
 
         setCombinacionDisponible(true);
@@ -1291,17 +1366,16 @@ export default function Documentacion() {
                 creado.solicitud_pdf_plantilla ||
                 plantillaAutomatica;
 
-            setExpedientes((prev) => [
-                creado,
-                ...prev,
-            ]);
+            const expedienteCompleto = await apiDocumentacion.get(creado.id_expediente);
+
+            setExpedientes((prev) => [expedienteCompleto, ...prev]);
+            setAbiertoId(creado.id_expediente);
 
             setFormatosSeleccionados((prev) => ({
                 ...prev,
                 [creado.id_expediente]: plantillaAsignada,
             }));
 
-            setAbiertoId(creado.id_expediente);
             setOpenCrear(false);
 
             mostrarMensaje(
@@ -1542,6 +1616,7 @@ export default function Documentacion() {
                         ) : null}
                     </div>
 
+                    {/* Selector de Dealer: solo admin y gerentes */}
                     {(isAdmin || isGerente) ? (
                         <select value={filtroDealer} onChange={(event) => setFiltroDealer(event.target.value)} className={`${inputClass} xl:w-56`}>
                             <option value="Todos">Todos los Dealers</option>
@@ -1549,10 +1624,13 @@ export default function Documentacion() {
                         </select>
                     ) : null}
 
-                    <select value={filtroAsesor} onChange={(event) => setFiltroAsesor(event.target.value)} className={`${inputClass} xl:w-64`}>
-                        <option value="Todos">Todos los asesores</option>
-                        {asesoresFiltro.map((asesor) => <option key={asesor} value={asesor}>{asesor}</option>)}
-                    </select>
+                    {/* Selector de Asesor: EXCLUSIVO para Administradores */}
+                    {isAdmin ? (
+                        <select value={filtroAsesor} onChange={(event) => setFiltroAsesor(event.target.value)} className={`${inputClass} xl:w-64`}>
+                            <option value="Todos">Todos los asesores</option>
+                            {asesoresFiltro.map((asesor) => <option key={asesor} value={asesor}>{asesor}</option>)}
+                        </select>
+                    ) : null}
 
                     <div className="flex h-11 min-w-[130px] items-center justify-center px-4 text-xs font-black text-[#131E5C]">
                         {expedientesVisibles.length} expediente{expedientesVisibles.length === 1 ? "" : "s"}
@@ -1738,7 +1816,7 @@ export default function Documentacion() {
 
                                 <select
                                     value={nuevo.agencia}
-                                    disabled={!isAdmin && userAgencias.length <= 1}
+                                    disabled={!isAdmin && userAgencias.length === 1}
                                     onChange={(event) => setNuevo((prev) => ({ ...prev, agencia: event.target.value }))}
                                     className={`${inputClass} pl-10 disabled:cursor-not-allowed disabled:opacity-60`}
                                 >
@@ -1756,7 +1834,9 @@ export default function Documentacion() {
                                 </div>
 
                                 <span className="text-[9px] font-bold text-slate-400">
-                                    {nombresAsesoresActivos.length} asesores disponibles
+                                    {(isAdmin || isGerente)
+                                        ? `${nombresAsesoresActivos.length} asesores disponibles`
+                                        : "Asignado automáticamente"}
                                 </span>
                             </div>
 
@@ -1765,16 +1845,22 @@ export default function Documentacion() {
 
                                 <select
                                     value={nuevo.asesor_nombre}
+                                    disabled={!(isAdmin || isGerente) && Boolean(nombreUsuarioSesion)}
                                     onChange={(event) => setNuevo((prev) => ({ ...prev, asesor_nombre: event.target.value }))}
-                                    className={`${inputClass} pl-10`}
+                                    className={`${inputClass} pl-10 disabled:cursor-not-allowed disabled:opacity-75`}
                                 >
-                                    <option value="">Selecciona un asesor...</option>
-
-                                    {nombresAsesoresActivos.map((asesor) => (
-                                        <option key={asesor} value={asesor}>
-                                            {asesor}
-                                        </option>
-                                    ))}
+                                    {!(isAdmin || isGerente) && nombreUsuarioSesion ? (
+                                        <option value={nombreUsuarioSesion}>{nombreUsuarioSesion}</option>
+                                    ) : (
+                                        <>
+                                            <option value="">Selecciona un asesor...</option>
+                                            {nombresAsesoresActivos.map((asesor) => (
+                                                <option key={asesor} value={asesor}>
+                                                    {asesor}
+                                                </option>
+                                            ))}
+                                        </>
+                                    )}
                                 </select>
                             </div>
                         </label>
