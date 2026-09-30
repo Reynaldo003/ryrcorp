@@ -14,14 +14,13 @@ import {
     Lightbulb,
     Sparkles,
 } from "lucide-react";
-
 import vwWhite from "../assets/vw_white.png";
 import ryr from "../assets/ryr.png";
-
 import { useAuth } from "../auth/AuthContext";
 import WhatsappNotificationsBell from "./WhatsappNotificationsBell";
 import { apiClickup } from "../lib/apiClickup";
 import { INTERFACES, SECTION_ORDER, interfazVisible } from "../config/interfaces";
+const API = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
 
 function cls(...items) {
     return items.filter(Boolean).join(" ");
@@ -47,7 +46,6 @@ function obtenerRolUsuario(user, esAdministrador) {
     if (typeof user?.role === "string") return user.role;
     if (user?.tipo_usuario) return user.tipo_usuario;
     if (user?.grupo) return user.grupo;
-
     return esAdministrador ? "Administrador" : "Usuario CRM";
 }
 
@@ -58,6 +56,37 @@ function obtenerIniciales(nombre) {
         .slice(0, 2)
         .map((palabra) => palabra[0]?.toUpperCase())
         .join("");
+}
+function obtenerInicialUsuario(user) {
+    const valor =
+        user?.nombre ||
+        user?.usuario ||
+        user?.username ||
+        user?.email ||
+        "U";
+
+    return String(valor).trim().charAt(0).toUpperCase();
+}
+
+function obtenerFotoUsuario(user) {
+    const foto =
+        user?.foto_url ||
+        user?.foto ||
+        user?.photo ||
+        user?.avatar ||
+        "";
+
+    if (!foto) {
+        return "";
+    }
+
+    // Si Django ya manda la URL completa.
+    if (/^https?:\/\//i.test(foto)) {
+        return foto;
+    }
+
+    // Si Django devuelve algo como /media/usuarios/perfiles/foto.jpg
+    return `${API}${foto.startsWith("/") ? foto : `/${foto}`}`;
 }
 
 function FadeText({ show, children, className = "" }) {
@@ -92,7 +121,8 @@ export default function Sidebar() {
 
     const nombreUsuario = obtenerNombreUsuario(user);
     const rolUsuario = obtenerRolUsuario(user, canSeeSettings);
-    const iniciales = obtenerIniciales(nombreUsuario);
+    const inicialUsuario = obtenerInicialUsuario(user);
+    const fotoUsuario = obtenerFotoUsuario(user);
     const agenciaUsuario = user?.agencia || user?.dealer || user?.sucursal || "Agencia no asignada";
 
     useEffect(() => {
@@ -179,12 +209,6 @@ export default function Sidebar() {
             }));
     }, [user]);
 
-    /*
-     * SECTION_ORDER controla los títulos y el orden.
-     *
-     * Ejemplo:
-     * ["General", "Comercial", "Postventa", "Administración"]
-     */
     const sections = useMemo(() => {
         return SECTION_ORDER
             .map((section) => ({
@@ -306,16 +330,63 @@ export default function Sidebar() {
     );
 
     const UserCard = ({ showText }) => {
+        const AvatarUsuario = ({ size = "h-10 w-10" }) => (
+            <div
+                className={cls(
+                    "relative shrink-0 overflow-visible rounded-xl",
+                    size
+                )}
+            >
+                <div
+                    className={cls(
+                        "grid h-full w-full place-items-center overflow-hidden rounded-xl",
+                        "bg-gradient-to-br from-[#304292] via-[#263578] to-[#182666]",
+                        "text-[12px] font-bold text-[#9CEBFF]",
+                        "shadow-lg transition-all duration-300",
+                        "group-hover:scale-110"
+                    )}
+                >
+                    {fotoUsuario ? (
+                        <img
+                            src={fotoUsuario}
+                            alt={nombreUsuario}
+                            className="h-full w-full object-cover"
+                            onError={(event) => {
+                                event.currentTarget.style.display = "none";
+
+                                const fallback =
+                                    event.currentTarget.nextElementSibling;
+
+                                if (fallback) {
+                                    fallback.style.display = "grid";
+                                }
+                            }}
+                        />
+                    ) : null}
+
+                    <span
+                        className="h-full w-full place-items-center"
+                        style={{
+                            display: fotoUsuario ? "none" : "grid",
+                        }}
+                    >
+                        {inicialUsuario}
+                    </span>
+                </div>
+
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#182666] bg-[#00B0F0] shadow-[0_0_8px_#00B0F0]" />
+            </div>
+        );
+
         if (!showText) {
             return (
                 <div className="px-2 py-3">
                     <NavLink
                         to="/configuracion"
                         title={`${nombreUsuario} · ${rolUsuario}`}
-                        className="relative mx-auto grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-[11px] font-bold text-[#8BE7FF] transition-all duration-300 hover:scale-110 hover:border-[#00B0F0]/40 hover:bg-white/10"
+                        className="group relative mx-auto block h-11 w-11 transition-all duration-300 hover:scale-105"
                     >
-                        {iniciales}
-                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#131E5C] bg-[#00B0F0] shadow-[0_0_8px_#00B0F0]" />
+                        <AvatarUsuario size="h-11 w-11" />
                     </NavLink>
                 </div>
             );
@@ -327,11 +398,7 @@ export default function Sidebar() {
                     to="/configuracion"
                     className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.045] px-3 py-2.5 transition-all duration-300 hover:-translate-y-px hover:border-[#00B0F0]/25 hover:bg-white/[0.075]"
                 >
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#304292] via-[#263578] to-[#182666] text-[11px] font-bold text-[#9CEBFF] shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:-rotate-3">
-                        {iniciales}
-
-                        <span className="absolute ml-8 mt-8 h-3 w-3 rounded-full border-2 border-[#182666] bg-[#00B0F0] shadow-[0_0_8px_#00B0F0]" />
-                    </div>
+                    <AvatarUsuario />
 
                     <div className="min-w-0 flex-1">
                         <div className="truncate text-[12px] font-semibold text-white">

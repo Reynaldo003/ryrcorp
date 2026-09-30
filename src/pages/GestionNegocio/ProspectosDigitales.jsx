@@ -1479,10 +1479,7 @@ export default function ProspectosDigitales() {
   const añoActual = hoy.getFullYear();
   const mesActual = hoy.getMonth();
 
-  const años = useMemo(
-    () => Array.from({ length: 5 }, (_, i) => añoActual - i),
-    [añoActual]
-  );
+  const años = useMemo(() => Array.from({ length: 3 }, (_, i) => añoActual - i), [añoActual]);
 
   const [añoSel, setAñoSel] = useState(añoActual);
   const [mesSel, setMesSel] = useState(mesActual);
@@ -2236,8 +2233,8 @@ export default function ProspectosDigitales() {
           <button
             onClick={() => setAgenciaSel("Todas")}
             className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === "Todas"
-                ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+              ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+              : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
               }`}
           >
             {isAdmin
@@ -2251,11 +2248,7 @@ export default function ProspectosDigitales() {
               onClick={() =>
                 setAgenciaSel(agencia)
               }
-              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === agencia
-                  ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                  : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
-                }`}
-            >
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === agencia ? "bg-[#001E50] text-white ring-2 ring-[#001E50]" : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"}`}>
               {agencia}
             </button>
           ))}
