@@ -298,6 +298,12 @@ function GestionNegocioIndexPorPermisos() {
     }
 
     const permisos = user?.permisos || [];
+    const rolNorm = String(user?.rol || "").trim().toLowerCase();
+
+    // Asesor Digital / Asesor General: su única pestaña disponible es Prospectos Digitales.
+    if (["asesor digital", "asesor general"].includes(rolNorm)) {
+        return <Navigate to="/gestion_negocio/prospectos_digitales" replace />;
+    }
 
     // Administradores: Partes es su primera pestaña disponible.
     if (tienePermiso(permisos, ["USUARIOS_ADMIN"])) {
@@ -535,7 +541,10 @@ export const router = createBrowserRouter(
                         {
                             path: "gestion_negocio",
                             element: (
-                                <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                <RequirePermission
+                                    anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}
+                                    anyOfRoles={["Asesor Digital", "Asesor General"]}
+                                >
                                     <GestionLayout />
                                 </RequirePermission>
                             ),
@@ -563,7 +572,10 @@ export const router = createBrowserRouter(
                                 {
                                     path: "prospectos_digitales",
                                     element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                        <RequirePermission
+                                            anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}
+                                            anyOfRoles={["Asesor Digital", "Asesor General"]}
+                                        >
                                             <ProspectosDigitales />
                                         </RequirePermission>
                                     ),
@@ -571,7 +583,10 @@ export const router = createBrowserRouter(
                                 {
                                     path: "citas",
                                     element: (
-                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}>
+                                        <RequirePermission
+                                            anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "ALL"]}
+                                            anyOfRoles={["Asesor Digital", "Asesor General"]}
+                                        >
                                             <Citas />
                                         </RequirePermission>
                                     ),

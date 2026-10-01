@@ -11,6 +11,10 @@ export default function GestionTopNav() {
     const { hasAnyPermission, user } = useAuth();
     // Si la interfaz "gestion_negocio" está activada manualmente, mostrar todos los submódulos.
     const gestionActivo = interfazActivada(user, "gestion_negocio");
+    // Rol "Asesor Digital" y "Asesor General": ver únicamente Prospectos Digitales y Citas.
+    const esAsesorDigital = ["asesor digital", "asesor general"].includes(
+        String(user?.rol || "").trim().toLowerCase()
+    );
 
     const tabs = [
         {
@@ -23,7 +27,7 @@ export default function GestionTopNav() {
             label: "Autos Nuevos",
             to: "/gestion_negocio/autos_nuevos",
             icon: CarFront,
-            show: true,
+            show: gestionActivo || !esAsesorDigital,
         },
         {
             label: "Prospectos Digitales",
@@ -41,19 +45,19 @@ export default function GestionTopNav() {
             label: "Ingresos de Piso",
             to: "/gestion_negocio/ingresos_piso",
             icon: Users,
-            show: true,
+            show: gestionActivo || !esAsesorDigital,
         },
         {
             label: "Pruebas de Manejo",
             to: "/gestion_negocio/pruebas_manejo",
             icon: Users,
-            show: true,
+            show: gestionActivo || !esAsesorDigital,
         },
         {
             label: "Solicitudes de Crédito",
             to: "/gestion_negocio/solicitudes_credito",
             icon: Users,
-            show: true,
+            show: gestionActivo || !esAsesorDigital,
         },
     ].filter((tab) => tab.show);
     return (

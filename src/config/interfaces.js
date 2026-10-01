@@ -47,6 +47,7 @@ export const INTERFACES = [
         label: "Gestión de Negocio",
         icon: BanknoteArrowUp,
         permisos: ["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"],
+        roles: ["Asesor Digital", "Asesor General"],
     },
     {
         key: "partes",
@@ -244,11 +245,18 @@ export function tieneAlgunPermiso(permisos = [], permitidos = []) {
 // Interfaz visible: respeta el override manual del usuario (user.interfaces)
 // o, si no hay override, los permisos. Con permiso ALL (administradores)
 // el menú siempre se muestra completo.
-export function interfazVisible(item, permisos = [], interfaces = null) {
+export function interfazVisible(item, permisos = [], interfaces = null, rol = "") {
     if (item.alwaysOn) return true;
     if (permisos.includes("ALL")) return true;
     if (Array.isArray(interfaces)) {
         return interfaces.includes(item.key);
+    }
+    // Visible por rol (independiente de permisos); p. ej. "Asesor Digital".
+    if (Array.isArray(item.roles)) {
+        const rolNorm = String(rol || "").trim().toLowerCase();
+        if (item.roles.some((r) => String(r).trim().toLowerCase() === rolNorm)) {
+            return true;
+        }
     }
     return tieneAlgunPermiso(permisos, item.permisos);
 }

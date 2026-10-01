@@ -198,7 +198,8 @@ export default function Sidebar() {
                 interfazVisible(
                     item,
                     user?.permisos || [],
-                    interfacesUsuario
+                    interfacesUsuario,
+                    rolUsuario
                 )
             )
             .map((item) => ({
@@ -207,7 +208,7 @@ export default function Sidebar() {
                 label: item.label,
                 icon: item.icon,
             }));
-    }, [user]);
+    }, [user, rolUsuario]);
 
     const sections = useMemo(() => {
         return SECTION_ORDER

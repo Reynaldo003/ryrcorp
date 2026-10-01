@@ -9,6 +9,12 @@ function tieneAlguno(permisos = [], permitidos = []) {
     return permitidos.some((permiso) => permisos.includes(permiso));
 }
 
+function tieneRolAlguno(rol, permitidos = []) {
+    const rolNorm = String(rol || "").trim().toLowerCase();
+
+    return permitidos.some((r) => String(r).trim().toLowerCase() === rolNorm);
+}
+
 // True si la ruta actual pertenece a la interfaz (route prefix match).
 function rutaPerteneceAInterfaz(pathname, item) {
     if (item.to === "/") return pathname === "/";
@@ -82,7 +88,7 @@ export function obtenerRutaInicialPorUsuario(user) {
     return "/";
 }
 
-export default function RequirePermission({ anyOf = [], children }) {
+export default function RequirePermission({ anyOf = [], anyOfRoles = [], children }) {
     const { user, ready } = useAuth();
     const location = useLocation();
 
@@ -90,13 +96,13 @@ export default function RequirePermission({ anyOf = [], children }) {
         return null;
     }
 
-    if (!anyOf.length) {
+    if (!anyOf.length && !anyOfRoles.length) {
         return children;
     }
 
     const permisos = user?.permisos || [];
     const interfaces = user?.interfaces;
-    const autorizado = tieneAlguno(permisos, anyOf);
+    const autorizado = tieneAlguno(permisos, anyOf) || tieneRolAlguno(user?.rol, anyOfRoles);
 
     // Usuarios con interfaces manuales: se autoriza si la ruta pertenece a
     // una interfaz habilitada (mismo criterio que usa el sidebar).
