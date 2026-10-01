@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Package } from "lucide-react";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -24,11 +24,11 @@ export default function PostVentaTopNav() {
                 label: "Envio de Encuestas",
                 href: "/encuesta_whats/envio_satisfaccion",
                 icon: Package,
-                show: encuestaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA"]),
+                show: submoduloVisible(user, "encuesta_whats", "envio_satisfaccion", encuestaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA"])),
             },
         ];
         return items.filter((x) => x.show);
-    }, [hasAnyPermission, canSeeContacto, inProspectos, encuestaActivo]);
+    }, [hasAnyPermission, canSeeContacto, inProspectos, encuestaActivo, user]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

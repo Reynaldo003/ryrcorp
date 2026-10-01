@@ -3,7 +3,7 @@ import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, C
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -21,43 +21,43 @@ export default function GestionTopNav() {
             label: "Inventario",
             to: "/gestion_negocio/inventario",
             icon: LayoutList,
-            show: gestionActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: submoduloVisible(user, "gestion_negocio", "inventario", gestionActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
         {
             label: "Autos Nuevos",
             to: "/gestion_negocio/autos_nuevos",
             icon: CarFront,
-            show: gestionActivo || !esAsesorDigital,
+            show: submoduloVisible(user, "gestion_negocio", "autos_nuevos", gestionActivo || !esAsesorDigital),
         },
         {
             label: "Prospectos Digitales",
             to: "/gestion_negocio/prospectos_digitales",
             icon: Users,
-            show: true,
+            show: submoduloVisible(user, "gestion_negocio", "prospectos_digitales", true),
         },
         {
             label: "Citas",
             to: "/gestion_negocio/citas",
             icon: Users,
-            show: true,
+            show: submoduloVisible(user, "gestion_negocio", "citas", true),
         },
         {
             label: "Ingresos de Piso",
             to: "/gestion_negocio/ingresos_piso",
             icon: Users,
-            show: gestionActivo || !esAsesorDigital,
+            show: submoduloVisible(user, "gestion_negocio", "ingresos_piso", gestionActivo || !esAsesorDigital),
         },
         {
             label: "Pruebas de Manejo",
             to: "/gestion_negocio/pruebas_manejo",
             icon: Users,
-            show: gestionActivo || !esAsesorDigital,
+            show: submoduloVisible(user, "gestion_negocio", "pruebas_manejo", gestionActivo || !esAsesorDigital),
         },
         {
             label: "Solicitudes de Crédito",
             to: "/gestion_negocio/solicitudes_credito",
             icon: Users,
-            show: gestionActivo || !esAsesorDigital,
+            show: submoduloVisible(user, "gestion_negocio", "solicitudes_credito", gestionActivo || !esAsesorDigital),
         },
     ].filter((tab) => tab.show);
     return (

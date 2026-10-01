@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { CreditCard, CarFront } from "lucide-react";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -48,22 +48,22 @@ export default function FinancierosTopNav() {
                 label: "Solicitudes Crédito",
                 href: "/financieros/credito",
                 icon: CreditCard,
-                show: financierosActivo || hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosDigitales),
+                show: submoduloVisible(user, "financieros", "credito", financierosActivo || hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosDigitales)),
             },
             {
                 label: "Long Drive",
                 href: "/financieros/long_drive",
                 icon: CarFront,
-                show: financierosActivo || hasAnyPermission(permisosFinancieros),
+                show: submoduloVisible(user, "financieros", "long_drive", financierosActivo || hasAnyPermission(permisosFinancieros)),
             },
             {
                 label: "Documentacion",
                 href: "/financieros/documentacion",
                 icon: CarFront,
-                show: financierosActivo || hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosPiso),
+                show: submoduloVisible(user, "financieros", "documentacion", financierosActivo || hasAnyPermission(permisosFinancieros) || hasAnyPermission(permisosPiso)),
             },
         ].filter((item) => item.show);
-    }, [hasAnyPermission, financierosActivo]);
+    }, [hasAnyPermission, financierosActivo, user]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

@@ -10,7 +10,7 @@ import {
 
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -43,30 +43,30 @@ export default function Topbar({
                 label: "Pedidos de Piezas",
                 href: "/postventa/pedidos_piezas",
                 icon: Package,
-                show: postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
+                show: submoduloVisible(user, "postventa", "pedidos_piezas", postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",])),
             },
             {
                 label: "Hoja de Ingresos",
                 href: "/postventa/hoja_ingresos",
                 icon: DoorOpen,
-                show: postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER",]),
+                show: submoduloVisible(user, "postventa", "hoja_ingresos", postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER",])),
             },
             {
                 label: "Panel Taller",
                 href: "/postventa/taller",
                 icon: Wrench,
-                show: postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
+                show: submoduloVisible(user, "postventa", "taller", postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",])),
             },
             {
                 label: "Safety Culture",
                 href: "/postventa/safety",
                 icon: ShieldCheck,
-                show: postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",]),
+                show: submoduloVisible(user, "postventa", "safety", postventaActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD",])),
             },
         ];
 
         return items.filter((item) => item.show);
-    }, [hasAnyPermission, postventaActivo]);
+    }, [hasAnyPermission, postventaActivo, user]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

@@ -5,7 +5,7 @@ import { Globe, CalendarDays, Building2, createLucideIcon, MessageCircle, Bankno
 import vwDark from "../../assets/vw_dark.png";
 import { steeringWheel } from "@lucide/lab";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 const SteeringWheelLab = createLucideIcon("SteeringWheelLab", steeringWheel);
@@ -39,24 +39,24 @@ export default function ComercialTopNav() {
                 label: "Avaluos",
                 href: "/usados/avaluos",
                 icon: BanknoteArrowUp,
-                show: usadosActivo || hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_VALUADOR"]),
+                show: submoduloVisible(user, "usados", "avaluos", usadosActivo || hasAnyPermission(["CRM_DIGITALES", "USUARIOS_ADMIN", "CRM_VENTAS", "CRM_CALIDAD", "CRM_VALUADOR"])),
             },
             {
                 label: "Valuaciones",
                 href: "/usados/valuaciones",
                 icon: Users,
-                show: true,
+                show: submoduloVisible(user, "usados", "valuaciones", true),
             },
             {
                 label: "Inventario",
                 href: "/usados/inventario",
                 icon: LayoutList,
-                show: usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_VALUADOR"]),
+                show: submoduloVisible(user, "usados", "inventario", usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_VALUADOR"])),
             },
         ];
 
         return items.filter((x) => x.show);
-    }, [hasAnyPermission, canSeeContacto, inProspectos, usadosActivo]);
+    }, [hasAnyPermission, canSeeContacto, inProspectos, usadosActivo, user]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

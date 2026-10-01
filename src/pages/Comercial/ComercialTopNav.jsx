@@ -20,7 +20,7 @@ import {
 import vwDark from "../../assets/vw_dark.png";
 import { steeringWheel } from "@lucide/lab";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -68,102 +68,102 @@ export default function ComercialTopNav() {
                 label: "Prospectos",
                 href: "/comercial/prospectos",
                 icon: Globe,
-                show: comercialActivo || hasAnyPermission([
+                show: submoduloVisible(user, "comercial", "prospectos", comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL"
-                ]),
+                ])),
             },
             {
                 label: "Plantillas",
                 href: "/comercial/prospectos/plantillas",
                 icon: LayoutPanelTop,
-                show: (comercialActivo || canSeeContacto) && inProspectos,
+                show: submoduloVisible(user, "comercial", "plantillas", (comercialActivo || canSeeContacto) && inProspectos),
             },
             {
                 label: "Contacto",
                 href: "/comercial/prospectos/contacto",
                 icon: MessageCircle,
-                show: (comercialActivo || canSeeContacto) && inProspectos,
+                show: submoduloVisible(user, "comercial", "contacto", (comercialActivo || canSeeContacto) && inProspectos),
             },
             {
                 label: "Bandeja",
                 href: "/comercial/prospectos/bandeja",
                 icon: KanbanSquare,
-                show: (comercialActivo || canSeeContacto) && inProspectos,
+                show: submoduloVisible(user, "comercial", "bandeja", (comercialActivo || canSeeContacto) && inProspectos),
             },
             {
                 label: "Rendimiento Digital",
                 href: "/comercial/prospectos/rendimiento_digitales",
                 icon: ChartNoAxesCombined,
-                show: (comercialActivo || canSeeRendimiento) && inProspectos,
+                show: submoduloVisible(user, "comercial", "rendimiento_digitales", (comercialActivo || canSeeRendimiento) && inProspectos),
             },
             {
                 label: "Citas",
                 href: "/comercial/citas",
                 icon: CalendarDays,
-                show: comercialActivo || hasAnyPermission([
+                show: submoduloVisible(user, "comercial", "citas", comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL",
-                ]),
+                ])),
             },
             {
                 label: "Tráfico piso",
                 href: "/comercial/trafico_piso",
                 icon: UsersRound,
-                show: comercialActivo || hasAnyPermission([
+                show: submoduloVisible(user, "comercial", "trafico_piso", comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL",
-                ]),
+                ])),
             },
             {
                 label: "Pruebas",
                 href: "/comercial/pruebas_manejo",
                 icon: SteeringWheelLab,
-                show: comercialActivo || hasAnyPermission([
+                show: submoduloVisible(user, "comercial", "pruebas_manejo", comercialActivo || hasAnyPermission([
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL",
                     "CRM_DIGITALES",
-                ]),
+                ])),
             },
             {
                 label: "Entregas",
                 href: "/comercial/entregas",
                 icon: PackageCheck,
-                show: comercialActivo || hasAnyPermission([
+                show: submoduloVisible(user, "comercial", "entregas", comercialActivo || hasAnyPermission([
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_CALL_CENTER",
                     "CRM_COORDINADOR_DIGITAL",
                     "CRM_DIGITALES",
-                ]),
+                ])),
             },
             {
                 label: "Campañas Meta",
                 href: "/comercial/campanas_meta",
                 icon: BarChart2,
-                show: comercialActivo || hasAnyPermission([
+                show: submoduloVisible(user, "comercial", "campanas_meta", comercialActivo || hasAnyPermission([
                     "CRM_DIGITALES",
                     "CRM_VENTAS",
                     "USUARIOS_ADMIN",
                     "CRM_CALIDAD",
                     "CRM_COORDINADOR_DIGITAL",
-                ]),
+                ])),
             },
         ];
 
         return items.filter((item) => item.show);
-    }, [hasAnyPermission, canSeeContacto, canSeeRendimiento, inProspectos, comercialActivo]);
+    }, [hasAnyPermission, canSeeContacto, canSeeRendimiento, inProspectos, comercialActivo, user]);
 
     const isActive = (href) => {
         /**

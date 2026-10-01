@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 import { BadgeCheck, ShieldCheck, Cog, ThumbsUp, UndoDot, ClipboardPenLine, Wrench, Store, ClipboardX } from "lucide-react";
 
 const BRAND_BLUE = "#131E5C";
@@ -20,47 +20,47 @@ export default function CalidadTopNav() {
                 label: "Reclamaciones",
                 href: "/calidad/reclamaciones",
                 icon: BadgeCheck,
-                show: calidadActivo || hasAnyPermission(["CRM_RECLAMACIONES", "USUARIOS_ADMIN", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "reclamaciones", calidadActivo || hasAnyPermission(["CRM_RECLAMACIONES", "USUARIOS_ADMIN", "CRM_CALIDAD"])),
             },
             {
                 label: "Experiencia de Entrega",
                 href: "/calidad/enc_satisfaccion",
                 icon: ThumbsUp,
-                show: calidadActivo || hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "enc_satisfaccion", calidadActivo || hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"])),
             },
             {
                 label: "Experiencia de Piso",
                 href: "/calidad/enc_piso",
                 icon: Store,
-                show: calidadActivo || hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "enc_piso", calidadActivo || hasAnyPermission(["CRM_DIGITALES", "CRM_VENTAS", "USUARIOS_ADMIN", "CRM_CALIDAD"])),
             },
             {
                 label: "Experiencia de Servicio",
                 href: "/calidad/enc_servicio",
                 icon: Cog,
-                show: calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "enc_servicio", calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD"])),
             },
             {
                 label: "Encuestas JD Power",
                 href: "/calidad/jdpower",
                 icon: ClipboardPenLine,
-                show: calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "jdpower", calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD"])),
             },
             {
                 label: "JD Power Servicio",
                 href: "/calidad/jdpower-servicio",
                 icon: Wrench,
-                show: calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "jdpower-servicio", calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD"])),
             },
             {
                 label: "No Conformidad",
                 href: "/calidad/no-conformidad",
                 icon: ClipboardX,
-                show: calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"]),
+                show: submoduloVisible(user, "calidad", "no-conformidad", calidadActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD"])),
             },
         ];
         return items.filter((x) => x.show);
-    }, [hasAnyPermission, calidadActivo]);
+    }, [hasAnyPermission, calidadActivo, user]);
 
     const isActive = (href) => location.pathname.startsWith(href);
 

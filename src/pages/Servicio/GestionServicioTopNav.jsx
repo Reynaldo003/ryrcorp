@@ -3,7 +3,7 @@ import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, C
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -17,13 +17,13 @@ export default function GestionTopNav() {
             label: "Presupuestos de Servicio",
             to: "/servicio/presupuestos",
             icon: LayoutList,
-            show: servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: submoduloVisible(user, "servicio", "presupuestos", servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
         {
             label: "GOTA - Órdenes de Taller",
             to: "/servicio/gota",
             icon: Wrench,
-            show: servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: submoduloVisible(user, "servicio", "gota", servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
     ].filter((tab) => tab.show);
     return (

@@ -10,7 +10,7 @@ import flags from "react-phone-number-input/flags";
 import "react-phone-number-input/style.css";
 import { useAuth } from "../auth/AuthContext";
 import { ensureFreshAccessToken } from "../lib/apiPruebas";
-import { INTERFACES, SECTION_ORDER, interfacesDesdePermisos } from "../config/interfaces";
+import { INTERFACES, SECTION_ORDER, interfacesDesdePermisos, SUBMODULOS_POR_INTERFAZ } from "../config/interfaces";
 
 const API = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
 const AGENCIAS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
@@ -655,8 +655,14 @@ function UserModal({
     const interfacesIniciales = useMemo(
         () => {
             if (Array.isArray(user?.interfaces)) {
-                return user.interfaces.filter(key =>
-                    INTERFACES.some(item => item.key === key)
+                // Conserva el módulo base y las claves de submódulos conocidas.
+                return user.interfaces.filter(clave =>
+                    INTERFACES.some(item =>
+                        item.key === clave ||
+                        (SUBMODULOS_POR_INTERFAZ[item.key] || []).some(
+                            sub => `${item.key}:${sub.key}` === clave
+                        )
+                    )
                 );
             }
 
@@ -671,11 +677,108 @@ function UserModal({
     const [interfacesSel, setInterfacesSel] =
         useState(interfacesIniciales);
 
+    // Módulos desplegados (acordeón). Por defecto se abren los que tienen
+    // claves compuestas activas (desglose parcial).
+    const [expandidos, setExpandidos] = useState(() => {
+        const inicial = new Set();
+
+        interfacesIniciales.forEach(clave => {
+            const idx = clave.indexOf(":");
+            if (idx > 0) inicial.add(clave.slice(0, idx));
+        });
+
+        return inicial;
+    });
+
+    const toggleExpandido = (key) => {
+        setExpandidos(prev => {
+            const next = new Set(prev);
+
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+
+            return next;
+        });
+    };
+
     const toggleInterfaz = (key) => {
         setInterfacesSel(prev =>
             prev.includes(key)
-                ? prev.filter(item => item !== key)
-                : [...prev, key]
+                ? prev.filter(item => item !== key && !item.startsWith(`${key}:`))
+                : [
+                      ...prev.filter(item => !item.startsWith(`${key}:`)),
+                      key,
+                  ]
+        );
+    };
+
+    // (Des)marca un submódulo de un módulo. Al marcar el módulo completo
+    // primero, pasa a lista compuesta automáticamente para permitir el desglose.
+    const toggleSubmodulo = (interfazKey, submoduloKey) => {
+        const compuesta = `${interfazKey}:${submoduloKey}`;
+
+        setInterfacesSel(prev => {
+            const baseActiva = prev.includes(interfazKey);
+            const compuestaActiva = prev.includes(compuesta);
+
+            if (baseActiva) {
+                // Módulo completo activo: expandir a todos los submódulos
+                // y desmarcar solo el seleccionado.
+                const todos = SUBMODULOS_POR_INTERFAZ[interfazKey] || [];
+                const otras =
+                    todos
+                        .filter(sub => sub.key !== submoduloKey)
+                        .map(sub => `${interfazKey}:${sub.key}`) || [];
+
+                return [
+                    ...prev.filter(
+                        p =>
+                            p !== interfazKey &&
+                            !p.startsWith(`${interfazKey}:`)
+                    ),
+                    ...otras,
+                ];
+            }
+
+            if (compuestaActiva) {
+                return prev.filter(p => p !== compuesta);
+            }
+
+            // Si marca todos los submódulos del módulo, usar clave base.
+            const todos = SUBMODULOS_POR_INTERFAZ[interfazKey] || [];
+            const errores = todos.some(
+                sub =>
+                    sub.key !== submoduloKey &&
+                    !prev.includes(`${interfazKey}:${sub.key}`)
+            );
+
+            if (!errores) {
+                return [
+                    ...prev.filter(
+                        p => !p.startsWith(`${interfazKey}:`)
+                    ),
+                    interfazKey,
+                ];
+            }
+
+            return [...prev, compuesta];
+        });
+    };
+
+    // Marca todos los submódulos (vuelve a clave base) o quita el módulo completo.
+    const marcarTodos = (key) => {
+        setInterfacesSel(prev => [
+            ...prev.filter(p => p !== key && !p.startsWith(`${key}:`)),
+            key,
+        ]);
+    };
+
+    const quitarModulo = (key) => {
+        setInterfacesSel(prev =>
+            prev.filter(p => p !== key && !p.startsWith(`${key}:`))
         );
     };
 
@@ -1118,8 +1221,8 @@ function UserModal({
                         Inicio siempre es visible.
                     </div>
 
-                    {interfacesManual && (
-                        <div className="crm-interface-groups">
+{interfacesManual && (
+                        <div className="crm-perm">
                             {SECTION_ORDER.map(section => {
                                 const items =
                                     interfacesConfigurables.filter(
@@ -1133,50 +1236,219 @@ function UserModal({
                                 return (
                                     <div
                                         key={section}
-                                        className="crm-interface-group"
+                                        className="crm-perm-section"
                                     >
-                                        <div className="crm-interface-group-title">
+                                        <div className="crm-perm-section-title">
                                             {section}
                                         </div>
 
-                                        <div className="crm-interface-list">
-                                            {items.map(item => {
+                                        <div className="crm-perm-grid">
+{items.map(item => {
                                                 const Icon = item.icon;
                                                 const checked =
                                                     interfacesSel.includes(
                                                         item.key
                                                     );
+                                                const submodulos =
+                                                    SUBMODULOS_POR_INTERFAZ[
+                                                        item.key
+                                                    ] || [];
+                                                const expandido =
+                                                    expandidos.has(
+                                                        item.key
+                                                    );
+                                                const subActivos =
+                                                    submodulos.filter(
+                                                        sub =>
+                                                            checked ||
+                                                            interfacesSel.includes(
+                                                                `${item.key}:${sub.key}`
+                                                            )
+                                                    ).length;
+                                                const parcial =
+                                                    submodulos.length >
+                                                        0 &&
+                                                    !checked &&
+                                                    subActivos > 0;
 
                                                 return (
-                                                    <label
+                                                    <div
                                                         key={item.key}
                                                         className={
-                                                            "crm-interface-item" +
-                                                            (checked
-                                                                ? " checked"
+                                                            "crm-perm-wrap" +
+                                                            (expandido
+                                                                ? " open"
+                                                                : "") +
+                                                            (checked ||
+                                                                subActivos >
+                                                                    0
+                                                                ? " enabled"
                                                                 : "")
                                                         }
                                                     >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={
-                                                                checked
-                                                            }
-                                                            onChange={() =>
-                                                                toggleInterfaz(
-                                                                    item.key
-                                                                )
-                                                            }
-                                                        />
+                                                        <div className="crm-perm-card">
+                                                            <div className="crm-perm-card-head">
+                                                                <label
+                                                                    className="crm-perm-check"
+                                                                    onClick={e =>
+                                                                        e.stopPropagation()
+                                                                    }
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={
+                                                                            checked
+                                                                        }
+                                                                        onChange={() =>
+                                                                            toggleInterfaz(
+                                                                                item.key
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <span
+                                                                        className="crm-perm-checkbox"
+                                                                        aria-hidden
+                                                                    />
+                                                                </label>
 
-                                                        <span className="crm-interface-icon">
-                                                            <Icon size={16} />
-                                                        </span>
+                                                                <span className="crm-perm-icon">
+                                                                    <Icon
+                                                                        size={16}
+                                                                    />
+                                                                </span>
 
-                                                        <span className="crm-interface-label">
-                                                            {item.label}
-                                                        </span>
-                                                    </label>
+                                                                <span className="crm-perm-label">
+                                                                    {item.label}
+                                                                </span>
+
+                                                                {submodulos.length >
+                                                                    0 && (
+                                                                    <span
+                                                                        className={
+                                                                            "crm-perm-pill" +
+                                                                            (checked
+                                                                                ? " full"
+                                                                                : parcial
+                                                                                  ? " partial"
+                                                                                  : "")
+                                                                        }
+                                                                    >
+                                                                        {checked
+                                                                            ? "Completo"
+                                                                            : `${subActivos}/${submodulos.length}`}
+                                                                    </span>
+                                                                )}
+
+                                                                {submodulos.length >
+                                                                    0 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="crm-perm-chev"
+                                                                        onClick={e => {
+                                                                            e.stopPropagation();
+                                                                            toggleExpandido(
+                                                                                item.key
+                                                                            );
+                                                                        }}
+                                                                        aria-expanded={
+                                                                            expandido
+                                                                        }
+                                                                        aria-label={
+                                                                            expandido
+                                                                                ? "Contraer submódulos"
+                                                                                : "Expandir submódulos"
+                                                                        }
+                                                                    >
+                                                                        <ChevronDown
+                                                                            size={16}
+                                                                        />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {submodulos.length >
+                                                            0 && (
+                                                            <div className="crm-perm-subpanel">
+                                                                <div className="crm-perm-subpanel-head">
+                                                                    <span className="crm-perm-subpanel-title">
+                                                                        Submodulos Visibles Por Usuario
+                                                                    </span>
+                                                                    <div className="crm-perm-subpanel-actions">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                marcarTodos(
+                                                                                    item.key
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            Todos
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                quitarModulo(
+                                                                                    item.key
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            Ninguno
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="crm-perm-subs">
+                                                                    {submodulos.map(
+                                                                        sub => {
+                                                                            const subCompuesto = `${item.key}:${sub.key}`;
+                                                                            const subChecked =
+                                                                                checked ||
+                                                                                interfacesSel.includes(
+                                                                                    subCompuesto
+                                                                                );
+
+                                                                            return (
+                                                                                <label
+                                                                                    key={
+                                                                                        sub.key
+                                                                                    }
+                                                                                    className={
+                                                                                        "crm-perm-sub" +
+                                                                                        (subChecked
+                                                                                            ? " checked"
+                                                                                            : "")
+                                                                                    }
+                                                                                >
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={
+                                                                                            subChecked
+                                                                                        }
+                                                                                        onChange={() =>
+                                                                                            toggleSubmodulo(
+                                                                                                item.key,
+                                                                                                sub.key
+                                                                                            )
+                                                                                        }
+                                                                                    />
+                                                                                    <span
+                                                                                        className="crm-perm-checkbox"
+                                                                                        aria-hidden
+                                                                                    />
+                                                                                    <span className="crm-perm-sub-label">
+                                                                                        {
+                                                                                            sub.label
+                                                                                        }
+                                                                                    </span>
+                                                                                </label>
+                                                                            );
+                                                                        }
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>
@@ -2550,72 +2822,313 @@ function GlobalStyles() {
         color: #1d4ed8;
       }
 
-      .crm-interface-groups {
-        margin-top: 4px;
+      .crm-perm {
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 16px;
+        margin-top: 4px;
       }
 
-      .crm-interface-group-title {
+      .crm-perm-section-title {
         font-size: 11px;
         font-weight: 800;
         color: #94a3b8;
         text-transform: uppercase;
         letter-spacing: .06em;
         margin-bottom: 8px;
+        padding: 0 2px;
       }
 
-      .crm-interface-list {
+      .crm-perm-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 8px;
+        grid-template-columns: 1fr;
+        gap: 12px;
       }
 
-      .crm-interface-item {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 9px 11px;
+      .crm-perm-card {
         border: 1.5px solid #e2e8f0;
-        border-radius: 11px;
+        border-radius: 12px;
         background: #fff;
-        cursor: pointer;
-        font-size: 12.5px;
-        font-weight: 600;
-        color: #334155;
-        transition: all .15s ease;
-        font-family: inherit;
+        overflow: hidden;
+        transition: border-color .15s ease, box-shadow .15s ease;
       }
 
-      .crm-interface-item:hover {
+      .crm-perm-card:hover {
+        border-color: #c7d7f7;
+      }
+
+      .crm-perm-wrap.open .crm-perm-card {
+        border-color: #94b8ee;
+        box-shadow: 0 2px 10px rgba(37, 99, 235, .08);
+      }
+
+      .crm-perm-wrap.enabled .crm-perm-card {
         border-color: #bfdbfe;
       }
 
-      .crm-interface-item.checked {
+      .crm-perm-card-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 11px 12px;
+        background: #fff;
+        transition: background .15s ease;
+      }
+
+      .crm-perm-wrap.open .crm-perm-card-head {
+        background: #f5f9ff;
+      }
+
+      .crm-perm-wrap.enabled .crm-perm-card-head {
+        background: #f8fbff;
+      }
+
+      .crm-perm-check {
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .crm-perm-check input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+      }
+
+      .crm-perm-checkbox {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #cbd5e1;
+        border-radius: 6px;
+        background: #fff;
+        transition: all .15s ease;
+        flex: 0 0 auto;
+      }
+
+      .crm-perm-checkbox::after {
+        content: "";
+        width: 10px;
+        height: 6px;
+        border-left: 2.5px solid transparent;
+        border-bottom: 2.5px solid transparent;
+        transform: rotate(-45deg) translate(1px, -1px) scale(0);
+        transition: all .15s ease;
+      }
+
+      .crm-perm-check input:checked + .crm-perm-checkbox {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+
+      .crm-perm-check input:checked + .crm-perm-checkbox::after {
+        border-color: #fff;
+        transform: rotate(-45deg) translate(0, -1px) scale(1);
+      }
+
+      .crm-perm-check:hover .crm-perm-checkbox {
+        border-color: #2563eb;
+      }
+
+      .crm-perm-icon {
+        display: inline-flex;
+        color: #64748b;
+        flex: 0 0 auto;
+        transition: color .15s ease;
+      }
+
+      .crm-perm-wrap.open .crm-perm-icon,
+      .crm-perm-wrap.enabled .crm-perm-icon {
+        color: #1d4ed8;
+      }
+
+      .crm-perm-label {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .crm-perm-pill {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        transition: all .15s ease;
+      }
+
+      .crm-perm-pill.partial {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .crm-perm-pill.full {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .crm-perm-chev {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 9px;
+        background: #fff;
+        color: #64748b;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all .15s ease;
+      }
+
+      .crm-perm-chev:hover {
+        border-color: #2563eb;
+        color: #1d4ed8;
+        background: #eff6ff;
+      }
+
+      .crm-perm-chev svg {
+        transition: transform .2s ease;
+      }
+
+      .crm-perm-wrap.open .crm-perm-chev svg {
+        transform: rotate(180deg);
+      }
+
+      .crm-perm-subpanel {
+        display: none;
+        flex-direction: column;
+        border: 1.5px solid #dbeafe;
+        border-radius: 12px;
+        background: #f8faff;
+        overflow: hidden;
+      }
+
+      .crm-perm-wrap.open .crm-perm-subpanel {
+        display: flex;
+      }
+
+      .crm-perm-subpanel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 9px 12px;
+        background: #eef4ff;
+        border-bottom: 1px solid #dbeafe;
+      }
+
+      .crm-perm-subpanel-title {
+        font-size: 11.5px;
+        font-weight: 800;
+        color: #1d4ed8;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+      }
+
+      .crm-perm-subpanel-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .crm-perm-subpanel-actions button {
+        padding: 3px 10px;
+        border: 1px solid #bfdbfe;
+        border-radius: 999px;
+        background: #fff;
+        color: #1d4ed8;
+        font-size: 10.5px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all .15s ease;
+      }
+
+      .crm-perm-subpanel-actions button:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+      }
+
+      .crm-perm-subs {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 7px;
+        padding: 10px 12px;
+      }
+
+      .crm-perm-sub {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 11px;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        color: #475569;
+        transition: all .15s ease;
+        font-family: inherit;
+        position: relative;
+      }
+
+      .crm-perm-sub:hover {
+        border-color: #bfdbfe;
+        background: #fff;
+      }
+
+      .crm-perm-sub.checked {
         background: #eff6ff;
         border-color: #2563eb;
         color: #1d4ed8;
+        font-weight: 600;
       }
 
-      .crm-interface-item input {
-        accent-color: #2563eb;
-        width: 15px;
-        height: 15px;
-        margin: 0;
+      .crm-perm-sub input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none;
       }
 
-      .crm-interface-icon {
-        display: inline-flex;
-        color: #64748b;
+      .crm-perm-sub .crm-perm-checkbox {
+        width: 17px;
+        height: 17px;
+        border-radius: 5px;
+        border-width: 1.5px;
       }
 
-      .crm-interface-item.checked .crm-interface-icon {
-        color: #1d4ed8;
+      .crm-perm-sub .crm-perm-checkbox::after {
+        width: 9px;
+        height: 5px;
       }
 
-      .crm-interface-label {
+      .crm-perm-sub-label {
         min-width: 0;
+      }
+
+      @media (max-width: 720px) {
+        .crm-perm-grid {
+          grid-template-columns: 1fr;
+        }
       }
 
       .crm-profile-banner {

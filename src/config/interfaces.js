@@ -249,7 +249,12 @@ export function interfazVisible(item, permisos = [], interfaces = null, rol = ""
     if (item.alwaysOn) return true;
     if (permisos.includes("ALL")) return true;
     if (Array.isArray(interfaces)) {
-        return interfaces.includes(item.key);
+        if (interfaces.includes(item.key)) return true;
+
+        // Si tiene submódulos del catálogo activos, el módulo es visible.
+        return submodulosDeInterfaz(item.key).some((sub) =>
+            interfaces.includes(`${item.key}:${sub.key}`)
+        );
     }
     // Visible por rol (independiente de permisos); p. ej. "Asesor Digital".
     if (Array.isArray(item.roles)) {
@@ -269,4 +274,112 @@ export function interfacesDesdePermisos(permisos = []) {
 // true si el usuario tiene la interfaz manual activada (clave del catálogo).
 export function interfazActivada(user, key) {
     return Array.isArray(user?.interfaces) && user.interfaces.includes(key);
+}
+
+// Catálogo de submódulos (pestañas) por interfaz.
+// La clave de un submódulo se almacena como "<interfaz>:<submodulo>".
+export const SUBMODULOS_POR_INTERFAZ = {
+    gestion_negocio: [
+        { key: "inventario", label: "Inventario", to: "/gestion_negocio/inventario" },
+        { key: "autos_nuevos", label: "Autos Nuevos", to: "/gestion_negocio/autos_nuevos" },
+        { key: "prospectos_digitales", label: "Prospectos Digitales", to: "/gestion_negocio/prospectos_digitales" },
+        { key: "citas", label: "Citas", to: "/gestion_negocio/citas" },
+        { key: "ingresos_piso", label: "Ingresos de Piso", to: "/gestion_negocio/ingresos_piso" },
+        { key: "pruebas_manejo", label: "Pruebas de Manejo", to: "/gestion_negocio/pruebas_manejo" },
+        { key: "solicitudes_credito", label: "Solicitudes de Crédito", to: "/gestion_negocio/solicitudes_credito" },
+    ],
+    partes: [
+        { key: "refacciones_obsolescencia", label: "Obsolescencia de Refacciones", to: "/partes/refacciones_obsolescencia" },
+        { key: "compra_refacciones", label: "Compra de Refacciones", to: "/partes/compra_refacciones" },
+    ],
+    servicio: [
+        { key: "presupuestos", label: "Presupuestos de Servicio", to: "/servicio/presupuestos" },
+        { key: "gota", label: "GOTA - Gestor de Ordenes de Taller Activas", to: "/servicio/gota" },
+    ],
+    usados: [
+        { key: "avaluos", label: "Avaluos", to: "/usados/avaluos" },
+        { key: "valuaciones", label: "Valuaciones", to: "/usados/valuaciones" },
+        { key: "inventario", label: "Inventario", to: "/usados/inventario" },
+    ],
+    calidad: [
+        { key: "reclamaciones", label: "Reclamaciones", to: "/calidad/reclamaciones" },
+        { key: "enc_satisfaccion", label: "Experiencia de Entrega", to: "/calidad/enc_satisfaccion" },
+        { key: "enc_piso", label: "Experiencia de Piso", to: "/calidad/enc_piso" },
+        { key: "enc_servicio", label: "Experiencia de Servicio", to: "/calidad/enc_servicio" },
+        { key: "jdpower", label: "Encuestas JD Power", to: "/calidad/jdpower" },
+        { key: "jdpower-servicio", label: "JD Power Servicio", to: "/calidad/jdpower-servicio" },
+        { key: "no-conformidad", label: "No Conformidad", to: "/calidad/no-conformidad" },
+    ],
+    comercial: [
+        { key: "prospectos", label: "Prospectos", to: "/comercial/prospectos" },
+        { key: "plantillas", label: "Plantillas", to: "/comercial/prospectos/plantillas" },
+        { key: "contacto", label: "Contacto", to: "/comercial/prospectos/contacto" },
+        { key: "bandeja", label: "Bandeja", to: "/comercial/prospectos/bandeja" },
+        { key: "rendimiento_digitales", label: "Rendimiento Digital", to: "/comercial/prospectos/rendimiento_digitales" },
+        { key: "citas", label: "Citas", to: "/comercial/citas" },
+        { key: "trafico_piso", label: "Tráfico piso", to: "/comercial/trafico_piso" },
+        { key: "pruebas_manejo", label: "Pruebas", to: "/comercial/pruebas_manejo" },
+        { key: "entregas", label: "Entregas", to: "/comercial/entregas" },
+        { key: "campanas_meta", label: "Campañas Meta", to: "/comercial/campanas_meta" },
+    ],
+    postventa: [
+        { key: "pedidos_piezas", label: "Pedidos de Piezas", to: "/postventa/pedidos_piezas" },
+        { key: "hoja_ingresos", label: "Hoja de Ingresos", to: "/postventa/hoja_ingresos" },
+        { key: "taller", label: "Panel Taller", to: "/postventa/taller" },
+        { key: "safety", label: "Safety Culture", to: "/postventa/safety" },
+    ],
+    financieros: [
+        { key: "credito", label: "Solicitudes Crédito", to: "/financieros/credito" },
+        { key: "long_drive", label: "Long Drive", to: "/financieros/long_drive" },
+        { key: "documentacion", label: "Documentacion", to: "/financieros/documentacion" },
+    ],
+    encuesta_whats: [
+        { key: "envio_satisfaccion", label: "Envio de Encuestas", to: "/encuesta_whats/envio_satisfaccion" },
+    ],
+    administrativos: [
+        { key: "reclutamiento", label: "Reclutamiento", to: "/administrativos/reclutamiento" },
+        { key: "alta-personal", label: "Alta del Personal", to: "/administrativos/alta-personal" },
+        { key: "puestos", label: "Puestos", to: "/administrativos/puestos" },
+        { key: "ambiente-laboral", label: "Ambiente laboral", to: "/administrativos/ambiente-laboral" },
+    ],
+};
+
+export function submodulosDeInterfaz(key) {
+    return SUBMODULOS_POR_INTERFAZ[key] || [];
+}
+
+// Estado de un submódulo para un usuario con interfaces manuales:
+//   true  => activo (módulo completo o submódulo seleccionado)
+//   false => no activo
+//   null  => el usuario no tiene override manual (usar permisos/rol)
+export function submoduloActivo(user, interfazKey, submoduloKey) {
+    if (!Array.isArray(user?.interfaces)) return null;
+
+    if (user.interfaces.includes(interfazKey)) return true;
+
+    return user.interfaces.includes(`${interfazKey}:${submoduloKey}`);
+}
+
+// Claves compuestas del catálogo presentes en las interfaces del usuario.
+export function clavesCompuestasEnInterfaces(interfaces = []) {
+    const compuestas = new Set();
+
+    for (const [interfazKey, submodulos] of Object.entries(SUBMODULOS_POR_INTERFAZ)) {
+        submodulos.forEach((sub) => {
+            if (interfaces.includes(`${interfazKey}:${sub.key}`)) {
+                compuestas.add(`${interfazKey}:${sub.key}`);
+            }
+        });
+    }
+
+    return [...compuestas];
+}
+
+// Visibilidad de un submódulo para una pestaña del TopNav.
+// Si el usuario NO tiene override manual, usa el fallback (condición de
+// permisos existente). Si lo tiene, decide por el override.
+export function submoduloVisible(user, interfazKey, submoduloKey, fallback = true) {
+    if (!Array.isArray(user?.interfaces)) return fallback;
+
+    return submoduloActivo(user, interfazKey, submoduloKey);
 }

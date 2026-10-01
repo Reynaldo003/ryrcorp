@@ -3,7 +3,7 @@ import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, C
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
-import { interfazActivada } from "../../config/interfaces";
+import { interfazActivada, submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -17,13 +17,13 @@ export default function GestionTopNav() {
             label: "Obsolescencia de Refacciones",
             to: "/partes/refacciones_obsolescencia",
             icon: Cog,
-            show: partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: submoduloVisible(user, "partes", "refacciones_obsolescencia", partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
         {
             label: "Compra de Refacciones",
             to: "/partes/compra_refacciones",
             icon: ShoppingCart,
-            show: partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"]),
+            show: submoduloVisible(user, "partes", "compra_refacciones", partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
     ].filter((tab) => tab.show);
     return (

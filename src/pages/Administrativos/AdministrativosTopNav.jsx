@@ -7,6 +7,8 @@ import {
     UserPlus,
     HeartHandshake,
 } from "lucide-react";import vwDark from "../../assets/vw_dark.png";
+import { useAuth } from "../../auth/AuthContext";
+import { submoduloVisible } from "../../config/interfaces";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -25,6 +27,7 @@ function VWLogo({ logoSrc }) {
 
 export default function AdministrativosTopNav() {
     const location = useLocation();
+    const { user } = useAuth();
 
     const tabs = useMemo(
         () => [
@@ -32,24 +35,28 @@ export default function AdministrativosTopNav() {
                 label: "Reclutamiento",
                 href: "reclutamiento",
                 icon: CalendarCheck2,
+                show: submoduloVisible(user, "administrativos", "reclutamiento", true),
             },
             {
                 label: "Alta del Personal",
                 href: "alta-personal",
                 icon: UserPlus,
+                show: submoduloVisible(user, "administrativos", "alta-personal", true),
             },
             {
                 label: "Puestos",
                 href: "puestos",
                 icon: BriefcaseBusiness,
+                show: submoduloVisible(user, "administrativos", "puestos", true),
             },
             {
                 label: "Ambiente laboral",
                 href: "ambiente-laboral",
                 icon: HeartHandshake,
+                show: submoduloVisible(user, "administrativos", "ambiente-laboral", true),
             },
-        ],
-        []
+        ].filter((t) => t.show),
+        [user]
     );
 
     const isActive = (href) => location.pathname.startsWith(href);
