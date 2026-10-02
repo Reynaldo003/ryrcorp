@@ -1814,15 +1814,15 @@ function DetalleOrden({ orden, onClose }) {
           </button>
         </div>
 
-      {/* Secciones en columnas para ver todo sin tanto scroll */}
-        <div className="columns-1 gap-3 md:columns-2 2xl:columns-3">
+      {/* Secciones apiladas hacia abajo, al ancho completo del contenedor */}
+        <div className="flex flex-col gap-3">
           {secciones.map((seccion) => {
             const Icon = seccion.icono;
 
             return (
               <div
                 key={seccion.titulo}
-                className="mb-3 break-inside-avoid overflow-hidden rounded-lg border border-[#E4E7F0]"
+                className="overflow-hidden rounded-lg border border-[#E4E7F0]"
               >
                 <p className="flex items-center gap-1.5 border-b border-[#E4E7F0] bg-[#F7F8FC] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1677FF]">
                   <Icon className="h-3 w-3 shrink-0" />
@@ -2010,6 +2010,24 @@ function TablaOrdenes({
   const [columnasVisibles, setColumnasVisibles] = useState(columnasGuardadasIniciales);
   const [showColumnas, setShowColumnas] = useState(false);
 
+  /* Ancho visible de la tabla: el detalle de la fila expandida se pega a la
+     izquierda con ese ancho para no obligar a hacer scroll horizontal. */
+  const scrollRef = useRef(null);
+  const [anchoVista, setAnchoVista] = useState(0);
+
+  useEffect(() => {
+    const contenedor = scrollRef.current;
+    if (!contenedor || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver((entradas) => {
+      const entrada = entradas[0];
+      if (entrada) setAnchoVista(Math.round(entrada.contentRect.width));
+    });
+
+    observer.observe(contenedor);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -2156,7 +2174,7 @@ function TablaOrdenes({
       </div>
 
       {/* Tabla */}
-      <div className="max-h-[70vh] min-h-[420px] overflow-auto">
+      <div ref={scrollRef} className="max-h-[70vh] min-h-[420px] overflow-auto">
         <table className="min-w-max border-collapse">
           <thead className="sticky top-0 z-20">
             <tr className="bg-[#131E5C]">
@@ -2313,10 +2331,20 @@ function TablaOrdenes({
                     {expandida && (
                       <tr>
                         <td colSpan={totalColumnas} className="p-0">
-                          <DetalleOrden
-                            orden={fila}
-                            onClose={() => onAlternarFila(clave)}
-                          />
+                          {/* Anclado al borde izquierdo con el ancho visible de
+                              la tabla: el detalle se ve completo sin scroll
+                              horizontal, sin importar cuán ancha sea la tabla. */}
+                          <div
+                            className="sticky left-0 z-10"
+                            style={{
+                              width: anchoVista > 0 ? anchoVista : "100%",
+                            }}
+                          >
+                            <DetalleOrden
+                              orden={fila}
+                              onClose={() => onAlternarFila(clave)}
+                            />
+                          </div>
                         </td>
                       </tr>
                     )}
