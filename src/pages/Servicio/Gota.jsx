@@ -43,12 +43,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Legend,
+  LabelList,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -87,7 +84,7 @@ const ORDEN_RANGOS_ANTIGUEDAD = [
 ];
 
 const PALETA_ANTIGUEDAD = [
-  "#10B981",
+  "#64748B",
   "#22C55E",
   "#F59E0B",
   "#F97316",
@@ -425,100 +422,6 @@ function EtiquetaVacia({ mensaje = "Sin datos para mostrar" }) {
   );
 }
 
-function crearRenderLabel(total) {
-  return function renderLabel({ cx, cy, midAngle, innerRadius, outerRadius, value }) {
-    if (!value) return null;
-
-    const porcentaje = total > 0 ? Math.round((value / total) * 100) : 0;
-    if (porcentaje < 4) return null;
-
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos((-midAngle * Math.PI) / 180);
-    const y = cy + radius * Math.sin((-midAngle * Math.PI) / 180);
-
-    return (
-      <text
-        x={x}
-        y={y}
-        fill="#FFFFFF"
-        textAnchor="middle"
-        dominantBaseline="central"
-        className="text-[10px] font-bold"
-      >
-        {porcentaje}%
-      </text>
-    );
-  };
-}
-
-function VWPieCard({
-  title,
-  subtitle,
-  icon: Icon,
-  action,
-  data = [],
-  height = 300,
-  label,
-  colors = PALETA_VW,
-}) {
-  const total = data.reduce((acc, item) => acc + numero(item.value), 0);
-
-  return (
-    <ChartCard title={title} subtitle={subtitle} icon={Icon} action={action}>
-      {data.length === 0 ? (
-        <EtiquetaVacia />
-      ) : (
-        <ResponsiveContainer width="100%" height={height}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={68}
-              outerRadius={118}
-              labelLine={false}
-              label={crearRenderLabel(total)}
-              paddingAngle={2}
-            >
-              {data.map((item, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={item.color || colors[index % colors.length]}
-                />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value, name) => [
-                `${entero(value)} (${porcentajeDecimal(
-                  total > 0 ? (numero(value) / total) * 100 : 0
-                )}%)`,
-                name,
-              ]}
-              contentStyle={TOOLTIP_STYLE}
-            />
-            <Legend
-              verticalAlign="bottom"
-              height={36}
-              iconSize={8}
-              wrapperStyle={{
-                fontSize: "10px",
-                fontWeight: 600,
-                color: "#475569",
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      )}
-
-      {label && (
-        <p className="mt-2 text-center text-[11px] text-slate-500">{label}</p>
-      )}
-    </ChartCard>
-  );
-}
-
 function VWBarCard({
   title,
   subtitle,
@@ -698,6 +601,336 @@ function KpiCard({
 }
 
 /* ============================================================
+   PERMANENCIA EN TALLER POR AGENCIA
+   Barra horizontal apilada comparativa: una fila por agencia, un
+   segmento por rango de permanencia (escala semáforo) y el tipo de
+   orden como información complementaria en el tooltip y en el tipo
+   predominante de cada agencia.
+   ============================================================ */
+
+const RANGO_CRITICO = "Más de 15 días";
+
+function TooltipPermanencia({ active, payload }) {
+  if (!active || !payload?.length) return null;
+
+  const fila = payload[0]?.payload;
+
+  if (!fila) return null;
+
+  const total = numero(fila.total);
+
+  return (
+    <div
+      style={TOOLTIP_STYLE}
+      className="max-w-[17rem] rounded-[10px] border border-slate-200 bg-white p-3"
+    >
+      <p className="text-[11px] font-bold text-[#001E50]">
+        {fila.name}
+      </p>
+
+      <div className="mt-2 space-y-1">
+        {payload.map((item) => {
+          const ordenes = numero(item.value);
+          if (!ordenes) return null;
+
+          const porcentaje = total > 0 ? (ordenes / total) * 100 : 0;
+          const detalle = fila.detalle?.[item.dataKey] || [];
+
+          return (
+            <div key={item.dataKey}>
+              <div className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-[11px] font-bold text-[#001E50]">
+                  {item.name}
+                </span>
+                <span className="ml-auto text-[11px] font-bold text-[#001E50]">
+                  {entero(ordenes)}
+                </span>
+                <span className="w-11 text-right text-[10px] font-semibold text-slate-500">
+                  {porcentajeDecimal(porcentaje)}%
+                </span>
+              </div>
+
+              {detalle.length > 0 && (
+                <div className="mt-1 space-y-0.5 border-l-2 border-slate-100 pl-2.5">
+                  {detalle.map((sub) => (
+                    <div
+                      key={sub.tipo}
+                      className="flex items-center gap-2 text-[10px] text-slate-500"
+                    >
+                      <span className="font-bold text-slate-600">{sub.tipo}</span>
+                      <span className="font-semibold text-slate-400">
+                        {entero(sub.ordenes)}
+                      </span>
+                      <span className="ml-auto text-slate-300">
+                        {porcentajeDecimal(
+                          ordenes > 0 ? (sub.ordenes / ordenes) * 100 : 0
+                        )}
+                        %
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-2 border-t border-slate-100 pt-1.5 text-[10px] font-semibold text-slate-500">
+        Total de la agencia: {entero(total)} OS
+      </p>
+    </div>
+  );
+}
+
+function VWPilaPermanenciaCard({
+  filas = [],
+  rangos = ORDEN_RANGOS_ANTIGUEDAD,
+  cargando = false,
+  alto = 340,
+}) {
+  if (filas.length === 0) {
+    return (
+      <ChartCard
+        title="Permanencia en taller por agencia"
+        subtitle="Días transcurridos desde la apertura, volumen total y tipo de orden"
+        icon={Clock}
+        className="md:col-span-2 xl:col-span-2"
+      >
+        <EtiquetaVacia
+          mensaje={
+            cargando
+              ? "Calculando la permanencia por agencia"
+              : "Sin órdenes abiertas para comparar por agencia"
+          }
+        />
+      </ChartCard>
+    );
+  }
+
+  const tiposVistos = [
+    ...new Set(filas.flatMap((fila) => fila.tipos || [])),
+  ].sort();
+
+  return (
+    <ChartCard
+      title="Permanencia en taller por agencia"
+      subtitle="Días transcurridos desde la apertura, volumen total y tipo de orden"
+      icon={Clock}
+      className="md:col-span-2 xl:col-span-2"
+      action={
+        <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700">
+          {filas.length} agencias
+        </span>
+      }
+    >
+      <ResponsiveContainer width="100%" height={alto}>
+        <BarChart
+          data={filas}
+          layout="vertical"
+          stackOffset="none"
+          margin={{ top: 10, right: 170, left: 8, bottom: 18 }}
+          barCategoryGap="26%"
+        >
+          <CartesianGrid
+            stroke="#E2E8F0"
+            strokeDasharray="3 3"
+            horizontal={false}
+          />
+
+          <XAxis
+            type="number"
+            tick={{ fontSize: 10, fill: "#475569" }}
+            tickFormatter={(value) => entero(value)}
+            tickLine={false}
+            axisLine={false}
+            label={{
+              value: "Órdenes de trabajo",
+              position: "insideBottom",
+              offset: -2,
+              style: { fontSize: 10, fill: "#64748B", fontWeight: 600 },
+            }}
+          />
+
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={150}
+            reversed
+            tickLine={false}
+            axisLine={false}
+            tick={({ x, y, payload }) => {
+              // En Recharts 3 el payload del tick es la fila completa del
+              // dataset; payload.value es solo el valor de dataKey.
+              const nombre = String(payload?.name ?? "");
+
+              return (
+                <text
+                  x={x}
+                  y={y}
+                  dy={4}
+                  textAnchor="end"
+                  style={{ fontSize: 11, fontWeight: 700, fill: "#001E50" }}
+                >
+                  {nombre}
+                </text>
+              );
+            }}
+          />
+
+          <Tooltip
+            content={<TooltipPermanencia />}
+            cursor={{ fill: "rgba(19, 30, 92, 0.05)" }}
+          />
+
+          {rangos.map((rango) => (
+            <Bar
+              key={rango}
+              dataKey={rango}
+              name={rango}
+              stackId="permanencia"
+              fill={colorAntiguedad(rango)}
+              maxBarSize={30}
+              isAnimationActive={false}
+            >
+              {/* `label` en <Bar> recibe el acumulado de la barra apilada, por
+                  eso la etiqueta va como <LabelList dataKey>: así `value` es el
+                  valor propio del segmento. `filas` se inyecta como prop
+                  adicional porque Recharts no reenvía `payload` al content. */}
+              <LabelList
+                dataKey={rango}
+                filas={filas}
+                rango={rango}
+                content={LabelSegmentoPermanencia}
+              />
+            </Bar>
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+
+      {/* Leyenda inferior: semáforo de permanencia */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-3">
+        {rangos.map((rango) => {
+          const suma = filas.reduce(
+            (acc, fila) => acc + numero(fila[rango]),
+            0
+          );
+
+          if (!suma) return null;
+
+          return (
+            <span
+              key={rango}
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"
+            >
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ backgroundColor: colorAntiguedad(rango) }}
+              />
+              {rango}
+              <span className="text-slate-400">{entero(suma)}</span>
+            </span>
+          );
+        })}
+      </div>
+
+      {tiposVistos.length > 0 && (
+        <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+          Desglose por tipo de orden en el detalle de cada segmento. Tipos
+          presentes: {tiposVistos.join(" · ")}
+        </p>
+      )}
+    </ChartCard>
+  );
+}
+
+function LabelSegmentoPermanencia(props) {
+  const { x, y, width, height, value, index, filas, rango } = props;
+
+  /* `value` llega desde <LabelList dataKey>, o sea el valor real del segmento.
+     No se usa el `label` de <Bar> porque en barras apiladas entrega
+     [inicio, finAcumulado] y el fin coincide con el total de la agencia. */
+  const ordenes = numero(value);
+
+  if (!ordenes) return null;
+
+  const fila = Array.isArray(filas) ? filas[index] : null;
+  const total = numero(fila?.total);
+  const mas15 = numero(fila?.mas15);
+  const centro = y + height / 2;
+
+  /* El total de la agencia se dibuja fuera de la barra, en el último segmento
+     con datos, para que nunca se confunda con el valor de un rango. Solo si la
+     fila consultada coincide con el segmento, para no imprimir un total
+     desalineado. */
+  const esUltimo =
+    fila &&
+    fila.ultimoRangoConDatos === rango &&
+    numero(fila[rango]) === ordenes;
+
+  if (esUltimo) {
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        <text
+          x={x + width + 10}
+          y={mas15 > 0 ? centro - 6 : centro}
+          textAnchor="start"
+          dominantBaseline="central"
+          style={{ fontSize: 11, fontWeight: 700, fill: "#001E50" }}
+        >
+          {`${entero(total)} OS total`}
+        </text>
+
+        {mas15 > 0 && (
+          <text
+            x={x + width + 10}
+            y={centro + 7}
+            textAnchor="start"
+            dominantBaseline="central"
+            style={{ fontSize: 9, fontWeight: 600, fill: "#94A3B8" }}
+          >
+            {`${entero(mas15)} en ${RANGO_CRITICO} · ${porcentajeDecimal(
+              total > 0 ? (mas15 / total) * 100 : 0
+            )}%`}
+          </text>
+        )}
+      </g>
+    );
+  }
+
+  if (width < 26 || height < 12) return null;
+
+  const soloCantidad = width < 62;
+
+  return (
+    <text
+      x={x + width / 2}
+      y={centro}
+      textAnchor="middle"
+      dominantBaseline="central"
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        fill: "#FFFFFF",
+        pointerEvents: "none",
+      }}
+    >
+      {soloCantidad || !total
+        ? entero(ordenes)
+        : `${entero(ordenes)} · ${porcentajeDecimal(
+            total > 0 ? (ordenes / total) * 100 : 0
+          )}%`}
+    </text>
+  );
+}
+
+/* ============================================================
    RESUMEN EJECUTIVO (HERO)
    ============================================================ */
 
@@ -834,7 +1067,7 @@ function ResumenEjecutivo({
                         {item.name}
                       </span>
                       <span className="shrink-0 text-[11px] font-bold text-sky-300">
-                        {entero(item.ordenes)} OS · {dineroCompacto(item.monto)}
+                        {entero(item.ordenes)} OS · {dinero(item.monto)}
                       </span>
                     </div>
 
@@ -2261,9 +2494,10 @@ function BarraFiltrosRapidos({
 
   return (
     <div className="space-y-3">
-      {/* Agencias */}
+      {/* Agencias: tira horizontal de una sola línea para que la barra fija
+          no crezca con el número de agencias. */}
       <div
-        className="flex flex-wrap items-center gap-1.5"
+        className="scrollbar-none -mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1"
         role="group"
         aria-label="Filtrar por agencia"
       >
@@ -2271,7 +2505,7 @@ function BarraFiltrosRapidos({
           [0, 1, 2].map((i) => (
             <span
               key={i}
-              className="h-8 w-28 animate-pulse rounded-full bg-slate-100"
+              className="h-8 w-28 shrink-0 animate-pulse rounded-full bg-slate-100"
             />
           ))
         ) : (
@@ -2280,7 +2514,7 @@ function BarraFiltrosRapidos({
               type="button"
               onClick={() => onAgencia("")}
               aria-pressed={!agenciaActiva}
-              className={clasesPildoraAgencia(!agenciaActiva)}
+              className={cn(clasesPildoraAgencia(!agenciaActiva), "shrink-0")}
             >
               <span>Todas las agencias</span>
             </button>
@@ -2295,7 +2529,7 @@ function BarraFiltrosRapidos({
                   onClick={() => onAgencia(agencia)}
                   aria-pressed={activa}
                   title={activa ? "Quitar filtro de agencia" : `Filtrar por ${agencia}`}
-                  className={clasesPildoraAgencia(activa)}
+                  className={cn(clasesPildoraAgencia(activa), "shrink-0")}
                 >
                   <span>{agencia}</span>
                 </button>
@@ -2365,7 +2599,7 @@ function BarraFiltrosRapidos({
         </div>
 
         <div
-          className="flex w-full gap-1.5 overflow-x-auto pb-1 md:pb-0"
+          className="scrollbar-none flex w-full gap-1.5 overflow-x-auto pb-1 md:pb-0"
           role="group"
           aria-label="Filtrar por mes de apertura"
         >
@@ -2458,7 +2692,6 @@ export default function Gota() {
   const [opciones, setOpciones] = useState({});
   const [colFilters, setColFilters] = useState({});
   const [filtrosVisibles, setFiltrosVisibles] = useState(true);
-  const [rapidosVisibles, setRapidosVisibles] = useState(true);
   // Año mostrado por el selector de periodo (null = automático).
   const [anioPeriodo, setAnioPeriodo] = useState(null);
   // Rango de permanencia tocado en el resumen (null = sin detalle).
@@ -2490,9 +2723,16 @@ export default function Gota() {
   const colFiltersQuery = useMemo(() => {
     const query = {};
 
+    // El backend acepta un valor por parámetro, así que una selección múltiple
+    // se envía como el parámetro original con el sufijo "__in" y valores
+    // separados por coma (ej. tp_os__in=1,2). Antes se descartaba en silencio
+    // cualquier selección de 2+ valores, por lo que el filtro se veía activo
+    // pero no cambiaba los resultados.
     Object.entries(colFilters).forEach(([key, values]) => {
       if (Array.isArray(values) && values.length === 1) {
         query[key] = values[0];
+      } else if (Array.isArray(values) && values.length > 1) {
+        query[`${key}__in`] = values.join(",");
       }
     });
 
@@ -2594,33 +2834,13 @@ export default function Gota() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claveDashboard]);
 
-  /* ---------------- RESUMEN GLOBAL (SIN FILTROS) ---------------- */
+  /* ---------------- RESUMEN EJECUTIVO ---------------- */
 
-  // El Resumen ejecutivo · Postventa muestra el estado global del taller:
-  // se consulta una sola vez sin parámetros para que los filtros
-  // (rápidos, de formulario y de columna) no lo alteren.
-  const [dashboardGlobal, setDashboardGlobal] = useState(null);
-  const [dashboardGlobalListo, setDashboardGlobalListo] = useState(false);
-
-  useEffect(() => {
-    let vigente = true;
-
-    getGotaDashboard()
-      .then((data) => {
-        if (!vigente) return;
-        setDashboardGlobal(data);
-        setDashboardGlobalListo(true);
-      })
-      .catch(() => {
-        if (!vigente) return;
-        setDashboardGlobal(null);
-        setDashboardGlobalListo(true);
-      });
-
-    return () => {
-      vigente = false;
-    };
-  }, []);
+  // El Resumen ejecutivo · Postventa se alimenta del MISMO dashboard
+  // filtrado que los KPIs y las gráficas (getGotaDashboard con
+  // paramsConsulta), de modo que mes, agencia y Tipo OS también lo afectan.
+  // Antes se consultaba un segundo dashboard sin parámetros, por lo que esta
+  // secciónignoraba todos los filtros.
 
   useEffect(() => {
     if (error) push(error, "error");
@@ -2785,21 +3005,16 @@ export default function Gota() {
   }
 
   function refrescar() {
+    // El listado, el dashboard y el detalle del rango se resuelven por clave
+    // (claveListado / claveDashboard). Al invalidar ambas claves se vuelven a
+    // a disparar sus efectos, de modo que un solo botón refresca toda la
+    // página en lugar de solo la tabla.
     setActualizando(true);
+    setClaveResuelta("");
+    setClaveDashboardResuelta("");
+    push("Datos actualizados.", "success");
 
-    getGotaOrdenes({
-      ...paramsConsulta,
-      page,
-      page_size: pageSize,
-      ordering: ordenActual,
-    })
-      .then((data) => {
-        setOrdenes(data?.results || []);
-        setTotal(Number(data?.count || 0));
-        push("Datos actualizados.", "success");
-      })
-      .catch(() => {})
-      .finally(() => setActualizando(false));
+    window.setTimeout(() => setActualizando(false), 600);
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
@@ -2831,14 +3046,84 @@ export default function Gota() {
   const totales = dashboard?.totales || {};
   const graficas = dashboard?.graficas || {};
 
-  const porTipo = useMemo(
-    () =>
-      (graficas.por_tipo || []).map((item) => ({
-        name: `Tipo ${item.tp_os}`,
-        value: numero(item.ordenes),
-      })),
-    [graficas.por_tipo]
-  );
+  /* Permanencia por agencia: una fila por agencia con un segmento por rango
+     (escala semáforo) y, dentro de cada segmento, el desglose por tipo de
+     orden que alimenta el tooltip. El tipo predominante de la agencia se
+     calcula sobre el volumen total, no sobre un rango. */
+  const permanenciaAgencia = useMemo(() => {
+    const crudos = graficas.por_agencia_permanencia_tipo || [];
+
+    const porAgencia = new Map();
+
+    crudos.forEach((item) => {
+      const agencia = String(item.agencia ?? "").trim() || "Sin agencia";
+      const rango = String(item.rango ?? "").trim() || "Más de 15 días";
+      const tipo = String(item.tp_os ?? "").trim() || "Sin tipo";
+      const ordenes = numero(item.ordenes);
+
+      if (ordenes <= 0) return;
+
+      if (!porAgencia.has(agencia)) {
+        porAgencia.set(agencia, {
+          name: agencia,
+          total: 0,
+          rangos: new Map(),
+          detalle: {},
+          tipos: new Map(),
+        });
+      }
+
+      const fila = porAgencia.get(agencia);
+
+      fila.rangos.set(rango, (fila.rangos.get(rango) || 0) + ordenes);
+      fila.total += ordenes;
+      fila.tipos.set(tipo, (fila.tipos.get(tipo) || 0) + ordenes);
+
+      if (!fila.detalle[rango]) fila.detalle[rango] = new Map();
+
+      const porTipo = fila.detalle[rango];
+      porTipo.set(tipo, (porTipo.get(tipo) || 0) + ordenes);
+    });
+
+    const filas = [...porAgencia.values()]
+      .filter((fila) => fila.total > 0)
+      .map((fila) => {
+        const salida = {
+          name: fila.name,
+          total: fila.total,
+          detalle: {},
+          tipos: [...fila.tipos.keys()],
+        };
+
+        ORDEN_RANGOS_ANTIGUEDAD.forEach((rango) => {
+          salida[rango] = fila.rangos.get(rango) || 0;
+        });
+
+        Object.entries(fila.detalle).forEach(([rango, porTipo]) => {
+          salida.detalle[rango] = [...porTipo.entries()]
+            .map(([tipo, ordenes]) => ({ tipo, ordenes }))
+            .sort((a, b) => b.ordenes - a.ordenes);
+        });
+
+        // Último rango con datos de la barra: ahí se dibuja el resumen de
+        // volumen, para que la etiqueta quede fuera del apilado y no se
+        // confunda con el valor de un segmento.
+        salida.ultimoRangoConDatos =
+          [...ORDEN_RANGOS_ANTIGUEDAD]
+            .reverse()
+            .find((rango) => salida[rango] > 0) || null;
+
+        salida.mas15 = salida["Más de 15 días"] || 0;
+
+        return salida;
+      })
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      filas,
+      totalAgencias: filas.length,
+    };
+  }, [graficas.por_agencia_permanencia_tipo]);
 
   const porAgencia = useMemo(
     () =>
@@ -2887,34 +3172,6 @@ export default function Gota() {
     [graficas.por_subtipo]
   );
 
-  /* Datos globales (sin filtros) solo para el Resumen ejecutivo. */
-  const totalesResumen = dashboardGlobal?.totales || {};
-  const graficasResumen = dashboardGlobal?.graficas || {};
-
-  const porAgenciaResumen = useMemo(
-    () =>
-      (graficasResumen.por_agencia || []).map((item) => ({
-        name: item.agencia,
-        ordenes: numero(item.ordenes),
-        monto: numero(item.monto_total),
-      })),
-    [graficasResumen.por_agencia]
-  );
-
-  const porAntiguedadResumen = useMemo(() => {
-    const mapa = new Map(
-      (graficasResumen.por_antiguedad || []).map((item) => [
-        item.rango,
-        numero(item.ordenes),
-      ])
-    );
-
-    return ORDEN_RANGOS_ANTIGUEDAD.map((rango) => ({
-      name: rango,
-      value: mapa.get(rango) || 0,
-      color: colorAntiguedad(rango),
-    })).filter((item) => item.value > 0);
-  }, [graficasResumen.por_antiguedad]);
 
   /* ---------------- RENDER ---------------- */
 
@@ -2961,88 +3218,34 @@ export default function Gota() {
       </div>
 <div className="space-y-5 px-4 py-5 md:px-6 lg:px-8">
 
-        {/* FILTROS RÁPIDOS */}
-        <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E4E7F0] bg-[#F7F8FC] px-4 py-3">
-            <button
-              type="button"
-              onClick={() => setRapidosVisibles((prev) => !prev)}
-              className="flex items-center gap-2.5 text-left"
-              aria-expanded={rapidosVisibles}
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#131E5C]/10 bg-white text-[#131E5C]">
-                <Filter className="h-4 w-4" />
-              </span>
-
-              <span className="min-w-0">
-                <span className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#001E50]">
-                    Filtros rápidos
-                  </span>
-                  {(filtros.agencia ||
-                    filtros.tp_os ||
-                    filtros.fecha_desde ||
-                    filtros.fecha_hasta) && (
-                    <span className="rounded-full bg-[#131E5C] px-2 py-0.5 text-[10px] font-bold text-white">
-                      {entero(
-                        [
-                          filtros.agencia,
-                          filtros.tp_os,
-                          filtros.fecha_desde || filtros.fecha_hasta,
-                        ].filter(Boolean).length
-                      )}
-                    </span>
-                  )}
-                </span>
-                <span className="mt-0.5 block text-[11px] leading-tight text-slate-500">
-                  Agencia, tipo de orden y periodo de apertura
-                </span>
-              </span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <span className="hidden text-[11px] text-slate-400 sm:inline">
-                {rapidosVisibles ? "Ocultar" : "Mostrar"} filtros
-              </span>
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500">
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 transition-transform duration-200",
-                    rapidosVisibles && "rotate-180"
-                  )}
-                />
-              </span>
-            </div>
+        {/* FILTROS RÁPIDOS: siempre visibles, sin cabecera y fijos al hacer scroll */}
+        <section className="sticky top-0 z-30 rounded-2xl border border-[#E4E7F0] bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
+          <div className="p-4">
+            <BarraFiltrosRapidos
+              agencias={opciones.agencia || []}
+              tipos={opciones.tpos || []}
+              anios={aniosPeriodo}
+              anio={anioEfectivo}
+              mesActivo={mesPeriodoActivo}
+              anioCompleto={anioCompletoActivo}
+              agenciaActiva={filtros.agencia}
+              tipoActivo={filtros.tp_os}
+              cargando={!opciones.agencia}
+              onAgencia={seleccionarAgenciaRapida}
+              onTipo={seleccionarTipoRapido}
+              onMes={seleccionarMesRapido}
+              onAnioCompleto={seleccionarAnioCompleto}
+              onAnio={cambiarAnioPeriodo}
+            />
           </div>
-
-          {rapidosVisibles && (
-            <div className="p-4">
-              <BarraFiltrosRapidos
-                agencias={opciones.agencia || []}
-                tipos={opciones.tpos || []}
-                anios={aniosPeriodo}
-                anio={anioEfectivo}
-                mesActivo={mesPeriodoActivo}
-                anioCompleto={anioCompletoActivo}
-                agenciaActiva={filtros.agencia}
-                tipoActivo={filtros.tp_os}
-                cargando={!opciones.agencia}
-                onAgencia={seleccionarAgenciaRapida}
-                onTipo={seleccionarTipoRapido}
-                onMes={seleccionarMesRapido}
-                onAnioCompleto={seleccionarAnioCompleto}
-                onAnio={cambiarAnioPeriodo}
-              />
-            </div>
-          )}
         </section>
 
         {/* RESUMEN EJECUTIVO */}
         <ResumenEjecutivo
-          cargando={!dashboardGlobalListo}
-          totales={totalesResumen}
-          antiguedad={porAntiguedadResumen}
-          agencias={porAgenciaResumen}
+          cargando={loadingDashboard}
+          totales={totales}
+          antiguedad={porAntiguedad}
+          agencias={porAgencia}
           rangoActivo={rangoAntiguedad}
           onSeleccionarRango={(nombre) =>
             setRangoAntiguedad((prev) => (prev === nombre ? null : nombre))
@@ -3053,7 +3256,7 @@ export default function Gota() {
           <DetalleRangoAntiguedad
             key={rangoAntiguedad}
             rango={rangoAntiguedad}
-            filtrosBase={FILTROS_VACIOS}
+            filtrosBase={paramsConsulta}
             onClose={() => setRangoAntiguedad(null)}
             onVerEnTabla={() => verRangoEnTabla(rangoAntiguedad)}
           />
@@ -3097,12 +3300,10 @@ export default function Gota() {
 
         {/* Gráficas */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <VWPieCard
-            title="Órdenes por tipo"
-            subtitle="Distribución de la mezcla de trabajo"
-            icon={Tag}
-            data={porTipo}
-            label={`${entero(totales.ordenes)} órdenes en el corte actual`}
+          <VWPilaPermanenciaCard
+            filas={permanenciaAgencia.filas}
+            rangos={ORDEN_RANGOS_ANTIGUEDAD}
+            cargando={loadingDashboard}
           />
 
           <VWBarCard
@@ -3113,14 +3314,6 @@ export default function Gota() {
             yKey="ordenes"
             barColor={C.accent}
             gradientId="gota-grad-agencia"
-          />
-
-          <VWPieCard
-            title="Permanencia en taller"
-            subtitle="Días transcurridos desde la apertura"
-            icon={Clock}
-            data={porAntiguedad}
-            label="Verde: salida rápida · Rojo: requiere atención"
           />
 
           <VWBarCard
