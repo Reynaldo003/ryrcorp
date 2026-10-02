@@ -43,9 +43,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  LabelList,
   Line,
   LineChart,
+  Rectangle,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -602,88 +602,196 @@ function KpiCard({
 
 /* ============================================================
    PERMANENCIA EN TALLER POR AGENCIA
-   Barra horizontal apilada comparativa: una fila por agencia, un
-   segmento por rango de permanencia (escala semáforo) y el tipo de
-   orden como información complementaria en el tooltip y en el tipo
-   predominante de cada agencia.
+   Barras horizontales apiladas: una fila por agencia (de mayor a
+   menor volumen), un segmento por rango de permanencia con la
+   cantidad y el % dentro de la agencia, el total al final de la
+   barra y el desglose por tipo de orden dentro del tooltip.
    ============================================================ */
 
-const RANGO_CRITICO = "Más de 15 días";
+const RADIO_BARRA_PERMANENCIA = 6;
+
+/* Dibuja el segmento: rectángulo apilado (solo se redondean los
+   extremos externos de la barra), etiquetas de cantidad / % dentro
+   del segmento y el total de la agencia fuera de la barra. Se usa
+   `shape` porque Recharts 3 ya reparte `payload` con la fila y el
+   valor propio de cada segmento, cosa que <LabelList> no hace
+   (su `index` se desalinea cuando hay segmentos de ancho 0). */
+function FormaSegmentoPermanencia(props) {
+  const { x, y, width, height, payload, dataKey, name, fill } = props;
+
+  if (!payload || width <= 0 || height <= 0) return null;
+
+  const rango = String(dataKey ?? name ?? "");
+  const ordenes = numero(payload[rango]);
+  if (ordenes <= 0) return null;
+
+  const total = numero(payload.total);
+  const centro = y + height / 2;
+
+  const conDatos = ORDEN_RANGOS_ANTIGUEDAD.filter(
+    (rangoConDatos) => numero(payload[rangoConDatos]) > 0
+  );
+  const esPrimero = conDatos[0] === rango;
+  const esUltimo = conDatos[conDatos.length - 1] === rango;
+
+  const radio = [
+    esPrimero ? RADIO_BARRA_PERMANENCIA : 0,
+    esUltimo ? RADIO_BARRA_PERMANENCIA : 0,
+    esUltimo ? RADIO_BARRA_PERMANENCIA : 0,
+    esPrimero ? RADIO_BARRA_PERMANENCIA : 0,
+  ];
+
+  const dosLineas = height >= 26;
+
+  return (
+    <g>
+      <Rectangle
+        isAnimationActive={false}
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={fill}
+        radius={radio}
+      />
+
+      {width >= 14 && (
+        <text
+          x={x + width / 2}
+          y={dosLineas ? centro - 5 : centro}
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            fill: "#FFFFFF",
+            pointerEvents: "none",
+          }}
+        >
+          {entero(ordenes)}
+        </text>
+      )}
+
+      {width >= 34 && dosLineas && (
+        <text
+          x={x + width / 2}
+          y={centro + 8}
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{
+            fontSize: 9.5,
+            fontWeight: 600,
+            fill: "rgba(255, 255, 255, 0.88)",
+            pointerEvents: "none",
+          }}
+        >
+          {`${porcentajeDecimal(total > 0 ? (ordenes / total) * 100 : 0)}%`}
+        </text>
+      )}
+
+      {esUltimo && (
+        <text
+          x={x + width + 10}
+          y={centro}
+          textAnchor="start"
+          dominantBaseline="central"
+          style={{
+            fontSize: 12,
+            fontWeight: 800,
+            fill: "#131E50",
+            pointerEvents: "none",
+          }}
+        >
+          {`${entero(total)} OS`}
+        </text>
+      )}
+    </g>
+  );
+}
 
 function TooltipPermanencia({ active, payload }) {
   if (!active || !payload?.length) return null;
 
-  const fila = payload[0]?.payload;
+  const item = payload[0];
+  const fila = item?.payload;
 
   if (!fila) return null;
 
+  const rango = String(item.dataKey ?? item.name ?? "");
+  const ordenes = numero(item.value);
   const total = numero(fila.total);
+  const porcentaje = total > 0 ? (ordenes / total) * 100 : 0;
+  const detalle = fila.detalle?.[rango] || [];
 
   return (
     <div
-      style={TOOLTIP_STYLE}
-      className="max-w-[17rem] rounded-[10px] border border-slate-200 bg-white p-3"
+      style={{
+        borderRadius: 14,
+        border: "1px solid #E2E8F0",
+        background: "#FFFFFF",
+        boxShadow: "0 18px 40px -16px rgba(15, 23, 42, 0.35)",
+        fontFamily: "inherit",
+      }}
+      className="w-[17rem]"
     >
-      <p className="text-[11px] font-bold text-[#001E50]">
-        {fila.name}
-      </p>
+      <div className="p-3.5">
+        <p className="text-[13px] font-black text-[#001E50]">{fila.name}</p>
 
-      <div className="mt-2 space-y-1">
-        {payload.map((item) => {
-          const ordenes = numero(item.value);
-          if (!ordenes) return null;
+        <div className="mt-2 flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: item.color || colorAntiguedad(rango) }}
+          />
+          <span className="text-[11.5px] font-bold text-[#001E50]">{rango}</span>
+        </div>
 
-          const porcentaje = total > 0 ? (ordenes / total) * 100 : 0;
-          const detalle = fila.detalle?.[item.dataKey] || [];
+        <div className="mt-1.5 flex items-baseline gap-3">
+          <span className="text-[12px] font-semibold text-slate-600">
+            Órdenes:{" "}
+            <span className="font-black text-[#001E50]">{entero(ordenes)}</span>
+          </span>
+          <span className="ml-auto text-[12px] font-black text-[#001E50]">
+            {`${porcentajeDecimal(porcentaje)}%`}
+          </span>
+        </div>
 
-          return (
-            <div key={item.dataKey}>
-              <div className="flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-[11px] font-bold text-[#001E50]">
-                  {item.name}
+        <div className="my-2 border-t border-dashed border-slate-200" />
+
+        <p className="text-[11px] font-semibold text-slate-500">
+          Desglose por tipo de orden:
+        </p>
+
+        <div className="mt-1.5 space-y-1">
+          {detalle.length > 0 ? (
+            detalle.map((sub) => (
+              <div
+                key={sub.tipo}
+                className="flex items-center gap-2 text-[11.5px]"
+              >
+                <span className="w-5 font-black text-[#001E50]">{sub.tipo}</span>
+                <span className="font-bold text-[#001E50]">
+                  {entero(sub.ordenes)}
                 </span>
-                <span className="ml-auto text-[11px] font-bold text-[#001E50]">
-                  {entero(ordenes)}
-                </span>
-                <span className="w-11 text-right text-[10px] font-semibold text-slate-500">
-                  {porcentajeDecimal(porcentaje)}%
+                <span className="ml-auto font-semibold text-slate-500">
+                  {`${porcentajeDecimal(
+                    ordenes > 0 ? (sub.ordenes / ordenes) * 100 : 0
+                  )}%`}
                 </span>
               </div>
+            ))
+          ) : (
+            <p className="text-[11px] text-slate-400">Sin detalle por tipo</p>
+          )}
+        </div>
 
-              {detalle.length > 0 && (
-                <div className="mt-1 space-y-0.5 border-l-2 border-slate-100 pl-2.5">
-                  {detalle.map((sub) => (
-                    <div
-                      key={sub.tipo}
-                      className="flex items-center gap-2 text-[10px] text-slate-500"
-                    >
-                      <span className="font-bold text-slate-600">{sub.tipo}</span>
-                      <span className="font-semibold text-slate-400">
-                        {entero(sub.ordenes)}
-                      </span>
-                      <span className="ml-auto text-slate-300">
-                        {porcentajeDecimal(
-                          ordenes > 0 ? (sub.ordenes / ordenes) * 100 : 0
-                        )}
-                        %
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <div className="my-2 border-t border-dashed border-slate-200" />
+
+        <p className="text-[11.5px] font-semibold text-slate-600">
+          Total de la agencia:{" "}
+          <span className="font-black text-[#001E50]">{entero(total)} OS</span>
+        </p>
       </div>
-
-      <p className="mt-2 border-t border-slate-100 pt-1.5 text-[10px] font-semibold text-slate-500">
-        Total de la agencia: {entero(total)} OS
-      </p>
     </div>
   );
 }
@@ -692,7 +800,6 @@ function VWPilaPermanenciaCard({
   filas = [],
   rangos = ORDEN_RANGOS_ANTIGUEDAD,
   cargando = false,
-  alto = 340,
 }) {
   if (filas.length === 0) {
     return (
@@ -717,6 +824,9 @@ function VWPilaPermanenciaCard({
     ...new Set(filas.flatMap((fila) => fila.tipos || [])),
   ].sort();
 
+  /* Altura por fila: la barra queda ~36px y respira como en el modelo. */
+  const alto = Math.min(680, Math.max(220, filas.length * 58 + 46));
+
   return (
     <ChartCard
       title="Permanencia en taller por agencia"
@@ -724,7 +834,7 @@ function VWPilaPermanenciaCard({
       icon={Clock}
       className="md:col-span-2 xl:col-span-2"
       action={
-        <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700">
+        <span className="shrink-0 rounded-full bg-[#131E50]/10 px-2.5 py-1 text-[10px] font-bold text-[#131E50]">
           {filas.length} agencias
         </span>
       }
@@ -734,7 +844,7 @@ function VWPilaPermanenciaCard({
           data={filas}
           layout="vertical"
           stackOffset="none"
-          margin={{ top: 10, right: 170, left: 8, bottom: 18 }}
+          margin={{ top: 10, right: 96, left: 8, bottom: 8 }}
           barCategoryGap="26%"
         >
           <CartesianGrid
@@ -745,47 +855,37 @@ function VWPilaPermanenciaCard({
 
           <XAxis
             type="number"
-            tick={{ fontSize: 10, fill: "#475569" }}
+            tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }}
             tickFormatter={(value) => entero(value)}
             tickLine={false}
             axisLine={false}
-            label={{
-              value: "Órdenes de trabajo",
-              position: "insideBottom",
-              offset: -2,
-              style: { fontSize: 10, fill: "#64748B", fontWeight: 600 },
-            }}
+            height={26}
+            allowDecimals={false}
+            interval="preserveStartEnd"
           />
 
           <YAxis
             type="category"
             dataKey="name"
             width={150}
-            reversed
+            interval={0}
+            tickFormatter={(valor) => {
+              const texto = String(valor ?? "");
+              return texto.length > 20 ? `${texto.slice(0, 19)}…` : texto;
+            }}
+            tick={{
+              fontSize: 12,
+              fontWeight: 700,
+              fill: "#131E50",
+            }}
             tickLine={false}
             axisLine={false}
-            tick={({ x, y, payload }) => {
-              // En Recharts 3 el payload del tick es la fila completa del
-              // dataset; payload.value es solo el valor de dataKey.
-              const nombre = String(payload?.name ?? "");
-
-              return (
-                <text
-                  x={x}
-                  y={y}
-                  dy={4}
-                  textAnchor="end"
-                  style={{ fontSize: 11, fontWeight: 700, fill: "#001E50" }}
-                >
-                  {nombre}
-                </text>
-              );
-            }}
           />
 
           <Tooltip
             content={<TooltipPermanencia />}
-            cursor={{ fill: "rgba(19, 30, 92, 0.05)" }}
+            shared={false}
+            cursor={false}
           />
 
           {rangos.map((rango) => (
@@ -795,138 +895,54 @@ function VWPilaPermanenciaCard({
               name={rango}
               stackId="permanencia"
               fill={colorAntiguedad(rango)}
-              maxBarSize={30}
+              maxBarSize={36}
               isAnimationActive={false}
-            >
-              {/* `label` en <Bar> recibe el acumulado de la barra apilada, por
-                  eso la etiqueta va como <LabelList dataKey>: así `value` es el
-                  valor propio del segmento. `filas` se inyecta como prop
-                  adicional porque Recharts no reenvía `payload` al content. */}
-              <LabelList
-                dataKey={rango}
-                filas={filas}
-                rango={rango}
-                content={LabelSegmentoPermanencia}
-              />
-            </Bar>
+              shape={FormaSegmentoPermanencia}
+            />
           ))}
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Leyenda inferior: semáforo de permanencia */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-3">
-        {rangos.map((rango) => {
-          const suma = filas.reduce(
-            (acc, fila) => acc + numero(fila[rango]),
-            0
-          );
+      <p className="mt-1 text-center text-[11px] font-semibold text-slate-500">
+        Órdenes de trabajo
+      </p>
 
-          if (!suma) return null;
+      {/* Leyenda semáforo + nota al pie */}
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5">
+          {rangos.map((rango) => {
+            const suma = filas.reduce(
+              (acc, fila) => acc + numero(fila[rango]),
+              0
+            );
 
-          return (
-            <span
-              key={rango}
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"
-            >
+            if (!suma) return null;
+
+            return (
               <span
-                aria-hidden="true"
-                className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: colorAntiguedad(rango) }}
-              />
-              {rango}
-              <span className="text-slate-400">{entero(suma)}</span>
-            </span>
-          );
-        })}
-      </div>
+                key={rango}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: colorAntiguedad(rango) }}
+                />
+                {rango}
+              </span>
+            );
+          })}
+        </div>
 
-      {tiposVistos.length > 0 && (
-        <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
-          Desglose por tipo de orden en el detalle de cada segmento. Tipos
-          presentes: {tiposVistos.join(" · ")}
+        <p className="text-[10px] italic leading-relaxed text-slate-400 md:text-right">
+          Valores dentro de cada segmento: cantidad y % de participación en la
+          agencia.
+          <br />
+          En el tooltip se muestra el desglose por tipo de orden:{" "}
+          {tiposVistos.length > 0 ? tiposVistos.join(" – ") : "—"}
         </p>
-      )}
+      </div>
     </ChartCard>
-  );
-}
-
-function LabelSegmentoPermanencia(props) {
-  const { x, y, width, height, value, index, filas, rango } = props;
-
-  /* `value` llega desde <LabelList dataKey>, o sea el valor real del segmento.
-     No se usa el `label` de <Bar> porque en barras apiladas entrega
-     [inicio, finAcumulado] y el fin coincide con el total de la agencia. */
-  const ordenes = numero(value);
-
-  if (!ordenes) return null;
-
-  const fila = Array.isArray(filas) ? filas[index] : null;
-  const total = numero(fila?.total);
-  const mas15 = numero(fila?.mas15);
-  const centro = y + height / 2;
-
-  /* El total de la agencia se dibuja fuera de la barra, en el último segmento
-     con datos, para que nunca se confunda con el valor de un rango. Solo si la
-     fila consultada coincide con el segmento, para no imprimir un total
-     desalineado. */
-  const esUltimo =
-    fila &&
-    fila.ultimoRangoConDatos === rango &&
-    numero(fila[rango]) === ordenes;
-
-  if (esUltimo) {
-    return (
-      <g style={{ pointerEvents: "none" }}>
-        <text
-          x={x + width + 10}
-          y={mas15 > 0 ? centro - 6 : centro}
-          textAnchor="start"
-          dominantBaseline="central"
-          style={{ fontSize: 11, fontWeight: 700, fill: "#001E50" }}
-        >
-          {`${entero(total)} OS total`}
-        </text>
-
-        {mas15 > 0 && (
-          <text
-            x={x + width + 10}
-            y={centro + 7}
-            textAnchor="start"
-            dominantBaseline="central"
-            style={{ fontSize: 9, fontWeight: 600, fill: "#94A3B8" }}
-          >
-            {`${entero(mas15)} en ${RANGO_CRITICO} · ${porcentajeDecimal(
-              total > 0 ? (mas15 / total) * 100 : 0
-            )}%`}
-          </text>
-        )}
-      </g>
-    );
-  }
-
-  if (width < 26 || height < 12) return null;
-
-  const soloCantidad = width < 62;
-
-  return (
-    <text
-      x={x + width / 2}
-      y={centro}
-      textAnchor="middle"
-      dominantBaseline="central"
-      style={{
-        fontSize: 10,
-        fontWeight: 700,
-        fill: "#FFFFFF",
-        pointerEvents: "none",
-      }}
-    >
-      {soloCantidad || !total
-        ? entero(ordenes)
-        : `${entero(ordenes)} · ${porcentajeDecimal(
-            total > 0 ? (ordenes / total) * 100 : 0
-          )}%`}
-    </text>
   );
 }
 
@@ -3104,16 +3120,6 @@ export default function Gota() {
             .map(([tipo, ordenes]) => ({ tipo, ordenes }))
             .sort((a, b) => b.ordenes - a.ordenes);
         });
-
-        // Último rango con datos de la barra: ahí se dibuja el resumen de
-        // volumen, para que la etiqueta quede fuera del apilado y no se
-        // confunda con el valor de un segmento.
-        salida.ultimoRangoConDatos =
-          [...ORDEN_RANGOS_ANTIGUEDAD]
-            .reverse()
-            .find((rango) => salida[rango] > 0) || null;
-
-        salida.mas15 = salida["Más de 15 días"] || 0;
 
         return salida;
       })
