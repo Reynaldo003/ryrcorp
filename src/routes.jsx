@@ -118,6 +118,7 @@ import NoConformidad from "./pages/Calidad/NoConformidad";
 import DigitalesRendimiento from "./pages/Digitales/DigitalesRendimiento";
 import DirectorioWeb from "./pages/DirectorioWeb/DirectorioWeb";
 import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
+import Tableros from "./pages/Tableros/Tableros";
 import AdministracionAsesores from "./pages/AdministracionAsesores/AdministracionAsesores";
 import GestorActividades from "./pages/GestorActividades/GestorActividades";
 import GestorActividadesLayout from "./pages/GestorActividades/GestorActividadesLayout";
@@ -1297,6 +1298,23 @@ export const router = createBrowserRouter(
                             element: (
                                 <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_DIGITALES", "CRM_COORDINADOR_DIGITAL"]}>
                                     <AnalisisFacturas />
+                                </RequirePermission>
+                            ),
+                        },
+                        
+                        {
+                            path: "tableros",
+                            element: (
+                                <RequirePermission
+                                    anyOf={[
+                                        "USUARIOS_ADMIN",
+                                        "CRM_DIGITALES",
+                                        "CRM_COORDINADOR_DIGITAL",
+                                        "CRM_VENTAS",
+                                        "CRM_CALIDAD",
+                                    ]}
+                                >
+                                    <Tableros />
                                 </RequirePermission>
                             ),
                         },

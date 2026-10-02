@@ -15,6 +15,7 @@ import {
     UserCheck,
     Send,
     FileSearchCorner,
+    Columns2,
     TrendingUp,
     BrainCircuit,
     UsersRound,
@@ -145,6 +146,14 @@ export const INTERFACES = [
         label: "Facturas",
         icon: FileSearchCorner,
         permisos: ["USUARIOS_ADMIN", "CRM_CALIDAD"],
+    },
+    {
+        key: "tableros",
+        section: "Marketing",
+        to: "/tableros",
+        label: "Tableros",
+        icon: Columns2,
+        permisos: ["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL", "CRM_DIGITALES", "CRM_VENTAS", "CRM_CALIDAD"],
     },
     {
         key: "financieros",
