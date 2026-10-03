@@ -1,3 +1,4 @@
+//src/lib/apiCompraRef.js
 import { buildQuery, http } from "./apiClient";
 
 const BASE_URL = "/compra-refacciones/api";

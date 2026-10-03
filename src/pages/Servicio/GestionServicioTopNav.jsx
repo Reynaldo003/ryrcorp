@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign, Wrench } from "lucide-react";
+import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign, Wrench, Receipt, ReceiptText } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
@@ -24,6 +24,12 @@ export default function GestionTopNav() {
             to: "/servicio/gota",
             icon: Wrench,
             show: submoduloVisible(user, "servicio", "gota", servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
+        },
+        {
+            label: "Órdenes Facturadas",
+            to: "/servicio/ordenes-facturadas",
+            icon: ReceiptText,
+            show: submoduloVisible(user, "servicio", "ordenes-facturadas", servicioActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
     ].filter((tab) => tab.show);
     return (

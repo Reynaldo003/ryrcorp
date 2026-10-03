@@ -136,6 +136,7 @@ import CompraRefacciones from "./pages/Partes/CompraRefacciones";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 import Presupuestos from "./pages/Presupuestos/Presupuestos";
 import Gota from "./pages/Servicio/Gota";
+import OrdenesFacturadas from "./pages/Servicio/OrdenesFacturadas";
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
@@ -673,6 +674,14 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
                                             <Gota />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "ordenes-facturadas",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                            <OrdenesFacturadas />
                                         </RequirePermission>
                                     ),
                                 },

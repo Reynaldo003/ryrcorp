@@ -24,6 +24,7 @@ import { LINEAS_WHATSAPP } from "../../config/lineasWhatsApp";
 ============================================================ */
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const AGENCIAS = ["VW Córdoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"];
+const BUSINESS = ["Todos", "Nuevos", "Usados", "Comerciales"];
 
 const IMAGEN_HERO = "https://images.unsplash.com/photo-1603584173870-7f23fdae1b7a?auto=format&fit=crop&w=800&q=80";
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80";
@@ -1469,6 +1470,19 @@ function EmbudoComercial({ etapas = [], canales = [], pautas = [], loading }) {
   );
 }
 
+function getBusinessProspecto(prospecto) {
+  if (!prospecto) return "";
+
+  return String(
+    prospecto.business ||
+    prospecto.linea ||
+    prospecto.linea_negocio ||
+    prospecto.cliente?.business ||
+    prospecto.cliente?.linea ||
+    ""
+  ).trim();
+}
+
 /* ============================================================
     COMPONENTE PRINCIPAL
 ============================================================ */
@@ -1484,6 +1498,7 @@ export default function ProspectosDigitales() {
   const [añoSel, setAñoSel] = useState(añoActual);
   const [mesSel, setMesSel] = useState(mesActual);
   const [agenciaSel, setAgenciaSel] = useState("Todas");
+  const [businessSel, setBusinessSel] = useState("Todos");
 
   const rolUsuario = useMemo(() => {
     return normalizaTexto(
@@ -1590,11 +1605,7 @@ export default function ProspectosDigitales() {
     });
 
     return Array.from(mapa.values());
-  }, [
-    isAdmin,
-    agenciasUsuario,
-    numerosPermitidos
-  ]);
+  }, [isAdmin, agenciasUsuario, numerosPermitidos]);
 
   const lineasConsulta = useMemo(() => {
     if (isAdmin) {
@@ -1673,19 +1684,21 @@ export default function ProspectosDigitales() {
     };
 
     if (agenciaSel !== "Todas") {
-      const agencia = quitaAccentos(agenciaSel);
+      const agencia =
+        quitaAccentos(agenciaSel);
 
       params.agencia = agencia;
       params.agencia_nombre = agencia;
       params.sucursal = agencia;
     }
 
+    if (businessSel !== "Todos") {
+      params.business = businessSel;
+    }
+
     return params;
-  }, [
-    añoSel,
-    mesSel,
-    agenciaSel
-  ]);
+  }, [añoSel, mesSel, agenciaSel, businessSel]);
+
   const [data, setData] = useState(VACIO);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -2074,33 +2087,25 @@ export default function ProspectosDigitales() {
 
   const prospectosCohorte = useMemo(() => {
     return prospectosRaw
-      .filter((p) =>
+      .filter((prospecto) =>
         esDelPeriodo(
-          p,
+          prospecto,
           añoSel,
           mesSel + 1
         )
       )
 
-      /*
-       * Importante:
-       * la seguridad/alcan­ce ya fue aplicada
-       * al cargar por numero_asesor.
-       *
-       * No debemos volver a descartar registros
-       * basándonos en negocio.asesores.
-       */
-      .filter((p) =>
-        esProspectoDigitalValido(p)
+      .filter((prospecto) =>
+        esProspectoDigitalValido(prospecto)
       )
 
-      .filter((p) => {
+      .filter((prospecto) => {
         const agenciaProspecto =
           normalizaAgenciaGrupo(
-            p.agencia ||
-            p.sucursal ||
-            p.agencia_nombre ||
-            p.cliente?.agencia ||
+            prospecto.agencia ||
+            prospecto.sucursal ||
+            prospecto.agencia_nombre ||
+            prospecto.cliente?.agencia ||
             ""
           );
 
@@ -2109,16 +2114,15 @@ export default function ProspectosDigitales() {
         }
 
         /*
-         * Primero respetamos el alcance
+         * Primero validamos el alcance
          * permitido del usuario.
          */
         if (!isAdmin) {
           const perteneceAlUsuario =
             agenciasPermitidas.some(
               (agencia) =>
-                normalizaAgenciaGrupo(
-                  agencia
-                ) === agenciaProspecto
+                normalizaAgenciaGrupo(agencia) ===
+                agenciaProspecto
             );
 
           if (!perteneceAlUsuario) {
@@ -2127,26 +2131,66 @@ export default function ProspectosDigitales() {
         }
 
         /*
-         * Después aplicamos el filtro
-         * seleccionado en pantalla.
+         * Después aplicamos la agencia
+         * seleccionada en pantalla.
          */
-        if (agenciaSel === "Todas") {
-          return true;
+        if (agenciaSel !== "Todas") {
+          const agenciaSeleccionada =
+            normalizaAgenciaGrupo(
+              agenciaSel
+            );
+
+          if (
+            agenciaProspecto !==
+            agenciaSeleccionada
+          ) {
+            return false;
+          }
         }
 
-        return (
-          agenciaProspecto ===
-          normalizaAgenciaGrupo(
-            agenciaSel
-          )
-        );
+        /*
+         * Finalmente aplicamos
+         * el Business seleccionado.
+         */
+        if (businessSel !== "Todos") {
+          const businessProspecto =
+            normalizaTexto(
+              getBusinessProspecto(
+                prospecto
+              )
+            );
+
+          const businessSeleccionado =
+            normalizaTexto(
+              businessSel
+            );
+
+          if (
+            businessProspecto !==
+            businessSeleccionado
+          ) {
+            return false;
+          }
+        }
+
+        return true;
       })
 
-      .map((p) => ({
-        ...p,
-        _citaMatch: findCitaMatch(p)
+      .map((prospecto) => ({
+        ...prospecto,
+        _citaMatch:
+          findCitaMatch(prospecto)
       }));
-  }, [prospectosRaw, añoSel, mesSel, citasMap, agenciaSel, isAdmin, agenciasPermitidas]);
+  }, [
+    prospectosRaw,
+    añoSel,
+    mesSel,
+    citasMap,
+    agenciaSel,
+    businessSel,
+    isAdmin,
+    agenciasPermitidas
+  ]);
 
   /* CÁLCULOS DE METRICAS INTEGRADAS */
   const totalProspectos = prospectosCohorte.length;
@@ -2229,29 +2273,79 @@ export default function ProspectosDigitales() {
 
       {/* FILTROS VW */}
       <div className="bg-white rounded-xl p-3 md:p-4 border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto scrollbar-thin pb-1 xl:pb-0">
-          <button
-            onClick={() => setAgenciaSel("Todas")}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === "Todas"
-              ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-              : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
-              }`}
-          >
-            {isAdmin
-              ? "Todas las agencias"
-              : "Todas mis agencias"}
-          </button>
+        <div className="flex flex-col gap-3 min-w-0">
+          {/* DEALER */}
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[10px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+              Dealer
+            </span>
 
-          {agenciasPermitidas.map((agencia) => (
-            <button
-              key={agencia}
-              onClick={() =>
-                setAgenciaSel(agencia)
-              }
-              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === agencia ? "bg-[#001E50] text-white ring-2 ring-[#001E50]" : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"}`}>
-              {agencia}
-            </button>
-          ))}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setAgenciaSel("Todas")
+                }
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === "Todas"
+                  ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                  : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                  }`}
+              >
+                {isAdmin
+                  ? "Todas las agencias"
+                  : "Todas mis agencias"}
+              </button>
+
+              {agenciasPermitidas.map(
+                (agencia) => (
+                  <button
+                    key={agencia}
+                    type="button"
+                    onClick={() =>
+                      setAgenciaSel(agencia)
+                    }
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${agenciaSel === agencia
+                      ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                      : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                      }`}
+                  >
+                    {agencia}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* BUSINESS */}
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[10px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+              Business
+            </span>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {BUSINESS.map((business) => {
+                const activo = businessSel === business;
+
+                return (
+                  <button
+                    key={business}
+                    type="button"
+                    onClick={() => setBusinessSel(business)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${activo
+                        ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                        : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                      }`}
+                  >
+                    {activo && (
+                      <Check className="h-3 w-3" />
+                    )}
+
+                    {business}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
