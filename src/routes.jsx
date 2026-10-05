@@ -122,6 +122,7 @@ import AdministracionAsesores from "./pages/AdministracionAsesores/Administracio
 import GestorActividades from "./pages/GestorActividades/GestorActividades";
 import GestorActividadesLayout from "./pages/GestorActividades/GestorActividadesLayout";
 import VentasVN from "./pages/VentasVN/VentasVN";
+import VentasUsados from "./pages/VentasVN/VentasUsados";
 import ProductosEstoque from "./pages/GestionNegocio/ProductosEstoque";
 import Piezas from "./pages/GestionNegocio/Piezas";
 
@@ -951,6 +952,14 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_VALUADOR"]}>
                                             <RegistroAvaluos />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "ventas",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_VALUADOR"]}>
+                                            <VentasUsados />
                                         </RequirePermission>
                                     ),
                                 },

@@ -2,23 +2,26 @@
 
 import { http, buildQuery } from "./apiClient";
 
+export const CONDICION_USO = {
+  NUEVO: "N",
+  USADO: "U",
+};
+
 // ==========================================================
-// DASHBOARD AUTOS NUEVOS
+// DASHBOARD AUTOS
 // ==========================================================
 //
-// Consume:
 // GET /ventas-vn/api/dashboard/
 //
-// Parámetros disponibles:
+// Parámetros:
 // - fecha_desde
 // - fecha_hasta
 // - agencia
 // - asesor
 // - familia
 // - condicion_pago
-//
-// CondUso = "N" NO se envía.
-// El backend lo aplica siempre.
+// - venta_digital
+// - cond_uso: N | U
 // ==========================================================
 
 export function getVentasVNDashboard(params = {}) {
@@ -27,8 +30,6 @@ export function getVentasVNDashboard(params = {}) {
 
 // ==========================================================
 // DETALLE VW_VN
-//
-// Mantiene funcionando la tabla que ya construimos.
 // ==========================================================
 
 export function getVentasVNDetalle(params = {}) {

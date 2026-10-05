@@ -4912,51 +4912,58 @@ export default function DigitalesContacto() {
     }
 
     async function bloquearContactoActivo() {
-        if (!activeTel || blockingTel) return;
+        if (!activeTel || blockingTel || !numeroAsesorActivo) {
+            return;
+        }
 
         const ok = window.confirm(
             `¿Seguro que quieres bloquear a ${formateaTelUi(activeTel)}?\n\n` +
-            "Ya no podrá escribir a esta línea de WhatsApp y tampoco podrás enviarle mensajes hasta desbloquearlo."
+            "El bloqueo se aplicará únicamente a la línea de WhatsApp seleccionada."
         );
 
-        if (!ok) return;
+        if (!ok) {
+            return;
+        }
 
         setBlockingTel(activeTel);
+
+        const motivo = "Cliente bloqueado manualmente desde el chat";
 
         try {
             await api.digitalesBloquearContacto({
                 tel: activeTel,
-                motivo:
-                    "Cliente bloqueado manualmente desde el chat",
+                motivo,
                 numero_asesor: numeroAsesorActivo,
             });
 
-            setProspecto(prev => prev ? {
-                ...prev,
-                whatsapp_bloqueado: true,
-                whatsapp_bloqueado_motivo: "Cliente bloqueado manualmente desde el chat",
-                estado: "Descalificado",
-                ia_pausada: true,
-                ia_pausada_motivo: "cliente_bloqueado",
-            } : prev);
-
-            setChats(prev => prev.map(c =>
-                c.telefono === activeTel
+            setProspecto((prev) =>
+                prev
                     ? {
-                        ...c,
+                        ...prev,
                         whatsapp_bloqueado: true,
-                        whatsapp_bloqueado_motivo: "Cliente bloqueado manualmente desde el chat",
-                        estado: "Descalificado",
+                        whatsapp_bloqueado_motivo: motivo,
                     }
-                    : c
-            ));
+                    : prev
+            );
+
+            setChats((prev) =>
+                prev.map((chat) =>
+                    chat.telefono === activeTel
+                        ? {
+                            ...chat,
+                            whatsapp_bloqueado: true,
+                            whatsapp_bloqueado_motivo: motivo,
+                        }
+                        : chat
+                )
+            );
 
             mensajesCacheRef.current.delete(activeTel);
 
             await refreshActiveChat(activeTel).catch(() => { });
             await refreshChats().catch(() => { });
 
-            alert("Contacto bloqueado correctamente.");
+            alert("Contacto bloqueado únicamente en esta línea.");
         } catch (error) {
             alert(`No se pudo bloquear: ${error.message}`);
         } finally {
@@ -4964,15 +4971,18 @@ export default function DigitalesContacto() {
         }
     }
 
-
     async function desbloquearContactoActivo() {
-        if (!activeTel || blockingTel) return;
+        if (!activeTel || blockingTel || !numeroAsesorActivo) {
+            return;
+        }
 
         const ok = window.confirm(
-            `¿Deseas desbloquear a ${formateaTelUi(activeTel)}?`
+            `¿Deseas desbloquear a ${formateaTelUi(activeTel)} de esta línea de WhatsApp?`
         );
 
-        if (!ok) return;
+        if (!ok) {
+            return;
+        }
 
         setBlockingTel(activeTel);
 
@@ -4982,28 +4992,34 @@ export default function DigitalesContacto() {
                 numero_asesor: numeroAsesorActivo,
             });
 
-            setProspecto(prev => prev ? {
-                ...prev,
-                whatsapp_bloqueado: false,
-                whatsapp_bloqueado_motivo: "",
-            } : prev);
-
-            setChats(prev => prev.map(c =>
-                c.telefono === activeTel
+            setProspecto((prev) =>
+                prev
                     ? {
-                        ...c,
+                        ...prev,
                         whatsapp_bloqueado: false,
                         whatsapp_bloqueado_motivo: "",
                     }
-                    : c
-            ));
+                    : prev
+            );
+
+            setChats((prev) =>
+                prev.map((chat) =>
+                    chat.telefono === activeTel
+                        ? {
+                            ...chat,
+                            whatsapp_bloqueado: false,
+                            whatsapp_bloqueado_motivo: "",
+                        }
+                        : chat
+                )
+            );
 
             mensajesCacheRef.current.delete(activeTel);
 
             await refreshActiveChat(activeTel).catch(() => { });
             await refreshChats().catch(() => { });
 
-            alert("Contacto desbloqueado correctamente.");
+            alert("Contacto desbloqueado de esta línea.");
         } catch (error) {
             alert(`No se pudo desbloquear: ${error.message}`);
         } finally {

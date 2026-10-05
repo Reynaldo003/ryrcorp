@@ -53,6 +53,12 @@ export default function ComercialTopNav() {
                 icon: LayoutList,
                 show: submoduloVisible(user, "usados", "inventario", usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_VALUADOR"])),
             },
+            {
+                label: "Ventas",
+                href: "/usados/ventas",
+                icon: LayoutList,
+                show: submoduloVisible(user, "usados", "ventas", usadosActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS", "CRM_VALUADOR"])),
+            },
         ];
 
         return items.filter((x) => x.show);
