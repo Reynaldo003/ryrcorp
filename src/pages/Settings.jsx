@@ -3121,6 +3121,19 @@ function GlobalStyles() {
         height: 5px;
       }
 
+      /* El input de submódulo vive en .crm-perm-sub (no en .crm-perm-check),
+         así que las reglas de arriba nunca lo pintaban. Mismo estilo: fondo
+         azul + check blanco cuando está seleccionado. */
+      .crm-perm-sub input:checked + .crm-perm-checkbox {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+
+      .crm-perm-sub input:checked + .crm-perm-checkbox::after {
+        border-color: #fff;
+        transform: rotate(-45deg) translate(0, -1px) scale(1);
+      }
+
       .crm-perm-sub-label {
         min-width: 0;
       }

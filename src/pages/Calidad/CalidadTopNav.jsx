@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
 import { interfazActivada, submoduloVisible } from "../../config/interfaces";
-import { BadgeCheck, ShieldCheck, Cog, ThumbsUp, UndoDot, ClipboardPenLine, Wrench, Store, ClipboardX } from "lucide-react";
+import { BadgeCheck, Check, ShieldCheck, Cog, ThumbsUp, UndoDot, ClipboardPenLine, Wrench, Store, ClipboardX } from "lucide-react";
 
 const BRAND_BLUE = "#131E5C";
 
@@ -123,6 +123,8 @@ export default function CalidadTopNav() {
                                 }}
                             >
                                 <Icon className="h-4 w-4" />
+
+                                <Check className={`h-4 w-4 shrink-0 stroke-[3] ${active ? "" : "invisible"}`} />
                                 <span className="hidden sm:inline">{t.label}</span>
                             </Link>
                         );
