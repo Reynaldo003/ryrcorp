@@ -32,6 +32,11 @@ import {
     TableProperties,
     BarChart3,
     FileSpreadsheet,
+    Wrench,
+    Camera,
+    ListChecks,
+    CalendarClock,
+    ClipboardCheck,
 } from "lucide-react";
 import { apiAvaluos } from "../../lib/apiAvaluos";
 import { createPortal } from "react-dom";
@@ -97,7 +102,7 @@ function ModalSkeleton() {
     );
 }
 
-function Modal({ open, title, onClose, children, footer }) {
+function Modal({ open, title, subtitle, onClose, children, footer }) {
     if (!open) return null;
 
     return (
@@ -107,7 +112,7 @@ function Modal({ open, title, onClose, children, footer }) {
                 onClick={onClose}
             />
             <div className="absolute inset-0 flex items-end justify-center p-3 sm:items-center">
-                <div className="w-full max-w-7xl overflow-hidden rounded-lg border border-[#131E5C] bg-neutral-100 shadow-2xl">
+                <div className="w-full max-w-7xl overflow-hidden rounded-2xl border border-[#131E5C] bg-neutral-100 shadow-2xl">
                     <div
                         className="flex items-center justify-between gap-3 px-5 py-4"
                         style={{ backgroundColor: BRAND_BLUE }}
@@ -116,11 +121,16 @@ function Modal({ open, title, onClose, children, footer }) {
                             <div className="truncate text-base font-extrabold text-white">
                                 {title}
                             </div>
+                            {subtitle ? (
+                                <div className="mt-0.5 truncate text-xs font-semibold text-white/60">
+                                    {subtitle}
+                                </div>
+                            ) : null}
                         </div>
 
                         <button
                             onClick={onClose}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white hover:bg-white/15"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/20 bg-white/5 text-white hover:bg-white/15"
                             aria-label="Cerrar"
                         >
                             <X className="h-5 w-5" />
@@ -136,6 +146,15 @@ function Modal({ open, title, onClose, children, footer }) {
                     ) : null}
                 </div>
             </div>
+        </div>
+    );
+}
+
+function SectionBanner({ icon: Icon, title }) {
+    return (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#131E5C]/20 bg-[#131E5C]/5 px-4 py-3">
+            {Icon ? <Icon className="h-5 w-5 text-[#131E5C]" /> : null}
+            <span className="text-sm font-extrabold text-[#131E5C]">{title}</span>
         </div>
     );
 }
@@ -1222,6 +1241,16 @@ export default function RegistroAvaluos() {
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
+    const [activeTab, setActiveTab] = useState("cliente");
+
+    const TABS_AVALUO = [
+        { key: "cliente", label: "Cliente", icon: User },
+        { key: "vehiculo", label: "Vehículo", icon: CarFront },
+        { key: "valores", label: "Valores", icon: BadgeDollarSign },
+        { key: "tecnica", label: "Técnica", icon: Wrench },
+        { key: "evidencias", label: "Evidencias", icon: Camera },
+        { key: "lista", label: "Lista de verificación", icon: ClipboardList },
+    ];
 
     const [loadingList, setLoadingList] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
@@ -1330,6 +1359,22 @@ export default function RegistroAvaluos() {
     ];
 
     const TIPO_TOMA = ["Canal", "Auto a Cuenta"];
+
+    // Orígenes como en prospectos (NuevoProspectoModal: origenMeta + PAUTAS_BASE)
+    const ORIGENES_VALUACION = [
+        "Facebook",
+        "Facebook Ads",
+        "Instagram Ads",
+        "Google Ads",
+        "Campaña",
+        "WhatsApp",
+        "Llamada Entrante",
+        "VW-Concesionarios",
+        "Referido",
+        "Orgánico",
+        "Evento",
+        "Otro",
+    ];
 
     const MARCA = [
         "ACURA",
@@ -1454,8 +1499,8 @@ export default function RegistroAvaluos() {
     const telInvalid = !!telError;
 
     const inputBase =
-        "w-full rounded-lg border px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none transition-colors duration-150";
-    const inputOk = "border-black/10 bg-neutral-100";
+        "w-full rounded-lg border px-3 py-2 text-sm text-[#131E5C] font-semibold outline-none transition-colors duration-150 placeholder:text-[#131E5C]/40 placeholder:font-normal focus:ring-2 focus:ring-[#131E5C]/15";
+    const inputOk = "border-black/10 bg-neutral-100 focus:border-[#131E5C]/40";
     const inputBad = "border-red-500 bg-red-50";
 
     useEffect(() => {
@@ -1739,6 +1784,7 @@ export default function RegistroAvaluos() {
         cleanupDraftResources(draft);
         setTouchedSave(false);
         setMode("create");
+        setActiveTab("cliente");
 
         // Agencia por defecto: primera del usuario si no es admin
         const agenciaDefault = isAdmin ? "" : userAgencias[0] || "";
@@ -1752,6 +1798,15 @@ export default function RegistroAvaluos() {
             cliente_correo: "",
             fecha_avaluo: "",
             asesor_ventas: "",
+            // ── Solicitud / Seguimiento estilo Chevrolet (persistidos en BD) ──
+            tipo_valuacion: "Valoración",
+            vendedor: "",
+            agenda_valuacion: "",
+            origen_valuacion: "",
+            fecha_toma_cuenta: "",
+            fecha_finalizacion: "",
+            observaciones: "",
+            comentario_ticket: "Valuación",
             marca_auto: "",
             modelo: "",
             anio_modelo: "",
@@ -1783,6 +1838,7 @@ export default function RegistroAvaluos() {
             cleanupDraftResources(draft);
             setTouchedSave(false);
             setMode("edit");
+            setActiveTab("cliente");
             setLoadingDetail(true);
             setOpenModal(true);
 
@@ -1804,6 +1860,14 @@ export default function RegistroAvaluos() {
                 cliente_correo: item?.cliente?.correo || "",
                 fecha_avaluo: toDTLocal(item.fecha_avaluo),
                 asesor_ventas: item.asesor_ventas || "",
+                tipo_valuacion: item.tipo_valuacion || "Valoración",
+                vendedor: item.vendedor || "",
+                agenda_valuacion: toDTLocal(item.agenda_valuacion),
+                origen_valuacion: item.origen_valuacion || "",
+                fecha_toma_cuenta: toDTLocal(item.fecha_toma_cuenta),
+                fecha_finalizacion: toDTLocal(item.fecha_finalizacion),
+                observaciones: item.observaciones || "",
+                comentario_ticket: item.comentario_ticket || "Valuación",
                 marca_auto: item.marca_auto || "",
                 modelo: item.modelo || "",
                 anio_modelo: item.anio_modelo || "",
@@ -2030,6 +2094,14 @@ export default function RegistroAvaluos() {
                 correo: draft.cliente_correo || "",
                 fecha_avaluo: fromDTLocalToISO(draft.fecha_avaluo),
                 asesor_ventas: draft.asesor_ventas || "",
+                tipo_valuacion: draft.tipo_valuacion || "",
+                vendedor: draft.vendedor || "",
+                agenda_valuacion: fromDTLocalToISO(draft.agenda_valuacion),
+                origen_valuacion: draft.origen_valuacion || "",
+                fecha_toma_cuenta: fromDTLocalToISO(draft.fecha_toma_cuenta),
+                fecha_finalizacion: fromDTLocalToISO(draft.fecha_finalizacion),
+                observaciones: draft.observaciones || "",
+                comentario_ticket: draft.comentario_ticket || "",
                 marca_auto: draft.marca_auto || "",
                 modelo: draft.modelo || "",
                 anio_modelo: draft.anio_modelo || "",
@@ -2728,7 +2800,8 @@ export default function RegistroAvaluos() {
 
             <Modal
                 open={openModal}
-                title={mode === "create" ? "Nuevo Avalúo" : `Editar Avalúo • ${draft?.id}`}
+                title={mode === "create" ? "Nuevo avalúo" : `Editar avalúo • ${draft?.id}`}
+                subtitle="Gestión de avalúo Volkswagen"
                 onClose={closeModal}
                 footer={
                     <>
@@ -2742,7 +2815,14 @@ export default function RegistroAvaluos() {
                         </button>
 
                         <button
-                            onClick={save}
+                            onClick={() => {
+                                setTouchedSave(true);
+                                if (missing.length || !telIsOk) {
+                                    if (missing.includes("cliente_telefono") || telInvalid) setActiveTab("cliente");
+                                    else if (missing.includes("fecha_avaluo")) setActiveTab("cliente");
+                                }
+                                save();
+                            }}
                             disabled={
                                 saving ||
                                 loadingDetail ||
@@ -2764,8 +2844,37 @@ export default function RegistroAvaluos() {
                 {loadingDetail ? (
                     <ModalSkeleton />
                 ) : !draft ? null : (
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <Field label="Dealer" icon={Building2}>
+                    <div>
+                        {/* ── Tabs por sección ── */}
+                        <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                            {TABS_AVALUO.map((tab) => {
+                                const TabIcon = tab.icon;
+                                const isActive = activeTab === tab.key;
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab.key)}
+                                        className={[
+                                            "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition",
+                                            isActive
+                                                ? "bg-[#131E5C] text-white shadow"
+                                                : "bg-white text-slate-500 hover:bg-slate-50 hover:text-[#131E5C] border border-transparent",
+                                        ].join(" ")}
+                                    >
+                                        <TabIcon className="h-4 w-4" />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* ═══ SECCIÓN: CLIENTE ═══ */}
+                        {activeTab === "cliente" ? (
+                        <div>
+                        <SectionBanner icon={User} title="Datos del cliente y solicitud" />
+                        <div className="grid gap-3 md:grid-cols-3">
+                        <Field label="Distribuidor" icon={Building2}>
                             <select
                                 value={draft.agencia || ""}
                                 onChange={(e) =>
@@ -2813,23 +2922,20 @@ export default function RegistroAvaluos() {
                             ) : null}
                         </Field>
 
-                        <Field label="Asesor de ventas" icon={UserStar}>
+                        <Field label="Tipo de valuación" icon={ClipboardCheck}>
                             <select
-                                value={draft.asesor_ventas || ""}
+                                value={draft.tipo_valuacion || "Valoración"}
                                 onChange={(e) =>
                                     setDraft((prev) => ({
                                         ...prev,
-                                        asesor_ventas: e.target.value,
+                                        tipo_valuacion: e.target.value,
                                     }))
                                 }
                                 className={[inputBase, inputOk].join(" ")}
                             >
-                                <option value="">Selecciona un asesor...</option>
-                                {ASESORES.map((asesor) => (
-                                    <option key={asesor} value={asesor}>
-                                        {asesor}
-                                    </option>
-                                ))}
+                                <option value="Valoración">Valoración</option>
+                                <option value="Avalúo formal">Avalúo formal</option>
+                                <option value="Revaluación">Revaluación</option>
                             </select>
                         </Field>
 
@@ -2897,6 +3003,63 @@ export default function RegistroAvaluos() {
                             />
                         </Field>
 
+                        <Field label="Asesor de ventas" icon={UserStar}>
+                            <select
+                                value={draft.asesor_ventas || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        asesor_ventas: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                            >
+                                <option value="">Selecciona un asesor...</option>
+                                {ASESORES.map((asesor) => (
+                                    <option key={asesor} value={asesor}>
+                                        {asesor}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+
+                        <Field label="Vendedor" icon={User}>
+                            <input
+                                value={draft.vendedor || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        vendedor: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                                placeholder="Vendedor responsable"
+                            />
+                        </Field>
+
+                        <Field label="Agenda de valuación" icon={CalendarClock}>
+                            <input
+                                type="datetime-local"
+                                value={draft.agenda_valuacion || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        agenda_valuacion: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                            />
+                        </Field>
+                        </div>
+                        </div>
+                        ) : null}
+
+                        {/* ═══ SECCIÓN: VEHÍCULO ═══ */}
+                        {activeTab === "vehiculo" ? (
+                        <div>
+                        <SectionBanner icon={CarFront} title="Datos del vehículo" />
+                        <div className="grid gap-3 md:grid-cols-3">
+
                         <Field label="Marca de auto" icon={CarFront}>
                             <select
                                 value={draft.marca_auto}
@@ -2924,36 +3087,34 @@ export default function RegistroAvaluos() {
                                 placeholder="Ej. Jetta"
                             />
                         </Field>
-                        <div className="grid grid-cols-2">
-                            <Field label="Año modelo" icon={CalendarDays}>
-                                <input
-                                    value={draft.anio_modelo}
-                                    onChange={(e) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            anio_modelo: e.target.value
-                                                .replace(/[^\d]/g, "")
-                                                .slice(0, 4),
-                                        }))
-                                    }
-                                    className={[inputBase, inputOk].join(" ")}
-                                    placeholder="Ej. 2022"
-                                />
-                            </Field>
-                            <Field label="Kilometraje" icon={Gauge}>
-                                <input
-                                    value={draft.kilometraje}
-                                    onChange={(e) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            kilometraje: e.target.value,
-                                        }))
-                                    }
-                                    className={[inputBase, inputOk].join(" ")}
-                                    placeholder="Ej. 45000"
-                                />
-                            </Field>
-                        </div>
+                        <Field label="Año modelo" icon={CalendarDays}>
+                            <input
+                                value={draft.anio_modelo}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        anio_modelo: e.target.value
+                                            .replace(/[^\d]/g, "")
+                                            .slice(0, 4),
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                                placeholder="Ej. 2022"
+                            />
+                        </Field>
+                        <Field label="Kilometraje" icon={Gauge}>
+                            <input
+                                value={draft.kilometraje}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        kilometraje: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                                placeholder="Ej. 45000"
+                            />
+                        </Field>
                         <Field label="Serie" icon={Hash}>
                             <input
                                 value={draft.serie}
@@ -2965,6 +3126,45 @@ export default function RegistroAvaluos() {
                             />
                         </Field>
 
+                        <Field label="Color" icon={Palette}>
+                            <input
+                                value={draft.color}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({ ...prev, color: e.target.value }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                                placeholder="Ej. Blanco perlado"
+                            />
+                        </Field>
+
+                        <Field label="Tipo de toma" icon={ClipboardList}>
+                            <select
+                                value={draft.tipo_toma || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        tipo_toma: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                            >
+                                <option value="">Selecciona un tipo...</option>
+                                {TIPO_TOMA.map((tipo) => (
+                                    <option key={tipo} value={tipo}>
+                                        {tipo}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                        </div>
+                        </div>
+                        ) : null}
+
+                        {/* ═══ SECCIÓN: VALORES ═══ */}
+                        {activeTab === "valores" ? (
+                        <div>
+                        <SectionBanner icon={BadgeDollarSign} title="Valores y oferta" />
+                        <div className="grid gap-3 md:grid-cols-3">
                         <Field label="Precio Estimado Cliente" icon={BadgeDollarSign}>
                             <input
                                 value={draft.precio_guia}
@@ -3019,15 +3219,81 @@ export default function RegistroAvaluos() {
                             />
                         </Field>
 
-                        <Field label="Color" icon={Palette}>
-                            <input
-                                value={draft.color}
+                        </div>
+
+                        <div className="mb-4 mt-6 flex items-center gap-2 rounded-xl border border-[#131E5C]/20 bg-[#131E5C]/5 px-4 py-3">
+                            <span className="text-sm font-extrabold text-[#131E5C]">Seguimiento</span>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-3">
+                        <Field label="Origen de valuación" icon={ClipboardList}>
+                            <select
+                                value={draft.origen_valuacion || ""}
                                 onChange={(e) =>
-                                    setDraft((prev) => ({ ...prev, color: e.target.value }))
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        origen_valuacion: e.target.value,
+                                    }))
                                 }
                                 className={[inputBase, inputOk].join(" ")}
-                                placeholder="Ej. Blanco perlado"
+                            >
+                                <option value="">Selecciona un origen...</option>
+                                {ORIGENES_VALUACION.map((origen) => (
+                                    <option key={origen} value={origen}>
+                                        {origen}
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="mt-1 text-[11px] font-semibold text-slate-400">
+                                Como en prospectos: campaña, facebook, etc.
+                            </div>
+                        </Field>
+
+                        <Field label="Fecha toma cuenta" icon={CalendarClock}>
+                            <input
+                                type="datetime-local"
+                                value={draft.fecha_toma_cuenta || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        fecha_toma_cuenta: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
                             />
+                        </Field>
+
+                        <Field label="Fecha finalización" icon={CalendarDays}>
+                            <input
+                                type="datetime-local"
+                                value={draft.fecha_finalizacion || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        fecha_finalizacion: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                            />
+                        </Field>
+
+                        <Field label="Etapa del proceso" icon={ClipboardList}>
+                            <select
+                                value={draft.etapa_proceso || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        etapa_proceso: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk].join(" ")}
+                            >
+                                <option value="">Selecciona una etapa...</option>
+                                {ETAPAS_PROCESO.map((etapa) => (
+                                    <option key={etapa} value={etapa}>
+                                        {etapa}
+                                    </option>
+                                ))}
+                            </select>
                         </Field>
 
                         <Field label="Ganador de subasta" icon={Trophy}>
@@ -3043,47 +3309,146 @@ export default function RegistroAvaluos() {
                                 placeholder="Nombre del ganador"
                             />
                         </Field>
-                        <div className="grid grid-cols-2">
-                            <Field label="Etapa del proceso" icon={ClipboardList}>
-                                <select
-                                    value={draft.etapa_proceso || ""}
-                                    onChange={(e) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            etapa_proceso: e.target.value,
-                                        }))
-                                    }
-                                    className={[inputBase, inputOk].join(" ")}
-                                >
-                                    <option value="">Selecciona una etapa...</option>
-                                    {ETAPAS_PROCESO.map((etapa) => (
-                                        <option key={etapa} value={etapa}>
-                                            {etapa}
-                                        </option>
-                                    ))}
-                                </select>
+
+                        <Field label="Observaciones" icon={MessageSquareText} className="md:col-span-2">
+                            <textarea
+                                value={draft.observaciones || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        observaciones: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk, "min-h-[80px]"].join(" ")}
+                                placeholder="Observaciones adicionales de la valoración"
+                            />
+                        </Field>
+
+                        <Field label="Comentarios para ticket" icon={FileText}>
+                            <textarea
+                                value={draft.comentario_ticket || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        comentario_ticket: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk, "min-h-[80px]"].join(" ")}
+                                placeholder="Valuación"
+                            />
+                            <div className="mt-1 text-[11px] font-semibold text-slate-400">
+                                Este comentario solo aparece en el ticket.
+                            </div>
+                        </Field>
+
+                        </div>
+                        </div>
+                        ) : null}
+
+                        {/* ═══ SECCIÓN: TÉCNICA (incluye Valuación + descripción VW existente pero sin input) ═══ */}
+                        {activeTab === "tecnica" ? (
+                        <div>
+                        <SectionBanner icon={Wrench} title="Información técnica y valuación" />
+                        <div className="grid gap-3">
+                        <Field label="Valuación — conceptos de reparación" icon={ClipboardList}>
+                                <div className="space-y-4">
+                                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full text-sm">
+                                                <thead className="bg-[#131E5C] text-white">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left font-bold">Descripción</th>
+                                                        <th className="px-4 py-3 text-left font-bold">Costo</th>
+                                                        <th className="px-4 py-3 text-center font-bold">Acción</th>
+                                                    </tr>
+                                                </thead>
+
+                                                <tbody className="divide-y divide-slate-200">
+                                                    {(draft.conceptos || []).map((concepto, index) => (
+                                                        <tr key={`concepto-${concepto.id || index}`}>
+                                                            <td className="px-4 py-3 align-top">
+                                                                <textarea
+                                                                    value={concepto.descripcion}
+                                                                    onChange={(e) =>
+                                                                        actualizarConcepto(index, "descripcion", e.target.value)
+                                                                    }
+                                                                    rows={3}
+                                                                    className={[
+                                                                        inputBase,
+                                                                        inputOk,
+                                                                        "min-h-[84px] resize-y leading-5",
+                                                                    ].join(" ")}
+                                                                    placeholder="Ej. Hojalatería de fascia delantera"
+                                                                />
+                                                            </td>
+
+                                                            <td className="px-4 py-3 align-top min-w-[180px]">
+                                                                <input
+                                                                    value={concepto.costo}
+                                                                    onChange={(e) =>
+                                                                        actualizarConcepto(index, "costo", e.target.value)
+                                                                    }
+                                                                    className={[inputBase, inputOk].join(" ")}
+                                                                    placeholder="0.00"
+                                                                    inputMode="decimal"
+                                                                />
+                                                            </td>
+
+                                                            <td className="px-4 py-3 align-top text-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => eliminarConcepto(index)}
+                                                                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                                                                    title="Eliminar concepto"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+
+                                                <tfoot className="border-t border-slate-200 bg-slate-50">
+                                                    <tr>
+                                                        <td className="px-4 py-3 text-right font-extrabold text-[#131E5C]">
+                                                            Total reparación
+                                                        </td>
+                                                        <td className="px-4 py-3 font-extrabold text-[#131E5C]">
+                                                            {formatoMoneda(totalConceptos)}
+                                                        </td>
+                                                        <td className="px-4 py-3" />
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={agregarConcepto}
+                                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#131E5C]/90 px-4 py-3 font-bold text-white hover:bg-[#131E5C]"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Agregar concepto
+                                    </button>
+                                </div>
                             </Field>
 
-                            <Field label="Tipo de toma" icon={ClipboardList}>
-                                <select
-                                    value={draft.tipo_toma || ""}
-                                    onChange={(e) =>
-                                        setDraft((prev) => ({
-                                            ...prev,
-                                            tipo_toma: e.target.value,
-                                        }))
-                                    }
-                                    className={[inputBase, inputOk].join(" ")}
-                                >
-                                    <option value="">Selecciona un tipo...</option>
-                                    {TIPO_TOMA.map((tipo) => (
-                                        <option key={tipo} value={tipo}>
-                                            {tipo}
-                                        </option>
-                                    ))}
-                                </select>
-                            </Field>
-                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                        <Field label="Descripción del avalúo" icon={FileText}>
+                            <textarea
+                                value={draft.descripcion || ""}
+                                onChange={(e) =>
+                                    setDraft((prev) => ({
+                                        ...prev,
+                                        descripcion: e.target.value,
+                                    }))
+                                }
+                                className={[inputBase, inputOk, "min-h-[90px]"].join(" ")}
+                                placeholder="Descripción general del vehículo / avalúo..."
+                            />
+                        </Field>
+
                         <Field label="Comentarios" icon={MessageSquareText}>
                             <textarea
                                 value={draft.comentarios}
@@ -3093,12 +3458,20 @@ export default function RegistroAvaluos() {
                                         comentarios: e.target.value,
                                     }))
                                 }
-                                className={[inputBase, inputOk, "min-h-[30px]"].join(" ")}
+                                className={[inputBase, inputOk, "min-h-[90px]"].join(" ")}
                                 placeholder="Notas internas..."
                             />
                         </Field>
+                        </div>
+                        </div>
+                        </div>
+                        ) : null}
 
-                        <Field label="Evidencias" icon={Paperclip} className="lg:col-span-3 sm:col-span-1 ">
+                        {/* ═══ SECCIÓN: EVIDENCIAS ═══ */}
+                        {activeTab === "evidencias" ? (
+                        <div>
+                        <SectionBanner icon={Camera} title="Evidencias fotográficas y archivos" />
+                        <Field label="Evidencias" icon={Paperclip}>
                             <div className="space-y-4">
                                 <input
                                     ref={fileInputRef}
@@ -3187,92 +3560,25 @@ export default function RegistroAvaluos() {
                                 ) : null}
                             </div>
                         </Field>
-
-                        <div className="col-span-3">
-                            <Field label="Valuación" icon={ClipboardList}>
-                                <div className="space-y-4">
-                                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full text-sm">
-                                                <thead className="bg-[#131E5C] text-white">
-                                                    <tr>
-                                                        <th className="px-4 py-3 text-left font-bold">Descripción</th>
-                                                        <th className="px-4 py-3 text-left font-bold">Costo</th>
-                                                        <th className="px-4 py-3 text-center font-bold">Acción</th>
-                                                    </tr>
-                                                </thead>
-
-                                                <tbody className="divide-y divide-slate-200">
-                                                    {(draft.conceptos || []).map((concepto, index) => (
-                                                        <tr key={`concepto-${concepto.id || index}`}>
-                                                            <td className="px-4 py-3 align-top">
-                                                                <textarea
-                                                                    value={concepto.descripcion}
-                                                                    onChange={(e) =>
-                                                                        actualizarConcepto(index, "descripcion", e.target.value)
-                                                                    }
-                                                                    rows={3}
-                                                                    className={[
-                                                                        inputBase,
-                                                                        inputOk,
-                                                                        "min-h-[84px] resize-y leading-5",
-                                                                    ].join(" ")}
-                                                                    placeholder="Ej. Hojalatería de fascia delantera"
-                                                                />
-                                                            </td>
-
-                                                            <td className="px-4 py-3 align-top min-w-[180px]">
-                                                                <input
-                                                                    value={concepto.costo}
-                                                                    onChange={(e) =>
-                                                                        actualizarConcepto(index, "costo", e.target.value)
-                                                                    }
-                                                                    className={[inputBase, inputOk].join(" ")}
-                                                                    placeholder="0.00"
-                                                                    inputMode="decimal"
-                                                                />
-                                                            </td>
-
-                                                            <td className="px-4 py-3 align-top text-center">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => eliminarConcepto(index)}
-                                                                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                                                                    title="Eliminar concepto"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-
-                                                <tfoot className="border-t border-slate-200 bg-slate-50">
-                                                    <tr>
-                                                        <td className="px-4 py-3 text-right font-extrabold text-[#131E5C]">
-                                                            Total reparación
-                                                        </td>
-                                                        <td className="px-4 py-3 font-extrabold text-[#131E5C]">
-                                                            {formatoMoneda(totalConceptos)}
-                                                        </td>
-                                                        <td className="px-4 py-3" />
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={agregarConcepto}
-                                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#131E5C]/90 px-4 py-3 font-bold text-white hover:bg-[#131E5C]"
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                        Agregar concepto
-                                    </button>
-                                </div>
-                            </Field>
                         </div>
+                        ) : null}
+
+                        {/* ═══ SECCIÓN: LISTA DE VERIFICACIÓN (vacía por ahora, según lo acordado) ═══ */}
+                        {activeTab === "lista" ? (
+                        <div>
+                        <SectionBanner icon={ListChecks} title="Lista de verificación" />
+                        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                            <ListChecks className="mx-auto h-10 w-10 text-slate-300" />
+                            <div className="mt-3 text-sm font-extrabold text-[#131E5C]">
+                                Lista de verificación pendiente de definir
+                            </div>
+                            <div className="mx-auto mt-1 max-w-md text-xs font-semibold text-slate-500">
+                                Esta pestaña queda reservada para el checklist estilo Chevrolet.
+                                Por ahora no bloquea el guardado y no se elimina ningún campo de Volkswagen.
+                            </div>
+                        </div>
+                        </div>
+                        ) : null}
 
                     </div>
                 )}
