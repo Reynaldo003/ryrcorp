@@ -144,6 +144,7 @@ export default function Tableros() {
                 periodoAnio={periodoAnio}
                 setPeriodoAnio={setPeriodoAnio}
                 mesesSeleccionados={mesesSeleccionados}
+                setMesesSeleccionados={setMesesSeleccionados}
                 seleccionarMes={seleccionarMes}
             />
 
@@ -156,7 +157,7 @@ export default function Tableros() {
                         onDragStart={() => iniciarArrastre(panel.id)}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => moverPanel(panel.id)}
-                        className=""
+                        className="h-full"
                     >
                         <TarjetaPanel
                             panel={panel}

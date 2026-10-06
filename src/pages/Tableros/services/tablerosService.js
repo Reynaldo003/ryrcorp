@@ -2527,156 +2527,247 @@ export async function obtenerDatosSubmodulo(moduloId, submoduloId, filtros = {})
     }
 
     /* =========================
-       INVENTARIO
+    INVENTARIO
     ========================= */
 
     if (moduloId === "gestion_negocio" && submoduloId === "inventario") {
         try {
-            const filtrosInv = await apiInventario.getFiltros().catch(() => ({ agencias: [], estatus: [] }));
-            const agenciasLista = filtrosInv?.agencias || [];
+            const filtrosInv = await apiInventario.getFiltros();
+            const agenciasLista = Array.isArray(filtrosInv?.agencias) ? filtrosInv.agencias : [];
 
             let codigoAgencia;
+
             if (agenciaLimpia) {
-                const encontrada = agenciasLista.find(a => coincideAgencia(a.nombre, agenciaLimpia));
-                codigoAgencia = encontrada ? encontrada.codigo : agenciaLimpia;
+                const encontrada = agenciasLista.find(a => coincideAgencia(a.nombre || a.agenciaNombre || a.codigo, agenciaLimpia));
+                codigoAgencia = encontrada?.codigo;
             }
 
-            const paramsAPI = { condicion: "N", agencia: codigoAgencia };
+            const paramsAPI = {
+                condicion: "N",
+                agencia: codigoAgencia || undefined,
+            };
 
-            const [resInventario, resCosto] = await Promise.allSettled([
+            const [dataVehiculos, costoBackend] = await Promise.all([
                 apiInventario.getInventario(paramsAPI),
                 apiInventario.getCosto(paramsAPI),
             ]);
 
-            const dataVehiculos = resInventario.status === "fulfilled" && Array.isArray(resInventario.value) ? resInventario.value : [];
-            let rawVehiculos = dataVehiculos.filter(v => !ESTATUS_EXCLUIDOS.includes((v.StEstoque || "").trim()));
-
-            if (agenciaLimpia && rawVehiculos.length > 0) {
-                rawVehiculos = rawVehiculos.filter(v => {
-                    const familia = String(v.NmFamilia || "").trim().toUpperCase();
-                    const esComercial = MODELOS_COMERCIALES.some(m => familia.includes(m));
-                    if (esComercial) return false;
-                    return coincideAgencia(v.agenciaNombre || v.agencia, agenciaLimpia);
-                });
+            if (!Array.isArray(dataVehiculos)) {
+                throw new Error("El servicio de inventario no devolvió una lista válida.");
             }
-
-            let totalActivo = 0;
-            let costoInventario = 0;
-            let unidadesFueraGracia = 0;
-            let costoFinancieroTotal = 0;
 
             const periodoGracia = 30;
             const tasaAnual = 6.7458;
-            const buckets = { "0-30": 0, "31-60": 0, "61-90": 0, "91-120": 0, "+120": 0 };
-            const modelosCount = {};
-            const costoPorModeloMap = {};
 
-            if (rawVehiculos.length > 0) {
-                totalActivo = rawVehiculos.length;
+            const vehiculosActivos = dataVehiculos.filter(v => {
+                const estatus = String(v?.StEstoque || "").trim();
+                return !ESTATUS_EXCLUIDOS.includes(estatus);
+            });
 
-                rawVehiculos.forEach(v => {
-                    const valorCompra = Number(v.VrNF_Compra) || 0;
-                    const dias = v.diasEnStock != null ? Number(v.diasEnStock) : 0;
-                    const modelo = String(v.NmFamilia || v.EdiModelo || "Otro").trim();
+            const vehiculosCalculados = vehiculosActivos.map(v => {
+                const diasEnStock = v?.diasEnStock === null || v?.diasEnStock === undefined ? null : Number(v.diasEnStock);
+                const valorCompra = Number(v?.VrNF_Compra);
 
-                    costoInventario += valorCompra;
-
-                    if (dias <= 30) buckets["0-30"]++;
-                    else if (dias <= 60) buckets["31-60"]++;
-                    else if (dias <= 90) buckets["61-90"]++;
-                    else if (dias <= 120) buckets["91-120"]++;
-                    else buckets["+120"]++;
-
-                    modelosCount[modelo] = (modelosCount[modelo] || 0) + 1;
-
-                    if (dias > periodoGracia) {
-                        const diasFuera = dias - periodoGracia;
-                        const costoTot = ((valorCompra * (tasaAnual / 100)) / 360) * diasFuera;
-
-                        unidadesFueraGracia++;
-                        costoFinancieroTotal += costoTot;
-                        costoPorModeloMap[modelo] = (costoPorModeloMap[modelo] || 0) + costoTot;
-                    }
-                });
-
-                if (resCosto.status === "fulfilled" && Number(resCosto.value) > 0) {
-                    costoInventario = Number(resCosto.value);
+                if (!Number.isFinite(diasEnStock) || diasEnStock <= periodoGracia || !Number.isFinite(valorCompra)) {
+                    return {
+                        ...v,
+                        diasFueraGracia: null,
+                        costoFinancieroTotal: 0,
+                    };
                 }
-            } else {
-                const agNorm = normalizarTexto(agenciaLimpia);
 
-                if (agNorm.includes("cordoba")) {
-                    totalActivo = 56; costoInventario = 23249696; unidadesFueraGracia = 27; costoFinancieroTotal = 134552.94;
-                } else if (agNorm.includes("orizaba")) {
-                    totalActivo = 67; costoInventario = 30800000; unidadesFueraGracia = 34; costoFinancieroTotal = 253526.47;
-                } else if (agNorm.includes("tuxtepec")) {
-                    totalActivo = 53; costoInventario = 24400000; unidadesFueraGracia = 29; costoFinancieroTotal = 193025.10;
-                } else if (agNorm.includes("tuxpan")) {
-                    totalActivo = 43; costoInventario = 19800000; unidadesFueraGracia = 22; costoFinancieroTotal = 169451.22;
-                } else if (agNorm.includes("poza rica")) {
-                    totalActivo = 55; costoInventario = 25300000; unidadesFueraGracia = 18; costoFinancieroTotal = 157770.84;
-                } else {
-                    totalActivo = 296; costoInventario = 136489475; unidadesFueraGracia = 172; costoFinancieroTotal = 1394961;
-                }
-            }
+                const diasFueraGracia = diasEnStock - periodoGracia;
+                const costoFinancieroDiario = (valorCompra * (tasaAnual / 100)) / 360;
+                const costoFinancieroTotal = costoFinancieroDiario * diasFueraGracia;
+
+                return {
+                    ...v,
+                    diasFueraGracia,
+                    costoFinancieroDiario,
+                    costoFinancieroTotal,
+                };
+            });
+
+            const totalActivo = vehiculosCalculados.length;
+
+            const costoInventarioCalculado = vehiculosCalculados.reduce((total, v) => {
+                const valor = Number(v?.VrNF_Compra);
+                return total + (Number.isFinite(valor) ? valor : 0);
+            }, 0);
+
+            const costoInventario =
+                Number.isFinite(Number(costoBackend)) && Number(costoBackend) > 0
+                    ? Number(costoBackend)
+                    : costoInventarioCalculado;
+
+            const unidadesFueraGracia = vehiculosCalculados.filter(v => Number(v?.diasFueraGracia || 0) > 0).length;
+
+            const costoFinancieroTotal = vehiculosCalculados.reduce(
+                (total, v) => total + Number(v?.costoFinancieroTotal || 0),
+                0
+            );
+
+            /* ANTIGÜEDAD REAL */
+            const buckets = {
+                "0-30": 0,
+                "31-60": 0,
+                "61-90": 0,
+                "91-120": 0,
+                "+120": 0,
+            };
+
+            vehiculosCalculados.forEach(v => {
+                const dias = Number(v?.diasEnStock);
+
+                if (!Number.isFinite(dias)) return;
+
+                if (dias <= 30) buckets["0-30"]++;
+                else if (dias <= 60) buckets["31-60"]++;
+                else if (dias <= 90) buckets["61-90"]++;
+                else if (dias <= 120) buckets["91-120"]++;
+                else buckets["+120"]++;
+            });
 
             const antiguedadData = [
-                { name: "0-30 días", cantidad: buckets["0-30"] || Math.round(totalActivo * 0.42), porcentaje: totalActivo > 0 ? Math.round(((buckets["0-30"] || Math.round(totalActivo * 0.42)) / totalActivo) * 100) : 42, estado: "optimo" },
-                { name: "31-60 días", cantidad: buckets["31-60"] || Math.round(totalActivo * 0.21), porcentaje: totalActivo > 0 ? Math.round(((buckets["31-60"] || Math.round(totalActivo * 0.21)) / totalActivo) * 100) : 21, estado: "alerta" },
-                { name: "61-90 días", cantidad: buckets["61-90"] || Math.round(totalActivo * 0.08), porcentaje: totalActivo > 0 ? Math.round(((buckets["61-90"] || Math.round(totalActivo * 0.08)) / totalActivo) * 100) : 8, estado: "critico" },
-                { name: "91-120 días", cantidad: buckets["91-120"] || Math.round(totalActivo * 0.07), porcentaje: totalActivo > 0 ? Math.round(((buckets["91-120"] || Math.round(totalActivo * 0.07)) / totalActivo) * 100) : 7, estado: "critico" },
-                { name: ">120 días", cantidad: buckets["+120"] || Math.round(totalActivo * 0.22), porcentaje: totalActivo > 0 ? Math.round(((buckets["+120"] || Math.round(totalActivo * 0.22)) / totalActivo) * 100) : 22, estado: "obsoleto" },
-            ];
+                { name: "0-30 días", cantidad: buckets["0-30"], estado: "optimo" },
+                { name: "31-60 días", cantidad: buckets["31-60"], estado: "alerta" },
+                { name: "61-90 días", cantidad: buckets["61-90"], estado: "critico" },
+                { name: "91-120 días", cantidad: buckets["91-120"], estado: "critico" },
+                { name: ">120 días", cantidad: buckets["+120"], estado: "obsoleto" },
+            ].map(item => ({
+                ...item,
+                porcentaje: totalActivo > 0 ? Math.round((item.cantidad / totalActivo) * 100) : 0,
+            }));
 
-            const modelosData = Object.keys(modelosCount).length > 0
-                ? Object.entries(modelosCount).map(([name, cantidad]) => ({ name, cantidad })).sort((a, b) => b.cantidad - a.cantidad).slice(0, 7)
-                : [
-                    { name: "Nuevo Tiguan", cantidad: Math.max(1, Math.round(totalActivo * 0.22)) },
-                    { name: "Nuevo Virtus", cantidad: Math.max(1, Math.round(totalActivo * 0.18)) },
-                    { name: "Taos", cantidad: Math.max(1, Math.round(totalActivo * 0.14)) },
-                    { name: "T-Cross", cantidad: Math.max(1, Math.round(totalActivo * 0.10)) },
-                    { name: "Polo", cantidad: Math.max(1, Math.round(totalActivo * 0.08)) },
-                ];
+            /* MODELOS REALES */
+            const modelosMap = {};
+
+            vehiculosCalculados.forEach(v => {
+                const modelo = String(v?.NmFamilia || v?.EdiModelo || "").trim();
+                if (!modelo) return;
+
+                modelosMap[modelo] = (modelosMap[modelo] || 0) + 1;
+            });
+
+            const modelosData = Object.entries(modelosMap)
+                .map(([name, cantidad]) => ({ name, cantidad }))
+                .sort((a, b) => b.cantidad - a.cantidad)
+                .slice(0, 7);
+
+            /* COSTO FINANCIERO REAL POR AGENCIA */
+            const costosAgenciaMap = {};
+
+            vehiculosCalculados.forEach(v => {
+                const familia = String(v?.NmFamilia || "").trim().toUpperCase();
+
+                const esComercial = MODELOS_COMERCIALES.some(modelo =>
+                    familia.includes(modelo.toUpperCase())
+                );
+
+                const agencia = esComercial
+                    ? "Vehiculos Comerciales"
+                    : String(v?.agenciaNombre || v?.agencia || "Sin agencia").trim();
+
+                if (!costosAgenciaMap[agencia]) {
+                    costosAgenciaMap[agencia] = {
+                        name: agencia,
+                        cantidad: 0,
+                        vehiculosFuera: 0,
+                    };
+                }
+
+                costosAgenciaMap[agencia].cantidad += Number(v?.costoFinancieroTotal || 0);
+
+                if (Number(v?.diasFueraGracia || 0) > 0) {
+                    costosAgenciaMap[agencia].vehiculosFuera++;
+                }
+            });
+
+            let costoFinancieroChart = Object.values(costosAgenciaMap)
+                .filter(item => item.cantidad > 0)
+                .map(item => ({
+                    ...item,
+                    cantidad: Number(item.cantidad.toFixed(2)),
+                }))
+                .sort((a, b) => b.cantidad - a.cantidad);
 
             let tituloCostoChart = "Costo Financiero por Concesionaria";
-            let costoFinancieroChart = [];
 
+            /* SI SE SELECCIONÓ UNA AGENCIA, AGRUPAR POR MODELO */
             if (agenciaLimpia) {
                 tituloCostoChart = `Costo Financiero en ${filtros.agencia} por Modelo`;
 
-                costoFinancieroChart = Object.keys(costoPorModeloMap).length > 0
-                    ? Object.entries(costoPorModeloMap).map(([name, val]) => ({ name, cantidad: Number(val.toFixed(2)) })).sort((a, b) => b.cantidad - a.cantidad)
-                    : [
-                        { name: "Nuevo Tiguan", cantidad: Number((costoFinancieroTotal * 0.38).toFixed(2)) },
-                        { name: "Taos", cantidad: Number((costoFinancieroTotal * 0.28).toFixed(2)) },
-                        { name: "Nuevo Virtus", cantidad: Number((costoFinancieroTotal * 0.18).toFixed(2)) },
-                        { name: "Teramont", cantidad: Number((costoFinancieroTotal * 0.16).toFixed(2)) },
-                    ];
-            } else {
-                costoFinancieroChart = [
-                    { name: "Vehiculos Comerciales", cantidad: 486634.37, vehiculosFuera: 42 },
-                    { name: "Orizaba", cantidad: 253526.47, vehiculosFuera: 34 },
-                    { name: "Tuxtepec", cantidad: 193025.10, vehiculosFuera: 29 },
-                    { name: "Tuxpan", cantidad: 169451.22, vehiculosFuera: 22 },
-                    { name: "Poza Rica", cantidad: 157770.84, vehiculosFuera: 18 },
-                    { name: "Córdoba", cantidad: 134552.94, vehiculosFuera: 27 },
-                ];
+                const costosModeloMap = {};
+
+                vehiculosCalculados.forEach(v => {
+                    const modelo = String(v?.NmFamilia || v?.EdiModelo || "").trim();
+                    if (!modelo) return;
+
+                    if (!costosModeloMap[modelo]) {
+                        costosModeloMap[modelo] = {
+                            name: modelo,
+                            cantidad: 0,
+                            vehiculosFuera: 0,
+                        };
+                    }
+
+                    costosModeloMap[modelo].cantidad += Number(v?.costoFinancieroTotal || 0);
+
+                    if (Number(v?.diasFueraGracia || 0) > 0) {
+                        costosModeloMap[modelo].vehiculosFuera++;
+                    }
+                });
+
+                costoFinancieroChart = Object.values(costosModeloMap)
+                    .filter(item => item.cantidad > 0)
+                    .map(item => ({ ...item, cantidad: Number(item.cantidad.toFixed(2)) }))
+                    .sort((a, b) => b.cantidad - a.cantidad)
+                    .slice(0, 10);
             }
 
             return {
                 tipo: "inventario",
                 agenciaSeleccionada: filtros.agencia,
+
                 kpis: [
-                    { label: "Stock Activo", valor: `${totalActivo.toLocaleString("es-MX")} uds`, sub: "Inventario considerado", icon: Car },
-                    { label: "Valor Compra", valor: `$${Math.round(costoInventario).toLocaleString("es-MX")}`, sub: "Suma valor de compra", icon: CreditCard },
-                    { label: "Fuera de Gracia", valor: `${unidadesFueraGracia.toLocaleString("es-MX")} uds`, sub: "> 30 días", icon: AlertCircle, alert: true },
-                    { label: "Costo Financiero", valor: `$${Math.round(costoFinancieroTotal).toLocaleString("es-MX")}`, sub: "Tasa 6.7458%", icon: HandCoins, alert: true },
+                    {
+                        label: "Stock Activo",
+                        valor: `${totalActivo.toLocaleString("es-MX")} uds`,
+                        sub: "Inventario considerado",
+                        icon: Car,
+                    },
+                    {
+                        label: "Valor Compra",
+                        valor: `$${Math.round(costoInventario).toLocaleString("es-MX")}`,
+                        sub: "Suma valor de compra",
+                        icon: CreditCard,
+                    },
+                    {
+                        label: "Fuera de Gracia",
+                        valor: `${unidadesFueraGracia.toLocaleString("es-MX")} uds`,
+                        sub: `> ${periodoGracia} días`,
+                        icon: AlertCircle,
+                        alert: true,
+                    },
+                    {
+                        label: "Costo Financiero",
+                        valor: `$${Math.round(costoFinancieroTotal).toLocaleString("es-MX")}`,
+                        sub: `Tasa ${tasaAnual.toFixed(4)}%`,
+                        icon: HandCoins,
+                        alert: true,
+                    },
                 ],
-                dimensiones: { antiguedad: antiguedadData, modelos: modelosData, costoChart: costoFinancieroChart, tituloCostoChart },
+
+                dimensiones: {
+                    antiguedad: antiguedadData,
+                    modelos: modelosData,
+                    costoChart: costoFinancieroChart,
+                    tituloCostoChart,
+                },
             };
         } catch (err) {
             console.error("Error al obtener inventario:", err);
-            throw err;
+            throw new Error("No fue posible obtener los datos reales de Inventario.");
         }
     }
 
