@@ -37,8 +37,11 @@ import {
     ListChecks,
     CalendarClock,
     ClipboardCheck,
+    Printer,
 } from "lucide-react";
 import { apiAvaluos } from "../../lib/apiAvaluos";
+import { http as httpDescarga } from "../../lib/apiPruebas";
+import ChecklistVerificacion from "./ChecklistVerificacion";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import ReactECharts from "echarts-for-react";
@@ -1255,6 +1258,7 @@ export default function RegistroAvaluos() {
     const [loadingList, setLoadingList] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [imprimiendoChecklist, setImprimiendoChecklist] = useState(false);
     const [touchedSave, setTouchedSave] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT);
@@ -1826,6 +1830,7 @@ export default function RegistroAvaluos() {
             evidencias_existentes: [],
             evidencias_nuevas: [],
             delete_evidencia_ids: [],
+            checklist_cpo: null,
         });
 
         setOpenModal(true);
@@ -1887,6 +1892,7 @@ export default function RegistroAvaluos() {
                 evidencias_existentes: normalizarEvidenciasAvaluo(item),
                 evidencias_nuevas: [],
                 delete_evidencia_ids: [],
+                checklist_cpo: item.checklist_cpo || null,
             });
         } catch (error) {
             console.error(error);
@@ -2059,6 +2065,35 @@ export default function RegistroAvaluos() {
         });
     };
 
+    const onChecklistChange = useCallback((snapshot) => {
+        setDraft((prev) => (prev ? { ...prev, checklist_cpo: snapshot } : prev));
+    }, []);
+
+    const imprimirChecklist = async () => {
+        if (!draft?.id) {
+            alert("Guarda el avalúo antes de imprimir la lista de verificación.");
+            return;
+        }
+
+        setImprimiendoChecklist(true);
+
+        try {
+            const { blob } = await httpDescarga(
+                `/usados/api/avaluos/${draft.id}/checklist-pdf/`,
+                { method: "GET", responseType: "blob" }
+            );
+
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+            window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (error) {
+            console.error("Error generando PDF del checklist:", error);
+            alert("No se pudo generar el PDF de la lista de verificación.");
+        } finally {
+            setImprimiendoChecklist(false);
+        }
+    };
+
     const save = async () => {
         if (!draft || saving) return;
 
@@ -2123,6 +2158,7 @@ export default function RegistroAvaluos() {
                 etapa_proceso: draft.etapa_proceso || "",
                 tipo_toma: draft.tipo_toma || "",
                 comentarios: draft.comentarios || "",
+                checklist_cpo_json: JSON.stringify(draft.checklist_cpo || {}),
                 delete_evidencia_ids: draft.delete_evidencia_ids || [],
                 evidencias_nuevas: (draft.evidencias_nuevas || []).map(
                     (item) => item.file
@@ -3563,20 +3599,46 @@ export default function RegistroAvaluos() {
                         </div>
                         ) : null}
 
-                        {/* ═══ SECCIÓN: LISTA DE VERIFICACIÓN (vacía por ahora, según lo acordado) ═══ */}
+                        {/* ═══ SECCIÓN: LISTA DE VERIFICACIÓN (checklist CPO 114, persistido en BD) ═══ */}
                         {activeTab === "lista" ? (
                         <div>
                         <SectionBanner icon={ListChecks} title="Lista de verificación" />
-                        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-                            <ListChecks className="mx-auto h-10 w-10 text-slate-300" />
-                            <div className="mt-3 text-sm font-extrabold text-[#131E5C]">
-                                Lista de verificación pendiente de definir
-                            </div>
-                            <div className="mx-auto mt-1 max-w-md text-xs font-semibold text-slate-500">
-                                Esta pestaña queda reservada para el checklist estilo Chevrolet.
-                                Por ahora no bloquea el guardado y no se elimina ningún campo de Volkswagen.
-                            </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-[#131E5C]/15 bg-[#131E5C]/5 px-4 py-3">
+                            <span className="text-xs font-bold text-[#131E5C]">
+                                Checklist CPO de 114 puntos. Se guarda al guardar el avalúo y se
+                                imprime en PDF con los datos capturados.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={imprimirChecklist}
+                                disabled={imprimiendoChecklist || saving}
+                                className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-4 py-2 text-sm font-extrabold text-white transition hover:bg-[#131E5C]/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {imprimiendoChecklist ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Printer className="h-4 w-4" />
+                                )}
+                                {imprimiendoChecklist ? "Generando PDF..." : "Imprimir PDF"}
+                            </button>
+                            {!draft?.id ? (
+                                <span className="w-full text-[11px] font-semibold text-slate-500">
+                                    Guarda el avalúo para habilitar la impresión del PDF.
+                                </span>
+                            ) : null}
                         </div>
+                        <ChecklistVerificacion
+                            key={draft?.id || "nuevo"}
+                            value={draft?.checklist_cpo || null}
+                            onChange={onChecklistChange}
+                            info={{
+                                folio: draft?.id ? `UC-${String(draft.id).padStart(4, "0")}` : "Nuevo",
+                                vin: draft?.serie || "",
+                                modelo: [draft?.marca_auto, draft?.modelo, draft?.anio_modelo].filter(Boolean).join(" ") || "",
+                                km: draft?.kilometraje || "",
+                                cliente: draft?.cliente_nombre || "",
+                            }}
+                        />
                         </div>
                         ) : null}
 
