@@ -2492,19 +2492,6 @@ export default function DigitalesContacto() {
     }, [rolUsuario, permisosUsuario]);
 
 
-    const puedeVerAsignacion = useMemo(() => {
-        const esCoordinadorDigital =
-            rolUsuario.includes("coordinador") &&
-            rolUsuario.includes("digital");
-
-
-        return (
-            isAdmin ||
-            esCoordinadorDigital ||
-            permisosUsuario.includes("crm_coordinador_digital")
-        );
-    }, [isAdmin, rolUsuario, permisosUsuario]);
-
     const numerosAsignados = useMemo(
         () => obtenerNumerosWhatsAppUsuario(user),
         [user]
@@ -5945,23 +5932,21 @@ export default function DigitalesContacto() {
                                                             <div className="flex items-start justify-between gap-2">
                                                                 <div className="flex min-w-0 items-center gap-1.5">
                                                                     <div className="truncate text-sm font-extrabold text-[#131E5C] leading-tight">{chat.nombre}</div>
-                                                                    {puedeVerAsignacion ? (
-                                                                        <span
-                                                                            className={cls(
-                                                                                "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold leading-tight",
-                                                                                asesorVisual.className
-                                                                            )}
-                                                                            title={
-                                                                                chat.asesor_digital
-                                                                                    ? `Prospecto asignado a ${chat.asesor_digital}`
-                                                                                    : "Prospecto todavía sin asesor asignado"
-                                                                            }
-                                                                        >
-                                                                            <UserRound className="h-2.5 w-2.5" />
+                                                                    <span
+                                                                        className={cls(
+                                                                            "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold leading-tight",
+                                                                            asesorVisual.className
+                                                                        )}
+                                                                        title={
+                                                                            chat.asesor_digital
+                                                                                ? `Prospecto asignado a ${chat.asesor_digital}`
+                                                                                : "Prospecto todavía sin asesor asignado"
+                                                                        }
+                                                                    >
+                                                                        <UserRound className="h-2.5 w-2.5" />
 
-                                                                            {asesorVisual.nombreCorto}
-                                                                        </span>
-                                                                    ) : null}
+                                                                        {asesorVisual.nombreCorto}
+                                                                    </span>
                                                                 </div>
                                                                 <div className="shrink-0 text-right text-[11px] font-semibold text-slate-400 leading-tight">
                                                                     <div>{chat.last?.timestamp ? formatearFechaConDia(chat.last.timestamp) : chat.last?.time || ""}</div>
