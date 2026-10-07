@@ -1339,6 +1339,7 @@ export default function RegistroAvaluos() {
         "Paul Serrano Vera",
         "Patricia Cano",
         "Planta Puebla",
+        "Servicio Nuevos",
         "Roberto Ramses Luna Fajardo",
         "ROGELIO VAZQUEZ SANCHEZ",
         "RUBEN ALBERTO TOSQUY ADRIANO",
