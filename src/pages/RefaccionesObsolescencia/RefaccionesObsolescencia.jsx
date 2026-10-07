@@ -56,6 +56,7 @@ const COLUMNAS = [
     { key: "dias_desde_ultimo_movimiento", label: "Días sin Movimiento", tipo: "entero" },
     { key: "capa_obsolescencia", label: "Capa Obsolescencia" },
     { key: "categoria_movimiento", label: "Categoría Movimiento" },
+    { key: "categoria_fiscal", label: "Categoría Fiscal" },
 ];
 
 const FILTROS_INICIALES = {
@@ -224,8 +225,8 @@ export default function RefaccionesObsolescencia() {
                 page: 1,
                 page_size: total > 0 ? total : 5000,
             });
-            const filasAExportar = Array.isArray(respuestaCompleta?.results) 
-                ? respuestaCompleta.results 
+            const filasAExportar = Array.isArray(respuestaCompleta?.results)
+                ? respuestaCompleta.results
                 : registros;
 
             const workbook = new ExcelJS.Workbook();
