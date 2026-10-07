@@ -3,11 +3,10 @@ import { http as httpPruebas, getAccessToken } from "./apiPruebas";
 
 export { getAccessToken };
 
-export const API_ROOT = (
-  import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com"
-)
-  //"http://127.0.0.1:8000"
-  .replace(/\/+$/, "");
+export const API_ROOT =
+  import.meta.env.VITE_API_URL ||
+  "https://crm.grupoautomotrizryr.com".replace(/\/+$/, "");
+//"http://127.0.0.1:8000".replace(/\/+$/, "");
 
 export function getWebSocketAuthQuery() {
   const token = getAccessToken();

@@ -30,8 +30,10 @@ import {
     Wallet,
     Wrench,
     X,
+    FileSpreadsheet,
     XCircle,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 
 import {
@@ -1738,6 +1740,7 @@ export default function Retencion() {
     const [loadingOpciones, setLoadingOpciones] = useState(true);
     const [error, setError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [generandoExcel, setGenerandoExcel] = useState(false);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
@@ -2155,6 +2158,212 @@ export default function Retencion() {
         setRefreshKey((prev) => prev + 1);
     }
 
+    async function generarReporteExcel() {
+        if (generandoExcel) return;
+
+        try {
+            setGenerandoExcel(true);
+            setError(null);
+
+            const filtrosBackend = construirFiltrosRetencion({
+                anio,
+                mes,
+                semana,
+                segmento,
+                agencia,
+                estado,
+                marca,
+                search: busqueda.trim(),
+                ordering: "-fecha_ultima_os",
+            });
+
+            const registros = [];
+            let paginaActual = 1;
+
+            while (true) {
+                const respuesta = await apiRetencion.list({
+                    ...filtrosBackend,
+                    page: paginaActual,
+                    page_size: 500,
+                });
+
+                const resultados = Array.isArray(respuesta)
+                    ? respuesta
+                    : Array.isArray(respuesta?.results)
+                        ? respuesta.results
+                        : [];
+
+                registros.push(...resultados);
+
+                if (Array.isArray(respuesta)) break;
+
+                const total = Number(respuesta?.count || 0);
+
+                if (!respuesta?.next || registros.length >= total) {
+                    break;
+                }
+
+                paginaActual += 1;
+            }
+
+            if (registros.length === 0) {
+                setError("No existen registros para exportar con los filtros seleccionados.");
+                return;
+            }
+
+            const datosExcel = registros.map((item) => ({
+                Dealer: item.agencia || "",
+                Cliente: item.nombre_cliente || "",
+                "Teléfono 1": item.telefono_cliente || "",
+                "Teléfono 2": item.telefono_cliente2 || "",
+                "Teléfono 3": item.telefono_cliente3 || "",
+                Correo: item.correo_cliente || "",
+                VIN: item.vin || "",
+                Marca: item.marca || "",
+                Modelo: item.modelo_nombre || "",
+                "Código modelo": item.modelo_codigo || "",
+                Segmento: item.segmento || "",
+                "Estado actividad": item.estado_actividad || "",
+                "Meses desde venta": numeroSeguro(item.meses_desde_venta),
+                "Fecha venta": item.fecha_venta || "",
+                "Fecha salida": item.fecha_salida || "",
+                "Número nota": item.numero_nota || "",
+                "Total nota": numeroSeguro(
+                    item.total_nota_numero ?? item.total_nota
+                ),
+                "Última orden de servicio": item.ultima_orden_servicio || "",
+                "Fecha última OS": item.fecha_ultima_os || "",
+                "Tipo orden": item.tipo_orden || "",
+                "Subtipo orden": item.subtipo_orden || "",
+                "Situación OS": item.situacion_os || "",
+                Placa: item.placa_vehiculo || "",
+                Kilometraje: item.kilometraje || "",
+                "Medio contacto": item.medio_contacto || "",
+                "Total último servicio": numeroSeguro(
+                    item.total_ultimo_servicio_numero ??
+                    item.total_ultimo_servicio
+                ),
+            }));
+
+            const hojaDatos = XLSX.utils.json_to_sheet(datosExcel);
+
+            hojaDatos["!cols"] = [
+                { wch: 18 },
+                { wch: 35 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 32 },
+                { wch: 22 },
+                { wch: 15 },
+                { wch: 22 },
+                { wch: 16 },
+                { wch: 20 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 15 },
+                { wch: 15 },
+                { wch: 15 },
+                { wch: 15 },
+                { wch: 18 },
+                { wch: 24 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 14 },
+                { wch: 15 },
+                { wch: 20 },
+                { wch: 22 },
+            ];
+
+            hojaDatos["!autofilter"] = {
+                ref: hojaDatos["!ref"],
+            };
+
+            const filtrosReporte = [
+                {
+                    Filtro: "Año",
+                    Valor: anio === "Todos" ? "Todos" : anio,
+                },
+                {
+                    Filtro: "Mes",
+                    Valor:
+                        mes === "Todos"
+                            ? "Todos"
+                            : MESES[Number(mes) - 1] || mes,
+                },
+                {
+                    Filtro: "Semana",
+                    Valor: semana === "Todas" ? "Todas" : semana,
+                },
+                {
+                    Filtro: "Segmento",
+                    Valor: segmento,
+                },
+                {
+                    Filtro: "Dealer",
+                    Valor: agencia,
+                },
+                {
+                    Filtro: "Estado",
+                    Valor: estado,
+                },
+                {
+                    Filtro: "Marca",
+                    Valor: marca,
+                },
+                {
+                    Filtro: "Búsqueda",
+                    Valor: busqueda.trim() || "Sin búsqueda",
+                },
+                {
+                    Filtro: "Total registros",
+                    Valor: registros.length,
+                },
+            ];
+
+            const hojaFiltros = XLSX.utils.json_to_sheet(filtrosReporte);
+
+            hojaFiltros["!cols"] = [
+                { wch: 22 },
+                { wch: 35 },
+            ];
+
+            const libro = XLSX.utils.book_new();
+
+            XLSX.utils.book_append_sheet(
+                libro,
+                hojaDatos,
+                "Retención"
+            );
+
+            XLSX.utils.book_append_sheet(
+                libro,
+                hojaFiltros,
+                "Filtros"
+            );
+
+            const fecha = new Date()
+                .toISOString()
+                .slice(0, 10);
+
+            XLSX.writeFile(
+                libro,
+                `Reporte_Retencion_${fecha}.xlsx`
+            );
+        } catch (err) {
+            console.error("Error generando Excel:", err);
+
+            setError(
+                err?.message ||
+                "No se pudo generar el reporte de Excel."
+            );
+        } finally {
+            setGenerandoExcel(false);
+        }
+    }
+
     async function abrirDetalle(cliente) {
         setClienteSeleccionado(cliente);
         setModalOpen(true);
@@ -2334,6 +2543,26 @@ export default function Retencion() {
                             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#131E5C]/50" />
                         </div>
                     ) : null}
+
+                    <button
+                        type="button"
+                        onClick={generarReporteExcel}
+                        disabled={generandoExcel || loading}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-xs font-extrabold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Exportar los registros filtrados a Excel"
+                    >
+                        {generandoExcel ? (
+                            <>
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                Generando...
+                            </>
+                        ) : (
+                            <>
+                                <FileSpreadsheet className="h-4 w-4" />
+                                Exportar Excel
+                            </>
+                        )}
+                    </button>
 
                     <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1">
                         <button

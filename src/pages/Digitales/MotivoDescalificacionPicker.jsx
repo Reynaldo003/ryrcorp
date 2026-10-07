@@ -64,13 +64,7 @@ export default function MotivoDescalificacionPicker({ value, onChange, invalid =
     return (
         <div>
             <div
-                className={cls(
-                    "grid grid-cols-2 gap-2 rounded-xl border-2 p-2.5 transition sm:grid-cols-3 lg:grid-cols-5",
-                    invalid && !categoria
-                        ? "border-red-300 bg-red-50"
-                        : "border-slate-200 bg-white",
-                )}
-            >
+                className={cls("grid grid-cols-2 gap-2 rounded-xl border-2 p-2.5 transition sm:grid-cols-3 lg:grid-cols-5", invalid && !categoria ? "border-red-300 bg-red-50" : "border-slate-200 bg-white",)}>
                 {MOTIVOS_DESCALIFICACION_POR_CATEGORIA.map((cat) => {
                     const Icon = ICONOS_CATEGORIA[cat.icon] || MoreHorizontal;
                     const activo = categoria === cat.key;

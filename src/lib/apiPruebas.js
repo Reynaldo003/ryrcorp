@@ -2,7 +2,7 @@
 
 const API =
   import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-  //import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+//import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const LOGIN_PATH = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/login`;
 const ACCESS_REFRESH_MARGIN_SECONDS = 60;
@@ -14,12 +14,10 @@ function createAuthError(
   { code = "AUTH_ERROR", status = 0, rejected = false, cause = null } = {},
 ) {
   const error = new Error(message);
-
   error.code = code;
   error.status = status;
   error.authRejected = rejected;
   error.cause = cause;
-
   return error;
 }
 
@@ -1511,8 +1509,7 @@ export const api = {
       })}`,
     ),
 
-  notificacionesNoLeidas: () =>
-    http("/api/notificaciones/no-leidas/"),
+  notificacionesNoLeidas: () => http("/api/notificaciones/no-leidas/"),
 
   notificacionesMarcarLeida: (ids = []) => {
     const listaIds = Array.isArray(ids) ? ids : [ids];
