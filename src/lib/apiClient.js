@@ -6,7 +6,7 @@ export { getAccessToken };
 export const API_ROOT =
   import.meta.env.VITE_API_URL ||
   "https://crm.grupoautomotrizryr.com".replace(/\/+$/, "");
-//"http://127.0.0.1:8000".replace(/\/+$/, "");
+// "http://127.0.0.1:8000".replace(/\/+$/, "");
 
 export function getWebSocketAuthQuery() {
   const token = getAccessToken();

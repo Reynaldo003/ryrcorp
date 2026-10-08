@@ -88,7 +88,7 @@ const CHAT_LIST_DAYS = "";
 const CHAT_UPDATES_LIMIT = 40;
 const CHAT_CACHE_LIMIT = 80;
 const CHAT_UPDATES_INTERVAL = 2500;
-const CHAT_LIST_REFRESH_INTERVAL = 2500;
+const CHAT_LIST_REFRESH_INTERVAL = 15000;
 const CHAT_SEARCH_DELAY = 300;
 const MAX_RECORDING_SECONDS = 300;
 
@@ -3001,6 +3001,7 @@ export default function DigitalesContacto() {
             before_prioridad: beforePrioridad,
             solo_no_leidos: chatFilter === "no_leidos" ? 1 : 0,
             filtro_chat: chatFilter,
+            incluir_conteos: 0,
         });
 
         // ACTUALIZACIÓN DE CONTEOS REALES:
@@ -3066,6 +3067,7 @@ export default function DigitalesContacto() {
 
             params.set("numero_asesor", numeroLinea);
             params.set("paginado", "1");
+            params.set("incluir_conteos", "0");
             params.set("limit", String(CHAT_LIST_PAGE_SIZE));
             if (CHAT_LIST_DAYS) {
                 params.set("dias", String(CHAT_LIST_DAYS));
@@ -5482,6 +5484,38 @@ export default function DigitalesContacto() {
         chatFilter,
     ]);
     useEffect(() => {
+        if (isDirectChatMode || loadingList) return;
+        const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
+        if (!numeroLinea) return;
+        let activo = true;
+        let timer = null;
+        const cargarConteos = async () => {
+            if (!activo) return;
+            try {
+                if (document.visibilityState === "visible") {
+                    const respuesta = await api.digitalesChats({
+                        numero_asesor: numeroLinea,
+                        solo_conteos: 1,
+                        incluir_conteos: 1,
+                    });
+                    if (activo && numeroAsesorActivoRef.current === numeroLinea && respuesta?.conteos) {
+                        setFilterCounts(respuesta.conteos);
+                    }
+                }
+            } catch (error) {
+                console.error("No se pudieron cargar los conteos de chats:", error);
+            } finally {
+                if (activo) timer = window.setTimeout(cargarConteos, 120000);
+            }
+        };
+        timer = window.setTimeout(cargarConteos, 1500);
+        return () => {
+            activo = false;
+            if (timer) window.clearTimeout(timer);
+        };
+    }, [numeroAsesorActivo, isDirectChatMode, loadingList]);
+
+    useEffect(() => {
         const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
         if (!numeroLinea) return;
 
@@ -5563,9 +5597,12 @@ export default function DigitalesContacto() {
         };
 
         /*
-         * Primera consulta inmediatamente.
+         * La carga inicial la ejecuta el efecto de búsqueda.
+         * El polling comienza al cumplirse el primer intervalo.
          */
-        tickLista();
+        // La carga inicial ya la ejecuta el efecto de búsqueda.
+        // Evita disparar una segunda petición pesada al montar el componente.
+        timer = window.setTimeout(tickLista, CHAT_LIST_REFRESH_INTERVAL);
 
         return () => {
             alive = false;

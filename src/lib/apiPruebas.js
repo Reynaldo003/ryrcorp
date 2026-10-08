@@ -2,7 +2,7 @@
 
 const API =
   import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-//import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const LOGIN_PATH = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/login`;
 const ACCESS_REFRESH_MARGIN_SECONDS = 60;
@@ -943,6 +943,7 @@ export const api = {
     q = "",
     before = "",
     before_id = "",
+    before_prioridad = "",
     scope = "recientes",
     dias = 3,
     paginado = 1,
@@ -950,6 +951,8 @@ export const api = {
     usuario = "",
     solo_no_leidos = 0,
     filtro_chat = "",
+    incluir_conteos = 1,
+    solo_conteos = 0,
   } = {}) =>
     http(
       `/digitales/chats/${buildQuery(
@@ -958,6 +961,7 @@ export const api = {
           q,
           before,
           before_id,
+          before_prioridad,
           scope,
           dias,
           paginado,
@@ -965,6 +969,8 @@ export const api = {
           usuario,
           solo_no_leidos,
           filtro_chat,
+          incluir_conteos,
+          solo_conteos,
         }),
       )}`,
     ),
