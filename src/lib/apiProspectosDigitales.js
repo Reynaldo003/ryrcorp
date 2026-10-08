@@ -43,3 +43,7 @@ export function getSolicitudesFinanciamiento(params = {}) {
 export function getFacturadosStats(params = {}) {
     return http(`/digitales/analitica/facturados-stats/${buildQuery(params)}`);
 }
+
+export function getBdcResumen(params = {}) {
+    return http(`/digitales/analitica/bdc-resumen/${buildQuery(params)}`);
+}

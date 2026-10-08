@@ -1637,18 +1637,6 @@ export default function DigitalesProspectos() {
         )];
     }, [isCoordinador, numerosUsuarioSesion]);
 
-    const asesoresPermitidosBDC = useMemo(() => {
-        if (isAdmin) return null;
-
-        const numeros = isCoordinador ? numerosPermitidosCoordinador : numerosUsuarioSesion;
-
-        return [...new Set(
-            numeros
-                .map((numero) => getAsesorDigitalPorNumero(numero, user))
-                .map(canonicalAsesorDigitalBDC)
-                .filter(Boolean)
-        )];
-    }, [isAdmin, isCoordinador, numerosPermitidosCoordinador, numerosUsuarioSesion, user]);
     const [ctxMenu, setCtxMenu] = useState({ open: false, row: null });
     const [updatingEstado, setUpdatingEstado] = useState({});
     const [generatingSummary, setGeneratingSummary] = useState({});
@@ -1672,8 +1660,6 @@ export default function DigitalesProspectos() {
     const [loadingCases, setLoadingCases] = useState(false);
     const [fullCases, setFullCases] = useState([]);
     const [loadingFullCases, setLoadingFullCases] = useState(false);
-    const [fullCasesBDC, setFullCasesBDC] = useState([]);
-    const [loadingFullCasesBDC, setLoadingFullCasesBDC] = useState(false);
     const [exportandoReporte, setExportandoReporte] = useState(false);
     const [reporteProspectosExportacion, setReporteProspectosExportacion] = useState(null);
     const reporteProspectosRef = useRef(null);
@@ -2404,75 +2390,6 @@ export default function DigitalesProspectos() {
         deferredQ,
         filters,
         sort,
-    ]);
-
-    async function cargarProspectosCompletosBDC() {
-        if (!usaPaginacionServidor) {
-            setFullCasesBDC(accessibleCases);
-            return;
-        }
-
-        setLoadingFullCasesBDC(true);
-
-        try {
-            const params = {
-                ligero: 1,
-            };
-
-            if (
-                isAdmin &&
-                selectedNumeroAsesor === "Todos"
-            ) {
-                params.todos = 1;
-            } else {
-                const numero =
-                    isAdmin || isCoordinador
-                        ? normalizaTelefonoMx(
-                            selectedNumeroAsesor
-                        )
-                        : numeroAsesorActivo ||
-                        numeroUsuarioSesion;
-
-                if (!numero) {
-                    setFullCasesBDC([]);
-                    return;
-                }
-
-                params.numero_asesor = numero;
-            }
-
-            const data =
-                await listarProspectosDigitalesCompletos(
-                    params
-                );
-
-            setFullCasesBDC(
-                getListItems(data).map(
-                    normalizeProspecto
-                )
-            );
-        } catch (error) {
-            console.error(
-                "Error cargando datos completos para Ejecutivo BDC:",
-                error
-            );
-
-            setFullCasesBDC([]);
-        } finally {
-            setLoadingFullCasesBDC(false);
-        }
-    }
-
-    useEffect(() => {
-        if (viewMode !== "ejecutivo") {
-            return;
-        }
-
-        cargarProspectosCompletosBDC();
-    }, [
-        viewMode,
-        selectedNumeroAsesor,
-        versionOperativaBDC,
     ]);
 
     async function generarReporteProspectos(config = {}) {
@@ -3229,7 +3146,7 @@ export default function DigitalesProspectos() {
         {/* Vista Resultados IA */}
         {viewMode === "resultados" && <ResultadosIA numeroAsesorInicial={selectedNumeroAsesor !== "Todos" ? selectedNumeroAsesor : ""} agenciaInicial={filters.agencia !== "Todos" ? filters.agencia : ""} businessInicial={filters.linea !== "Todos" ? filters.linea : ""} />}
         {/* Vista Ejecutivo BDC */}
-        {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC rows={usaPaginacionServidor ? fullCasesBDC : accessibleCases} versionOperativa={versionOperativaBDC} asesoresPermitidos={asesoresPermitidosBDC} accesoTotal={isAdmin} />)}
+        {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC numeroAsesor={selectedNumeroAsesor} versionOperativa={versionOperativaBDC} />)}
         {/* Vista Gráficos */}
         {viewMode === "graficos" && <VistaGraficos rows={usaPaginacionServidor ? fullCases : sorted} />}
         {/* Vista Tabla */}
