@@ -1,33 +1,13 @@
 // src/pages/Inventario/InventarioIndex.jsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowUpRight, BarChart3, Building2, Calendar, Car, ChevronDown, ChevronUp,
-  CircleDollarSign, Clock, DollarSign, Eraser, FileSpreadsheet, FileText,
-  Landmark, Layers, LoaderCircle, Package, Percent, RefreshCw, Search,
-  ShieldAlert, Table2, TrendingUp, Users, WalletCards, X,
+  BarChart3, Building2, Car, ChevronDown, ChevronUp, Clock, Eraser,
+  FileSpreadsheet, FileText, Layers, LoaderCircle, RefreshCw, Search,
+  Table2, TrendingUp, X,
 } from "lucide-react";
-import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-} from "recharts";
-import ExcelJS from "exceljs";
-import html2canvas from "html2canvas-pro";
-import { jsPDF } from "jspdf";
-import { autoTable } from "jspdf-autotable";
 import { apiInventario } from "../../lib/apiInventario";
 import { getVentasVNDashboard, getVentasVNDetalle } from "../../lib/apiVentasVN";
-import { useECharts } from "./useECharts";
 import "./inventario.css";
-
-const C = {
-  navy: "#001E50",
-  navyDark: "#0A1340",
-  navyLight: "#1677FF",
-  border: "#E4E7F0",
-  muted: "#8891AD",
-  text: "#1A1F3C",
-};
 
 const COLORES = [
   "#001E50",
@@ -50,8 +30,6 @@ const MODELOS_COMERCIALES = [
   "TRANSPORTER",
   "CADDY",
 ];
-
-const MESES_CORTOS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
 
 function normalizarTexto(valor) {
   return String(valor ?? "")
@@ -421,9 +399,9 @@ function TablaVehiculos({ vehiculos, cargando, error, familiaFiltro, onClearFami
 }
 
 export default function InventarioIndex() {
-  const navigate = useNavigate();
-  const tablaRef = useRef(null);
   const reporteVisualRef = useRef(null);
+  const ultimaCargaInventario = useRef(0);
+  const ultimaCargaVentas = useRef(0);
 
   // VISTA ACTIVA: "dashboard" | "detalle"
   const [vistaActiva, setVistaActiva] = useState("dashboard");
@@ -488,58 +466,53 @@ export default function InventarioIndex() {
     apiInventario.getFiltros().then(setFiltrosDisponibles).catch(() => setFiltrosDisponibles({ agencias: [], estatus: [] }));
   }, []);
 
-  // Cargar APIs de Inventario
-  const cargarInventarioData = useCallback(() => {
+  // Inventario: una petición para detalle, KPIs y todos los gráficos.
+  const cargarInventarioData = useCallback(async (forzarActualizacion = false) => {
+    const idCarga = ++ultimaCargaInventario.current;
     const params = {
       agencia: agenciaSeleccionada || undefined,
       estatus: estatusSeleccionado || undefined,
       modelos: modelosComerciales ? MODELOS_COMERCIALES.join(",") : undefined,
       condicion: condicionInventario,
+      actualizar: forzarActualizacion ? 1 : undefined,
     };
-    const paramsNuevoUsado = { ...params, condicion: undefined };
-
     setCargando(true);
-    setError("");
-
-    Promise.all([
-      apiInventario.getPorAgencia(params),
-      apiInventario.getPorEstatus(params),
-      apiInventario.getPorMarca(params),
-      apiInventario.getNuevoUsado(paramsNuevoUsado),
-      apiInventario.getNacionalImportado(params),
-      apiInventario.getCosto(params),
-      apiInventario.getAntiguedad(params),
-    ])
-      .then(([agencia, estatus, marca, nu, ni, costo, antig]) => {
-        setPorAgencia(agencia);
-        setPorEstatus(estatus.filter((item) => !ESTATUS_EXCLUIDOS.includes(item.estatus)));
-        setPorMarca(marca.slice(0, 13));
-        setNuevoUsado(nu.filter((item) => item.condicion === "Nuevo" || item.condicion === "Usado"));
-        setNacionalImportado(ni);
-        setCostoTotal(costo);
-        setAntiguedad(antig);
-      })
-      .catch(() => setError("No se pudo cargar el resumen de inventario."))
-      .finally(() => setCargando(false));
-
     setCargandoTabla(true);
+    setError("");
     setErrorTabla("");
 
-    apiInventario.getInventario(params)
-      .then((data) => {
-        const vehiculosActivos = data.filter((vehiculo) => !ESTATUS_EXCLUIDOS.includes((vehiculo.StEstoque || "").trim()));
-        setVehiculos(vehiculosActivos);
-      })
-      .catch(() => setErrorTabla("No se pudo cargar el listado de unidades."))
-      .finally(() => setCargandoTabla(false));
+    try {
+      const datos = await apiInventario.getDashboard(params);
+      if (idCarga !== ultimaCargaInventario.current) return;
+      setVehiculos(datos.vehiculos);
+      setPorAgencia(datos.porAgencia);
+      setPorEstatus(datos.porEstatus.filter((item) => !ESTATUS_EXCLUIDOS.includes(item.estatus)));
+      setPorMarca(datos.porMarca.slice(0, 13));
+      setNuevoUsado(datos.nuevoUsado.filter((item) => item.condicion === "Nuevo" || item.condicion === "Usado"));
+      setNacionalImportado(datos.nacionalImportado);
+      setCostoTotal(datos.costoTotal);
+      setAntiguedad(datos.antiguedad);
+    } catch (errorCarga) {
+      if (idCarga !== ultimaCargaInventario.current) return;
+      console.error("Error de inventario:", errorCarga);
+      setError("No se pudo cargar el resumen de inventario.");
+      setErrorTabla("No se pudo cargar el listado de unidades.");
+    } finally {
+      if (idCarga === ultimaCargaInventario.current) {
+        setCargando(false);
+        setCargandoTabla(false);
+      }
+    }
   }, [agenciaSeleccionada, estatusSeleccionado, modelosComerciales, condicionInventario]);
 
   useEffect(() => {
     cargarInventarioData();
+    return () => { ultimaCargaInventario.current += 1; };
   }, [cargarInventarioData]);
 
   // Cargar Datos Ventas (VentasVN API)
   const cargarVentasData = useCallback(() => {
+    const idCarga = ++ultimaCargaVentas.current;
     setCargandoVentas(true);
     const nombreUnificadoVentas = obtenerAgenciaVentas(agenciaActual?.nombre, modelosComerciales);
 
@@ -554,6 +527,7 @@ export default function InventarioIndex() {
       getVentasVNDashboard(paramsVentas),
     ])
       .then(([resDetalle, resDashboard]) => {
+        if (idCarga !== ultimaCargaVentas.current) return;
         const dataDetalle = resDetalle.status === "fulfilled" ? resDetalle.value : null;
         const dataDashboard = resDashboard.status === "fulfilled" ? resDashboard.value : null;
 
@@ -572,11 +546,14 @@ export default function InventarioIndex() {
           setVentasData(null);
         }
       })
-      .finally(() => setCargandoVentas(false));
+      .finally(() => {
+        if (idCarga === ultimaCargaVentas.current) setCargandoVentas(false);
+      });
   }, [fechaDesde, fechaHasta, agenciaActual, modelosComerciales]);
 
   useEffect(() => {
     cargarVentasData();
+    return () => { ultimaCargaVentas.current += 1; };
   }, [cargarVentasData]);
 
   // Cálculos de Vehículos
@@ -799,6 +776,7 @@ export default function InventarioIndex() {
     if (!vehiculosCalculados.length || exportando) return;
     setExportando("excel");
     try {
+      const { default: ExcelJS } = await import("exceljs");
       const workbook = new ExcelJS.Workbook();
       const hoja = workbook.addWorksheet("Inventario", { views: [{ state: "frozen", ySplit: 1 }], pageSetup: { orientation: "landscape" } });
       hoja.columns = [
@@ -816,14 +794,25 @@ export default function InventarioIndex() {
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob); const enlace = document.createElement("a"); enlace.href = url; enlace.download = `reporte_inventario_${formatYMD(new Date())}.xlsx`;
       document.body.appendChild(enlace); enlace.click(); enlace.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (err) { alert("Error al exportar a Excel."); } finally { setExportando(null); }
+    } catch (err) { console.error(err); alert("Error al exportar a Excel."); } finally { setExportando(null); }
   };
 
   const exportarInventarioPdf = async () => {
-    if (!vehiculosCalculados.length || exportando) return; setExportando("pdf");
+    if (!vehiculosCalculados.length || exportando) return;
+    setExportando("pdf");
+    if (vistaActiva !== "dashboard") {
+      setVistaActiva("dashboard");
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
     try {
       if (document.fonts?.ready) await document.fonts.ready;
       await new Promise((resolve) => setTimeout(resolve, 300));
+      const [{ default: html2canvas }, { jsPDF }, { autoTable }] = await Promise.all([
+        import("html2canvas-pro"), import("jspdf"), import("jspdf-autotable"),
+      ]);
+      if (!reporteVisualRef.current) {
+        throw new Error("Abre la vista Gráficos antes de exportar a PDF.");
+      }
       const canvas = await html2canvas(reporteVisualRef.current, { scale: 1.4, useCORS: true, backgroundColor: "#ffffff", logging: false });
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
       const anchoUtil = doc.internal.pageSize.getWidth() - 16;
@@ -838,7 +827,7 @@ export default function InventarioIndex() {
         theme: "grid", styles: { fontSize: 6, cellPadding: 1 }, headStyles: { fillColor: [0, 30, 80], textColor: 255 }, margin: { left: 8, right: 8, bottom: 8 },
       });
       doc.save(`reporte_inventario_${formatYMD(new Date())}.pdf`);
-    } catch (err) { alert("Error al exportar a PDF."); } finally { setExportando(null); }
+    } catch (err) { console.error(err); alert("Error al exportar a PDF."); } finally { setExportando(null); }
   };
 
   return (
@@ -891,7 +880,7 @@ export default function InventarioIndex() {
 
             <button
               type="button"
-              onClick={() => { cargarInventarioData(); cargarVentasData(); }}
+              onClick={() => { cargarInventarioData(true); cargarVentasData(); }}
               disabled={cargando || cargandoTabla || cargandoVentas}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#001E50]/20 bg-white px-3 text-xs font-bold text-[#001E50] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
             >
@@ -1016,8 +1005,8 @@ export default function InventarioIndex() {
                   type="button"
                   onClick={pill.click}
                   className={`inline-flex items-center justify-center rounded-full px-3.5 py-1 text-[11px] font-bold transition-all ${activa
-                      ? "bg-white text-[#001E50] shadow-md scale-105"
-                      : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                    ? "bg-white text-[#001E50] shadow-md scale-105"
+                    : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
                     }`}
                 >
                   {pill.label}
@@ -1042,8 +1031,8 @@ export default function InventarioIndex() {
                     type="button"
                     onClick={() => setPeriodoGracia(dias)}
                     className={`flex-1 rounded-lg border py-1 text-xs font-bold transition ${periodoGracia === dias
-                        ? "border-[#001E50] bg-[#001E50] text-white shadow-sm"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      ? "border-[#001E50] bg-[#001E50] text-white shadow-sm"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                       }`}
                   >
                     {dias}d
@@ -1125,7 +1114,7 @@ export default function InventarioIndex() {
 
         {/* TABLA O DASHBOARD */}
         {vistaActiva === "detalle" ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" ref={tablaRef}>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="font-extrabold text-[#001E50] text-sm mb-3">Detalle Individual de Unidades en Inventario</h3>
             <TablaVehiculos
               vehiculos={vehiculosCalculados}
