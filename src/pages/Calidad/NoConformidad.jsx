@@ -468,12 +468,15 @@ function StatCard({ label, value, sub, color }) {
 }
 
 function RatingBadge({ value }) {
-    const r = Math.round(value);
-    const color = r === 1 ? "#D85A30" : r === 2 ? "#F0A500" : "#FCD34D";
-    const stars = "★".repeat(r) + "☆".repeat(3 - r);
+    const num = Number(value);
+    const safe = Number.isFinite(num) ? num : 0;
+    const r = Math.max(0, Math.min(5, Math.round(safe)));
+    const color =
+        r <= 1 ? "#D85A30" : r <= 2 ? "#F0A500" : r <= 3 ? "#FCD34D" : r <= 4 ? "#84CC16" : "#16A34A";
+    const stars = "★".repeat(r) + "☆".repeat(5 - r);
     return (
         <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black text-white" style={{ backgroundColor: color }}>
-            {stars} {value.toFixed(1)}
+            {stars} {safe.toFixed(1)}
         </span>
     );
 }

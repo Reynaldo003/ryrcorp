@@ -1,6 +1,5 @@
 // src/pages/Servicio/Gota.jsx
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -27,15 +26,23 @@ import {
   Filter,
   Info,
   ListFilter,
+  Loader2,
   MapPin,
+  Maximize2,
+  MessageSquare,
+  Minimize2,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
   Search,
   SearchX,
+  Send,
   Sheet,
   Tag,
+  Trash2,
   TrendingUp,
+  User,
   Wrench,
   X,
 } from "lucide-react";
@@ -52,7 +59,16 @@ import {
   YAxis,
 } from "recharts";
 
-import { getGotaDashboard, getGotaOpciones, getGotaOrdenes } from "../../lib/apiGota";
+import {
+  actualizarGotaComentario,
+  crearGotaComentario,
+  eliminarGotaComentario,
+  getGotaComentarios,
+  getGotaDashboard,
+  getGotaObservaciones,
+  getGotaOpciones,
+  getGotaOrdenes,
+} from "../../lib/apiGota";
 
 const C = {
   navy: "#131E5C",
@@ -206,6 +222,30 @@ function obtenerDiasTaller(abertura) {
   const hoy = new Date();
   const diff = hoy.getTime() - d.getTime();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+/* Días en taller: se prefiere el valor calculado por la vista del backend
+   (dias_taller) y, si no viene, se calcula en el cliente. */
+function valorDiasTaller(fila) {
+  if (!fila) return null;
+  if (fila.dias_taller !== null && fila.dias_taller !== undefined && fila.dias_taller !== "") {
+    const n = Number(fila.dias_taller);
+    if (Number.isFinite(n)) return n;
+  }
+  return obtenerDiasTaller(fila.dt_abertura);
+}
+
+function formatearFechaHora(valor) {
+  if (!valor) return "";
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return String(valor);
+  return d.toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function vacio(valor) {
@@ -555,41 +595,85 @@ function KpiCard({
   tono = "navy",
   cargando = false,
 }) {
-  const tonos = {
-    navy: "border-[#131E5C]/15 bg-[#131E5C]/10 text-[#131E5C]",
-    sky: "border-sky-100 bg-sky-50 text-sky-600",
-    emerald: "border-emerald-100 bg-emerald-50 text-emerald-600",
-    amber: "border-amber-100 bg-amber-50 text-amber-600",
+  const estilos = {
+    navy: {
+      cinta: "from-[#131E5C] via-[#2B3AA0] to-[#4F6BFF]",
+      insignia:
+        "bg-gradient-to-br from-[#131E5C] to-[#2B3AA0] text-white shadow-[0_10px_18px_-8px_rgba(19,30,92,0.7)]",
+      halo: "bg-[#31409E]/10",
+    },
+    sky: {
+      cinta: "from-sky-400 via-sky-500 to-blue-600",
+      insignia:
+        "bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_10px_18px_-8px_rgba(14,165,233,0.7)]",
+      halo: "bg-sky-400/10",
+    },
+    emerald: {
+      cinta: "from-emerald-400 via-emerald-500 to-teal-600",
+      insignia:
+        "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[0_10px_18px_-8px_rgba(16,185,129,0.7)]",
+      halo: "bg-emerald-400/10",
+    },
+    amber: {
+      cinta: "from-amber-400 via-amber-500 to-orange-500",
+      insignia:
+        "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_10px_18px_-8px_rgba(245,158,11,0.7)]",
+      halo: "bg-amber-400/10",
+    },
   };
 
+  const estilo = estilos[tono] || estilos.navy;
+
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white p-4 shadow-sm transition hover:border-[#131E5C]/25 hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
+    <div className="group relative overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+      {/* Cinta superior en degradado según el tono */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute inset-x-0 top-0 h-1 bg-gradient-to-r",
+          estilo.cinta
+        )}
+      />
+      {/* Halo suave decorativo */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full blur-2xl transition-opacity duration-200",
+          estilo.halo
+        )}
+      />
+
+      <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
             {title}
           </p>
 
           {cargando ? (
-            <div className="mt-2 h-7 w-28 animate-pulse rounded-lg bg-slate-200" />
+            <>
+              <div className="mt-2 h-7 w-28 animate-pulse rounded-lg bg-slate-200" />
+              <div className="mt-1.5 h-3 w-36 animate-pulse rounded bg-slate-100" />
+            </>
           ) : (
-            <p className="mt-1.5 truncate text-[22px] font-black leading-none text-[#001E50]">
-              {value}
-            </p>
-          )}
+            <>
+              <p className="mt-1.5 truncate text-[26px] font-black leading-none tabular-nums text-[#001E50]">
+                {value}
+              </p>
 
-          {subtitle && (
-            <p className="mt-1.5 truncate text-[11px] font-medium text-slate-500">
-              {subtitle}
-            </p>
+              {subtitle && (
+                <p className="mt-1.5 truncate text-[11px] font-medium text-slate-500">
+                  {subtitle}
+                </p>
+              )}
+            </>
           )}
         </div>
 
-        {Icon && (
+        {Icon && !cargando && (
           <span
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
-              tonos[tono] || tonos.navy
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105",
+              estilo.insignia
             )}
           >
             <Icon className="h-5 w-5" />
@@ -957,6 +1041,8 @@ function ResumenEjecutivo({
   agencias,
   rangoActivo,
   onSeleccionarRango,
+  agenciaActiva,
+  onSeleccionarAgencia,
 }) {
   const maximoAgencia = Math.max(1, ...agencias.map((item) => item.ordenes));
   const topAgencias = agencias.slice(0, 6);
@@ -1009,7 +1095,14 @@ function ResumenEjecutivo({
           </p>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {antiguedad.length === 0 ? (
+            {cargando ? (
+              [0, 1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={i}
+                  className="h-[62px] animate-pulse rounded-xl border border-white/10 bg-white/[0.06]"
+                />
+              ))
+            ) : antiguedad.length === 0 ? (
               <p className="col-span-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-[11px] font-medium text-slate-400">
                 Sin Permanencia calculable: las órdenes no tienen fecha de
                 apertura.
@@ -1057,11 +1150,21 @@ function ResumenEjecutivo({
               Carga por agencia
             </h3>
             <span className="text-[11px] text-slate-400">
-              {topAgencias.length} de {agencias.length} agencias
+              {cargando
+                ? "Cargando agencias…"
+                : `${topAgencias.length} de ${agencias.length} agencias`}
             </span>
           </div>
 
-          {topAgencias.length === 0 ? (
+          {cargando ? (
+            <div className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-6 text-[11px] font-semibold text-slate-300">
+              <Loader2
+                aria-hidden="true"
+                className="h-5 w-5 animate-spin text-sky-300"
+              />
+              Cargando agencias…
+            </div>
+          ) : topAgencias.length === 0 ? (
             <p className="mt-6 rounded-xl border border-white/10 bg-white/5 px-3 py-4 text-[11px] font-medium text-slate-400">
               Sin agencias con órdenes activas.
             </p>
@@ -1072,11 +1175,25 @@ function ResumenEjecutivo({
                   100,
                   Math.round((item.ordenes / maximoAgencia) * 100)
                 );
+                const activo = agenciaActiva === item.name;
 
                 return (
-                  <div
+                  <button
                     key={item.name}
-                    className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2"
+                    type="button"
+                    onClick={() => onSeleccionarAgencia(item.name)}
+                    aria-pressed={activo}
+                    title={
+                      activo
+                        ? "Quitar filtro de agencia"
+                        : `Filtrar por ${item.name}`
+                    }
+                    className={cn(
+                      "block w-full cursor-pointer rounded-xl border px-3 py-2 text-left transition",
+                      activo
+                        ? "border-sky-300/60 bg-white/[0.14] ring-2 ring-sky-300/60"
+                        : "border-white/10 bg-white/[0.05] hover:border-white/25 hover:bg-white/[0.1]"
+                    )}
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="truncate text-xs font-semibold text-slate-100">
@@ -1093,7 +1210,7 @@ function ResumenEjecutivo({
                         style={{ width: `${porcentaje}%` }}
                       />
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1480,15 +1597,19 @@ function ColumnFilterMenu({
    ============================================================ */
 
 const COLUMNAS = [
-  { key: "agencia", label: "Agencia", tipo: "texto", filtro: true, alineacion: "chip" },
   { key: "nr_os", label: "OS", tipo: "entero", filtro: true, alineacion: "fuerte" },
-  { key: "nr_atendimento", label: "Atención", tipo: "entero", filtro: true },
+  { key: "vin", label: "VIN", tipo: "texto", filtro: true },
+  { key: "dias_taller", label: "Días taller", tipo: "entero", alineacion: "dias" },
   { key: "tp_os", label: "Tipo OS", tipo: "texto", filtro: true, alineacion: "chip" },
+  { key: "asesor", label: "Asesor", tipo: "texto", filtro: true },
+  { key: "cliente", label: "Cliente", tipo: "texto", filtro: true },
+  { key: "telefono", label: "Teléfono", tipo: "texto" },
+  { key: "agencia", label: "Agencia", tipo: "texto", filtro: true, alineacion: "chip" },
+  { key: "comentarios", label: "Último comentario", tipo: "texto" },
+  { key: "nr_atendimento", label: "Atención", tipo: "entero", filtro: true },
   { key: "subtipo_os", label: "Subtipo", tipo: "texto", filtro: true },
-  { key: "situacao", label: "Situación", tipo: "texto", filtro: true, alineacion: "estado" },
   { key: "dt_abertura", label: "Apertura", tipo: "fecha", filtro: true, alineacion: "fecha" },
   { key: "hr_abertura", label: "Hora apertura", tipo: "hora" },
-  { key: "dias_taller", label: "Días taller", tipo: "entero", alineacion: "dias" },
   { key: "id_job", label: "Job", tipo: "entero", filtro: true },
   { key: "vr_pecas", label: "Partes", tipo: "moneda" },
   { key: "vr_om", label: "Mano de obra", tipo: "moneda" },
@@ -1500,20 +1621,46 @@ const COLUMNAS = [
   { key: "vr_desc_peca", label: "Desc. partes", tipo: "moneda" },
   { key: "perc_desc_pcs", label: "% desc. piezas", tipo: "numero" },
   { key: "vr_total_pecas", label: "Total partes", tipo: "moneda", alineacion: "fuerte" },
-  { key: "cod_pagador", label: "Pagador", tipo: "entero" },
+  { key: "cod_pagador", label: "Cód. pagador", tipo: "texto" },
+  { key: "pagador", label: "Pagador", tipo: "texto", filtro: true },
   { key: "cod_cond_pgto", label: "Cond. pago", tipo: "entero" },
   { key: "cod_oper_fiscal", label: "Oper. fiscal", tipo: "entero" },
   { key: "forma_pago", label: "Forma pago", tipo: "texto", filtro: true },
   { key: "uso_cfdi", label: "Uso CFDI", tipo: "texto", filtro: true },
   { key: "sit_garantia", label: "Garantía", tipo: "texto", filtro: true },
   { key: "sit_fiss", label: "FISS", tipo: "texto" },
-  { key: "motivo_cancel", label: "Motivo cancel.", tipo: "entero" },
+  { key: "motivo_cancel", label: "Motivo cancel.", tipo: "texto" },
   { key: "dt_debloq", label: "Desbloqueo", tipo: "fecha" },
   { key: "dt_emi_prefact", label: "Prefactura", tipo: "fecha" },
   { key: "hora_llegada", label: "Hora llegada", tipo: "hora" },
   { key: "dt_fechamento", label: "Cierre", tipo: "fecha" },
   { key: "hr_fechamento", label: "Hora cierre", tipo: "hora" },
-  { key: "rowid", label: "RowID" },
+];
+
+/* Vista compacta por defecto: solo estas columnas, en este orden. El botón
+   "Ver tabla completa" muestra todas las del selector de columnas. */
+const COLUMNAS_COMPACTAS = [
+  "nr_os",
+  "vin",
+  "dias_taller",
+  "tp_os",
+  "asesor",
+  "cliente",
+  "telefono",
+  "agencia",
+  "comentarios",
+];
+
+/* Columnas agregadas después de la última versión: se activan solas para
+   quien ya tiene columnas guardadas en localStorage, sin re-mostrar las
+   que el usuario ocultó a propósito. */
+const COLUMNAS_NUEVAS = [
+  "vin",
+  "cliente",
+  "telefono",
+  "asesor",
+  "pagador",
+  "comentarios",
 ];
 
 function columnaPorClave(key) {
@@ -1536,7 +1683,15 @@ function columnasGuardadasIniciales() {
       COLUMNAS.some((col) => col.key === key)
     );
 
-    return validas.length ? new Set(validas) : columnasPorDefecto();
+    if (!validas.length) return columnasPorDefecto();
+
+    COLUMNAS_NUEVAS.forEach((key) => {
+      if (COLUMNAS.some((col) => col.key === key) && !validas.includes(key)) {
+        validas.push(key);
+      }
+    });
+
+    return new Set(validas);
   } catch {
     return columnasPorDefecto();
   }
@@ -1546,7 +1701,7 @@ function formatCell(fila, col) {
   const value = fila[col.key];
 
   if (col.key === "dias_taller") {
-    const dias = obtenerDiasTaller(fila.dt_abertura);
+    const dias = valorDiasTaller(fila);
     return dias === null ? "—" : String(dias);
   }
 
@@ -1572,7 +1727,7 @@ function CeldaOrden({ fila, col }) {
   const sinDato = texto === "—";
 
   if (col.alineacion === "dias") {
-    const dias = obtenerDiasTaller(fila.dt_abertura);
+    const dias = valorDiasTaller(fila);
 
     return (
       <div className="flex justify-center">
@@ -1627,6 +1782,23 @@ function CeldaOrden({ fila, col }) {
     );
   }
 
+  // Último comentario: lápiz siempre visible a la derecha para indicar
+  // que se puede escribir/editar. El clic burbujea a la fila y abre la
+  // tarjeta lateral con el editor de comentarios.
+  if (col.key === "comentarios") {
+    return (
+      <div className="flex max-w-[340px] items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate">{texto}</span>
+        <span
+          title="Escribir o editar comentario"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#131E5C]/20 bg-[#131E5C]/5 text-[#131E5C] opacity-70 transition group-hover:bg-[#131E5C] group-hover:text-white group-hover:opacity-100"
+        >
+          <Pencil className="h-3 w-3" />
+        </span>
+      </div>
+    );
+  }
+
   return <div className="max-w-[320px] truncate">{texto}</div>;
 }
 
@@ -1639,225 +1811,594 @@ function claveFila(fila) {
   return fila?.rowid ?? `${fila?.agencia}-${fila?.nr_os}-${fila?.nr_atendimento}`;
 }
 
-function DetalleOrden({ orden, onClose }) {
-  const dias = obtenerDiasTaller(orden.dt_abertura);
+/* ============================================================
+   COMENTARIOS EDITABLES DE LA ORDEN
+   ============================================================ */
 
-  const secciones = [
-    {
-      titulo: "Identificación",
-      icono: Wrench,
-      items: [
-        { etiqueta: "Agencia", valor: orden.agencia },
-        { etiqueta: "Orden de servicio", valor: orden.nr_os },
-        { etiqueta: "Número de atención", valor: orden.nr_atendimento },
-        { etiqueta: "Tipo de OS", valor: orden.tp_os },
-        { etiqueta: "Subtipo", valor: orden.subtipo_os },
-        { etiqueta: "Job", valor: orden.id_job },
-      ],
-    },
-    {
-      titulo: "Tiempos en taller",
-      icono: Clock,
-      items: [
-        {
-          etiqueta: "Fecha de apertura",
-          valor: formatearFechaISO(orden.dt_abertura),
-        },
-        {
-          etiqueta: "Hora de apertura",
-          valor: formatearHora(orden.hr_abertura),
-        },
-        {
-          etiqueta: "Días en taller",
-          valor: dias === null ? "—" : `${dias} día(s)`,
-        },
-        {
-          etiqueta: "Hora de llegada",
-          valor: formatearHora(orden.hora_llegada),
-        },
-        {
-          etiqueta: "Fecha de desbloqueo",
-          valor: formatearFechaISO(orden.dt_debloq),
-        },
-        {
-          etiqueta: "Fecha de cierre",
-          valor: formatearFechaISO(orden.dt_fechamento),
-        },
-      ],
-    },
-    {
-      titulo: "Importes",
-      icono: DollarSign,
-      items: [
-        { etiqueta: "Partes", valor: dinero(orden.vr_pecas) },
-        { etiqueta: "Mano de obra", valor: dinero(orden.vr_om) },
-        { etiqueta: "Lubricantes", valor: dinero(orden.vr_lubrif) },
-        { etiqueta: "Accesorios", valor: dinero(orden.vr_acessor) },
-        { etiqueta: "Cascos", valor: dinero(orden.vr_cascos) },
-        { etiqueta: "Adicionales", valor: dinero(orden.vr_adicionais) },
-        { etiqueta: "Adelantos", valor: dinero(orden.vr_adiantam) },
-        { etiqueta: "Descuento en partes", valor: dinero(orden.vr_desc_peca) },
-        {
-          etiqueta: "% descuento piezas",
-          valor: porcentajeDecimal(orden.perc_desc_pcs),
-        },
-        { etiqueta: "Total de partes", valor: dinero(orden.vr_total_pecas) },
-      ],
-    },
-    {
-      titulo: "Pago y facturación",
-      icono: Tag,
-      items: [
-        { etiqueta: "Situación", valor: orden.situacao },
-        { etiqueta: "Pagador", valor: orden.cod_pagador },
-        { etiqueta: "Condición de pago", valor: orden.cod_cond_pgto },
-        { etiqueta: "Operación fiscal", valor: orden.cod_oper_fiscal },
-        { etiqueta: "Uso de CFDI", valor: orden.uso_cfdi },
-        { etiqueta: "Forma de pago", valor: orden.forma_pago },
-        { etiqueta: "Flag pagado", valor: orden.flag_pago },
-        {
-          etiqueta: "Fecha prefactura",
-          valor: formatearFechaISO(orden.dt_emi_prefact),
-        },
-        {
-          etiqueta: "Hora prefactura",
-          valor: formatearHora(orden.hr_emi_prefact),
-        },
-      ],
-    },
-    {
-      titulo: "Garantía y control",
-      icono: CalendarCheck,
-      items: [
-        { etiqueta: "Situación garantía", valor: orden.sit_garantia },
-        { etiqueta: "FISS", valor: orden.sit_fiss },
-        { etiqueta: "Garantía HDA", valor: orden.nr_gar_hda },
-        { etiqueta: "Motivo de cancelación", valor: orden.motivo_cancel },
-        { etiqueta: "Funcionario cancelación", valor: orden.func_cancel },
-        { etiqueta: "Tipo de golpe", valor: orden.tipo_golpe },
-        { etiqueta: "Servicio de marca", valor: orden.tp_serv_marca },
-        { etiqueta: "Check GM", valor: orden.check_gm },
-        { etiqueta: "Autorización Chrysler", valor: orden.autori_crhysler },
-        {
-          etiqueta: "Funcionario de espera",
-          valor: orden.tem_fun_pin ? "Sí" : "No",
-        },
-        { etiqueta: "RowID", valor: orden.rowid },
-      ],
-    },
-  ];
+function PanelComentarios({ orden }) {
+  const agencia = orden?.agencia;
+  const nrOs = orden?.nr_os;
 
-  const campos = secciones.flatMap((seccion) => seccion.items);
-  const camposConDato = campos.filter((item) => !vacio(item.valor)).length;
-  const avance =
-    campos.length === 0
-      ? 0
-      : Math.round((camposConDato / campos.length) * 100);
+  const [comentarios, setComentarios] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+  const [texto, setTexto] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [errorForm, setErrorForm] = useState("");
+  const [editandoId, setEditandoId] = useState(null);
+  const [textoEdicion, setTextoEdicion] = useState("");
+  const [ocupadoId, setOcupadoId] = useState(null);
+
+  useEffect(() => {
+    if (vacio(agencia) || vacio(nrOs)) return undefined;
+
+    let vigente = true;
+
+    getGotaComentarios({ agencia, nr_os: nrOs })
+      .then((data) => {
+        if (!vigente) return;
+        setComentarios(Array.isArray(data) ? data : []);
+        setError("");
+      })
+      .catch((e) => {
+        if (!vigente) return;
+        setError(e?.message || "No se pudieron cargar los comentarios.");
+      })
+      .finally(() => {
+        if (vigente) setCargando(false);
+      });
+
+    return () => {
+      vigente = false;
+    };
+  }, [agencia, nrOs]);
+
+  async function agregar(evento) {
+    evento.preventDefault();
+
+    const limpio = texto.trim();
+
+    if (!limpio) {
+      setErrorForm("Escribe un comentario antes de guardar.");
+      return;
+    }
+
+    setGuardando(true);
+    setErrorForm("");
+
+    try {
+      const nuevo = await crearGotaComentario({
+        agencia,
+        nr_os: nrOs,
+        texto: limpio,
+      });
+
+      setComentarios((prev) => [nuevo, ...prev]);
+      setTexto("");
+    } catch (e) {
+      setErrorForm(e?.message || "No se pudo guardar el comentario.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function guardarEdicion(id) {
+    const limpio = textoEdicion.trim();
+
+    if (!limpio) return;
+
+    setOcupadoId(id);
+    setErrorForm("");
+
+    try {
+      const actualizado = await actualizarGotaComentario(id, { texto: limpio });
+      setComentarios((prev) =>
+        prev.map((item) => (item.id === id ? actualizado : item))
+      );
+      setEditandoId(null);
+      setTextoEdicion("");
+    } catch (e) {
+      setErrorForm(e?.message || "No se pudo actualizar el comentario.");
+    } finally {
+      setOcupadoId(null);
+    }
+  }
+
+  async function eliminar(id) {
+    setOcupadoId(id);
+    setErrorForm("");
+
+    try {
+      await eliminarGotaComentario(id);
+      setComentarios((prev) => prev.filter((item) => item.id !== id));
+    } catch (e) {
+      setErrorForm(e?.message || "No se pudo eliminar el comentario.");
+    } finally {
+      setOcupadoId(null);
+    }
+  }
 
   return (
-    <div className="border-b border-[#E4E7F0] bg-[#F7F8FC] px-4 py-3">
-      <div className="overflow-hidden rounded-xl border border-[#E4E7F0] bg-white">
-      {/* Cabecera estilo referencia */}
-        <div className="flex items-center gap-3 border-b border-[#E4E7F0] px-4 py-2.5">
-          <span className="flex h-7 shrink-0 items-center rounded-lg bg-[#0A1340] px-2 text-[11px] font-black text-white">
-            OS {orden.nr_os}
+    <section className="mb-3 overflow-hidden rounded-lg border border-[#E4E7F0]">
+      <p className="flex items-center gap-1.5 border-b border-[#E4E7F0] bg-[#F7F8FC] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1677FF]">
+        <MessageSquare className="h-3 w-3 shrink-0" />
+        Comentarios
+        {comentarios.length > 0 && (
+          <span className="ml-auto rounded-full bg-[#131E5C] px-1.5 text-[10px] font-black text-white">
+            {comentarios.length}
           </span>
+        )}
+      </p>
 
-          <div className="min-w-0 shrink-0">
-            <p className="truncate text-xs font-black uppercase tracking-wide text-[#001E50]">
-              {orden.agencia || "Sin agencia"}
-            </p>
-            <p className="truncate text-[11px] text-slate-500">
-              {entero(campos.length)} campos · Apertura{" "}
-              {formatearFechaISO(orden.dt_abertura)}
-            </p>
-          </div>
+      <form onSubmit={agregar} className="border-b border-[#E4E7F0] p-2.5">
+        <textarea
+          id="gota-comentario-texto"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={2}
+          placeholder="Escribe un comentario sobre esta orden…"
+          className="w-full resize-y rounded-lg border border-[#E4E7F0] bg-white px-2.5 py-2 text-[11px] text-slate-700 outline-none transition focus:border-[#1677FF]"
+        />
 
-          <div
-            className="hidden h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 sm:block"
-            role="progressbar"
-            aria-valuenow={avance}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Campos con dato capturado"
-            title={`${entero(camposConDato)} de ${entero(campos.length)} campos con dato`}
-          >
-            <div
-              className="h-full rounded-full bg-[#0A1340]"
-              style={{ width: `${avance}%` }}
-            />
-          </div>
-
-          {dias !== null && (
-            <span
-              className={cn(
-                "hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase md:inline",
-                dias <= 3
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : dias <= 7
-                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                    : "border-rose-200 bg-rose-50 text-rose-700"
-              )}
-            >
-              {dias} día(s)
-            </span>
-          )}
-
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="truncate text-[10px] text-rose-600">{errorForm}</span>
           <button
-            type="button"
-            onClick={onClose}
-            aria-label="Ocultar detalle"
-            title="Ocultar detalle"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0A1340] text-white transition hover:bg-[#1E2F7A]"
+            type="submit"
+            disabled={guardando}
+            className="flex shrink-0 items-center gap-1 rounded-lg bg-[#131E5C] px-2.5 py-1.5 text-[10px] font-bold text-white transition hover:bg-[#0A1340] disabled:opacity-50"
           >
-            <ChevronDown className="h-4 w-4 rotate-180" />
+            <Send className="h-3 w-3" />
+            {guardando ? "Guardando…" : "Agregar"}
           </button>
         </div>
+      </form>
 
-      {/* Secciones apiladas hacia abajo, al ancho completo del contenedor */}
-        <div className="flex flex-col gap-3">
-          {secciones.map((seccion) => {
-            const Icon = seccion.icono;
+      <div className="max-h-[240px] overflow-y-auto">
+        {cargando && (
+          <p className="px-2.5 py-3 text-[11px] text-slate-400">Cargando comentarios…</p>
+        )}
+
+        {!cargando && error && (
+          <p className="px-2.5 py-3 text-[11px] text-rose-600">{error}</p>
+        )}
+
+        {!cargando && !error && comentarios.length === 0 && (
+          <p className="px-2.5 py-3 text-[11px] text-slate-400">
+            Aún no hay comentarios para esta orden.
+          </p>
+        )}
+
+        {!cargando &&
+          !error &&
+          comentarios.map((comentario) => {
+            const editando = editandoId === comentario.id;
+            const ocupado = ocupadoId === comentario.id;
 
             return (
               <div
-                key={seccion.titulo}
-                className="overflow-hidden rounded-lg border border-[#E4E7F0]"
+                key={comentario.id}
+                className="border-b border-[#EEF1F7] px-2.5 py-2 last:border-b-0"
               >
-                <p className="flex items-center gap-1.5 border-b border-[#E4E7F0] bg-[#F7F8FC] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1677FF]">
-                  <Icon className="h-3 w-3 shrink-0" />
-                  {seccion.titulo}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-[10px] font-bold text-[#131E5C]">
+                    {comentario.usuario_nombre || "Usuario"}
+                  </p>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">
+                      {formatearFechaHora(comentario.creado_en)}
+                    </span>
 
-                <dl>
-                  {seccion.items.map(({ etiqueta, valor }, indice) => (
-                    <div
-                      key={etiqueta}
-                      className={cn(
-                        "flex items-baseline justify-between gap-2 px-2.5 py-1",
-                        indice % 2 === 1 && "bg-[#FAFBFF]"
-                      )}
-                    >
-                      <dt className="shrink-0 text-[11px] text-slate-500">
-                        {etiqueta}
-                      </dt>
-                      <dd className="truncate text-right text-[11px] font-bold text-slate-800">
-                        {vacio(valor) ? "—" : String(valor)}
-                      </dd>
+                    {!editando && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={ocupado}
+                          onClick={() => {
+                            setEditandoId(comentario.id);
+                            setTextoEdicion(comentario.texto || "");
+                            setErrorForm("");
+                          }}
+                          title="Editar comentario"
+                          className="rounded p-0.5 text-slate-400 transition hover:text-[#1677FF] disabled:opacity-50"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={ocupado}
+                          onClick={() => eliminar(comentario.id)}
+                          title="Eliminar comentario"
+                          className="rounded p-0.5 text-slate-400 transition hover:text-rose-600 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {editando ? (
+                  <div className="mt-1.5">
+                    <textarea
+                      value={textoEdicion}
+                      onChange={(e) => setTextoEdicion(e.target.value)}
+                      rows={2}
+                      className="w-full resize-y rounded-lg border border-[#E4E7F0] bg-white px-2.5 py-2 text-[11px] text-slate-700 outline-none transition focus:border-[#1677FF]"
+                    />
+                    <div className="mt-1.5 flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditandoId(null);
+                          setTextoEdicion("");
+                        }}
+                        className="rounded-lg border border-[#E4E7F0] px-2 py-1 text-[10px] font-bold text-slate-500 transition hover:bg-slate-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ocupado}
+                        onClick={() => guardarEdicion(comentario.id)}
+                        className="flex items-center gap-1 rounded-lg bg-[#131E5C] px-2 py-1 text-[10px] font-bold text-white transition hover:bg-[#0A1340] disabled:opacity-50"
+                      >
+                        <Check className="h-3 w-3" />
+                        {ocupado ? "Guardando…" : "Guardar"}
+                      </button>
                     </div>
-                  ))}
-                </dl>
+                  </div>
+                ) : (
+                  <p className="mt-1 whitespace-pre-wrap text-[11px] text-slate-700">
+                    {comentario.texto}
+                  </p>
+                )}
               </div>
             );
           })}
-        </div>
       </div>
+    </section>
+  );
+}
 
-      <p className="mt-2 text-[10px] text-slate-400">
-        Ficha de solo lectura · los importes corresponden al valor capturado en
-        la orden de servicio.
+/* ============================================================
+   OBSERVACIONES HISTÓRICAS DE SERVICIO (solo lectura)
+   ============================================================ */
+
+function PanelObservaciones({ orden }) {
+  const agencia = orden?.agencia;
+  const nrOs = orden?.nr_os;
+
+  const [observaciones, setObservaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (vacio(agencia) || vacio(nrOs)) return undefined;
+
+    let vigente = true;
+
+    getGotaObservaciones({ agencia, nr_os: nrOs })
+      .then((data) => {
+        if (!vigente) return;
+        setObservaciones(Array.isArray(data) ? data : []);
+        setError("");
+      })
+      .catch((e) => {
+        if (!vigente) return;
+        setError(e?.message || "No se pudieron cargar las observaciones.");
+      })
+      .finally(() => {
+        if (vigente) setCargando(false);
+      });
+
+    return () => {
+      vigente = false;
+    };
+  }, [agencia, nrOs]);
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-[#E4E7F0]">
+      <p className="flex items-center gap-1.5 border-b border-[#E4E7F0] bg-[#F7F8FC] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1677FF]">
+        <Clock className="h-3 w-3 shrink-0" />
+        Observaciones de servicio
+        <span className="ml-1 text-[9px] font-semibold normal-case tracking-normal text-slate-400">
+          (histórico de solo lectura)
+        </span>
+        {observaciones.length > 0 && (
+          <span className="ml-auto rounded-full bg-slate-400 px-1.5 text-[10px] font-black text-white">
+            {observaciones.length}
+          </span>
+        )}
       </p>
+
+      <div className="max-h-[220px] overflow-y-auto">
+        {cargando && (
+          <p className="px-2.5 py-3 text-[11px] text-slate-400">Cargando observaciones…</p>
+        )}
+
+        {!cargando && error && (
+          <p className="px-2.5 py-3 text-[11px] text-rose-600">{error}</p>
+        )}
+
+        {!cargando && !error && observaciones.length === 0 && (
+          <p className="px-2.5 py-3 text-[11px] text-slate-400">
+            Sin observaciones históricas registradas.
+          </p>
+        )}
+
+        {!cargando &&
+          !error &&
+          observaciones.map((observacion, indice) => (
+            <div
+              key={`${observacion.seq}-${indice}`}
+              className="border-b border-[#EEF1F7] px-2.5 py-2 last:border-b-0"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-[10px] font-bold text-slate-600">
+                  {observacion.autor || observacion.resp_incl || "Servicio"}
+                </p>
+                <span className="shrink-0 text-[10px] text-slate-400">
+                  {formatearFechaISO(observacion.dt_incl)}
+                  {formatearHora(observacion.hr_incl) !== "—"
+                    ? ` · ${formatearHora(observacion.hr_incl)}`
+                    : ""}
+                </span>
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-[11px] text-slate-700">
+                {observacion.texto}
+              </p>
+            </div>
+          ))}
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   TARJETA LATERAL DE LA ORDEN (DRAWER)
+   Se abre al hacer clic en una fila: entra desde el lado derecho.
+   Lo primero que muestra es el panel de comentarios (el más reciente
+   arriba, con editor para agregar); después los datos y las
+   observaciones de servicio.
+   ============================================================ */
+
+function FilaDato({ etiqueta, valor, fuerte }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 px-3 py-1.5">
+      <dt className="shrink-0 text-[11px] text-slate-500">{etiqueta}</dt>
+      <dd
+        className={cn(
+          "truncate text-right text-[11px]",
+          fuerte ? "font-black text-[#131E5C]" : "font-bold text-slate-800"
+        )}
+      >
+        {vacio(valor) ? "—" : String(valor)}
+      </dd>
     </div>
+  );
+}
+
+function SeccionTarjeta({ titulo, icono, children }) {
+  const Icono = icono;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-[#E4E7F0] bg-white">
+      <p className="flex items-center gap-1.5 border-b border-[#E4E7F0] bg-[#F7F8FC] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1677FF]">
+        <Icono className="h-3 w-3 shrink-0" />
+        {titulo}
+      </p>
+      <dl>{children}</dl>
+    </section>
+  );
+}
+
+function DrawerOrden({ orden, onClose }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const marco = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(marco);
+  }, []);
+
+  useEffect(() => {
+    const alTeclar = (evento) => {
+      if (evento.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", alTeclar);
+    return () => window.removeEventListener("keydown", alTeclar);
+  }, [onClose]);
+
+  const dias = valorDiasTaller(orden);
+
+  const importes = [
+    ["Partes", orden.vr_pecas],
+    ["Mano de obra", orden.vr_om],
+    ["Lubricantes", orden.vr_lubrif],
+    ["Accesorios", orden.vr_acessor],
+    ["Cascos", orden.vr_cascos],
+    ["Adicionales", orden.vr_adicionais],
+    ["Ad anticipos", orden.vr_adiantam],
+    ["Descuento en partes", orden.vr_desc_peca],
+  ]
+    .filter(([, bruto]) => !vacio(bruto) && Number(bruto) !== 0)
+    .map(([etiqueta, bruto]) => ({ etiqueta, valor: dinero(bruto) }));
+
+  if (!vacio(orden.perc_desc_pcs) && Number(orden.perc_desc_pcs) !== 0) {
+    importes.push({
+      etiqueta: "% desc. piezas",
+      valor: porcentajeDecimal(orden.perc_desc_pcs),
+    });
+  }
+
+  importes.push({
+    etiqueta: "Total de partes",
+    valor: dinero(orden.vr_total_pecas),
+    fuerte: true,
+  });
+
+  return createPortal(
+    <>
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className={cn(
+          "fixed inset-0 z-40 bg-[#0A1340]/45 transition-opacity duration-300",
+          visible ? "opacity-100" : "opacity-0"
+        )}
+      />
+
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Ficha de la orden ${orden?.nr_os ?? ""}`}
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex w-[min(440px,100vw)] flex-col bg-[#F7F8FC] shadow-2xl transition-transform duration-300 ease-out",
+          visible ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        {/* Cabecera */}
+        <div className="shrink-0 bg-gradient-to-br from-[#0A1340] via-[#131E5C] to-[#1E2F7A] px-5 pb-4 pt-5 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-300">
+                Orden de taller
+              </p>
+              <h2 className="mt-1 text-3xl font-black leading-none tracking-tight">
+                OS {orden.nr_os}
+              </h2>
+              <p className="mt-1.5 truncate text-xs text-slate-300">
+                {orden.agencia || "Sin agencia"}
+                {orden.nr_atendimento
+                  ? ` · Atención ${orden.nr_atendimento}`
+                  : ""}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar ficha"
+              title="Cerrar ficha"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {orden.tp_os && (
+              <span className="rounded-full bg-sky-400/20 px-2.5 py-1 text-[10px] font-bold text-sky-200">
+                Tipo {orden.tp_os}
+              </span>
+            )}
+            {orden.situacao && (
+              <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white">
+                {orden.situacao}
+              </span>
+            )}
+            {dias !== null && (
+              <span className="rounded-full bg-emerald-400/20 px-2.5 py-1 text-[10px] font-bold text-emerald-200">
+                {dias} día(s) en taller
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Cuerpo */}
+        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <PanelComentarios orden={orden} />
+
+          <SeccionTarjeta titulo="Orden" icono={Wrench}>
+            <FilaDato etiqueta="Orden de servicio" valor={orden.nr_os} />
+            <FilaDato etiqueta="Atención" valor={orden.nr_atendimento} />
+            <FilaDato etiqueta="Tipo de OS" valor={orden.tp_os} />
+            <FilaDato etiqueta="Subtipo" valor={orden.subtipo_os} />
+            <FilaDato etiqueta="Estatus" valor={orden.situacao} />
+            <FilaDato
+              etiqueta="Días en taller"
+              valor={dias === null ? "—" : `${dias} día(s)`}
+            />
+            <FilaDato
+              etiqueta="Apertura"
+              valor={
+                vacio(orden.dt_abertura)
+                  ? "—"
+                  : `${formatearFechaISO(orden.dt_abertura)}${
+                      vacio(orden.hr_abertura)
+                        ? ""
+                        : ` · ${formatearHora(orden.hr_abertura)}`
+                    }`
+              }
+            />
+            <FilaDato etiqueta="Job" valor={orden.id_job} />
+          </SeccionTarjeta>
+
+          <SeccionTarjeta titulo="Vehículo y contacto" icono={User}>
+            <FilaDato etiqueta="VIN" valor={orden.vin} />
+            <FilaDato etiqueta="Cliente" valor={orden.cliente} />
+            <FilaDato etiqueta="Teléfono" valor={orden.telefono} />
+            <FilaDato etiqueta="Asesor" valor={orden.asesor} />
+          </SeccionTarjeta>
+
+          <SeccionTarjeta titulo="Importes" icono={DollarSign}>
+            {importes.map((item) => (
+              <FilaDato
+                key={item.etiqueta}
+                etiqueta={item.etiqueta}
+                valor={item.valor}
+                fuerte={item.fuerte}
+              />
+            ))}
+          </SeccionTarjeta>
+
+          <SeccionTarjeta titulo="Tiempos" icono={Clock}>
+            <FilaDato
+              etiqueta="Fecha de apertura"
+              valor={formatearFechaISO(orden.dt_abertura)}
+            />
+            <FilaDato
+              etiqueta="Hora de apertura"
+              valor={formatearHora(orden.hr_abertura)}
+            />
+            <FilaDato
+              etiqueta="Hora de llegada"
+              valor={formatearHora(orden.hora_llegada)}
+            />
+            <FilaDato
+              etiqueta="Desbloqueo"
+              valor={formatearFechaISO(orden.dt_debloq)}
+            />
+            <FilaDato
+              etiqueta="Cierre"
+              valor={formatearFechaISO(orden.dt_fechamento)}
+            />
+          </SeccionTarjeta>
+
+          <SeccionTarjeta titulo="Pago y facturación" icono={Tag}>
+            <FilaDato etiqueta="Pagador" valor={orden.pagador} />
+            <FilaDato
+              etiqueta="Condición de pago"
+              valor={orden.cod_cond_pgto}
+            />
+            <FilaDato etiqueta="Forma de pago" valor={orden.forma_pago} />
+            <FilaDato etiqueta="Uso de CFDI" valor={orden.uso_cfdi} />
+            <FilaDato etiqueta="Garantía" valor={orden.sit_garantia} />
+            <FilaDato
+              etiqueta="Prefactura"
+              valor={formatearFechaISO(orden.dt_emi_prefact)}
+            />
+          </SeccionTarjeta>
+
+          <PanelObservaciones orden={orden} />
+
+          <p className="pb-1 text-[10px] leading-relaxed text-slate-400">
+            Los comentarios son editables; las observaciones de servicio
+            provienen del histórico y son de solo lectura.
+          </p>
+        </div>
+      </aside>
+    </>,
+    document.body
   );
 }
 
@@ -2009,24 +2550,24 @@ function TablaOrdenes({
   const [filtroAbierto, setFiltroAbierto] = useState(null);
   const [columnasVisibles, setColumnasVisibles] = useState(columnasGuardadasIniciales);
   const [showColumnas, setShowColumnas] = useState(false);
+  // Tabla compacta (9 columnas) por defecto; "Ver tabla completa" muestra
+  // todas las del selector. Se recuerda en localStorage.
+  const [tablaCompleta, setTablaCompleta] = useState(() => {
+    try {
+      return localStorage.getItem("gota_tabla_completa") === "1";
+    } catch {
+      return false;
+    }
+  });
 
-  /* Ancho visible de la tabla: el detalle de la fila expandida se pega a la
-     izquierda con ese ancho para no obligar a hacer scroll horizontal. */
-  const scrollRef = useRef(null);
-  const [anchoVista, setAnchoVista] = useState(0);
-
-  useEffect(() => {
-    const contenedor = scrollRef.current;
-    if (!contenedor || typeof ResizeObserver === "undefined") return;
-
-    const observer = new ResizeObserver((entradas) => {
-      const entrada = entradas[0];
-      if (entrada) setAnchoVista(Math.round(entrada.contentRect.width));
-    });
-
-    observer.observe(contenedor);
-    return () => observer.disconnect();
-  }, []);
+  function cambiarTablaCompleta(valor) {
+    setTablaCompleta(valor);
+    try {
+      localStorage.setItem("gota_tabla_completa", valor ? "1" : "0");
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  }
 
   useEffect(() => {
     try {
@@ -2039,12 +2580,12 @@ function TablaOrdenes({
     }
   }, [columnasVisibles]);
 
-  const columnasTabla = useMemo(
-    () => COLUMNAS.filter((col) => columnasVisibles.has(col.key)),
-    [columnasVisibles]
-  );
-
-  const totalColumnas = columnasTabla.length + 1;
+  const columnasTabla = useMemo(() => {
+    if (!tablaCompleta) {
+      return COLUMNAS.filter((col) => COLUMNAS_COMPACTAS.includes(col.key));
+    }
+    return COLUMNAS.filter((col) => columnasVisibles.has(col.key));
+  }, [columnasVisibles, tablaCompleta]);
 
   function abrirFiltro(key, event) {
     if (filtroAbierto && filtroAbierto.key === key) {
@@ -2140,41 +2681,63 @@ function TablaOrdenes({
             </button>
           )}
 
-          <div className="relative">
+          {tablaCompleta ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowColumnas((prev) => !prev)}
+                aria-expanded={showColumnas}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold transition",
+                  showColumnas
+                    ? "border-[#131E5C] bg-[#131E5C] text-white"
+                    : "border-[#131E5C]/20 bg-white text-[#131E5C] hover:bg-slate-50"
+                )}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Ocultar columnas ({columnasTabla.length}/{COLUMNAS.length})
+                <ChevronDown
+                  className={cn(
+                    "h-3 w-3 transition-transform",
+                    showColumnas && "rotate-180"
+                  )}
+                />
+              </button>
+
+              {showColumnas && (
+                <ColumnChooser
+                  visibles={columnasVisibles}
+                  onChange={setColumnasVisibles}
+                  onClose={() => setShowColumnas(false)}
+                />
+              )}
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => setShowColumnas((prev) => !prev)}
-              aria-expanded={showColumnas}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold transition",
-                showColumnas
-                  ? "border-[#131E5C] bg-[#131E5C] text-white"
-                  : "border-[#131E5C]/20 bg-white text-[#131E5C] hover:bg-slate-50"
-              )}
+              onClick={() => cambiarTablaCompleta(true)}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#131E5C] px-3 text-[11px] font-bold text-white transition hover:bg-[#0A1340]"
             >
-              <Eye className="h-3.5 w-3.5" />
-              Columnas ({columnasTabla.length}/{COLUMNAS.length})
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 transition-transform",
-                  showColumnas && "rotate-180"
-                )}
-              />
+              <Maximize2 className="h-3.5 w-3.5" />
+              Ver tabla completa
             </button>
+          )}
 
-            {showColumnas && (
-              <ColumnChooser
-                visibles={columnasVisibles}
-                onChange={setColumnasVisibles}
-                onClose={() => setShowColumnas(false)}
-              />
-            )}
-          </div>
+          {tablaCompleta && (
+            <button
+              type="button"
+              onClick={() => cambiarTablaCompleta(false)}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#131E5C]/20 bg-white px-3 text-[11px] font-bold text-[#131E5C] transition hover:bg-slate-50"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+              Minimizar tabla
+            </button>
+          )}
         </div>
       </div>
 
       {/* Tabla */}
-      <div ref={scrollRef} className="max-h-[70vh] min-h-[420px] overflow-auto">
+      <div className="max-h-[70vh] min-h-[420px] overflow-auto">
         <table className="min-w-max border-collapse">
           <thead className="sticky top-0 z-20">
             <tr className="bg-[#131E5C]">
@@ -2244,7 +2807,7 @@ function TablaOrdenes({
               ))
             ) : ordenes.length === 0 ? (
               <tr>
-                <td colSpan={totalColumnas} className="px-6 py-16 text-center">
+                <td colSpan={columnasTabla.length + 1} className="px-6 py-16 text-center">
                   <SearchX className="mx-auto h-8 w-8 text-slate-300" />
                   <p className="mt-3 text-sm font-bold text-slate-700">
                     No se encontraron órdenes
@@ -2272,18 +2835,18 @@ function TablaOrdenes({
                 const expandida = filaExpandida === clave;
 
                 return (
-                  <Fragment key={clave}>
-                    <tr
-                      onClick={() => onAlternarFila(clave)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          onAlternarFila(clave);
-                        }
-                      }}
-                      tabIndex={0}
-                      aria-expanded={expandida}
-                      title={expandida ? "Ocultar detalle" : "Ver detalle de la orden"}
+                  <tr
+                    key={clave}
+                    onClick={() => onAlternarFila(clave)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onAlternarFila(clave);
+                      }
+                    }}
+                    tabIndex={0}
+                    aria-expanded={expandida}
+                    title={expandida ? "Cerrar ficha" : "Abrir ficha de la orden"}
                       className={cn(
                         "group cursor-pointer border-b border-slate-100 transition-colors hover:bg-[#EAF1FF] focus:bg-[#EAF1FF] focus:outline-none",
                         indice % 2 === 1 && "bg-[#FAFBFF]",
@@ -2328,27 +2891,6 @@ function TablaOrdenes({
                       </td>
                     </tr>
 
-                    {expandida && (
-                      <tr>
-                        <td colSpan={totalColumnas} className="p-0">
-                          {/* Anclado al borde izquierdo con el ancho visible de
-                              la tabla: el detalle se ve completo sin scroll
-                              horizontal, sin importar cuán ancha sea la tabla. */}
-                          <div
-                            className="sticky left-0 z-10"
-                            style={{
-                              width: anchoVista > 0 ? anchoVista : "100%",
-                            }}
-                          >
-                            <DetalleOrden
-                              orden={fila}
-                              onClose={() => onAlternarFila(clave)}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
                 );
               })
             )}
@@ -2503,16 +3045,13 @@ const CAMPOS_FILTRO = [
    tableros de Gestión de Negocio, conectada a los filtros de GOTA. */
 function BarraFiltrosRapidos({
   agencias,
-  tipos,
   anios,
   anio,
   mesActivo,
   anioCompleto,
   agenciaActiva,
-  tipoActivo,
   cargando,
   onAgencia,
-  onTipo,
   onMes,
   onAnioCompleto,
   onAnio,
@@ -2526,14 +3065,6 @@ function BarraFiltrosRapidos({
       activa
         ? "bg-[#131E5C] text-white ring-2 ring-[#131E5C]"
         : "border border-slate-200 bg-white text-[#001E50] hover:bg-slate-50"
-    );
-
-  const clasesPildoraTipo = (activa) =>
-    cn(
-      "inline-flex cursor-pointer items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition-all duration-150",
-      activa
-        ? "bg-[#1677FF] text-white shadow-sm"
-        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
     );
 
   return (
@@ -2581,47 +3112,6 @@ function BarraFiltrosRapidos({
             })}
           </>
         )}
-      </div>
-
-      {/* Tipo de orden de servicio */}
-      <div className="flex flex-col gap-2 rounded-xl border border-slate-200/80 bg-slate-50 p-2 md:flex-row md:items-center">
-        <span className="flex shrink-0 items-center gap-1.5 px-2 text-xs font-bold text-[#001E50]">
-          <Tag className="h-3.5 w-3.5 text-[#1677FF]" />
-          Tipo OS:
-        </span>
-
-        <div
-          className="flex flex-wrap items-center gap-1.5"
-          role="group"
-          aria-label="Filtrar por tipo de orden de servicio"
-        >
-          <button
-            type="button"
-            onClick={() => onTipo("")}
-            aria-pressed={!tipoActivo}
-            className={clasesPildoraTipo(!tipoActivo)}
-          >
-            {!tipoActivo && <Check className="h-3 w-3 text-white" />}
-            <span>Todos</span>
-          </button>
-
-          {tipos.map((tipo) => {
-            const activo = tipoActivo === tipo;
-
-            return (
-              <button
-                key={tipo}
-                type="button"
-                onClick={() => onTipo(tipo)}
-                aria-pressed={activo}
-                className={clasesPildoraTipo(activo)}
-              >
-                {activo && <Check className="h-3 w-3 text-white" />}
-                <span>{tipo}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Periodo de apertura: año + meses */}
@@ -2754,7 +3244,26 @@ export default function Gota() {
   const [claveResuelta, setClaveResuelta] = useState("");
   const [claveDashboardResuelta, setClaveDashboardResuelta] = useState("");
 
-  const [ordenActual, setOrdenActual] = useState("-rowid");
+  const [ordenActual, setOrdenActual] = useState("-dt_abertura");
+  // Vista activa: "tabla" | "graficos". Se recuerda en localStorage.
+  const [vista, setVista] = useState(() => {
+    try {
+      return localStorage.getItem("gota_vista") === "graficos"
+        ? "graficos"
+        : "tabla";
+    } catch {
+      return "tabla";
+    }
+  });
+
+  function cambiarVista(valor) {
+    setVista(valor);
+    try {
+      localStorage.setItem("gota_vista", valor);
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  }
   // Detalle desplegado: { clave, pagina } para que al cambiar de
   // página el detalle de la fila anterior deje de mostrarse.
   const [detalleAbierto, setDetalleAbierto] = useState(null);
@@ -2951,11 +3460,6 @@ export default function Gota() {
     });
   }
 
-  function seleccionarTipoRapido(valor) {
-    if (filtros.tp_os === valor) return;
-    aplicarSeleccionRapida({ tp_os: valor });
-  }
-
   function seleccionarMesRapido(indice) {
     if (mesPeriodoActivo === indice) {
       aplicarSeleccionRapida({ fecha_desde: "", fecha_hasta: "" });
@@ -3089,6 +3593,13 @@ export default function Gota() {
 
   const totales = dashboard?.totales || {};
   const graficas = dashboard?.graficas || {};
+
+  // Orden mostrada en la tarjeta lateral: se busca en la página actual por
+  // su clave; si ya no está (cambió página/filtros), la tarjeta se oculta.
+  const ordenDrawer = detalleAbierto
+    ? (ordenes.find((fila) => claveFila(fila) === detalleAbierto.clave) ??
+      null)
+    : null;
 
   /* Permanencia por agencia: una fila por agencia con un segmento por rango
      (escala semáforo) y, dentro de cada segmento, el desglose por tipo de
@@ -3231,6 +3742,43 @@ export default function Gota() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="tablist"
+              aria-label="Cambiar vista"
+              className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-100 p-1"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={vista === "tabla"}
+                onClick={() => cambiarVista("tabla")}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-bold transition",
+                  vista === "tabla"
+                    ? "bg-[#131E5C] text-white shadow"
+                    : "text-slate-500 hover:text-[#131E5C]"
+                )}
+              >
+                <Sheet className="h-3.5 w-3.5" />
+                Tabla
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={vista === "graficos"}
+                onClick={() => cambiarVista("graficos")}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-bold transition",
+                  vista === "graficos"
+                    ? "bg-[#131E5C] text-white shadow"
+                    : "text-slate-500 hover:text-[#131E5C]"
+                )}
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+                Gráficos
+              </button>
+            </div>
+
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[#131E5C]/15 bg-[#131E5C]/5 px-3 py-1.5 text-xs font-bold text-[#131E5C]">
               <Wrench className="h-3.5 w-3.5" />
               {entero(total)} órdenes
@@ -3257,16 +3805,13 @@ export default function Gota() {
           <div className="p-4">
             <BarraFiltrosRapidos
               agencias={opciones.agencia || []}
-              tipos={opciones.tpos || []}
               anios={aniosPeriodo}
               anio={anioEfectivo}
               mesActivo={mesPeriodoActivo}
               anioCompleto={anioCompletoActivo}
               agenciaActiva={filtros.agencia}
-              tipoActivo={filtros.tp_os}
               cargando={!opciones.agencia}
               onAgencia={seleccionarAgenciaRapida}
-              onTipo={seleccionarTipoRapido}
               onMes={seleccionarMesRapido}
               onAnioCompleto={seleccionarAnioCompleto}
               onAnio={cambiarAnioPeriodo}
@@ -3274,29 +3819,7 @@ export default function Gota() {
           </div>
         </section>
 
-        {/* RESUMEN EJECUTIVO */}
-        <ResumenEjecutivo
-          cargando={loadingDashboard}
-          totales={totales}
-          antiguedad={porAntiguedad}
-          agencias={porAgencia}
-          rangoActivo={rangoAntiguedad}
-          onSeleccionarRango={(nombre) =>
-            setRangoAntiguedad((prev) => (prev === nombre ? null : nombre))
-          }
-        />
-
-        {rangoAntiguedad && (
-          <DetalleRangoAntiguedad
-            key={rangoAntiguedad}
-            rango={rangoAntiguedad}
-            filtrosBase={paramsConsulta}
-            onClose={() => setRangoAntiguedad(null)}
-            onVerEnTabla={() => verRangoEnTabla(rangoAntiguedad)}
-          />
-        )}
-
-        {/* KPIs */}
+        {/* KPIs: siempre visibles, debajo de los filtros de mes */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             title="Órdenes en taller"
@@ -3332,6 +3855,38 @@ export default function Gota() {
           />
         </section>
 
+        {/* VISTA TABLA: resumen + filtros + tabla */}
+        {vista === "tabla" && (
+          <>
+        {/* RESUMEN EJECUTIVO */}
+        <ResumenEjecutivo
+          cargando={loadingDashboard}
+          totales={totales}
+          antiguedad={porAntiguedad}
+          agencias={porAgencia}
+          rangoActivo={rangoAntiguedad}
+          agenciaActiva={filtros.agencia}
+          onSeleccionarAgencia={seleccionarAgenciaRapida}
+          onSeleccionarRango={(nombre) =>
+            setRangoAntiguedad((prev) => (prev === nombre ? null : nombre))
+          }
+        />
+
+        {rangoAntiguedad && (
+          <DetalleRangoAntiguedad
+            key={rangoAntiguedad}
+            rango={rangoAntiguedad}
+            filtrosBase={paramsConsulta}
+            onClose={() => setRangoAntiguedad(null)}
+            onVerEnTabla={() => verRangoEnTabla(rangoAntiguedad)}
+          />
+        )}
+          </>
+        )}
+
+        {/* VISTA GRÁFICOS: gráficas (sin resumen ejecutivo) */}
+        {vista === "graficos" && (
+          <>
         {/* Gráficas */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <VWPilaPermanenciaCard
@@ -3378,7 +3933,12 @@ export default function Gota() {
             data={porDia}
           />
         </section>
+          </>
+        )}
 
+        {/* VISTA TABLA (cont.): filtros + tabla */}
+        {vista === "tabla" && (
+          <>
         {/* FILTROS */}
         <section className="overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E4E7F0] bg-[#F7F8FC] px-4 py-3">
@@ -3606,7 +4166,16 @@ export default function Gota() {
             ordenActual={ordenActual}
           />
         </section>
+          </>
+        )}
       </div>
+
+      {ordenDrawer && (
+        <DrawerOrden
+          orden={ordenDrawer}
+          onClose={() => setDetalleAbierto(null)}
+        />
+      )}
 
       <PilaAvisos avisos={avisos} />
     </main>
