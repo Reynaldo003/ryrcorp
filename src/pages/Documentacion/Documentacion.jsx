@@ -727,112 +727,111 @@ function ExpedienteCard({
 
                                                     const key =
                                                         `${expediente.id_expediente}-${requisito.id}`;
-                                                    
+
                                                     // ── CASO ESPECIAL: SUBTABLA DINÁMICA PARA "OTROS" ──────────────
                                                     if (requisito.id === "otros") {
-                                                    const otrosDocs = expediente.documentos_otros || [];
-                                                    const isUploading = !!uploading[key];
+                                                        const otrosDocs = expediente.documentos_otros || [];
+                                                        const isUploading = !!uploading[key];
 
-                                                    return (
-                                                        <tr key={requisito.id} className="border-b bg-slate-50/70">
-                                                        <td colSpan={5} className="p-4">
-                                                            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                                                            <div>
-                                                                <div className="flex items-center gap-2">
-                                                                <span className="font-semibold text-slate-800 text-sm">
-                                                                    {requisito.nombre}
-                                                                </span>
-                                                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                                                                    {otrosDocs.length} archivo{otrosDocs.length === 1 ? "" : "s"}
-                                                                </span>
-                                                                </div>
-                                                                <p className="text-xs text-slate-500 mt-0.5">
-                                                                {requisito.descripcion || "Documentos varios no contemplados en el catálogo"}
-                                                                </p>
-                                                            </div>
+                                                        return (
+                                                            <tr key={requisito.id} className="border-b bg-slate-50/70">
+                                                                <td colSpan={5} className="p-4">
+                                                                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                                                        <div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-semibold text-slate-800 text-sm">
+                                                                                    {requisito.nombre}
+                                                                                </span>
+                                                                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                                                                    {otrosDocs.length} archivo{otrosDocs.length === 1 ? "" : "s"}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                                                {requisito.descripcion || "Documentos varios no contemplados en el catálogo"}
+                                                                            </p>
+                                                                        </div>
 
-                                                            {editable && (
-                                                                <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium rounded shadow transition ${
-                                                                isUploading ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-                                                                }`}>
-                                                                <span>{isUploading ? "Subiendo..." : "+ Adjuntar documento"}</span>
-                                                                <input
-                                                                    type="file"
-                                                                    accept=".pdf,application/pdf"
-                                                                    disabled={isUploading}
-                                                                    className="hidden"
-                                                                    onChange={(e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (file) {
-                                                                        onSeleccionar(expediente, requisito, file);
-                                                                    }
-                                                                    e.target.value = "";
-                                                                    }}
-                                                                />
-                                                                </label>
-                                                            )}
-                                                            </div>
+                                                                        {editable && (
+                                                                            <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium rounded shadow transition ${isUploading ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                                                                                }`}>
+                                                                                <span>{isUploading ? "Subiendo..." : "+ Adjuntar documento"}</span>
+                                                                                <input
+                                                                                    type="file"
+                                                                                    accept=".pdf,application/pdf"
+                                                                                    disabled={isUploading}
+                                                                                    className="hidden"
+                                                                                    onChange={(e) => {
+                                                                                        const file = e.target.files?.[0];
+                                                                                        if (file) {
+                                                                                            onSeleccionar(expediente, requisito, file);
+                                                                                        }
+                                                                                        e.target.value = "";
+                                                                                    }}
+                                                                                />
+                                                                            </label>
+                                                                        )}
+                                                                    </div>
 
-                                                            {otrosDocs.length > 0 ? (
-                                                            <div className="overflow-x-auto rounded border border-slate-200 bg-white shadow-sm">
-                                                                <table className="min-w-full text-xs text-left divide-y divide-slate-100">
-                                                                <thead className="bg-slate-100 text-slate-600 font-semibold">
-                                                                    <tr>
-                                                                    <th className="py-2 px-3">Nombre del archivo</th>
-                                                                    <th className="py-2 px-3">Tamaño</th>
-                                                                    <th className="py-2 px-3 text-right">Acciones</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-slate-100">
-                                                                    {otrosDocs.map((doc) => {
-                                                                        const isDeleting = !!uploading[`del-${doc.id_documento}`];
+                                                                    {otrosDocs.length > 0 ? (
+                                                                        <div className="overflow-x-auto rounded border border-slate-200 bg-white shadow-sm">
+                                                                            <table className="min-w-full text-xs text-left divide-y divide-slate-100">
+                                                                                <thead className="bg-slate-100 text-slate-600 font-semibold">
+                                                                                    <tr>
+                                                                                        <th className="py-2 px-3">Nombre del archivo</th>
+                                                                                        <th className="py-2 px-3">Tamaño</th>
+                                                                                        <th className="py-2 px-3 text-right">Acciones</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-slate-100">
+                                                                                    {otrosDocs.map((doc) => {
+                                                                                        const isDeleting = !!uploading[`del-${doc.id_documento}`];
 
-                                                                        return (
-                                                                            <tr key={doc.id_documento} className="hover:bg-slate-50 transition-colors">
-                                                                                <td className="py-2 px-3 font-medium text-slate-800">
-                                                                                    <span className="text-red-500 font-bold mr-2">PDF</span>
-                                                                                    <span className="truncate max-w-sm inline-block align-middle" title={doc.nombre_original}>
-                                                                                        {doc.nombre_original}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="py-2 px-3 text-slate-500">
-                                                                                    {formatBytes(doc.tamano_bytes)}
-                                                                                </td>
-                                                                                <td className="py-2 px-3 text-right">
-                                                                                    <div className="flex items-center justify-end gap-2">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => onVer(doc)}
-                                                                                            className="px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded font-medium transition"
-                                                                                        >
-                                                                                            Ver
-                                                                                        </button>
-                                                                                        {editable && (
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                disabled={isDeleting}
-                                                                                                onClick={() => onEliminar(expediente, requisito, doc)}
-                                                                                                className="px-2.5 py-1 text-red-600 hover:bg-red-50 rounded font-medium transition disabled:opacity-50"
-                                                                                            >
-                                                                                                {isDeleting ? "Eliminando..." : "Eliminar"}
-                                                                                            </button>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-                                                                </tbody>
-                                                                </table>
-                                                            </div>
-                                                            ) : (
-                                                            <div className="text-xs text-slate-400 italic py-3 text-center border border-dashed border-slate-300 rounded bg-white">
-                                                                No hay documentos adicionales adjuntos en este expediente.
-                                                            </div>
-                                                            )}
-                                                        </td>
-                                                        </tr>
-                                                    );
+                                                                                        return (
+                                                                                            <tr key={doc.id_documento} className="hover:bg-slate-50 transition-colors">
+                                                                                                <td className="py-2 px-3 font-medium text-slate-800">
+                                                                                                    <span className="text-red-500 font-bold mr-2">PDF</span>
+                                                                                                    <span className="truncate max-w-sm inline-block align-middle" title={doc.nombre_original}>
+                                                                                                        {doc.nombre_original}
+                                                                                                    </span>
+                                                                                                </td>
+                                                                                                <td className="py-2 px-3 text-slate-500">
+                                                                                                    {formatBytes(doc.tamano_bytes)}
+                                                                                                </td>
+                                                                                                <td className="py-2 px-3 text-right">
+                                                                                                    <div className="flex items-center justify-end gap-2">
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() => onVer(doc)}
+                                                                                                            className="px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded font-medium transition"
+                                                                                                        >
+                                                                                                            Ver
+                                                                                                        </button>
+                                                                                                        {editable && (
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                disabled={isDeleting}
+                                                                                                                onClick={() => onEliminar(expediente, requisito, doc)}
+                                                                                                                className="px-2.5 py-1 text-red-600 hover:bg-red-50 rounded font-medium transition disabled:opacity-50"
+                                                                                                            >
+                                                                                                                {isDeleting ? "Eliminando..." : "Eliminar"}
+                                                                                                            </button>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </td>
+                                                                                            </tr>
+                                                                                        );
+                                                                                    })}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="text-xs text-slate-400 italic py-3 text-center border border-dashed border-slate-300 rounded bg-white">
+                                                                            No hay documentos adicionales adjuntos en este expediente.
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
                                                     }
 
                                                     // ── CASO GENERAL: LOS OTROS 32 REQUISITOS HABITUALES ───────────
@@ -1024,27 +1023,31 @@ function ExpedienteCard({
 }
 
 export default function Documentacion() {
-    const { user } = useAuth();
+    const { user, getUserAgencias } = useAuth();
     const {
         nombresAsesoresActivos,
     } = useAsesoresGestionComercial();
     const timerRef = useRef(null);
 
-    const rol = normalizar(user?.rol);
-    const idRol = Number(user?.id_rol ?? user?.rol_id ?? user?.rol ?? 0);
-    const permisos = user?.permisos || [];
-    // id_rol === 1 es Administrador, id_rol === 12 es Asesor Piso
-    const isAdmin = idRol === 1 || rol === "administrador" || permisos.includes("ALL") || permisos.includes("USUARIOS_ADMIN");
 
-    const isGerente = (
+
+    const rol = normalizar(user?.rol ?? user?.nombre_rol ?? "");
+    const idRol = Number(user?.id_rol ?? user?.idrol ?? user?.rol_id ?? 0);
+    const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+
+    const isAdmin = idRol === 1 || rol === "administrador";
+
+    const esFinancieroAgencia =
         idRol === 6 ||
-        (rol.includes("gerente") && rol.includes("servicios") && rol.includes("financieros"))
-        || permisos.includes("FINANCIEROS_GERENTE")
-    );
+        ["contador", "financiero", "financieros", "crm_financieros", "crm financieros"].includes(rol);
+
+    const isGerente =
+        esFinancieroAgencia ||
+        (rol.includes("gerente") && rol.includes("financiero"));
 
     const userAgencias = useMemo(
-        () => String(user?.agencia || "").split("|").map(limpiar).filter(Boolean),
-        [user?.agencia],
+        () => getUserAgencias(),
+        [user?.agencia]
     );
 
     const inputClass = "h-11 w-full rounded-xl border border-[#131E5C] px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#131E5C] focus:bg-white focus:ring-4 focus:ring-[#131E5C]/[0.07]";
@@ -1161,9 +1164,11 @@ export default function Documentacion() {
     }, [nuevo.tipo_persona, nuevo.financiamiento]);
 
     const dealersCreacion = useMemo(() => {
-        if (isAdmin || userAgencias.length === 0) return AGENCIAS_DIGITALES;
+        if (isAdmin) return AGENCIAS_DIGITALES;
+        if (esFinancieroAgencia) return userAgencias;
+        if (userAgencias.length === 0) return AGENCIAS_DIGITALES;
         return userAgencias;
-    }, [isAdmin, userAgencias]);
+    }, [isAdmin, esFinancieroAgencia, userAgencias]);
 
     const dealersFiltro = useMemo(() => {
         const agenciasDisponibles = expedientes.map((exp) => exp.agencia).filter(Boolean);
@@ -1191,44 +1196,57 @@ export default function Documentacion() {
         ""
     );
 
+
     const expedientesVisibles = useMemo(() => {
         const q = normalizar(busqueda);
-        const nombreActivo = normalizar(
-            user?.nombre_completo ||
-            (user?.nombre && user?.apellidos ? `${user.nombre} ${user.apellidos}` : "") ||
-            user?.nombre ||
-            user?.usuario ||
-            ""
-        );
 
         return expedientes.filter((exp) => {
-            // 1. Si es Asesor Piso (no admin ni gerente), solo ve sus propios expedientes
-            if (!isAdmin && !isGerente) {
-                // Si aún no se determina el nombre en sesión, no mostrar registros por seguridad
-                if (!nombreActivo) return false;
+            const agenciaExpediente = normalizar(exp.agencia);
 
-                const creado = normalizar(exp.creado_por);
-                const asesor = normalizar(exp.asesor_nombre);
-                const esMio = (
-                    (creado && (creado === nombreActivo || nombreActivo.includes(creado) || creado.includes(nombreActivo))) ||
-                    (asesor && (asesor === nombreActivo || nombreActivo.includes(asesor) || asesor.includes(nombreActivo)))
-                );
-                if (!esMio) return false;
+            const perteneceASuAgencia = userAgencias.some(
+                (agencia) => normalizar(agencia) === agenciaExpediente
+            );
+
+            // Administrador: todos los expedientes.
+            // Financiero o gerente: todos los de sus agencias.
+            // Asesor: únicamente sus propios expedientes.
+            if (!isAdmin) {
+                if (isGerente) {
+                    if (!perteneceASuAgencia) return false;
+                } else {
+                    if (!nombreActivo) return false;
+
+                    const creado = normalizar(exp.creado_por);
+                    const asesor = normalizar(exp.asesor_nombre);
+
+                    const esMio =
+                        (creado && (
+                            creado === nombreActivo ||
+                            nombreActivo.includes(creado) ||
+                            creado.includes(nombreActivo)
+                        )) ||
+                        (asesor && (
+                            asesor === nombreActivo ||
+                            nombreActivo.includes(asesor) ||
+                            asesor.includes(nombreActivo)
+                        ));
+
+                    if (!esMio) return false;
+                }
             }
 
-            // 2. Si es Gerente (no admin), solo ve los de sus Dealers asignados
-            if (isGerente && !isAdmin && userAgencias.length > 0) {
-                if (!userAgencias.some((ag) => normalizar(ag) === normalizar(exp.agencia))) return false;
+            // Filtro por Dealer
+            if ((isAdmin || isGerente) && filtroDealer !== "Todos") {
+                if (agenciaExpediente !== normalizar(filtroDealer)) {
+                    return false;
+                }
             }
 
-            // 3. Filtro de Dealer (aplica para Admin y Gerente)
-            if ((isAdmin || isGerente) && filtroDealer !== "Todos" && normalizar(exp.agencia) !== normalizar(filtroDealer)) {
-                return false;
-            }
-
-            // 4. Filtro de Asesor (solo Administrador)
-            if (isAdmin && filtroAsesor !== "Todos" && normalizar(exp.asesor_nombre) !== normalizar(filtroAsesor)) {
-                return false;
+            // Filtro por asesor exclusivo del administrador
+            if (isAdmin && filtroAsesor !== "Todos") {
+                if (normalizar(exp.asesor_nombre) !== normalizar(filtroAsesor)) {
+                    return false;
+                }
             }
 
             if (!q) return true;
@@ -1241,32 +1259,51 @@ export default function Documentacion() {
                 exp.creado_por,
                 nombrePersona(exp.tipo_persona),
                 nombreFinanciamiento(exp.financiamiento),
-            ].some((value) => normalizar(value).includes(q));
+            ].some((valor) => normalizar(valor).includes(q));
         });
-    }, [expedientes, busqueda, filtroDealer, filtroAsesor, isAdmin, isGerente, userAgencias, user]);
+    }, [
+        expedientes,
+        busqueda,
+        filtroDealer,
+        filtroAsesor,
+        isAdmin,
+        isGerente,
+        userAgencias,
+        nombreActivo,
+    ]);
+
 
     const puedeEditar = (expediente) => {
         if (isAdmin) return true;
 
+        const perteneceASuAgencia = userAgencias.some(
+            (agencia) =>
+                normalizar(agencia) === normalizar(expediente.agencia)
+        );
+
+        if (isGerente) {
+            return perteneceASuAgencia;
+        }
+
+        if (!nombreActivo) return false;
+
         const creado = normalizar(expediente.creado_por);
         const asesor = normalizar(expediente.asesor_nombre);
 
-        // Si es el asesor asignado o quien creó el expediente, SIEMPRE puede editarlo
-        if (nombreActivo) {
-            const esMio = (
-                (creado && (creado === nombreActivo || nombreActivo.includes(creado) || creado.includes(nombreActivo))) ||
-                (asesor && (asesor === nombreActivo || nombreActivo.includes(asesor) || asesor.includes(nombreActivo)))
-            );
-            if (esMio) return true;
-        }
-
-        // Si es gerente o usuario de agencia, puede editar si coincide su agencia
-        if (userAgencias.length > 0) {
-            return userAgencias.some((agencia) => normalizar(agencia) === normalizar(expediente.agencia));
-        }
-
-        return false;
+        return Boolean(
+            (creado && (
+                creado === nombreActivo ||
+                nombreActivo.includes(creado) ||
+                creado.includes(nombreActivo)
+            )) ||
+            (asesor && (
+                asesor === nombreActivo ||
+                nombreActivo.includes(asesor) ||
+                asesor.includes(nombreActivo)
+            ))
+        );
     };
+
 
     const nombreUsuarioSesion = (
         user?.nombre_completo ||
