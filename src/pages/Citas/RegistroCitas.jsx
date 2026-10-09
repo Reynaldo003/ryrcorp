@@ -1347,6 +1347,8 @@ export default function RegistroCitas() {
     );
 
     const [citas, setCitas] = useState([]);
+    const [citasGraficos, setCitasGraficos] = useState([]);
+    const [loadingGraficos, setLoadingGraficos] = useState(false);
     const [vista, setVista] = useState("calendario");
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
@@ -1380,6 +1382,26 @@ export default function RegistroCitas() {
         rangoDesde: "",
         rangoHasta: "",
     });
+    const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
+    const [mesSeleccionado, setMesSeleccionado] = useState(null);
+    const seleccionarPeriodo = (anio, mes) => {
+        const desde = `${anio}-${String(mes || 1).padStart(2, "0")}-01`;
+
+        const hasta = mes === 0
+            ? `${anio}-12-31`
+            : `${anio}-${String(mes).padStart(2, "0")}-${String(
+                new Date(anio, mes, 0).getDate()
+            ).padStart(2, "0")}`;
+
+        setAnioSeleccionado(anio);
+        setMesSeleccionado(mes);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: desde,
+            rangoHasta: hasta,
+        }));
+    };
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
@@ -1491,6 +1513,31 @@ export default function RegistroCitas() {
         }
     }, [buildServerParams]);
 
+    useEffect(() => {
+        if (vista !== "graficos") return;
+
+        let activo = true;
+        setLoadingGraficos(true);
+
+        apiCitas.list(buildServerParams(1))
+            .then((data) => {
+                if (activo) {
+                    setCitasGraficos(Array.isArray(data) ? data : []);
+                }
+            })
+            .catch((error) => {
+                console.error("Error al cargar citas para gráficas:", error);
+                if (activo) setCitasGraficos([]);
+            })
+            .finally(() => {
+                if (activo) setLoadingGraficos(false);
+            });
+
+        return () => {
+            activo = false;
+        };
+    }, [vista, buildServerParams]);
+
     useEffect(() => { refreshList(1); }, [refreshList]);
 
     const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -1525,6 +1572,15 @@ export default function RegistroCitas() {
 
         return ["Todos", ...Array.from(set)];
     }, [citas, nombresAsesoresActivos]);
+
+    const graficosFiltrados = useMemo(() => {
+        return (citasGraficos || []).filter((c) => {
+            if (!isAdmin && userAgencias.length > 0 && !userTieneAgencia(c.agencia)) {
+                return false;
+            }
+            return true;
+        });
+    }, [citasGraficos, isAdmin, userAgencias, userTieneAgencia]);
 
     const filtered = useMemo(() => {
         return (citas || []).filter((c) => {
@@ -1785,6 +1841,11 @@ export default function RegistroCitas() {
     const resetFilters = () => {
         setPage(1);
 
+        // Restablecer los controles de año y mes
+        setAnioSeleccionado(new Date().getFullYear());
+        setMesSeleccionado(null);
+
+        // Restablecer los filtros generales
         setFilters({
             q: "",
             agencia: "Todos",
@@ -1797,6 +1858,12 @@ export default function RegistroCitas() {
 
     const toggleRangoFechas = (desde, hasta) => {
         setPage(1);
+
+        // Desmarcar el periodo seleccionado en los botones nuevos
+        setMesSeleccionado(null);
+
+        // Sincronizar el selector de año
+        setAnioSeleccionado(new Date().getFullYear());
 
         setFilters((prev) => {
             const mismoRango =
@@ -2030,207 +2097,98 @@ export default function RegistroCitas() {
                 </div>
             </div>
 
-            <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="grid gap-3 md:grid-cols-12">
+            {/* FILTROS NUEVOS: CONCESIONARIOS, AÑO Y MESES */}
+            <div className="mb-4 rounded-2xl bg-[#071D49] p-4 shadow-md">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="mr-3 text-xs font-bold uppercase tracking-wide text-white/70">
+                        Concesionarios:
+                    </span>
 
-                    {/* FILA 1 */}
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Búsqueda">
-                            <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
-                                <Search className="h-4 w-4 text-[#131E5C]" />
+                    {[
+                        { label: "Todas las agencias", value: "Todos" },
+                        { label: "VW Córdoba", value: "VW Cordoba" },
+                        { label: "VW Orizaba", value: "VW Orizaba" },
+                        { label: "VW Poza Rica", value: "VW Poza Rica" },
+                        { label: "VW Tuxpan", value: "VW Tuxpan" },
+                        { label: "VW Tuxtepec", value: "VW Tuxtepec" },
+                    ].map(({ label, value }) => {
+                        const activo = filters.agencia === value;
 
-                                <input
-                                    value={filters.q}
-                                    onChange={(e) => {
-                                        setPage(1);
-                                        setFilters((p) => ({
-                                            ...p,
-                                            q: e.target.value,
-                                        }));
-                                    }}
-                                    placeholder="Buscar por dealer, cliente, teléfono…"
-                                    className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]"
-                                />
-
-                                {filters.q ? (
-                                    <button
-                                        onClick={() => {
-                                            setPage(1);
-                                            setFilters((p) => ({
-                                                ...p,
-                                                q: "",
-                                            }));
-                                        }}
-                                        className="rounded-lg bg-white p-1 text-[#131E5C] hover:bg-white/80 hover:text-red-500"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                ) : null}
-                            </div>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Dealer">
-                            <select
-                                value={filters.agencia}
-                                onChange={(e) => {
+                        return (
+                            <button
+                                key={value}
+                                type="button"
+                                onClick={() => {
                                     setPage(1);
-                                    setFilters((p) => ({
-                                        ...p,
-                                        agencia: e.target.value,
+                                    setFilters((prev) => ({
+                                        ...prev,
+                                        agencia: value,
                                     }));
                                 }}
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                                    activo
+                                        ? "bg-white text-[#071D49] shadow-sm"
+                                        : "bg-white/10 text-white hover:bg-white/20"
+                                }`}
                             >
-                                {dealers.map((d) => (
-                                    <option key={d} value={d}>
-                                        {d}
-                                    </option>
-                                ))}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Asesor Digital">
-                            <select
-                                value={filters.asesorDigital}
-                                onChange={(e) => {
-                                    setPage(1);
-                                    setFilters((p) => ({
-                                        ...p,
-                                        asesorDigital: e.target.value,
-                                    }));
-                                }}
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            >
-                                {asesoresDigitalesFiltro.map((a) => (
-                                    <option key={a} value={a}>
-                                        {a}
-                                    </option>
-                                ))}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Asesor Piso">
-                            <select
-                                value={filters.asesorPiso}
-                                onChange={(e) => {
-                                    setPage(1);
-                                    setFilters((p) => ({
-                                        ...p,
-                                        asesorPiso: e.target.value,
-                                    }));
-                                }}
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            >
-                                {asesoresPisoFiltro.map((a) => (
-                                    <option key={a} value={a}>
-                                        {a}
-                                    </option>
-                                ))}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    {/* FILA 2 */}
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Desde">
-                            <input
-                                type="date"
-                                value={filters.rangoDesde}
-                                onChange={(e) => {
-                                    setPage(1);
-                                    setFilters((p) => ({
-                                        ...p,
-                                        rangoDesde: e.target.value,
-                                    }));
-                                }}
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            />
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Hasta">
-                            <input
-                                type="date"
-                                value={filters.rangoHasta}
-                                onChange={(e) => {
-                                    setPage(1);
-                                    setFilters((p) => ({
-                                        ...p,
-                                        rangoHasta: e.target.value,
-                                    }));
-                                }}
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            />
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-6">
-                        <FilterBlock label="Acciones">
-                            <div className="flex flex-wrap gap-2">
-                                <button
-                                    onClick={setHoy}
-                                    className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
-                                >
-                                    Hoy
-                                </button>
-
-                                <button
-                                    onClick={setAyer}
-                                    className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
-                                >
-                                    Ayer
-                                </button>
-
-                                <button
-                                    onClick={setSemana}
-                                    className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-sky-600"
-                                >
-                                    Semana
-                                </button>
-
-                                <button
-                                    onClick={setUltimos7Dias}
-                                    className="rounded-lg bg-violet-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-600"
-                                >
-                                    7 días
-                                </button>
-
-                                <button
-                                    onClick={setUltimos30Dias}
-                                    className="rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600"
-                                >
-                                    30 días
-                                </button>
-
-                                <button
-                                    onClick={setEsteMes}
-                                    className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-600"
-                                >
-                                    Este mes
-                                </button>
-
-                                <button
-                                    onClick={resetFilters}
-                                    className="rounded-lg border border-[#131E5C] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
-                                >
-                                    <span className="inline-flex items-center gap-1">
-                                        <X className="h-3.5 w-3.5" />
-                                        Limpiar
-                                    </span>
-                                </button>
-                            </div>
-                        </FilterBlock>
-                    </div>
+                                {label}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
+            {/* FILTROS POR AÑO Y MES */}
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center gap-3">
 
+                    <select
+                        value={anioSeleccionado}
+                        onChange={(e) => {
+                            seleccionarPeriodo(Number(e.target.value), mesSeleccionado);
+                            setPage(1);
+                        }}
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-[#071D49]"
+                    >
+                        {Array.from(
+                            { length: new Date().getFullYear() - 2020 + 1 },
+                            (_, i) => new Date().getFullYear() - i
+                        ).map((anio) => (
+                            <option key={anio} value={anio}>
+                                {anio}
+                            </option>
+                        ))}
+                    </select>
+
+                    <div className="h-8 w-px bg-slate-200" />
+
+                    {[
+                        "Todo el año",
+                        "ENE", "FEB", "MAR", "ABR",
+                        "MAY", "JUN", "JUL", "AGO",
+                        "SEP", "OCT", "NOV", "DIC"
+                    ].map((nombre, indice) => {
+                        const activo = mesSeleccionado === indice;
+
+                        return (
+                            <button
+                                key={nombre}
+                                type="button"
+                                onClick={() => {
+                                    seleccionarPeriodo(anioSeleccionado, indice);
+                                    setPage(1);
+                                }}
+                                className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                                    activo
+                                        ? "bg-[#071D49] text-white shadow-sm"
+                                        : "text-slate-600 hover:bg-slate-100"
+                                }`}
+                            >
+                                {nombre}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
             {vista === "calendario" && (
                 <CalendarioView
                     rows={sorted}
@@ -2383,7 +2341,16 @@ export default function RegistroCitas() {
                 </>
             )}
 
-            {vista === "graficos" && <GraficosView rows={sorted} />}
+            {vista === "graficos" && (
+                loadingGraficos ? (
+                    <div className="flex items-center justify-center gap-2 p-8 text-slate-500">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Cargando todas las citas para las gráficas...
+                    </div>
+                ) : (
+                    <GraficosView rows={graficosFiltrados} />
+                )
+            )}
 
             <Modal open={openModal} title={mode === "create" ? "Nueva Cita" : `Editar Cita • ${draft?.id}`} onClose={closeModal} footer={
                 <>
