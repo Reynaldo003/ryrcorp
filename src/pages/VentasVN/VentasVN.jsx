@@ -1,25 +1,50 @@
 ﻿// src/pages/VentasVN/VentasVN.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   ArrowDown, ArrowUp, BarChart3, CalendarDays, Car, CreditCard, Eraser,
   CircleDollarSign, Database, ImageDown, LoaderCircle, RefreshCw, RotateCcw,
   Search, SlidersHorizontal, Tags, User, Users, CheckCircle2, Globe,
-  Table2, TrendingUp, WalletCards, X, Check, Plus, ChevronDown,
+  Table2, TrendingUp, WalletCards, X, Check, Plus, ChevronDown, Calendar,
+  Percent, Landmark, Layers, ChevronUp, PieChart as PieIcon,
 } from "lucide-react";
 import {
-  ResponsiveContainer, BarChart, Bar, ComposedChart, Line, PieChart, Pie, Cell, Sector,
-  XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
+  ResponsiveContainer, BarChart, ComposedChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import html2canvas from "html2canvas-pro";
-import { http, buildQuery } from "../../lib/apiClient";
-import { CONDICION_USO, getVentasVNDashboard } from "../../lib/apiVentasVN";
+import { CONDICION_USO, getVentasVNDashboard, getVentasVNDetalle } from "../../lib/apiVentasVN";
 import InteractiveTable from "../VentasVN/InteractiveTable";
 const C = {
-  navy: "#131E5C", navyDark: "#0A1340", navyMid: "#2445A2", navyLight: "#6681D4",
-  surface: "#F7F8FC", border: "#E4E7F0", borderMd: "#C8CEDF", muted: "#8891AD",
-  text: "#1A1F3C", textSub: "#515778", success: "#059669", successBg: "#ECFDF5",
+  navy: "#001E50", navyDark: "#0A1340", navyLight: "#1677FF",
+  border: "#E4E7F0", muted: "#8891AD", text: "#1A1F3C",
 };
-function cn(...parts) { return parts.filter(Boolean).join(" "); }
+const MODELOS_VC = ["CADDY", "CRAFTER", "TRANSPORTER", "AMAROK", "CARAVELLE"];
+function esVehiculoComercial(familia) {
+  if (!familia) return false;
+  const famUpper = String(familia).toUpperCase();
+  return MODELOS_VC.some((mod) => famUpper.includes(mod));
+}
+function obtenerGrupoModelo(familia) {
+  if (!familia) return "OTROS";
+  const fam = String(familia).toUpperCase().trim();
+  if (fam.includes("JETTA") || fam.includes("GLI")) return "JETTA";
+  if (fam.includes("POLO")) return "POLO";
+  if (fam.includes("VIRTUS")) return "VIRTUS";
+  if (fam.includes("TAOS")) return "TAOS";
+  if (fam.includes("TIGUAN") || fam.includes("ALLSPACE")) return "TIGUAN";
+  if (fam.includes("NIVUS")) return "NIVUS";
+  if (fam.includes("CROSS") && !fam.includes("SPORT")) return "T-CROSS";
+  if (fam.includes("SAVEIRO")) return "SAVEIRO";
+  if (fam.includes("AMAROK")) return "AMAROK";
+  if (fam.includes("CRAFTER")) return "CRAFTER";
+  if (fam.includes("TRANSPORTER")) return "TRANSPORTER";
+  if (fam.includes("CADDY")) return "CADDY";
+  if (fam.includes("CARAVELLE")) return "CARAVELLE";
+  if (fam.includes("TERAMONT") || fam.includes("CROSS SPORT")) return "TERAMONT";
+  if (fam.includes("GOLF") || fam.includes("GTI")) return "GOLF";
+  if (fam.includes("GOL")) return "GOL";
+  return fam.replace(/NUEVO\s\*|NUEVA\s\*|PA\s\*|GP\s\*/g, "").trim() || fam;
+}
 const COLUMNAS = [
   { key: "serie", label: "Serie" },
   { key: "nr_nota", label: "Nr. Nota" },
@@ -54,35 +79,14 @@ const COLUMNAS = [
   { key: "tipo_venta", label: "Tipo de Venta" },
 ];
 const FILTROS_INICIALES = {
-  q: "",
-  agencia: "",
-  asesor: "",
-  familia: "",
-  condicion_pago: "",
-  fecha_desde: "",
-  fecha_hasta: "",
-  venta_digital: "",
+  q: "", agencia: "", asesor: "", familia: "", condicion_pago: "",
+  fecha_desde: "", fecha_hasta: "", venta_digital: "",
 };
-const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-const MESES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-];
-const PIE_COLORS = ["#131E5C", "#2445A2", "#3D63C8", "#6681D4", "#8B9DDE", "#AEB9E8", "#42526E", "#7A869A"];
-const PRESETS_FECHA = [
-  { id: "mes_actual", label: "Este mes" },
-  { id: "mes_anterior", label: "Mes anterior" },
-  { id: "ultimos_30", label: "Últimos 30 días" },
-  { id: "ultimos_7", label: "Últimos 7 días" },
-  { id: "esta_semana", label: "Esta semana" },
-  { id: "ayer", label: "Ayer" },
-  { id: "hoy", label: "Hoy" },
-];
-const TOOLTIP_STYLE = { border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 12px 30px rgba(19,30,92,.12)", fontSize: 12 };
-const inputClass = "h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10";
+const MESES_CORTOS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+const PIE_COLORS = ["#001E50", "#1677FF", "#3D63C8", "#6681D4", "#8B9DDE", "#AEB9E8", "#42526E", "#7A869A"];
+const TOOLTIP_STYLE = { border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 12px 30px rgba(0,30,80,.12)", fontSize: 12 };
 function numero(value) { return Number(value || 0); }
 function formatoNumero(value) { return numero(value).toLocaleString("es-MX"); }
-function formatoCompacto(value) { return new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 }).format(numero(value)); }
 function money(value) {
   if (value === null || value === undefined || value === "") return "—";
   const n = Number(value);
@@ -106,29 +110,6 @@ function fechaLocal(value) {
   const [y, m, d] = String(value).split("-").map(Number);
   return new Date(y, m - 1, d);
 }
-function moverDias(date, dias) {
-  const out = new Date(date);
-  out.setDate(out.getDate() + dias);
-  return out;
-}
-function obtenerRangoPreset(id, base = new Date()) {
-  const hoy = new Date(base.getFullYear(), base.getMonth(), base.getDate());
-  let desde = hoy;
-  let hasta = hoy;
-  if (id === "mes_actual") desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  if (id === "mes_anterior") {
-    desde = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-    hasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
-  }
-  if (id === "ultimos_30") desde = moverDias(hoy, -29);
-  if (id === "ultimos_7") desde = moverDias(hoy, -6);
-  if (id === "esta_semana") {
-    const desplazamiento = (hoy.getDay() + 6) % 7;
-    desde = moverDias(hoy, -desplazamiento);
-  }
-  if (id === "ayer") desde = hasta = moverDias(hoy, -1);
-  return { fecha_desde: fechaInput(desde), fecha_hasta: fechaInput(hasta) };
-}
 function obtenerRangoMes(mes, anio) {
   const anioN = Number(anio) || 2000;
   const mesN = Number(mes);
@@ -137,61 +118,54 @@ function obtenerRangoMes(mes, anio) {
   const hasta = new Date(anioN, mesN, 0);
   return { fecha_desde: fechaInput(desde), fecha_hasta: fechaInput(hasta) };
 }
-function formatoRango(desde, hasta) {
-  if (!desde && !hasta) return "Todo el historial";
-  const fmt = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" });
-  const d = fechaLocal(desde);
-  const h = fechaLocal(hasta);
-  if (d && h && desde === hasta) return fmt.format(d);
-  if (d && h) return `${fmt.format(d)} – ${fmt.format(h)}`;
-  if (d) return `Desde ${fmt.format(d)}`;
-  return `Hasta ${fmt.format(h)}`;
-}
-function porcentaje(value, total) { return total ? Math.round((numero(value) / total) * 100) : 0; }
 export default function VentasVN() {
   const [dashboard, setDashboard] = useState({
-    totales: {
-      productos: 0,
-      unidades_vendidas: 0,
-      ingresos: 0,
-      costo: 0,
-      ventas_digitales: 0,
-    },
+    totales: { productos: 0, unidades_vendidas: 0, ingresos: 0, costo: 0, ventas_digitales: 0 },
     graficas: { por_mes: [], por_asesor: [], por_familia: [], por_condicion_pago: [] },
     opciones: { agencias: [], asesores: [], familias: [], condiciones_pago: [] },
   });
-  const hoy = new Date();
+  const [dashboardAnual, setDashboardAnual] = useState([]); // Para la tendencia completa de 12 meses
+  const hoy = useMemo(() => new Date(), []);
   const anioActual = hoy.getFullYear();
   const mesActual = hoy.getMonth();
-  const anios = useMemo(
-    () => Array.from({ length: 5 }, (_, i) => anioActual - i),
-    [anioActual]
-  );
+  const anios = useMemo(() => Array.from({ length: 5 }, (_, i) => anioActual - i), [anioActual]);
   const [anioSel, setAnioSel] = useState(anioActual);
   const [mesSel, setMesSel] = useState(mesActual);
+  const [modeloExpandido, setModeloExpandido] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
-  const [errorDashboard, setErrorDashboard] = useState("");
   const [registros, setRegistros] = useState([]);
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [vistaActiva, setVistaActiva] = useState("detalle");
+  const [vistaActiva, setVistaActiva] = useState("dashboard");
   const [filtros, setFiltros] = useState(() => ({
     ...FILTROS_INICIALES,
     ...obtenerRangoMes(mesActual + 1, anioActual),
   }));
   const [qBuscado, setQBuscado] = useState("");
+  // La agencia y la paginación se filtran en PostgreSQL, no en una página de React.
+  const registrosFiltrados = registros;
+  const agenciasOpciones = useMemo(() => {
+    const agencias = dashboard?.opciones?.agencias || [];
+    return Array.from(new Set([...agencias, "R&R VC"]));
+  }, [dashboard?.opciones?.agencias]);
+
   useEffect(() => {
-    const t = setTimeout(() => setQBuscado(filtros.q), 400);
+    const t = setTimeout(() => setQBuscado(filtros.q), 300);
     return () => clearTimeout(t);
   }, [filtros.q]);
-  async function cargarDashboard() {
+  const solicitudDashboard = useRef(0);
+  const solicitudDetalle = useRef(0);
+
+  const cargarDashboard = useCallback(async () => {
+    const solicitud = ++solicitudDashboard.current;
     setLoadingDashboard(true);
-    setErrorDashboard("");
     try {
       const response = await getVentasVNDashboard({
+        cond_uso: CONDICION_USO.NUEVO,
+        q: qBuscado,
         fecha_desde: filtros.fecha_desde,
         fecha_hasta: filtros.fecha_hasta,
         agencia: filtros.agencia,
@@ -199,34 +173,49 @@ export default function VentasVN() {
         familia: filtros.familia,
         condicion_pago: filtros.condicion_pago,
         venta_digital: filtros.venta_digital,
+        anio_tendencia: anioSel,
       });
+      if (solicitud !== solicitudDashboard.current) return;
+      const data = response?.data || response || {};
+      const totales = data.totales || {};
+      const graficas = data.graficas || {};
+      const opciones = data.opciones || {};
       setDashboard({
         totales: {
-          productos: Number(response?.totales?.productos || 0),
-          unidades_vendidas: Number(response?.totales?.unidades_vendidas || 0),
-          ingresos: Number(response?.totales?.ingresos || 0),
-          costo: Number(response?.totales?.costo || 0),
-          ventas_digitales: Number(response?.totales?.ventas_digitales || 0),
+          productos: numero(totales.productos),
+          unidades_vendidas: numero(totales.unidades_vendidas),
+          ingresos: numero(totales.ingresos),
+          costo: numero(totales.costo),
+          ventas_digitales: numero(totales.ventas_digitales),
         },
         graficas: {
-          por_mes: response?.graficas?.por_mes || [], por_asesor: response?.graficas?.por_asesor || [],
-          por_familia: response?.graficas?.por_familia || [], por_condicion_pago: response?.graficas?.por_condicion_pago || [],
+          por_mes: graficas.por_mes || [],
+          por_asesor: graficas.por_asesor || [],
+          por_familia: graficas.por_familia || [],
+          por_condicion_pago: graficas.por_condicion_pago || [],
         },
         opciones: {
-          agencias: response?.opciones?.agencias || [], asesores: response?.opciones?.asesores || [],
-          familias: response?.opciones?.familias || [], condiciones_pago: response?.opciones?.condiciones_pago || [],
+          agencias: opciones.agencias || [],
+          asesores: opciones.asesores || [],
+          familias: opciones.familias || [],
+          condiciones_pago: opciones.condiciones_pago || [],
         },
       });
+      setDashboardAnual(graficas.tendencia_anual || []);
     } catch (err) {
-      console.error("Error cargando dashboard VW_VN:", err);
-      setErrorDashboard(err?.message || "No se pudo cargar el dashboard de Autos Nuevos.");
-    } finally { setLoadingDashboard(false); }
-  }
-  async function cargarDatos() {
+      if (solicitud === solicitudDashboard.current) console.error("Error en dashboard:", err);
+    } finally {
+      if (solicitud === solicitudDashboard.current) setLoadingDashboard(false);
+    }
+  }, [qBuscado, anioSel, filtros.fecha_desde, filtros.fecha_hasta, filtros.agencia, filtros.asesor, filtros.familia, filtros.condicion_pago, filtros.venta_digital]);
+
+  const cargarDatos = useCallback(async () => {
+    const solicitud = ++solicitudDetalle.current;
     setLoading(true);
     setError("");
     try {
-      const query = buildQuery({
+      const response = await getVentasVNDetalle({
+        cond_uso: CONDICION_USO.NUEVO,
         page: pagina,
         page_size: pageSize,
         q: qBuscado,
@@ -238,68 +227,121 @@ export default function VentasVN() {
         fecha_hasta: filtros.fecha_hasta,
         venta_digital: filtros.venta_digital,
       });
-      const response = await http(`/ventas-vn/api/${query}`);
-      setRegistros(Array.isArray(response?.results) ? response.results : []);
-      setTotal(Number(response?.count || 0));
+      if (solicitud !== solicitudDetalle.current) return;
+      const data = response?.data || response || {};
+      const lista = Array.isArray(data.results) ? data.results : [];
+      setRegistros(lista);
+      setTotal(Number(data.count ?? lista.length));
     } catch (err) {
-      console.error("Error cargando VW_VN:", err);
+      if (solicitud !== solicitudDetalle.current) return;
       setRegistros([]);
       setTotal(0);
-      setError(err?.message || "No fue posible cargar la información de VW_VN.");
-    } finally { setLoading(false); }
-  }
+      setError(err?.message || "No fue posible cargar la información.");
+    } finally {
+      if (solicitud === solicitudDetalle.current) setLoading(false);
+    }
+  }, [pagina, pageSize, qBuscado, filtros.agencia, filtros.asesor, filtros.familia, filtros.condicion_pago, filtros.fecha_desde, filtros.fecha_hasta, filtros.venta_digital]);
+
+  // El detalle se solicita solo cuando el usuario abre la tabla.
   useEffect(() => {
-    cargarDatos();
-  }, [
-    pagina,
-    pageSize,
-    qBuscado,
-    filtros.agencia,
-    filtros.asesor,
-    filtros.familia,
-    filtros.condicion_pago,
-    filtros.fecha_desde,
-    filtros.fecha_hasta,
-    filtros.venta_digital,
-  ]);
-  useEffect(() => {
-    cargarDashboard();
-  }, [
-    filtros.agencia,
-    filtros.asesor,
-    filtros.familia,
-    filtros.condicion_pago,
-    filtros.fecha_desde,
-    filtros.fecha_hasta,
-    filtros.venta_digital,
-  ]);
-  const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
-  const hayFiltros = Object.values(filtros).some((value) => String(value || "").trim());
-  const rangoActual = useMemo(() => formatoRango(filtros.fecha_desde, filtros.fecha_hasta), [filtros.fecha_desde, filtros.fecha_hasta]);
-  const presetFechaActivo = useMemo(() => {
-    const match = PRESETS_FECHA.find((preset) => {
-      const rango = obtenerRangoPreset(preset.id);
-      return rango.fecha_desde === filtros.fecha_desde && rango.fecha_hasta === filtros.fecha_hasta;
-    });
-    return match?.id || "";
-  }, [filtros.fecha_desde, filtros.fecha_hasta]);
-  const utilidad = numero(dashboard.totales.ingresos) - numero(dashboard.totales.costo);
-  const margen = dashboard.totales.ingresos ? (utilidad / dashboard.totales.ingresos) * 100 : 0;
-  const datosMes = useMemo(() => (dashboard.graficas.por_mes || []).map((item) => ({
-    ...item, etiqueta: etiquetaMes(item), productos: numero(item.productos), unidades_vendidas: numero(item.unidades_vendidas),
-    ingresos: numero(item.ingresos), costo: numero(item.costo), utilidad: numero(item.ingresos) - numero(item.costo),
-  })), [dashboard.graficas.por_mes]);
-  const topAsesores = useMemo(() => [...(dashboard.graficas.por_asesor || [])]
-    .map((item) => ({ ...item, unidades_vendidas: numero(item.unidades_vendidas), ingresos: numero(item.ingresos), costo: numero(item.costo) }))
-    .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas).slice(0, 10), [dashboard.graficas.por_asesor]);
-  const topFamilias = useMemo(() => [...(dashboard.graficas.por_familia || [])]
-    .map((item) => ({ ...item, unidades_vendidas: numero(item.unidades_vendidas), ingresos: numero(item.ingresos), costo: numero(item.costo) }))
-    .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas).slice(0, 10), [dashboard.graficas.por_familia]);
-  const condicionesPago = useMemo(() => [...(dashboard.graficas.por_condicion_pago || [])]
-    .map((item) => ({ ...item, unidades_vendidas: numero(item.unidades_vendidas) }))
-    .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas).slice(0, 8), [dashboard.graficas.por_condicion_pago]);
-  const totalCondicionesPago = useMemo(() => condicionesPago.reduce((acc, item) => acc + numero(item.unidades_vendidas), 0), [condicionesPago]);
-  const idxCondicionActivo = useMemo(() => condicionesPago.findIndex((item) => filtros.condicion_pago && item.condicion_pago === filtros.condicion_pago), [condicionesPago, filtros.condicion_pago]);
+    if (vistaActiva === "detalle") cargarDatos();
+  }, [vistaActiva, cargarDatos]);
+  useEffect(() => { cargarDashboard(); }, [cargarDashboard]);
+
+  const hayFiltros = useMemo(() => Object.values(filtros).some((v) => String(v || "").trim()), [filtros]);
+  // Los KPI se calculan con toda la selección, nunca con la página visible.
+  const totalesCalculados = dashboard.totales;
+
+  const utilidad = numero(totalesCalculados.ingresos) - numero(totalesCalculados.costo);
+  const margen = totalesCalculados.ingresos ? (utilidad / totalesCalculados.ingresos) * 100 : 0;
+  const porcentajeDigital = useMemo(() => {
+    return totalesCalculados.unidades_vendidas
+      ? (numero(totalesCalculados.ventas_digitales) / numero(totalesCalculados.unidades_vendidas)) * 100
+      : 0;
+  }, [totalesCalculados]);
+  // La penetración utiliza las agregaciones del servidor (Situacao = 'E').
+  const penetracionFinanciera = useMemo(() => {
+    const condiciones = dashboard?.graficas?.por_condicion_pago || [];
+    const totalUnidades = condiciones.reduce((total, item) => total + numero(item.unidades_vendidas), 0);
+    let unidadesVW = 0;
+    const desgloseCompleto = condiciones.map((item) => {
+      const condicion = String(item.condicion_pago || "Sin condición").trim();
+      const esVW = condicion.toUpperCase().includes("VW") || condicion.toUpperCase().includes("FINANCI");
+      const unidades = numero(item.unidades_vendidas);
+      if (esVW) unidadesVW += unidades;
+      return {
+        condicion, unidades, esVW, ingresos: numero(item.ingresos),
+        porcentaje: totalUnidades ? (unidades / totalUnidades) * 100 : 0,
+      };
+    }).sort((a, b) => b.unidades - a.unidades);
+    return {
+      porcentajeGlobal: totalUnidades ? (unidadesVW / totalUnidades) * 100 : 0,
+      unidadesVW, totalUnidades, desgloseCompleto,
+      maxUnidadesCondicion: Math.max(1, ...desgloseCompleto.map((item) => item.unidades)),
+    };
+  }, [dashboard?.graficas?.por_condicion_pago]);
+
+  // AGRUPACIÓN INTERACTIVA DE MODELOS Y SUS SUB-FAMILIAS (100% ANCHO AL PIE WITH DRILLDOWN)
+  const modelosAgrupados = useMemo(() => {
+    const mapa = new Map();
+    for (const fila of dashboard?.graficas?.por_familia || []) {
+      const familia = fila.familia || "DESCONOCIDO";
+      const modelo = obtenerGrupoModelo(familia);
+      const unidades = numero(fila.unidades_vendidas);
+      const ingresos = numero(fila.ingresos);
+      const costo = numero(fila.costo);
+      if (!mapa.has(modelo)) {
+        mapa.set(modelo, { modelo, unidades: 0, ingresos: 0, costo: 0, utilidad: 0, familias: [] });
+      }
+      const grupo = mapa.get(modelo);
+      grupo.unidades += unidades;
+      grupo.ingresos += ingresos;
+      grupo.costo += costo;
+      grupo.utilidad = grupo.ingresos - grupo.costo;
+      grupo.familias.push({ familia, unidades, ingresos, costo, utilidad: ingresos - costo });
+    }
+    const list = [...mapa.values()].sort((a, b) => b.unidades - a.unidades);
+    for (const item of list) item.familias.sort((a, b) => b.unidades - a.unidades);
+    return { list, maxUnidadesModelo: Math.max(1, ...list.map((item) => item.unidades)) };
+  }, [dashboard?.graficas?.por_familia]);
+
+  // Asesores calculados
+  const asesoresCalculados = useMemo(() => {
+    const lista = dashboard?.graficas?.por_asesor || [];
+    return lista.map((item) => ({
+      asesor: item.asesor || "SIN ASESOR",
+      unidades_vendidas: numero(item.unidades_vendidas),
+      ingresos: numero(item.ingresos),
+      costo: numero(item.costo),
+    })).sort((a, b) => b.unidades_vendidas - a.unidades_vendidas);
+  }, [dashboard?.graficas?.por_asesor]);
+
+  const maxUnidadesAsesor = useMemo(() => Math.max(1, ...asesoresCalculados.map((a) => a.unidades_vendidas)), [asesoresCalculados]);
+  // Tendencia del Mes: SIEMPRE muestra TODO EL AÑO completo
+  const datosMesCompleto = useMemo(() => {
+    const porMes = new Map(dashboardAnual.map((item) => [Number(item.mes), item]));
+    return Array.from({ length: 12 }, (_, indice) => {
+      const mes = indice + 1;
+      return porMes.get(mes) || { anio: anioSel, mes, unidades_vendidas: 0, ingresos: 0, costo: 0 };
+    }).map((item) => ({
+      ...item,
+      etiqueta: etiquetaMes(item),
+      unidades_vendidas: numero(item?.unidades_vendidas),
+      ingresos: numero(item?.ingresos),
+      costo: numero(item?.costo),
+      utilidad: numero(item?.ingresos) - numero(item?.costo),
+    }));
+  }, [dashboardAnual, anioSel]);
+  const condicionesPago = useMemo(() => {
+    const lista = Array.isArray(dashboard?.graficas?.por_condicion_pago) ? dashboard.graficas.por_condicion_pago : [];
+    return [...lista]
+      .map((item) => ({
+        ...item,
+        unidades_vendidas: numero(item?.unidades_vendidas),
+      }))
+      .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas)
+      .slice(0, 8);
+  }, [dashboard?.graficas?.por_condicion_pago]);
   function cambiarFiltro(campo, value) {
     setPagina(1);
     setFiltros((prev) => ({ ...prev, [campo]: value }));
@@ -311,60 +353,37 @@ export default function VentasVN() {
     setFiltros({
       ...FILTROS_INICIALES,
       agencia: "",
-      q: "",
-      familia: "",
-      condicion_pago: "",
-      asesor: "",
-      venta_digital: "",
-      fecha_desde: "",
-      fecha_hasta: "",
+      fecha_desde: `${anioActual}-01-01`,
+      fecha_hasta: `${anioActual}-12-31`,
     });
   }
   function aplicarAgencia(agencia) {
     setPagina(1);
     setFiltros((prev) => ({ ...prev, agencia }));
   }
-  function aplicarRangoRapido(id) {
-    const rango = obtenerRangoPreset(id);
-    setPagina(1);
-    setFiltros((prev) => ({ ...prev, ...rango }));
-  }
   function aplicarMes(mesIndex) {
     setPagina(1);
-    // Si vuelve a presionar el mismo mes, quitar el filtro de fecha
     if (mesSel === mesIndex) {
       setMesSel("sin_filtro");
-      setFiltros((prev) => ({
-        ...prev,
-        fecha_desde: "",
-        fecha_hasta: "",
-      }));
+      setFiltros((prev) => ({ ...prev, fecha_desde: "", fecha_hasta: "" }));
       return;
     }
     setMesSel(mesIndex);
-    // "Todo el año"
     if (mesIndex === null) {
-      setFiltros((prev) => ({
-        ...prev,
-        fecha_desde: `${anioSel}-01-01`,
-        fecha_hasta: `${anioSel}-12-31`,
-      }));
+      setFiltros((prev) => ({ ...prev, fecha_desde: `${anioSel}-01-01`, fecha_hasta: `${anioSel}-12-31` }));
       return;
     }
     const rango = obtenerRangoMes(mesIndex + 1, anioSel);
-    setFiltros((prev) => ({
-      ...prev,
-      ...rango,
-    }));
+    setFiltros((prev) => ({ ...prev, ...rango }));
   }
+
   function aplicarAnio(anio) {
     const nuevoAnio = Number(anio);
     setAnioSel(nuevoAnio);
     setPagina(1);
-    if (mesSel === "sin_filtro") {
-      return;
-    }
-    if (mesSel === null) {
+
+    if (mesSel === "sin_filtro" || mesSel === null) {
+      setMesSel(null);
       setFiltros((prev) => ({
         ...prev,
         fecha_desde: `${nuevoAnio}-01-01`,
@@ -372,36 +391,13 @@ export default function VentasVN() {
       }));
       return;
     }
+
     const rango = obtenerRangoMes(mesSel + 1, nuevoAnio);
-    setFiltros((prev) => ({
-      ...prev,
-      ...rango,
-    }));
+    setFiltros((prev) => ({ ...prev, ...rango }));
   }
-  function actualizarTodo() { cargarDatos(); cargarDashboard(); }
+
   const chartRefs = useRef({});
   const [exportandoKey, setExportandoKey] = useState(null);
-  function alternarFiltro(campo, valor) {
-    setPagina(1);
-    setFiltros((prev) => ({ ...prev, [campo]: prev[campo] === valor ? FILTROS_INICIALES[campo] : valor }));
-  }
-  function restaurarGrafica(patch) {
-    setPagina(1);
-    setFiltros((prev) => ({ ...prev, ...patch }));
-  }
-  function esMesActivo(item) {
-    const rango = obtenerRangoMes(item?.mes, item?.anio);
-    return !!(rango.fecha_desde && filtros.fecha_desde === rango.fecha_desde && filtros.fecha_hasta === rango.fecha_hasta);
-  }
-  function clicMes(entry) {
-    const rango = obtenerRangoMes(entry?.mes, entry?.anio);
-    if (!rango.fecha_desde) return;
-    setPagina(1);
-    setFiltros((prev) => {
-      const activo = prev.fecha_desde === rango.fecha_desde && prev.fecha_hasta === rango.fecha_hasta;
-      return activo ? { ...prev, fecha_desde: "", fecha_hasta: "" } : { ...prev, ...rango };
-    });
-  }
   async function exportarGrafica(key, nombre) {
     const nodo = chartRefs.current[key];
     if (!nodo) return;
@@ -409,7 +405,6 @@ export default function VentasVN() {
     try {
       if (document.fonts?.ready) await document.fonts.ready;
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await new Promise((r) => setTimeout(r, 200));
       const canvas = await html2canvas(nodo, { scale: 1.6, useCORS: true, backgroundColor: "#ffffff", logging: false });
       const enlace = document.createElement("a");
       enlace.download = `${nombre}_${new Date().toISOString().slice(0, 10)}.png`;
@@ -421,55 +416,127 @@ export default function VentasVN() {
       setExportandoKey(null);
     }
   }
-  const maxVentasAsesor = Math.max(
-    1,
-    ...topAsesores.map((item) => numero(item.unidades_vendidas))
-  );
-  const porcentajeDigital = dashboard.totales.unidades_vendidas
-    ? (numero(dashboard.totales.ventas_digitales) /
-      numero(dashboard.totales.unidades_vendidas)) *
-    100
-    : 0;
+  const totalTabla = total;
+  const mesTextoActivo = mesSel === null ? "TODO EL AÑO" : mesSel !== "sin_filtro" ? MESES_CORTOS[mesSel] : "";
+  const etiquetaPeriodoActivo = `${mesTextoActivo} ${anioSel}`.trim();
   return (
-    <div className="min-h-screen">
-      <main className="space-y-5 py-4">
+    <div className="min-h-screen bg-[#F8FAFC]">
+      <main className="space-y-4 py-3 px-1 sm:px-2">
+        {/* HEADER TOP BAR */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-extrabold text-[#131E5C]">Venta Autos Nuevos</h1>
+            <h1 className="text-xl font-extrabold text-[#001E50] tracking-tight">Venta Autos Nuevos</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-xl border border-[#131E5C]/20 bg-white p-1 shadow-sm">
-              <button type="button" onClick={() => setVistaActiva("detalle")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${vistaActiva === "detalle" ? "bg-[#131E5C] text-white shadow" : "text-[#131E5C] hover:bg-slate-100"}`}>
-                <Table2 className="h-4 w-4" />Tabla
+            <div className="flex items-center rounded-xl border border-[#001E50]/20 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setVistaActiva("detalle")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "detalle" ? "bg-[#001E50] text-white shadow" : "text-[#001E50] hover:bg-slate-100"
+                  }`}
+              >
+                <Table2 className="h-3.5 w-3.5" />Tabla
               </button>
-              <button type="button" onClick={() => setVistaActiva("dashboard")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${vistaActiva === "dashboard" ? "bg-[#131E5C] text-white shadow" : "text-[#131E5C] hover:bg-slate-100"}`}>
-                <BarChart3 className="h-4 w-4" />Gráficos
+              <button
+                type="button"
+                onClick={() => setVistaActiva("dashboard")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "dashboard" ? "bg-[#001E50] text-white shadow" : "text-[#001E50] hover:bg-slate-100"
+                  }`}
+              >
+                <BarChart3 className="h-3.5 w-3.5" />Gráficos
               </button>
             </div>
-            <button type="button" onClick={actualizarTodo} disabled={loading || loadingDashboard} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:opacity-50">
-              {loading || loadingDashboard ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Actualizar
+            <button
+              type="button"
+              onClick={() => { if (vistaActiva === "detalle") cargarDatos(); cargarDashboard(); }}
+              disabled={loading || loadingDashboard}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[#001E50]/20 bg-white px-3.5 text-xs font-bold text-[#001E50] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
+            >
+              {loading || loadingDashboard ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Actualizar
             </button>
           </div>
         </div>
-        {/* FILTROS PRINCIPALES - ESTILO GESTIÓN DE NEGOCIO */}
-        <div className="space-y-3">
-          {/* AGENCIAS */}
-          <div className="flex flex-wrap items-center gap-2">
-            {["Todos", ...dashboard.opciones.agencias].map((agencia) => {
-              const activa =
-                agencia === "Todos"
-                  ? !filtros.agencia
-                  : filtros.agencia === agencia;
+        {/* HERO CARD BANNER ESTILO VOLVO CRM CON FILTRO INTEGRADO */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#001E50] via-[#0A1340] to-[#050B28] text-white shadow-xl border border-[#001E50]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(22,119,255,0.15),transparent_70%)] pointer-events-none" />
+          <Car className="absolute -right-6 -bottom-6 h-56 w-56 text-white/[0.04] pointer-events-none transform -rotate-12" />
+          {/* ENCABEZADO Y MÉTRICAS */}
+          <div className="relative p-5 pb-4 border-b border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-sky-300/80">
+                  VOLKSWAGEN AUTOMOTRIZ R&R · CRM DASHBOARD
+                </p>
+                <h2 className="text-2xl font-black tracking-tight text-white mt-0.5">
+                  Rendimiento de Venta Autos Nuevos
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-white/10 backdrop-blur-md px-3 py-1 text-[11px] font-bold text-white border border-white/15">
+                  Periodo Activo: <strong className="text-sky-300">{etiquetaPeriodoActivo}</strong>
+                </span>
+              </div>
+            </div>
+            {/* MÉTRICAS EN BLOQUES ESTILO VOLVO */}
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-white/10">
+              <div className="pt-2 sm:pt-0 sm:px-3 first:px-0">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  UNIDADES VENDIDAS
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-white">{totalesCalculados.unidades_vendidas}</span>
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                    {totalesCalculados.ventas_digitales} dig.
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Operaciones acumuladas</p>
+              </div>
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  INGRESOS TOTALES
+                </span>
+                <span className="text-2xl font-black text-white block">{money(totalesCalculados.ingresos)}</span>
+                <p className="text-[10px] text-slate-400 mt-1">Facturación bruta acumulada</p>
+              </div>
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  COSTO DE VENTAS
+                </span>
+                <span className="text-2xl font-black text-slate-200 block">{money(totalesCalculados.costo)}</span>
+                <p className="text-[10px] text-slate-400 mt-1">Costo total de las unidades</p>
+              </div>
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  UTILIDAD ESTIMADA
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-emerald-400">{money(utilidad)}</span>
+                </div>
+                <p className="text-[10px] text-emerald-300/80 font-bold mt-1">Margen: {margen.toFixed(1)}%</p>
+              </div>
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  VENTAS DIGITALES
+                </span>
+                <span className="text-2xl font-black text-sky-300 block">{totalesCalculados.ventas_digitales}</span>
+                <p className="text-[10px] text-sky-200/80 mt-1">{porcentajeDigital.toFixed(1)}% penetración digital</p>
+              </div>
+            </div>
+          </div>
+          {/* INTEGRACIÓN DE BOTONES DE CONCESIONARIOS EN LA PARTE INFERIOR DEL BANNER HERO */}
+          <div className="bg-black/30 backdrop-blur-md px-5 py-2.5 flex flex-wrap items-center gap-2 border-t border-white/10">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 mr-2">Concesionarios:</span>
+            {["Todos", ...(agenciasOpciones || [])].map((agencia) => {
+              const activa = agencia === "Todos" ? !filtros.agencia : filtros.agencia === agencia;
               return (
                 <button
                   key={agencia}
                   type="button"
-                  onClick={() =>
-                    aplicarAgencia(agencia === "Todos" ? "" : agencia)
-                  }
-                  className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-xs font-vw-head font-bold transition-all ${activa
-                      ? "border-[#001E50] bg-[#001E50] text-white"
-                      : "border-slate-200 bg-white text-[#001E50] hover:bg-slate-50"
+                  onClick={() => aplicarAgencia(agencia === "Todos" ? "" : agencia)}
+                  className={`inline-flex items-center justify-center rounded-full px-3.5 py-1 text-[11px] font-bold transition-all ${activa
+                    ? "bg-white text-[#001E50] shadow-md scale-105"
+                    : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
                     }`}
                 >
                   {agencia === "Todos" ? "Todas las agencias" : agencia}
@@ -477,727 +544,372 @@ export default function VentasVN() {
               );
             })}
           </div>
-          {/* FILTROS COMPLEMENTARIOS DE AUTOS NUEVOS */}
-          <div className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-2.5">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-vw-head font-bold text-white">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                <span>Filtros de Autos Nuevos</span>
-              </div>
-              <button
-                type="button"
-                onClick={limpiarFiltros}
-                disabled={!hayFiltros}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[10px] font-vw-head font-bold text-[#001E50] shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Eraser className="h-3 w-3" />
-                Limpiar filtros
-              </button>
-            </div>
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-              {/* BUSCAR */}
-              <div>
-                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                  Buscar
-                </label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={filtros.q}
-                    onChange={(e) => cambiarFiltro("q", e.target.value)}
-                    placeholder="Serie, cliente, modelo..."
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs font-vw-text text-[#001E50] outline-none transition placeholder:text-slate-300 focus:border-[#1677FF]"
-                  />
-                  {filtros.q ? (
-                    <button
-                      type="button"
-                      onClick={() => cambiarFiltro("q", "")}
-                      className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              {/* FAMILIA / MODELO */}
-              <div>
-                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                  Familia / Modelo
-                </label>
-                <select
-                  value={filtros.familia}
-                  onChange={(e) => cambiarFiltro("familia", e.target.value)}
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                >
-                  <option value="">Todas las familias</option>
-                  {dashboard.opciones.familias.map((familia) => (
-                    <option key={familia} value={familia}>
-                      {familia}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {/* CONDICIÓN DE PAGO */}
-              <div>
-                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                  Condición de Pago
-                </label>
-                <select
-                  value={filtros.condicion_pago}
-                  onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)}
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                >
-                  <option value="">Todas las condiciones</option>
-                  {dashboard.opciones.condiciones_pago.map((condicion) => (
-                    <option key={condicion} value={condicion}>
-                      {condicion}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {/* ASESOR */}
-              <div>
-                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                  Asesor
-                </label>
-                <select
-                  value={filtros.asesor}
-                  onChange={(e) => cambiarFiltro("asesor", e.target.value)}
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                >
-                  <option value="">Todos los asesores</option>
-                  {dashboard.opciones.asesores.map((asesor) => (
-                    <option key={asesor} value={asesor}>
-                      {asesor}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {/* TIPO DE VENTA */}
-              <div>
-                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                  Tipo de Venta
-                </label>
-                <select
-                  value={filtros.venta_digital}
-                  onChange={(e) => cambiarFiltro("venta_digital", e.target.value)}
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                >
-                  <option value="">Todas las ventas</option>
-                  <option value="1">Venta digital</option>
-                </select>
-              </div>
-            </div>
-            {(filtros.asesor ||
-              filtros.familia ||
-              filtros.condicion_pago ||
-              filtros.venta_digital) && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 pt-2">
-                  <span className="mr-1 text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                    Aplicados:
-                  </span>
-                  {filtros.asesor && (
-                    <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
-                      {filtros.asesor}
-                    </span>
-                  )}
-                  {filtros.familia && (
-                    <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
-                      {filtros.familia}
-                    </span>
-                  )}
-                  {filtros.condicion_pago && (
-                    <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
-                      {filtros.condicion_pago}
-                    </span>
-                  )}
-                  {filtros.venta_digital === "1" && (
-                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#1677FF]">
-                      Venta digital
-                    </span>
-                  )}
-                </div>
-              )}
-          </div>
-          {/* AÑO + MESES */}
-          <div className="bg-white rounded-xl p-2.5 border border-slate-200 flex items-center gap-3">
+        </div>
+        {/* BARRA DE CONTROL DE FECHA (AÑO Y MESES VOLVO STYLE) */}
+        <div className="bg-white rounded-xl p-2.5 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-thin">
             <div className="relative inline-block shrink-0">
               <select
                 value={anioSel}
                 onChange={(e) => aplicarAnio(e.target.value)}
-                className="appearance-none bg-white border border-slate-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-vw-head font-bold text-[#001E50] focus:outline-none cursor-pointer"
+                className="appearance-none bg-slate-100 border border-slate-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-bold text-[#001E50] focus:outline-none cursor-pointer hover:bg-slate-200 transition"
               >
                 {anios.map((anio) => (
-                  <option key={anio} value={anio}>
-                    {anio}
-                  </option>
+                  <option key={anio} value={anio}>{anio}</option>
                 ))}
               </select>
-              <ChevronDown className="h-3.5 w-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="h-3.5 w-3.5 text-slate-600 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-            <div className="flex gap-1.5 overflow-x-auto w-full pb-1 scrollbar-thin">
-              {/* TODO EL AÑO */}
-              <button
-                type="button"
-                onClick={() => aplicarMes(null)}
-                className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-3 py-1.5 text-xs transition-all ${mesSel === null
-                    ? "bg-[#001E50] text-white font-vw-head font-bold"
-                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
-                  }`}
-              >
-                {mesSel === null ? (
-                  <Check className="h-3 w-3 text-white" />
-                ) : (
-                  <Plus className="h-3 w-3 text-slate-400" />
-                )}
-                <span>Todo el año</span>
-              </button>
-              {/* MESES */}
-              {MESES.map((mes, index) => {
-                const futuro =
-                  anioSel === anioActual && index > mesActual;
-                const activo = mesSel === index;
-                return (
-                  <button
-                    key={mes}
-                    type="button"
-                    disabled={futuro}
-                    onClick={() => aplicarMes(index)}
-                    className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-xs transition-all ${activo
-                        ? "bg-[#001E50] text-white font-vw-head font-bold"
-                        : futuro
-                          ? "border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed font-vw-head font-bold"
-                          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
-                      }`}
-                  >
-                    {activo ? (
-                      <Check className="h-3 w-3 text-white" />
-                    ) : (
-                      <Plus className="h-3 w-3 text-slate-400" />
-                    )}
-                    <span>{mes.toLowerCase()}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <div className="h-4 w-[1px] bg-slate-200 mx-1 shrink-0" />
             <button
               type="button"
-              onClick={actualizarTodo}
-              disabled={loading || loadingDashboard}
-              title="Recargar"
-              className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 text-[#001E50] transition shrink-0"
+              onClick={() => aplicarMes(null)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${mesSel === null
+                ? "bg-[#001E50] text-white shadow"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
             >
-              <RefreshCw
-                className={`h-4 w-4 ${loading || loadingDashboard ? "animate-spin" : ""
-                  }`}
-              />
+              Todo el año
             </button>
+            {MESES_CORTOS.map((mes, index) => {
+              const futuro = anioSel === anioActual && index > mesActual;
+              const activo = mesSel === index;
+              return (
+                <button
+                  key={mes}
+                  type="button"
+                  disabled={futuro}
+                  onClick={() => aplicarMes(index)}
+                  className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all ${activo
+                    ? "bg-[#001E50] text-white shadow"
+                    : futuro
+                      ? "bg-slate-50 text-slate-300 cursor-not-allowed"
+                      : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                >
+                  {mes}
+                </button>
+              );
+            })}
+          </div>
+          {hayFiltros && (
+            <button
+              type="button"
+              onClick={limpiarFiltros}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100"
+            >
+              <Eraser className="h-3 w-3" /> Restablecer
+            </button>
+          )}
+        </div>
+        {/* FILTROS ADICIONALES SECUNDARIOS */}
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+            <div>
+              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">Buscar</label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={filtros.q}
+                  onChange={(e) => cambiarFiltro("q", e.target.value)}
+                  placeholder="Serie, cliente, modelo..."
+                  className="h-8 w-full rounded-lg border border-slate-200 pl-8 pr-7 text-xs font-medium text-[#001E50] outline-none focus:border-[#1677FF]"
+                />
+                {filtros.q && (
+                  <button type="button" onClick={() => cambiarFiltro("q", "")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">Familia / Modelo</label>
+              <select value={filtros.familia} onChange={(e) => cambiarFiltro("familia", e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs text-[#001E50] outline-none focus:border-[#1677FF]">
+                <option value="">Todas las familias</option>
+                {(dashboard?.opciones?.familias || []).map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">Condición de Pago</label>
+              <select value={filtros.condicion_pago} onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs text-[#001E50] outline-none focus:border-[#1677FF]">
+                <option value="">Todas las condiciones</option>
+                {(dashboard?.opciones?.condiciones_pago || []).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">Asesor</label>
+              <select value={filtros.asesor} onChange={(e) => cambiarFiltro("asesor", e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs text-[#001E50] outline-none focus:border-[#1677FF]">
+                <option value="">Todos los asesores</option>
+                {(dashboard?.opciones?.asesores || []).map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">Tipo de Venta</label>
+              <select value={filtros.venta_digital} onChange={(e) => cambiarFiltro("venta_digital", e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs text-[#001E50] outline-none focus:border-[#1677FF]">
+                <option value="">Todas las ventas</option>
+                <option value="1">Venta digital</option>
+              </select>
+            </div>
           </div>
         </div>
-        {/* RESUMEN EJECUTIVO + DESGLOSE POR ASESOR */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-          {/* CONSOLIDADO GENERAL */}
-          <section className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between shadow-sm">
-            <div className="relative h-28 w-full overflow-hidden bg-[#001E50] shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#001E50] via-[#0A3975] to-[#1677FF]" />
-              <div className="absolute right-5 top-1/2 -translate-y-1/2 opacity-20">
-                <Car className="h-24 w-24 text-white" />
-              </div>
-              <div className="absolute top-2 left-2 bg-[#001E50] text-white text-[10px] font-vw-head font-bold px-2.5 py-0.5 rounded-full border border-white/20">
-                Consolidado General
-              </div>
-              <div className="absolute bottom-2 left-2 flex items-center gap-1.5 text-white">
-                <Car className="h-3.5 w-3.5 text-sky-400" />
-                <span className="text-xs font-vw-head font-bold tracking-wide">
-                  VW Autos Nuevos
+        {/* TABLA O DASHBOARD */}
+        {vistaActiva === "detalle" ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <InteractiveTable
+              data={registrosFiltrados || []}
+              columns={COLUMNAS || []}
+              total={totalTabla}
+              page={pagina}
+              pageSize={pageSize}
+              onPageSizeChange={(tamano) => { setPageSize(tamano); setPagina(1); }}
+              onPageChange={setPagina}
+              loading={loading}
+              error={error}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+            {/* PANEL IZQUIERDO: DESGLOSE Y RANKING POR ASESOR (FORMATO BARRAS DELGADAS) */}
+            <div className="lg:col-span-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                  <Users className="h-3.5 w-3.5" />
+                  <span>Desglose por Asesor Comercial</span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  Top {asesoresCalculados.length} asesores
                 </span>
               </div>
-            </div>
-            <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-vw-head font-bold text-[#1677FF] uppercase tracking-wider">
-                    Ventas Autos Nuevos
-                  </span>
-                  <span className="bg-emerald-50 text-emerald-700 text-[9px] font-vw-head font-bold px-2 py-0.5 rounded border border-emerald-200">
-                    Consolidado
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-col items-center justify-center py-1 text-center my-auto">
-                <h4 className="text-[11px] font-vw-head font-bold text-slate-400 uppercase tracking-widest mb-0.5">
-                  Resumen Ejecutivo de Ventas
-                </h4>
-                <div className="text-5xl font-vw-head font-extrabold text-[#001E50] leading-none tracking-tight">
-                  {loadingDashboard
-                    ? "..."
-                    : formatoNumero(dashboard.totales.unidades_vendidas)}
-                </div>
-                <div className="text-[10px] font-vw-head font-bold text-[#1677FF] uppercase tracking-wider mt-1.5">
-                  Total Unidades Vendidas
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100">
-                <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
-                  <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
-                    <Database className="h-2.5 w-2.5 text-emerald-600" />
-                    <span>Operaciones</span>
-                  </div>
-                  <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
-                    {loadingDashboard
-                      ? "..."
-                      : formatoNumero(dashboard.totales.productos)}
-                  </div>
-                </div>
-                <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
-                  <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
-                    <Globe className="h-2.5 w-2.5 text-[#1677FF]" />
-                    <span>Digitales</span>
-                  </div>
-                  <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
-                    {loadingDashboard
-                      ? "..."
-                      : formatoNumero(dashboard.totales.ventas_digitales)}
-                  </div>
-                </div>
-                <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
-                  <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
-                    <TrendingUp className="h-2.5 w-2.5 text-emerald-600" />
-                    <span>Margen</span>
-                  </div>
-                  <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
-                    {loadingDashboard ? "..." : `${margen.toFixed(1)}%`}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-          {/* DESGLOSE POR ASESOR */}
-          <section className="lg:col-span-8 bg-[#F8FAFC] rounded-2xl border border-slate-200 p-3.5 md:p-4 space-y-3 flex flex-col shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] text-white px-3.5 py-1 text-xs font-vw-head font-bold">
-                <Users className="h-3.5 w-3.5 text-white shrink-0" />
-                <span>Desglose por Asesor Comercial</span>
-              </div>
-              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-vw-head font-bold text-[#001E50] shadow-sm">
-                Top {topAsesores.length} asesores
-              </div>
-            </div>
-            <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-              {loadingDashboard ? (
-                <div className="flex h-[180px] items-center justify-center">
-                  <LoaderCircle className="h-5 w-5 animate-spin text-[#001E50]" />
-                </div>
-              ) : topAsesores.length === 0 ? (
-                <div className="flex h-[180px] items-center justify-center text-xs text-slate-400 italic bg-white rounded-xl border border-slate-200">
-                  Sin datos de asesores en el periodo seleccionado
-                </div>
-              ) : (
-                topAsesores.map((item, idx) => {
-                  const pctWidth =
-                    (numero(item.unidades_vendidas) / maxVentasAsesor) * 100;
-                  const activo = filtros.asesor === item.asesor;
-                  return (
-                    <button
-                      key={`${item.asesor}-${idx}`}
-                      type="button"
-                      onClick={() => alternarFiltro("asesor", item.asesor)}
-                      className={`w-full rounded-xl border overflow-hidden transition-all duration-150 text-left ${activo
-                          ? "border-[#1677FF] bg-blue-50"
-                          : "border-slate-200/80 bg-white hover:bg-slate-50"
-                        }`}
-                    >
-                      <div className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2.5 w-52 min-w-0 shrink-0">
-                          <div
-                            className={`h-6 w-6 rounded-md flex items-center justify-center font-vw-head font-bold text-[10px] shrink-0 ${idx === 0
-                                ? "bg-[#001E50] text-white"
-                                : "bg-slate-100 text-slate-600"
-                              }`}
-                          >
-                            VW{idx + 1}
+              <div className="max-h-[360px] overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
+                {asesoresCalculados.length === 0 ? (
+                  <p className="py-12 text-center text-xs text-slate-400">Sin registros de asesores en este periodo</p>
+                ) : (
+                  asesoresCalculados.map((item, idx) => {
+                    const pct = Math.min(100, Math.round((item.unidades_vendidas / maxUnidadesAsesor) * 100));
+                    return (
+                      <div key={item.asesor} className="flex items-center gap-3 text-xs bg-slate-50/60 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-100/70 transition">
+                        <span className="flex h-6 w-8 shrink-0 items-center justify-center rounded-lg bg-[#001E50] text-[10px] font-black text-white">
+                          VW{idx + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex justify-between font-bold text-[#1A1F3C] text-[11px] mb-1">
+                            <span className="truncate">{item.asesor}</span>
+                            <span className="shrink-0 text-slate-500 ml-2">{item.unidades_vendidas} unds</span>
                           </div>
-                          <span
-                            className="font-vw-head font-bold text-[#001E50] text-xs truncate"
-                            title={item.asesor || "Sin asesor"}
-                          >
-                            {item.asesor || "Sin asesor"}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-700 font-vw-head font-bold shrink-0 min-w-[90px]">
-                          {formatoNumero(item.unidades_vendidas)} unidades
-                        </div>
-                        <div className="flex-1 mx-2">
-                          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                            <div
-                              className="bg-[#001E50] h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  Math.max(4, pctWidth)
-                                )}%`,
-                              }}
-                            />
+                          <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                            <div className="h-full rounded-full bg-[#001E50] transition-all duration-300" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
-                        <div className="text-[10px] font-vw-head font-bold text-[#1677FF] shrink-0">
+                        <span className="shrink-0 font-extrabold text-[#1677FF] text-xs min-w-[85px] text-right">
                           {money(item.ingresos)}
-                        </div>
+                        </span>
                       </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            <div className="mt-auto grid grid-cols-3 gap-2 border-t border-slate-200/60 pt-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
-                <div className="text-[9px] uppercase tracking-wide text-slate-400">
-                  Ingresos
-                </div>
-                <div
-                  className="mt-0.5 truncate text-xs font-vw-head font-bold text-[#001E50]"
-                  title={money(dashboard.totales.ingresos)}
-                >
-                  {loadingDashboard ? "..." : money(dashboard.totales.ingresos)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
-                <div className="text-[9px] uppercase tracking-wide text-slate-400">
-                  Costo
-                </div>
-                <div
-                  className="mt-0.5 truncate text-xs font-vw-head font-bold text-[#001E50]"
-                  title={money(dashboard.totales.costo)}
-                >
-                  {loadingDashboard ? "..." : money(dashboard.totales.costo)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
-                <div className="text-[9px] uppercase tracking-wide text-slate-400">
-                  Utilidad estimada
-                </div>
-                <div
-                  className={`mt-0.5 truncate text-xs font-vw-head font-bold ${utilidad >= 0 ? "text-emerald-700" : "text-red-600"
-                    }`}
-                  title={money(utilidad)}
-                >
-                  {loadingDashboard ? "..." : money(utilidad)}
-                </div>
+                    );
+                  })
+                )}
               </div>
             </div>
-          </section>
-        </div>
-        {errorDashboard && <ErrorBox>{errorDashboard}</ErrorBox>}
-        {error && <ErrorBox>{error}</ErrorBox>}
-        {vistaActiva === "dashboard" && (
-          <div className="grid gap-5 xl:grid-cols-12">
-            <div className="xl:col-span-7">
-              <ChartCard title="Tendencia comercial" subtitle="Ingresos, costo y unidades vendidas por mes" icon={TrendingUp} badge={rangoActual}
-                action={
-                  <div className="flex items-center gap-2">
-                    {filtros.fecha_desde && <GraficoRestaurar onClick={() => restaurarGrafica({ fecha_desde: "", fecha_hasta: "" })} />}
-                    <GraficoExportar onClick={() => exportarGrafica("tendencia", "tendencia_comercial")} busy={exportandoKey === "tendencia"} />
+            {/* PANEL DERECHO SUPERIOR: PENETRACIÓN FINANCIERA (TODOS LOS TIPOS CON BARRAS DELGADAS Y REDONDEADAS) */}
+            <div className="lg:col-span-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                    <Landmark className="h-3.5 w-3.5" />
+                    <span>Penetración Financiera VW (VWFS)</span>
                   </div>
-                }>
-                <div className="h-[360px]" ref={(n) => { chartRefs.current["tendencia"] = n; }}>
-                  {loadingDashboard ? <ChartLoading /> : datosMes.length === 0 ? <ChartEmpty /> : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={datosMes} margin={{ top: 12, right: 12, bottom: 6, left: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
-                        <XAxis dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="money" tickFormatter={formatoCompacto} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={65} />
-                        <YAxis yAxisId="units" orientation="right" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={35} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: C.text, fontWeight: 700 }} formatter={(value, name) => [name === "Unidades" ? `${formatoNumero(value)} unidades` : money(value), name]} />
-                        <Bar yAxisId="units" dataKey="unidades_vendidas" name="Unidades" radius={[6, 6, 0, 0]} barSize={22} className="cursor-pointer" onClick={(entry) => clicMes(entry)}>
-                          {datosMes.map((item, i) => {
-                            const activo = esMesActivo(item);
-                            return <Cell key={i} fill={activo ? C.navy : "#DDE4F6"} />;
-                          })}
-                        </Bar>
-                        <Line yAxisId="money" type="monotone" dataKey="ingresos" name="Ingresos" stroke={C.navy} strokeWidth={3} dot={{ r: 3, fill: C.navy }} activeDot={{ r: 5 }} />
-                        <Line yAxisId="money" type="monotone" dataKey="costo" name="Costo" stroke={C.navyLight} strokeWidth={2.5} dot={false} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  )}
+                  <button type="button" onClick={() => exportarGrafica("penetracion", "penetracion_vwfs")} className="text-slate-400 hover:text-slate-600">
+                    <ImageDown className="h-4 w-4" />
+                  </button>
                 </div>
-                <ChartLegend items={[{ color: C.navy, label: "Ingresos" }, { color: C.navyLight, label: "Costo" }, { color: "#DDE4F6", label: "Unidades" }]} />
-              </ChartCard>
-            </div>
-            <div className="xl:col-span-5">
-              <ChartCard title="Condición de pago" subtitle="Distribución de unidades vendidas" icon={WalletCards}
-                action={
-                  <div className="flex items-center gap-2">
-                    {filtros.condicion_pago && <GraficoRestaurar onClick={() => restaurarGrafica({ condicion_pago: "" })} />}
-                    <GraficoExportar onClick={() => exportarGrafica("condicion", "condicion_pago")} busy={exportandoKey === "condicion"} />
-                  </div>
-                }>
-                <div className="grid min-h-[390px] items-center gap-3 md:grid-cols-[1fr_220px] xl:grid-cols-1 2xl:grid-cols-[1fr_220px]" ref={(n) => { chartRefs.current["condicion"] = n; }}>
-                  <div className="relative h-[280px]">
-                    {loadingDashboard ? <ChartLoading /> : condicionesPago.length === 0 ? <ChartEmpty /> : (
-                      <>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={condicionesPago} dataKey="unidades_vendidas" nameKey="condicion_pago" cx="50%" cy="50%" innerRadius={72} outerRadius={105} paddingAngle={2} className="cursor-pointer" activeIndex={idxCondicionActivo >= 0 ? idxCondicionActivo : undefined} activeShape={<SectorResaltado />} onClick={(data) => alternarFiltro("condicion_pago", data ? data?.condicion_pago : "")}>
-                              {condicionesPago.map((item, index) => {
-                                return <Cell key={`${item.condicion_pago}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />;
-                              })}
-                            </Pie>
-                            <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${formatoNumero(value)} unidades`, name]} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-                          <p className="text-2xl font-extrabold text-[#131E5C]">{formatoNumero(totalCondicionesPago)}</p>
-                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">Unidades</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  {!loadingDashboard && condicionesPago.length > 0 && (
-                    <div className="space-y-2">
-                      {condicionesPago.map((item, index) => (
-                        <button key={`${item.condicion_pago}-${index}`} type="button" onClick={() => alternarFiltro("condicion_pago", item.condicion_pago)}
-                          className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition", filtros.condicion_pago === item.condicion_pago ? "bg-[#131E5C]/[0.08]" : "hover:bg-[#F7F8FC]")}>
-                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
-                          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#515778]" title={item.condicion_pago}>{item.condicion_pago || "Sin condición"}</span>
-                          <span className="text-[11px] font-bold text-[#1A1F3C]">{porcentaje(item.unidades_vendidas, totalCondicionesPago)}%</span>
-                        </button>
-                      ))}
+                {/* BANNER TOTAL PENETRACIÓN % */}
+                <div className="mt-3 flex items-center justify-between bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      PENETRACIÓN TOTAL VWFS
+                    </span>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <span className="text-3xl font-black text-[#001E50]">
+                        {penetracionFinanciera.porcentajeGlobal.toFixed(1)}%
+                      </span>
+                      <span className="text-xs font-bold text-slate-500">
+                        ({penetracionFinanciera.unidadesVW} de {penetracionFinanciera.totalUnidades} unds)
+                      </span>
                     </div>
-                  )}
-                </div>
-              </ChartCard>
-            </div>
-            <div className="xl:col-span-6">
-              <ChartCard title="Rendimiento por asesor" subtitle="Top 10 por unidades vendidas" icon={BarChart3}
-                action={
-                  <div className="flex items-center gap-2">
-                    {filtros.asesor && <GraficoRestaurar onClick={() => restaurarGrafica({ asesor: "" })} />}
-                    <GraficoExportar onClick={() => exportarGrafica("asesores", "rendimiento_asesores")} busy={exportandoKey === "asesores"} />
                   </div>
-                }>
-                <div className="h-[390px]" ref={(n) => { chartRefs.current["asesores"] = n; }}>
-                  {loadingDashboard ? <ChartLoading /> : topAsesores.length === 0 ? <ChartEmpty /> : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={topAsesores} layout="vertical" margin={{ top: 4, right: 38, left: 18, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="asesor" width={145} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
-                        <Bar dataKey="unidades_vendidas" name="Unidades vendidas" fill={C.navy} radius={[0, 7, 7, 0]} barSize={20} className="cursor-pointer" onClick={(entry) => alternarFiltro("asesor", entry ? entry?.asesor : "")}>
-                          {topAsesores.map((item, i) => {
-                            return <Cell key={i} fill={C.navy} />;
-                          })}
-                          <LabelList dataKey="unidades_vendidas" position="right" fill={C.textSub} fontSize={10} fontWeight={700} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </ChartCard>
-            </div>
-            <div className="xl:col-span-6">
-              <ChartCard title="Modelos con mayor movimiento" subtitle="Top 10 familias por unidades vendidas" icon={Car}
-                action={
-                  <div className="flex items-center gap-2">
-                    {filtros.familia && <GraficoRestaurar onClick={() => restaurarGrafica({ familia: "" })} />}
-                    <GraficoExportar onClick={() => exportarGrafica("familias", "modelos_mayor_movimiento")} busy={exportandoKey === "familias"} />
+                  <div className="rounded-2xl bg-[#001E50]/10 p-3 text-[#001E50]">
+                    <Percent className="h-6 w-6" />
                   </div>
-                }>
-                <div className="h-[390px]" ref={(n) => { chartRefs.current["familias"] = n; }}>
-                  {loadingDashboard ? <ChartLoading /> : topFamilias.length === 0 ? <ChartEmpty /> : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={topFamilias} layout="vertical" margin={{ top: 4, right: 38, left: 22, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.border} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="familia" width={150} tick={{ fontSize: 10, fill: C.textSub }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
-                        <Bar dataKey="unidades_vendidas" name="Unidades vendidas" fill={C.navyMid} radius={[0, 7, 7, 0]} barSize={20} className="cursor-pointer" onClick={(entry) => alternarFiltro("familia", entry ? entry?.familia : "")}>
-                          {topFamilias.map((item, i) => {
-                            return <Cell key={i} fill={C.navyMid} />;
-                          })}
-                          <LabelList dataKey="unidades_vendidas" position="right" fill={C.textSub} fontSize={10} fontWeight={700} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
                 </div>
-              </ChartCard>
+              </div>
+              {/* LISTADO DE TODOS LOS TIPOS DE FINANCIAMIENTO CON BARRAS DELGADAS E INFORMACIÓN EN LA MISMA LÍNEA */}
+              <div className="max-h-[250px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                {penetracionFinanciera.desgloseCompleto.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-slate-400">Sin datos de financiamiento en este periodo</p>
+                ) : (
+                  penetracionFinanciera.desgloseCompleto.map((item) => {
+                    const pctBarra = Math.min(100, Math.round((item.unidades / penetracionFinanciera.maxUnidadesCondicion) * 100));
+                    return (
+                      <div key={item.condicion} className="flex items-center gap-3 text-xs bg-slate-50/60 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-100/70 transition">
+                        <span className={`flex h-6 px-2 shrink-0 items-center justify-center rounded-lg text-[10px] font-black text-white ${item.esVW ? "bg-[#1677FF]" : "bg-slate-600"
+                          }`}>
+                          {item.esVW ? "VWFS" : "OTRO"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex justify-between font-bold text-[#1A1F3C] text-[11px] mb-1">
+                            <span className="truncate">{item.condicion}</span>
+                            <span className="shrink-0 text-slate-500 ml-2">{item.unidades} unds ({item.porcentaje.toFixed(1)}%)</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-300 ${item.esVW ? "bg-[#1677FF]" : "bg-slate-500"
+                              }`} style={{ width: `${pctBarra}%` }} />
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-extrabold text-[#001E50] text-xs min-w-[85px] text-right">
+                          {money(item.ingresos)}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        {vistaActiva === "detalle" && (
-          <div className="space-y-3">
-            <InteractiveTable
-              rows={registros}
-              columns={COLUMNAS}
-              storageKey="autos_nuevos"
-              total={total}
-              loading={loading}
-              pageSize={pageSize}
-              onPageSizeChange={(size) => { setPagina(1); setPageSize(size); }}
-              page={pagina}
-              totalPages={totalPaginas}
-              onPrev={() => setPagina((prev) => Math.max(1, prev - 1))}
-              onNext={() => setPagina((prev) => Math.min(totalPaginas, prev + 1))}
-            />
+            {/* SECCIÓN INTERMEDIA: TENDENCIA POR MES (TODO EL AÑO) Y CONDICIONES DE PAGO */}
+            <div className="lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="font-bold text-[#001E50] text-sm">Tendencia de Ventas por Mes (Año Completo)</h3>
+                  <p className="text-[10px] font-medium text-slate-400">Histórico de {anioSel} completo</p>
+                </div>
+                <button type="button" onClick={() => exportarGrafica("mes", "ventas_por_mes")} className="text-slate-400 hover:text-slate-600">
+                  <ImageDown className="h-4 w-4" />
+                </button>
+              </div>
+              <div ref={(el) => (chartRefs.current["mes"] = el)} className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={datosMesCompleto}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <Bar yAxisId="left" dataKey="unidades_vendidas" name="Unidades" fill="#001E50" radius={[6, 6, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="ingresos" name="Ingresos" stroke="#1677FF" strokeWidth={2.5} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="lg:col-span-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-[#001E50] text-sm">Distribución de Pagos</h3>
+                <button type="button" onClick={() => exportarGrafica("condiciones", "condiciones_pago")} className="text-slate-400 hover:text-slate-600">
+                  <ImageDown className="h-4 w-4" />
+                </button>
+              </div>
+              <div ref={(el) => (chartRefs.current["condiciones"] = el)} className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={condicionesPago} dataKey="unidades_vendidas" nameKey="condicion_pago" cx="50%" cy="50%" outerRadius={85} innerRadius={40} paddingAngle={3}>
+                      {(condicionesPago || []).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            {/* ========================================================================= */}
+            {/* SECCIÓN INFERIOR 100% ANCHO: MODELOS VENDIDOS BARRAS DELGADAS + INTERACTIVO */}
+            {/* ========================================================================= */}
+            <div className="lg:col-span-12 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                  <Layers className="h-3.5 w-3.5" />
+                  <span>Análisis de Modelos y Familias (Desglose de Montos e Utilidades)</span>
+                </div>
+                <span className="text-[11px] font-bold text-slate-500">
+                  Clica sobre un modelo para desplegar/contraer sus familias
+                </span>
+              </div>
+              {/* LISTA DE BARRAS HORIZONTALES DELGADAS DE MODELOS CON ACORDEÓN DRILLDOWN */}
+              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1 scrollbar-thin">
+                {modelosAgrupados.list.length === 0 ? (
+                  <p className="py-12 text-center text-xs text-slate-400">Sin registros de modelos en este periodo</p>
+                ) : (
+                  modelosAgrupados.list.map((m) => {
+                    const estaExpandido = modeloExpandido === m.modelo;
+                    const pctBarra = Math.min(100, Math.round((m.unidades / modelosAgrupados.maxUnidadesModelo) * 100));
+                    return (
+                      <div key={m.modelo} className="rounded-xl border border-slate-200 overflow-hidden transition">
+                        {/* FILA PRINCIPAL DEL MODELO (ESTILO ASESORES) */}
+                        <div
+                          onClick={() => setModeloExpandido(estaExpandido ? null : m.modelo)}
+                          className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#001E50] text-white">
+                            {estaExpandido ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex justify-between font-extrabold text-[#001E50] text-xs mb-1">
+                              <span>{m.modelo}</span>
+                              <span className="text-slate-500">{m.unidades} unds</span>
+                            </div>
+                            <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                              <div className="h-full rounded-full bg-[#001E50] transition-all duration-300" style={{ width: `${pctBarra}%` }} />
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 min-w-[140px] pl-2 border-l border-slate-200">
+                            <div className="text-xs font-black text-[#1677FF]">{money(m.ingresos)}</div>
+                            <div className="text-[10px] font-bold text-emerald-600 mt-0.5">
+                              Ut. {money(m.utilidad)}
+                            </div>
+                          </div>
+                        </div>
+                        {/* DESPLIEGUE DRILLDOWN INTERACTIVO DE SUB-FAMILIAS AL HACER CLIC */}
+                        {estaExpandido && (
+                          <div className="p-3 bg-white border-t border-slate-100 space-y-2 pl-8">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                              Variantes y Familias de {m.modelo}:
+                            </p>
+                            {m.familias.map((fam) => {
+                              const pctSubBarra = Math.min(100, Math.round((fam.unidades / m.unidades) * 100));
+                              return (
+                                <div key={fam.familia} className="flex items-center gap-3 text-xs bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                                  <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex justify-between font-bold text-slate-700 text-[11px] mb-0.5">
+                                      <span className="truncate">{fam.familia}</span>
+                                      <span className="shrink-0 text-slate-500 ml-2">{fam.unidades} unds</span>
+                                    </div>
+                                    <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                                      <div className="h-full rounded-full bg-[#1677FF] transition-all duration-300" style={{ width: `${pctSubBarra}%` }} />
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0 min-w-[130px]">
+                                    <div className="text-[11px] font-bold text-[#001E50]">{money(fam.ingresos)}</div>
+                                    <div className="text-[10px] font-bold text-emerald-600">Ut. {money(fam.utilidad)}</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
-    </div>
-  );
-}
-function KPICard({ icon, label, value, sub, accent, spark = [] }) {
-  const Icon = icon;
-  const sparkData = spark.map((v, i) => ({ i, v: numero(v) }));
-  const pct = sparkData.length > 1
-    ? (sparkData[sparkData.length - 1].v - sparkData[0].v) / Math.max(Math.abs(sparkData[0].v), 1)
-    : 0;
-  const tendencia = sparkData.length > 1 ? (pct >= 0 ? "up" : "down") : null;
-  return (
-    <div className="relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md" style={{ borderColor: "#E7EAF3" }}>
-      <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 translate-x-6 -translate-y-6 rounded-full opacity-[0.12]" style={{ backgroundColor: accent }} />
-      <div className="relative flex items-start justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${accent}1A`, color: accent }}>
-              <Icon className="h-[18px] w-[18px]" />
-            </span>
-            <span className="truncate text-xs font-bold uppercase tracking-wide text-[#8891AD]">{label}</span>
-          </div>
-          <div className="mt-3 truncate text-[26px] font-black leading-none tracking-tight text-[#131E5C]" title={String(value)}>{value}</div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {sub && <span className="truncate text-[11px] font-semibold" style={{ color: accent }}>{sub}</span>}
-            {tendencia && (
-              <span className={cn(`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tendencia === "up" ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`)}>
-                {tendencia === "up" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                {Math.abs(pct * 100).toFixed(1)}%
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="relative mt-3 border-t border-black/[0.06] pt-2">
-        {sparkData.length === 0 ? (
-          <div className="flex h-12 items-center text-[11px] font-semibold text-slate-300">Sin datos</div>
-        ) : (
-          <div className="h-12">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sparkData} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
-                <Bar dataKey="v" fill={accent} radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-function FilterButtonGroup({ label, value, options, onChange }) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-      <span className="shrink-0 text-[11px] font-black uppercase tracking-wider text-[#131E5C]/40">{label}</span>
-      <div className="flex flex-1 flex-wrap gap-1.5">
-        {options.map((option) => {
-          const active = value === option;
-          const todos = option === "Todos";
-          return (
-            <button key={option} type="button" onClick={() => onChange(option)} className={`inline-flex h-9 min-w-[90px] flex-1 items-center justify-center rounded-full px-3 text-xs font-bold transition active:scale-[0.97] ${todos ? (active ? "bg-slate-200 text-slate-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600") : (active ? "bg-[#131E5C] text-white shadow-md shadow-[#131E5C]/20" : "bg-[#131E5C]/5 text-[#131E5C] hover:bg-[#131E5C]/10")}`}>
-              {option}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-function FilterField({ label, hint, icon: Icon = null, children }) {
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center gap-1.5">
-        {Icon && <Icon className="h-3.5 w-3.5 text-[#131E5C]/60" />}
-        <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8891AD]">{label}</label>
-        {hint && <span className="rounded bg-[#F7F8FC] px-1.5 py-0.5 text-[9px] font-semibold text-[#8891AD]">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-function ChartCard({ title, subtitle, icon: Icon, badge, action, children }) {
-  return (
-    <section className="h-full overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
-      <div className="flex items-start justify-between gap-3 border-b border-[#E4E7F0] px-5 py-4">
-        <div className="flex items-start gap-3">
-          {Icon && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]"><Icon className="h-[18px] w-[18px] text-[#131E5C]" /></div>}
-          <div>
-            <h3 className="text-sm font-bold text-[#1A1F3C]">{title}</h3>
-            {subtitle && <p className="mt-0.5 text-xs text-[#8891AD]">{subtitle}</p>}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {badge && <Badge>{badge}</Badge>}
-          {action}
-        </div>
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
-  );
-}
-function GraficoExportar({ onClick, busy }) {
-  return (
-    <button type="button" onClick={onClick} disabled={busy} title="Descargar gráfica como imagen"
-      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E4E7F0] bg-white px-2.5 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-50">
-      <ImageDown className="h-3.5 w-3.5" />{busy ? "Generando…" : "PNG"}
-    </button>
-  );
-}
-function GraficoRestaurar({ onClick }) {
-  return (
-    <button type="button" onClick={onClick} title="Restaurar / quitar el filtro de esta gráfica"
-      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E4E7F0] bg-white px-2.5 text-[11px] font-bold text-[#131E5C] transition hover:bg-[#131E5C]/5">
-      <RotateCcw className="h-3.5 w-3.5" />Restaurar
-    </button>
-  );
-}
-function SectorResaltado(props) {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
-  return (
-    <Sector
-      cx={cx}
-      cy={cy}
-      innerRadius={innerRadius}
-      outerRadius={outerRadius + 7}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      fill={fill}
-      cornerRadius={4}
-      stroke="#FFFFFF"
-      strokeWidth={2}
-    />
-  );
-}
-function ChartLegend({ items }) {
-  return (
-    <div className="mt-1 flex flex-wrap items-center justify-center gap-4">
-      {items.map((item) => <div key={item.label} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-[10px] font-semibold text-[#8891AD]">{item.label}</span></div>)}
-    </div>
-  );
-}
-function Badge({ children }) {
-  return <span className="inline-flex items-center rounded-full bg-[#131E5C]/[0.08] px-2.5 py-1 text-[10px] font-bold text-[#131E5C]">{children}</span>;
-}
-function ErrorBox({ children }) {
-  return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{children}</div>;
-}
-function ChartLoading() {
-  return <div className="flex h-full items-center justify-center"><div className="flex items-center gap-2 text-sm font-medium text-[#8891AD]"><LoaderCircle className="h-4 w-4 animate-spin" />Cargando información...</div></div>;
-}
-function ChartEmpty() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center text-center">
-      <Database className="h-7 w-7 text-[#C8CEDF]" />
-      <p className="mt-2 text-sm font-semibold text-[#515778]">Sin información</p>
-      <p className="mt-1 text-xs text-[#8891AD]">No existen datos para los filtros seleccionados.</p>
     </div>
   );
 }

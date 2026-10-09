@@ -1,8 +1,4 @@
 // src/pages/VentasVN/InteractiveTable.jsx
-// Tabla interactiva para "Venta Autos Nuevos":
-// busqueda global, ordenamiento, columnas configurables, conteo de
-// resultados visibles, exportacion a Excel y detalle del auto en un
-// popup al hacer clic sobre una fila.
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -52,7 +48,6 @@ function DetallePopup({ registro, columns, onClose }) {
     function onEsc(e) { if (e.key === "Escape") cerrar(); }
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function cerrar() {
@@ -61,7 +56,7 @@ function DetallePopup({ registro, columns, onClose }) {
   }
 
   const get = (key) => {
-    const col = columns.find((c) => c.key === key);
+    const col = (columns || []).find((c) => c.key === key);
     return formatCell(registro[key], col?.tipo);
   };
 
@@ -120,19 +115,11 @@ function DetallePopup({ registro, columns, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-[#0A1340]/60 backdrop-blur-sm" onClick={cerrar} />
-      <div
-        className={cn("relative w-full max-w-3xl overflow-hidden rounded-3xl border bg-white shadow-2xl transition-all duration-200", closing ? "scale-95 opacity-0" : "scale-100 opacity-100")}
-        style={{ borderColor: C.border }}
-      >
-        {/* Header */}
+      <div className={cn("relative w-full max-w-3xl overflow-hidden rounded-3xl border bg-white shadow-2xl transition-all duration-200", closing ? "scale-95 opacity-0" : "scale-100 opacity-100")} style={{ borderColor: C.border }}>
         <div className="relative overflow-hidden px-6 py-6 text-white" style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyDark} 100%)` }}>
-          <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/5" />
-          <div className="absolute right-16 top-8 h-24 w-24 rounded-full bg-white/5" />
           <div className="relative flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-white/60">
-                <Car className="h-4 w-4" /> Detalle de operación
-              </div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-white/60"><Car className="h-4 w-4" /> Detalle de operación</div>
               <h2 className="mt-2 truncate text-2xl font-black tracking-tight">{titulo}</h2>
               <p className="mt-1 truncate text-sm font-medium text-white/70">{subtitulo}</p>
             </div>
@@ -140,22 +127,14 @@ function DetallePopup({ registro, columns, onClose }) {
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="relative mt-4 flex flex-wrap gap-2">
-            <Badge light>{get("agencia") !== "—" ? get("agencia") : "Sin agencia"}</Badge>
-            {get("situacion") !== "—" && <Badge light>Estado: {get("situacion")}</Badge>}
-            {get("asesor") !== "—" && <Badge light>Asesor: {get("asesor")}</Badge>}
-          </div>
         </div>
 
-        {/* Body */}
         <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
           <div className="grid gap-6 md:grid-cols-2">
             {secciones.map((sec) => (
               <div key={sec.titulo} className="min-w-0">
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: C.surface, color: C.navy }}>
-                    <sec.icono className="h-4 w-4" />
-                  </span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: C.surface, color: C.navy }}><sec.icono className="h-4 w-4" /></span>
                   <h3 className="text-xs font-black uppercase tracking-wider" style={{ color: C.navy }}>{sec.titulo}</h3>
                 </div>
                 <div className="rounded-2xl border bg-white px-4 py-1" style={{ borderColor: C.border }}>
@@ -174,13 +153,9 @@ function ProspectoDigitalPopup({ prospecto, onClose }) {
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
-    function onEsc(e) {
-      if (e.key === "Escape") cerrar();
-    }
-
+    function onEsc(e) { if (e.key === "Escape") cerrar(); }
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function cerrar() {
@@ -188,28 +163,14 @@ function ProspectoDigitalPopup({ prospecto, onClose }) {
     setTimeout(onClose, 180);
   }
 
-  const mostrar = (value) => {
-    if (value === null || value === undefined || value === "") return "—";
-    return String(value);
-  };
-
+  const mostrar = (value) => (value === null || value === undefined || value === "" ? "—" : String(value));
   const fecha = (value) => {
     if (!value) return "—";
-
     const d = new Date(value);
-
     if (Number.isNaN(d.getTime())) return mostrar(value);
-
-    return d.toLocaleString("es-MX", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    return d.toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
   };
-
-  const moneda = (value) => {
-    if (value === null || value === undefined || value === "") return "—";
-    return money(value);
-  };
+  const moneda = (value) => (value === null || value === undefined || value === "" ? "—" : money(value));
 
   const datos = [
     { e: "Nombre", v: mostrar(prospecto?.nombre) },
@@ -230,82 +191,32 @@ function ProspectoDigitalPopup({ prospecto, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6">
-      <div
-        className="absolute inset-0 bg-[#0A1340]/60 backdrop-blur-sm"
-        onClick={cerrar}
-      />
-
-      <div
-        className={cn(
-          "relative w-full max-w-2xl overflow-hidden rounded-3xl border bg-white shadow-2xl transition-all duration-200",
-          closing ? "scale-95 opacity-0" : "scale-100 opacity-100"
-        )}
-        style={{ borderColor: C.border }}
-      >
-        <div
-          className="relative overflow-hidden px-6 py-6 text-white"
-          style={{
-            background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyDark} 100%)`,
-          }}
-        >
+      <div className="absolute inset-0 bg-[#0A1340]/60 backdrop-blur-sm" onClick={cerrar} />
+      <div className={cn("relative w-full max-w-2xl overflow-hidden rounded-3xl border bg-white shadow-2xl transition-all duration-200", closing ? "scale-95 opacity-0" : "scale-100 opacity-100")} style={{ borderColor: C.border }}>
+        <div className="relative overflow-hidden px-6 py-6 text-white" style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyDark} 100%)` }}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                Prospecto digital
-              </div>
-
-              <h2 className="mt-2 truncate text-2xl font-black tracking-tight">
-                {mostrar(prospecto?.nombre) !== "—"
-                  ? mostrar(prospecto?.nombre)
-                  : "Venta digital"}
-              </h2>
-
-              <p className="mt-1 truncate text-sm font-medium text-white/70">
-                {mostrar(prospecto?.vin_facturado)}
-              </p>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-white/60">Prospecto digital</div>
+              <h2 className="mt-2 truncate text-2xl font-black tracking-tight">{mostrar(prospecto?.nombre) !== "—" ? mostrar(prospecto?.nombre) : "Venta digital"}</h2>
+              <p className="mt-1 truncate text-sm font-medium text-white/70">{mostrar(prospecto?.vin_facturado)}</p>
             </div>
-
-            <button
-              type="button"
-              onClick={cerrar}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/25"
-            >
+            <button type="button" onClick={cerrar} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/25">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
-
         <div className="max-h-[65vh] overflow-y-auto px-6 py-5">
           <div className="grid gap-x-6 md:grid-cols-2">
             {datos.map((item) => (
-              <div
-                key={item.e}
-                className="flex items-start justify-between gap-3 border-b border-slate-100 py-3"
-              >
-                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  {item.e}
-                </span>
-
-                <span
-                  className="min-w-0 break-words text-right text-xs font-bold text-[#1A1F3C]"
-                  title={item.v}
-                >
-                  {item.v}
-                </span>
+              <div key={item.e} className="flex items-start justify-between gap-3 border-b border-slate-100 py-3">
+                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{item.e}</span>
+                <span className="min-w-0 break-words text-right text-xs font-bold text-[#1A1F3C]" title={item.v}>{item.v}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
     </div>
-  );
-}
-
-function Badge({ light, children }) {
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold", light ? "bg-white/15 text-white" : "bg-[#131E5C]/[0.08] text-[#131E5C]")}>
-      {children}
-    </span>
   );
 }
 
@@ -329,12 +240,12 @@ function ColumnChooser({ columns, visible, onChange, onClose }) {
       <div className="border-b px-3 py-2.5" style={{ borderColor: C.border, backgroundColor: C.surface }}>
         <p className="text-xs font-bold text-[#1A1F3C]">Ocultar columnas</p>
         <div className="mt-2 flex items-center gap-2">
-          <button type="button" onClick={() => onChange(new Set(columns.map((c) => c.key)))} className="flex-1 rounded-lg bg-[#131E5C] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#0A1340]">Mostrar todas</button>
+          <button type="button" onClick={() => onChange(new Set((columns || []).map((c) => c.key)))} className="flex-1 rounded-lg bg-[#131E5C] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#0A1340]">Mostrar todas</button>
           <button type="button" onClick={() => onChange(new Set())} className="flex-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] font-bold text-red-600 hover:bg-red-100">Ocultar todas</button>
         </div>
       </div>
       <div className="max-h-[320px] overflow-y-auto p-1.5">
-        {columns.map((col) => {
+        {(columns || []).map((col) => {
           const oculta = !visible.has(col.key);
           return (
             <button key={col.key} type="button" onClick={() => toggle(col.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
@@ -355,9 +266,7 @@ function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onCl
   const ref = useRef(null);
 
   useEffect(() => {
-    function onDoc(e) {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
-    }
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) onClose(); }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [onClose]);
@@ -383,13 +292,7 @@ function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onCl
         <p className="truncate text-[11px] font-bold text-[#1A1F3C]">{label}</p>
         <div className="relative mt-1.5">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar..."
-            className="w-full rounded border border-slate-200 bg-white py-1 pl-7 pr-2 text-[11px] text-slate-700 outline-none transition focus:border-[#131E5C]/40 focus:ring-1 focus:ring-[#131E5C]/20"
-          />
+          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..." className="w-full rounded border border-slate-200 bg-white py-1 pl-7 pr-2 text-[11px] text-slate-700 outline-none transition focus:border-[#131E5C]/40 focus:ring-1 focus:ring-[#131E5C]/20" />
         </div>
       </div>
       <button type="button" onClick={toggleAll} className="flex w-full items-center gap-2 border-b border-slate-100 px-2.5 py-1.5 text-left text-[11px] font-semibold text-[#131E5C] transition hover:bg-slate-50">
@@ -428,13 +331,14 @@ const STORAGE_FILTROS = "filtros_columnas";
 
 export default function InteractiveTable({
   rows,
-  columns,
-  total,
-  loading,
-  pageSize,
+  data,
+  columns = [],
+  total = 0,
+  loading = false,
+  pageSize = 50,
   onPageSizeChange,
-  page,
-  totalPages,
+  page = 1,
+  onPageChange,
   onPrev,
   onNext,
   storageKey = "default",
@@ -444,24 +348,25 @@ export default function InteractiveTable({
   exportName = "Autos Nuevos",
   exportFile = `venta_autos_nuevos_${new Date().toISOString().slice(0, 10)}`,
 }) {
+  const tableRows = data || rows || [];
   const keyColumnas = `${storageKey}_${STORAGE_COLUMNAS}`;
   const keyFiltros = `${storageKey}_${STORAGE_FILTROS}`;
 
-  // Columnas visibles persistentes en localStorage (hasta que se limpie)
   const [visibleColumns, setVisibleColumns] = useState(() => {
     if (resetColumnsOnMount) {
-      return new Set(columns.map((c) => c.key));
+      return new Set((columns || []).map((c) => c.key));
     }
     const guardadas = (() => {
       try { return JSON.parse(localStorage.getItem(keyColumnas)); }
       catch { return null; }
     })();
-    if (Array.isArray(guardadas) && guardadas.length === columns.length) {
-      const validas = guardadas.filter((k) => columns.some((c) => c.key === k));
-      if (validas.length === columns.length) return new Set(validas);
+    if (Array.isArray(guardadas) && guardadas.length === (columns || []).length) {
+      const validas = guardadas.filter((k) => (columns || []).some((c) => c.key === k));
+      if (validas.length === (columns || []).length) return new Set(validas);
     }
-    return new Set(columns.map((c) => c.key));
+    return new Set((columns || []).map((c) => c.key));
   });
+
   const [showColumns, setShowColumns] = useState(false);
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [colFilters, setColFilters] = useState(() => {
@@ -477,7 +382,7 @@ export default function InteractiveTable({
     catch { /* ignore */ }
   }, [colFilters, keyFiltros]);
 
-  const visibleCols = useMemo(() => columns.filter((c) => visibleColumns.has(c.key)), [columns, visibleColumns]);
+  const visibleCols = useMemo(() => (columns || []).filter((c) => visibleColumns.has(c.key)), [columns, visibleColumns]);
 
   function cambiarColumnas(next) {
     setVisibleColumns(next);
@@ -488,17 +393,17 @@ export default function InteractiveTable({
   }
 
   const filtered = useMemo(() => {
-    let result = rows;
+    let result = tableRows;
     const activeFilters = Object.entries(colFilters).filter(([, v]) => Array.isArray(v) && v.length > 0);
     if (activeFilters.length > 0) {
       result = result.filter((row) => activeFilters.every(([key, vals]) => {
-        const col = columns.find((c) => c.key === key);
+        const col = (columns || []).find((c) => c.key === key);
         const cellVal = formatCell(row[key], col?.tipo).trim().toLowerCase();
         return vals.some((value) => cellVal === value.toLowerCase());
       }));
     }
     if (sort.key) {
-      const col = columns.find((c) => c.key === sort.key);
+      const col = (columns || []).find((c) => c.key === sort.key);
       if (col) {
         result = [...result].sort((a, b) => {
           const va = rawValue(a, col);
@@ -511,7 +416,7 @@ export default function InteractiveTable({
       }
     }
     return result;
-  }, [rows, columns, sort, colFilters]);
+  }, [tableRows, columns, sort, colFilters]);
 
   function toggleSort(key) {
     setSort((prev) => {
@@ -527,7 +432,7 @@ export default function InteractiveTable({
 
   function uniqueValues(col) {
     const set = new Map();
-    rows.forEach((row) => {
+    (tableRows || []).forEach((row) => {
       const v = formatCell(row[col.key], col.tipo).trim();
       const label = v || "(Vacío)";
       if (!set.has(label)) set.set(label, v === "" ? "" : v);
@@ -562,9 +467,9 @@ export default function InteractiveTable({
   const hayFiltrosColumna = Object.values(colFilters).some((v) => Array.isArray(v) && v.length > 0);
 
   function exportExcel() {
-    if (filtered.length === 0) return;
+    if ((filtered || []).length === 0) return;
     const header = visibleCols.map((c) => c.label);
-    const body = filtered.map((row) => visibleCols.map((c) => formatCell(row[c.key], c.tipo)));
+    const body = (filtered || []).map((row) => visibleCols.map((c) => formatCell(row[c.key], c.tipo)));
     const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
     ws["!cols"] = visibleCols.map(() => ({ wch: 22 }));
     const wb = XLSX.utils.book_new();
@@ -572,20 +477,32 @@ export default function InteractiveTable({
     XLSX.writeFile(wb, `${exportFile}.xlsx`);
   }
 
+  const calcTotalPages = Math.max(1, Math.ceil((total || 0) / (pageSize || 50)));
+
+  const handlePrev = () => {
+    if (onPrev) onPrev();
+    else if (onPageChange && page > 1) onPageChange(page - 1);
+  };
+
+  const handleNext = () => {
+    if (onNext) onNext();
+    else if (onPageChange && page < calcTotalPages) onPageChange(page + 1);
+  };
+
   return (
     <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: C.border, boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: C.border }}>
         <p className="text-xs font-semibold text-[#515778]">
-          <span className="font-bold text-slate-700">{filtered.length.toLocaleString("es-MX")}</span> visibles ·{" "}
-          <span className="font-bold text-slate-700">{total.toLocaleString("es-MX")}</span> totales
+          <span className="font-bold text-slate-700">{(filtered || []).length.toLocaleString("es-MX")}</span> visibles ·{" "}
+          <span className="font-bold text-slate-700">{(total || 0).toLocaleString("es-MX")}</span> totales
         </p>
 
         <div className="relative flex items-center gap-2">
           <button type="button" onClick={limpiarTodosLosFiltros} disabled={!hayFiltrosColumna} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-[11px] font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40">
             <ListFilter className="h-3.5 w-3.5" />Limpiar filtros
           </button>
-          <button type="button" onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-bold text-[#131E5C] hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={exportExcel} disabled={(filtered || []).length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-bold text-[#131E5C] hover:bg-[#131E5C]/5 disabled:cursor-not-allowed disabled:opacity-40">
             <Sheet className="h-3.5 w-3.5" />Exportar Excel
           </button>
           <button type="button" onClick={() => setShowColumns((p) => !p)} className={cn("inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-bold", showColumns ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-200 text-[#131E5C] hover:bg-[#131E5C]/5")}>
@@ -600,7 +517,7 @@ export default function InteractiveTable({
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-20">
             <tr style={{ backgroundColor: C.navy }}>
-              {visibleCols.map((col) => {
+              {(visibleCols || []).map((col) => {
                 const activo = tol(col.key).size > 0;
                 return (
                   <th key={col.key} className="whitespace-nowrap px-3 py-2 text-left" style={{ backgroundColor: C.navy }}>
@@ -639,24 +556,24 @@ export default function InteractiveTable({
           <tbody>
             {loading ? (
               Array.from({ length: 10 }).map((_, i) => (
-                <tr key={i}>{visibleCols.map((col) => <td key={col.key} className="border-b border-r border-slate-100 px-3 py-2.5"><div className="h-4 w-24 animate-pulse rounded bg-slate-200" /></td>)}</tr>
+                <tr key={i}>{(visibleCols || []).map((col) => <td key={col.key} className="border-b border-r border-slate-100 px-3 py-2.5"><div className="h-4 w-24 animate-pulse rounded bg-slate-200" /></td>)}</tr>
               ))
-            ) : filtered.length === 0 ? (
+            ) : (filtered || []).length === 0 ? (
               <tr>
-                <td colSpan={visibleCols.length} className="px-6 py-16 text-center">
+                <td colSpan={(visibleCols || []).length} className="px-6 py-16 text-center">
                   <Layers className="mx-auto h-8 w-8 text-slate-300" />
                   <p className="mt-3 text-sm font-semibold text-slate-700">No se encontraron registros</p>
                   <p className="mt-1 text-xs text-slate-400">Modifica la página o los filtros de la consulta para ver más resultados.</p>
                 </td>
               </tr>
-            ) : filtered.map((registro, index) => (
+            ) : (filtered || []).map((registro, index) => (
               <tr
                 key={`${registro[rowKey] || ""}-${registro.nr_nota || ""}-${registro.serie || ""}-${index}`}
                 onClick={detail ? () => setSeleccionado(registro) : undefined}
-                className={`transition-colors odd:bg-white even:bg-[#EAF1FF] ${detail ? "cursor-pointer hover:bg-blue-50/70 active:bg-blue-100/70" : "hover:bg-blue-50/40"}${detail ? "" : ""}`}
+                className={`transition-colors odd:bg-white even:bg-[#EAF1FF] ${detail ? "cursor-pointer hover:bg-blue-50/70 active:bg-blue-100/70" : "hover:bg-blue-50/40"}`}
                 title={detail ? "Ver detalle del auto" : undefined}
               >
-                {visibleCols.map((col) => {
+                {(visibleCols || []).map((col) => {
                   const value = formatCell(registro[col.key], col.tipo);
                   const monedaNegativa =
                     col.tipo === "moneda" &&
@@ -699,40 +616,42 @@ export default function InteractiveTable({
           </tbody>
         </table>
       </div>
-      {/* Footer */}
+
+      {/* Footer / Paginación */}
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: C.border, backgroundColor: C.surface }}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-500">Mostrando</span>
             <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1">
               <span className="text-[10px] font-semibold text-slate-400">por pág.</span>
-              <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-transparent text-xs font-bold text-slate-700 outline-none">
+              <select value={pageSize} onChange={(e) => onPageSizeChange && onPageSizeChange(Number(e.target.value))} className="bg-transparent text-xs font-bold text-slate-700 outline-none">
                 <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option><option value={500}>500</option>
               </select>
             </span>
-            <span className="text-slate-500">de <span className="font-bold text-slate-700">{total.toLocaleString("es-MX")}</span></span>
+            <span className="text-slate-500">de <span className="font-bold text-slate-700">{(total || 0).toLocaleString("es-MX")}</span></span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" disabled={loading || page <= 1} onClick={onPrev} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
-          <span className="min-w-[100px] text-center text-xs font-semibold text-slate-600">Página {page} de {totalPages}</span>
-          <button type="button" disabled={loading || page >= totalPages} onClick={onNext} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+          <button type="button" disabled={loading || page <= 1} onClick={handlePrev} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+          <span className="min-w-[100px] text-center text-xs font-semibold text-slate-600">Página {page} de {calcTotalPages}</span>
+          <button type="button" disabled={loading || page >= calcTotalPages} onClick={handleNext} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>
-            {detail && seleccionado && (
-              <DetallePopup
-                registro={seleccionado}
-                columns={columns}
-                onClose={() => setSeleccionado(null)}
-              />
-            )}
 
-            {prospectoSeleccionado && (
-              <ProspectoDigitalPopup
-                prospecto={prospectoSeleccionado}
-                onClose={() => setProspectoSeleccionado(null)}
-              />
-            )}
-          </div>
-        );
-      }
+      {detail && seleccionado && (
+        <DetallePopup
+          registro={seleccionado}
+          columns={columns}
+          onClose={() => setSeleccionado(null)}
+        />
+      )}
+
+      {prospectoSeleccionado && (
+        <ProspectoDigitalPopup
+          prospecto={prospectoSeleccionado}
+          onClose={() => setProspectoSeleccionado(null)}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,5 +1,3 @@
-// src/lib/apiVentasVN.js
-
 import { http, buildQuery } from "./apiClient";
 
 export const CONDICION_USO = {
@@ -9,11 +7,11 @@ export const CONDICION_USO = {
 
 // ==========================================================
 // DASHBOARD AUTOS
-// ==========================================================
-//
 // GET /ventas-vn/api/dashboard/
-//
+// ==========================================================
 // Parámetros:
+// - cond_uso: N | U
+// - q
 // - fecha_desde
 // - fecha_hasta
 // - agencia
@@ -21,7 +19,7 @@ export const CONDICION_USO = {
 // - familia
 // - condicion_pago
 // - venta_digital
-// - cond_uso: N | U
+// - anio_tendencia
 // ==========================================================
 
 export function getVentasVNDashboard(params = {}) {
@@ -29,7 +27,21 @@ export function getVentasVNDashboard(params = {}) {
 }
 
 // ==========================================================
-// DETALLE VW_VN
+// DETALLE AUTOS
+// GET /ventas-vn/api/
+// ==========================================================
+// Parámetros:
+// - cond_uso: N | U
+// - page
+// - page_size
+// - q
+// - fecha_desde
+// - fecha_hasta
+// - agencia
+// - asesor
+// - familia
+// - condicion_pago
+// - venta_digital
 // ==========================================================
 
 export function getVentasVNDetalle(params = {}) {

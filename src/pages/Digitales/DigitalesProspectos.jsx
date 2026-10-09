@@ -1,6 +1,6 @@
 ﻿//volkswagen
 //src/pages/Digitales/DigitalesProspectos.jsx
-import { useMemo, useState, useRef, useEffect, useDeferredValue, useCallback } from "react";
+import { lazy, Suspense, useMemo, useState, useRef, useEffect, useDeferredValue, useCallback } from "react";
 import { Plus, Search, X, Save, User, Van, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MessageSquareShare, Building2, FileText, FileDown, Car, Trash2, Loader2, CalendarPlus, CalendarCheck, Phone, LayoutList, UserStar, ClipboardCheck, BrainCircuit, CalendarRange, Table2, BarChart3, Clock3, AlertCircle, TrendingUp, Activity, Target, Paperclip, UploadCloud, Users, Bot, UserCheck, HandCoins, Gauge, LayoutTemplate, Check, Eye } from "lucide-react";
 import CONCESIONARIO from "/concesionario.png";
 import WAP from "/whatsapp.svg";
@@ -11,20 +11,12 @@ import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { apiCitas } from "../../lib/apiCitas";
 import { useAuth } from "../../auth/AuthContext";
-import ExcelJS from "exceljs";
-import html2canvas from "html2canvas-pro";
-import { jsPDF } from "jspdf";
-import { autoTable } from "jspdf-autotable";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
-import NuevoProspectoModal from "./NuevoProspectoModal";
-import ResultadosIA from "./ResultadosIA";
-import DashboardEjecutivoBDC from "./DashboardEjecutivoBDC";
 import { ETIQUETAS_ESTADO } from "./estadosProspecto";
-import ExportReportModal from "../../components/ExportReportModal";
 
 import {
     canonicalAsesorDigital,
@@ -39,6 +31,12 @@ import {
     obtenerContextoLinea,
     obtenerNombreAsesorSesion,
 } from "../../config/lineasWhatsApp";
+
+// Los módulos costosos se descargan únicamente al abrir su pantalla/modal.
+const NuevoProspectoModal = lazy(() => import("./NuevoProspectoModal"));
+const ResultadosIA = lazy(() => import("./ResultadosIA"));
+const DashboardEjecutivoBDC = lazy(() => import("./DashboardEjecutivoBDC"));
+const ExportReportModal = lazy(() => import("../../components/ExportReportModal"));
 
 const PAGE_SIZE = 200;
 const STORAGE_COLUMNAS_PROSPECTOS = "prospectos_columnas_visibles";
@@ -1194,6 +1192,33 @@ function SkeletonRow({ columnas = 5 }) {
     </tr>);
 }
 
+function IndicadorCargaProspectos({ pagina, cargaLenta, variasLineas }) {
+    return (
+        <div role="status" aria-live="polite" aria-busy="true" className="relative mb-4 overflow-hidden rounded-xl border border-[#131E5C]/15 bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.07]">
+                    <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-[#131E5C] motion-reduce:animate-none" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-[#131E5C]">Cargando prospectos...</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                        {cargaLenta
+                            ? "La consulta está tardando más de lo habitual. Seguimos esperando la respuesta del servidor."
+                            : variasLineas
+                                ? "Consultando las líneas de WhatsApp asignadas y actualizando la información."
+                                : pagina > 1
+                                    ? `Consultando la página ${pagina} de prospectos.`
+                                    : "Consultando registros y actualizando los indicadores."}
+                    </p>
+                </div>
+            </div>
+            <div aria-hidden="true" className="absolute bottom-0 left-0 h-0.5 w-full bg-slate-100">
+                <div className="h-full w-1/3 animate-pulse bg-[#131E5C] motion-reduce:animate-none" />
+            </div>
+        </div>
+    );
+}
+
 function ColumnChooser({ columns, visible, onChange, onClose }) {
     const ref = useRef(null);
 
@@ -1568,13 +1593,26 @@ function ContextMenu({ ctxMenu, onDelete, onClose }) {
         </div>
     </div>, document.body);
 }
+// Cargar los asesores solo cuando el modal de agenda está abierto.
+function SelectorAsesorAgenda({ value, onChange, className }) {
+    const { nombresAsesoresActivos = [] } = useAsesoresGestionComercial();
+    return (
+        <Field label="Asesor Asignado" icon={UserStar}>
+            <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+                <option value="">— Selecciona —</option>
+                {nombresAsesoresActivos.map((nombre) => (
+                    <option key={nombre} value={nombre}>{nombre}</option>
+                ))}
+            </select>
+        </Field>
+    );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DigitalesProspectos() {
     const navigate = useNavigate();
     const { user, ready } = useAuth();
-    const {
-        nombresAsesoresActivos,
-    } = useAsesoresGestionComercial();
+
     const [cases, setCases] = useState([]);
     const [viewMode, setViewMode] = useState("tabla");
     const [highlightedRow, setHighlightedRow] = useState(null);
@@ -1644,7 +1682,7 @@ export default function DigitalesProspectos() {
     const [summaryInfo, setSummaryInfo] = useState(null);
     const [sort, setSort] = useState({ key: null, dir: "asc" });
     const [filters, setFilters] = useState(INITIAL_FILTERS);
-    const [selectedNumeroAsesor, setSelectedNumeroAsesor,] = useState("");
+    const [selectedNumeroAsesor, setSelectedNumeroAsesor] = useState(() => (isAdmin || isCoordinador ? "Todos" : numeroUsuarioSesion));
     const numeroAsesorActivo = useMemo(() => {
         if (selectedNumeroAsesor &&
             selectedNumeroAsesor !== "Todos") {
@@ -1658,6 +1696,15 @@ export default function DigitalesProspectos() {
     const [serverKpis, setServerKpis] = useState(null);
     const [prospectoModal, setProspectoModal] = useState({ open: false, mode: "create", prospectoId: null, estadoInicial: "", tieneChatInicial: false });
     const [loadingCases, setLoadingCases] = useState(false);
+    const [cargaLenta, setCargaLenta] = useState(false);
+    const [errorCargaProspectos, setErrorCargaProspectos] = useState("");
+    const cargaProspectosId = useRef(0);
+    useEffect(() => {
+        setCargaLenta(false);
+        if (!loadingCases) return;
+        const timer = setTimeout(() => setCargaLenta(true), 9000);
+        return () => clearTimeout(timer);
+    }, [loadingCases]);
     const [fullCases, setFullCases] = useState([]);
     const [loadingFullCases, setLoadingFullCases] = useState(false);
     const [exportandoReporte, setExportandoReporte] = useState(false);
@@ -1728,235 +1775,86 @@ export default function DigitalesProspectos() {
         }
     }, [numeroAsesorActivo, numeroUsuarioSesion]);
 
-    const usaPaginacionServidor = !(
-        isCoordinador &&
-        selectedNumeroAsesor === "Todos"
-    );
+    // Para cuatro líneas se pintan 100 filas por página; el resto conserva 200.
+    const pageSizeActual = isCoordinador && selectedNumeroAsesor === "Todos" ? 100 : PAGE_SIZE;
+    // La tabla SIEMPRE usa paginación real en Django, incluso para coordinadores.
+    const usaPaginacionServidor = true;
 
     const cargarProspectosPorLinea = useCallback(async () => {
         if (!ready) return;
-
-        // Compatibilidad temporal:
-        // el coordinador en "Todos" combina varias líneas.
-        if (!usaPaginacionServidor) {
-            if (!numerosPermitidosCoordinador.length) {
-                setCases([]);
-                setTotalProspectos(0);
-                setServerKpis(null);
-                return;
-            }
-
-            setLoadingCases(true);
-
-            try {
-                const respuestas = await Promise.allSettled(
-                    numerosPermitidosCoordinador.map((numero) =>
-                        listarProspectosDigitalesCompletos({
-                            numero_asesor: numero,
-                            ligero: 1,
-                        })
-                    )
-                );
-
-                const registrosPorId = new Map();
-
-                respuestas.forEach((resultado, index) => {
-                    if (resultado.status !== "fulfilled") {
-                        console.error(
-                            "No se pudo cargar la línea:",
-                            numerosPermitidosCoordinador[index],
-                            resultado.reason
-                        );
-                        return;
-                    }
-
-                    getListItems(resultado.value)
-                        .map(normalizeProspecto)
-                        .forEach((registro) => {
-                            if (
-                                registro?.id_exp !== null &&
-                                registro?.id_exp !== undefined
-                            ) {
-                                registrosPorId.set(
-                                    registro.id_exp,
-                                    registro
-                                );
-                            }
-                        });
-                });
-
-                const registros = Array.from(
-                    registrosPorId.values()
-                );
-
-                setCases(registros);
-                setTotalProspectos(registros.length);
-                setServerKpis(null);
-            } catch (error) {
-                console.error(
-                    "Error cargando prospectos del coordinador:",
-                    error
-                );
-
-                setCases([]);
-                setTotalProspectos(0);
-                setServerKpis(null);
-            } finally {
-                setLoadingCases(false);
-            }
-
-            return;
-        }
-
-        const params = {
-            ligero: 1,
-            page,
-            page_size: PAGE_SIZE,
+        const solicitud = ++cargaProspectosId.current;
+        const params = { ligero: 1, page, page_size: pageSizeActual };
+        const mostrarVacio = () => {
+            if (solicitud !== cargaProspectosId.current) return;
+            setCases([]);
+            setTotalProspectos(0);
+            setServerKpis(null);
+            setErrorCargaProspectos("");
+            setLoadingCases(false);
         };
 
-        if (isAdmin && selectedNumeroAsesor === "Todos") {
+        if ((isAdmin || isCoordinador) && selectedNumeroAsesor === "Todos") {
+            if (isCoordinador && !numerosPermitidosCoordinador.length) {
+                mostrarVacio();
+                return;
+            }
+            // Django aplica el alcance de las líneas del usuario autenticado.
             params.todos = 1;
         } else {
-            let numero = "";
-
-            if (isAdmin || isCoordinador) {
-                numero = normalizaTelefonoMx(
-                    selectedNumeroAsesor
-                );
-            } else {
-                numero =
-                    numeroAsesorActivo ||
-                    numeroUsuarioSesion;
-            }
-
-            if (!numero) {
-                setCases([]);
-                setTotalProspectos(0);
-                setServerKpis(null);
+            const numero = (isAdmin || isCoordinador)
+                ? normalizaTelefonoMx(selectedNumeroAsesor)
+                : numeroAsesorActivo || numeroUsuarioSesion;
+            if (!numero || (isCoordinador && !numerosPermitidosCoordinador.includes(numero)) ||
+                (!isAdmin && !isCoordinador && !numerosUsuarioSesion.includes(numero))) {
+                mostrarVacio();
                 return;
             }
-
-            if (
-                isCoordinador &&
-                !numerosPermitidosCoordinador.includes(numero)
-            ) {
-                setCases([]);
-                setTotalProspectos(0);
-                setServerKpis(null);
-                return;
-            }
-
-            if (
-                !isAdmin &&
-                !isCoordinador &&
-                !numerosUsuarioSesion.includes(numero)
-            ) {
-                setCases([]);
-                setTotalProspectos(0);
-                setServerKpis(null);
-                return;
-            }
-
             params.numero_asesor = numero;
         }
 
         const search = deferredQ.trim();
-
-        if (search) {
-            params.search = search;
-        }
-
-        if (filters.agencia !== "Todos") {
-            params.agencia = filters.agencia;
-        }
-
-        if (filters.estado !== "Todos") {
-            params.estado = filters.estado;
-        }
-
-        if (filters.linea !== "Todos") {
-            params.business = filters.linea;
-        }
-
-        if (filters.buro !== "Todos") {
-            params.buro = filters.buro;
-        }
-
-        if (filters.formaPago !== "Todos") {
-            params.forma_pago = filters.formaPago;
-        }
-
-        if (filters.tipoCliente !== "Todos") {
-            params.tipo_cliente = filters.tipoCliente;
-        }
-
-        if (filters.fechaRegistroDesde) {
-            params.fecha_registro_desde =
-                filters.fechaRegistroDesde;
-        }
-
-        if (filters.fechaRegistroHasta) {
-            params.fecha_registro_hasta =
-                filters.fechaRegistroHasta;
-        }
-
+        if (search) params.search = search;
+        if (filters.agencia !== "Todos") params.agencia = filters.agencia;
+        if (filters.estado !== "Todos") params.estado = filters.estado;
+        if (filters.linea !== "Todos") params.business = filters.linea;
+        if (filters.buro !== "Todos") params.buro = filters.buro;
+        if (filters.formaPago !== "Todos") params.forma_pago = filters.formaPago;
+        if (filters.tipoCliente !== "Todos") params.tipo_cliente = filters.tipoCliente;
+        if (filters.fechaRegistroDesde) params.fecha_registro_desde = filters.fechaRegistroDesde;
+        if (filters.fechaRegistroHasta) params.fecha_registro_hasta = filters.fechaRegistroHasta;
         if (sort.key) {
             params.sort_key = sort.key;
             params.sort_dir = sort.dir;
         }
 
         setLoadingCases(true);
-
+        setErrorCargaProspectos("");
         try {
-            const data =
-                await api.digitalesListProspectos(params);
-
-            const registros = getListItems(data).map(
-                normalizeProspecto
-            );
-
+            const data = await api.digitalesListProspectos(params);
+            if (solicitud !== cargaProspectosId.current) return;
+            const registros = getListItems(data).map(normalizeProspecto);
             setCases(registros);
-
-            setTotalProspectos(
-                Number(
-                    data?.count ??
-                    registros.length
-                )
-            );
-
-            setServerKpis(
-                data?.kpis ?? null
-            );
+            setTotalProspectos(Number(data?.count ?? registros.length));
+            setServerKpis(data?.kpis ?? null);
         } catch (error) {
-            console.error(
-                "Error cargando prospectos paginados:",
-                error
-            );
-
+            if (solicitud !== cargaProspectosId.current) return;
+            console.error("Error cargando prospectos paginados:", error);
+            setErrorCargaProspectos("No se pudieron cargar los prospectos. Revisa tu conexión e inténtalo nuevamente.");
             setCases([]);
             setTotalProspectos(0);
             setServerKpis(null);
         } finally {
-            setLoadingCases(false);
+            if (solicitud === cargaProspectosId.current) setLoadingCases(false);
         }
     }, [
-        ready,
-        usaPaginacionServidor,
-        isAdmin,
-        isCoordinador,
-        selectedNumeroAsesor,
-        numeroAsesorActivo,
-        numeroUsuarioSesion,
-        numerosUsuarioSesion,
-        numerosPermitidosCoordinador,
-        page,
-        deferredQ,
-        filters,
-        sort,
+        ready, isAdmin, isCoordinador, selectedNumeroAsesor,
+        numeroAsesorActivo, numeroUsuarioSesion, numerosUsuarioSesion,
+        numerosPermitidosCoordinador, page, pageSizeActual, deferredQ, filters, sort,
     ]);
 
     useEffect(() => {
         cargarProspectosPorLinea();
+        return () => { cargaProspectosId.current += 1; };
     }, [cargarProspectosPorLinea]);
     useEffect(() => {
         if (!ready) return;
@@ -2167,7 +2065,7 @@ export default function DigitalesProspectos() {
 
     const totalPages = Math.max(
         1,
-        Math.ceil(totalFiltrado / PAGE_SIZE)
+        Math.ceil(totalFiltrado / pageSizeActual)
     );
 
     useEffect(() => {
@@ -2181,10 +2079,10 @@ export default function DigitalesProspectos() {
             usaPaginacionServidor
                 ? sorted
                 : sorted.slice(
-                    (page - 1) * PAGE_SIZE,
-                    page * PAGE_SIZE
+                    (page - 1) * pageSizeActual,
+                    page * pageSizeActual
                 ),
-        [sorted, page, usaPaginacionServidor,]
+        [sorted, page, usaPaginacionServidor, pageSizeActual]
     );
 
     const kpisLocales = useMemo(() => {
@@ -2290,7 +2188,7 @@ export default function DigitalesProspectos() {
             };
 
             if (
-                isAdmin &&
+                (isAdmin || isCoordinador) &&
                 selectedNumeroAsesor === "Todos"
             ) {
                 params.todos = 1;
@@ -2432,28 +2330,18 @@ export default function DigitalesProspectos() {
             const lineaSolicitada = reportFilters.linea_whatsapp;
             let filasRaw = [];
 
-            if (isAdmin) {
+            if (isAdmin || isCoordinador) {
                 const todos = !lineaSolicitada || lineaSolicitada === "Todos";
-                filasRaw = await listarProspectosDigitalesCompletos(
-                    crearParams(todos ? "" : lineaSolicitada, todos)
-                );
-            } else {
-                if (!lineaSolicitada || lineaSolicitada === "Todos") {
-                    const respuestas = await Promise.all(
-                        numerosPermitidosCoordinador.map((numero) =>
-                            listarProspectosDigitalesCompletos(crearParams(numero, false))
-                        )
-                    );
-                    const mapa = new Map();
-                    respuestas.flat().forEach((item) => mapa.set(item.id, item));
-                    filasRaw = Array.from(mapa.values());
-                } else {
-                    const numero = normalizaTelefonoMx(lineaSolicitada);
-                    if (!numerosPermitidosCoordinador.includes(numero)) {
-                        throw new Error("La línea seleccionada no está permitida para este coordinador.");
-                    }
-                    filasRaw = await listarProspectosDigitalesCompletos(crearParams(numero, false));
+                const numero = todos ? "" : normalizaTelefonoMx(lineaSolicitada);
+                if (isCoordinador && !todos && !numerosPermitidosCoordinador.includes(numero)) {
+                    throw new Error("La línea seleccionada no está permitida para este coordinador.");
                 }
+                if (isCoordinador && todos && !numerosPermitidosCoordinador.length) {
+                    throw new Error("El coordinador no tiene líneas autorizadas.");
+                }
+                filasRaw = await listarProspectosDigitalesCompletos(crearParams(numero, todos));
+            } else {
+                throw new Error("No tienes permisos para generar reportes.");
             }
 
             const filasExportar = getListItems(filasRaw).map(normalizeProspecto);
@@ -2545,6 +2433,7 @@ export default function DigitalesProspectos() {
                     throw new Error("No se pudo preparar la vista visual del reporte.");
                 }
 
+                const { default: html2canvas } = await import("html2canvas-pro");
                 canvas = await html2canvas(reporteProspectosRef.current, {
                     scale: 1.35,
                     useCORS: true,
@@ -2559,6 +2448,7 @@ export default function DigitalesProspectos() {
 
             if (config.format === "pdf") {
                 const orientation = config.orientation === "portrait" ? "portrait" : "landscape";
+                const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
                 const doc = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
                 doc.setProperties({
                     title: config.title || "Reporte de Prospectos Digitales",
@@ -2622,6 +2512,7 @@ export default function DigitalesProspectos() {
 
                 doc.save(nombreReporteProspectos(config, "pdf"));
             } else {
+                const { default: ExcelJS } = await import("exceljs");
                 const workbook = new ExcelJS.Workbook();
                 workbook.creator = "CRM Grupo Automotriz R&R";
                 workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
@@ -2956,14 +2847,14 @@ export default function DigitalesProspectos() {
     };
     const resetFilters = () => {
         setFilters(INITIAL_FILTERS);
-        setSelectedNumeroAsesor(isAdmin ? "Todos" : numeroUsuarioSesion || "");
+        setSelectedNumeroAsesor(isAdmin || isCoordinador ? "Todos" : numeroUsuarioSesion || "");
         setPage(1);
     };
     const hayFiltrosActivos = useMemo(() => {
         return (
             Object.keys(INITIAL_FILTERS).some((key) => filters[key] !== INITIAL_FILTERS[key]) ||
             (filters.q || "").trim() !== "" ||
-            (isAdmin ? selectedNumeroAsesor !== "Todos" : selectedNumeroAsesor !== (numeroUsuarioSesion || ""))
+            (isAdmin || isCoordinador ? selectedNumeroAsesor !== "Todos" : selectedNumeroAsesor !== (numeroUsuarioSesion || ""))
         );
     }, [filters, selectedNumeroAsesor, isAdmin, numeroUsuarioSesion]);
     // Resumen legible de los filtros activos para el modal de exportación.
@@ -3041,6 +2932,15 @@ export default function DigitalesProspectos() {
                 </button>
             </div>
         </div>
+        {viewMode === "tabla" && loadingCases && (
+            <IndicadorCargaProspectos pagina={page} cargaLenta={cargaLenta} variasLineas={isCoordinador && selectedNumeroAsesor === "Todos"} />
+        )}
+        {viewMode === "tabla" && !loadingCases && errorCargaProspectos && (
+            <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-sm font-semibold text-red-700">{errorCargaProspectos}</p>
+                <button type="button" onClick={() => cargarProspectosPorLinea()} className="rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800">Reintentar</button>
+            </div>
+        )}
         {!["ejecutivo", "resultados"].includes(viewMode) ? (<>
             {/* KPIs arriba */}
             <div className="mb-5 overflow-hidden rounded-2xl bg-white">
@@ -3144,9 +3044,9 @@ export default function DigitalesProspectos() {
             </div>
         </>) : null}
         {/* Vista Resultados IA */}
-        {viewMode === "resultados" && <ResultadosIA numeroAsesorInicial={selectedNumeroAsesor !== "Todos" ? selectedNumeroAsesor : ""} agenciaInicial={filters.agencia !== "Todos" ? filters.agencia : ""} businessInicial={filters.linea !== "Todos" ? filters.linea : ""} />}
+        {viewMode === "resultados" && <Suspense fallback={<div className="p-6 text-sm text-slate-500">Cargando resultados...</div>}><ResultadosIA numeroAsesorInicial={selectedNumeroAsesor !== "Todos" ? selectedNumeroAsesor : ""} agenciaInicial={filters.agencia !== "Todos" ? filters.agencia : ""} businessInicial={filters.linea !== "Todos" ? filters.linea : ""} /></Suspense>}
         {/* Vista Ejecutivo BDC */}
-        {viewMode === "ejecutivo" && (<DashboardEjecutivoBDC numeroAsesor={selectedNumeroAsesor} versionOperativa={versionOperativaBDC} />)}
+        {viewMode === "ejecutivo" && <Suspense fallback={<div className="p-6 text-sm text-slate-500">Cargando BDC...</div>}><DashboardEjecutivoBDC numeroAsesor={selectedNumeroAsesor} versionOperativa={versionOperativaBDC} /></Suspense>}
         {/* Vista Gráficos */}
         {viewMode === "graficos" && <VistaGraficos rows={usaPaginacionServidor ? fullCases : sorted} />}
         {/* Vista Tabla */}
@@ -3303,7 +3203,7 @@ export default function DigitalesProspectos() {
                                             {columnasVisibles.map((col) => celdas[col.key] ?? null)}
                                         </tr>);
                                     })}
-                                {!loadingCases && paginatedRows.length === 0 && (<tr>
+                                {!loadingCases && !errorCargaProspectos && paginatedRows.length === 0 && (<tr>
                                     <td colSpan={columnasVisibles.length} className="px-4 py-12 text-center text-slate-400">
                                         No hay resultados con esos filtros.
                                     </td>
@@ -3377,25 +3277,27 @@ export default function DigitalesProspectos() {
                                 </div>
                             </button>);
                         })}
-                    {!loadingCases && paginatedRows.length === 0 && <div className="rounded-2xl border border-black/10 bg-white p-10 text-center text-slate-400">No hay resultados con esos filtros.</div>}
+                    {!loadingCases && !errorCargaProspectos && paginatedRows.length === 0 && <div className="rounded-2xl border border-black/10 bg-white p-10 text-center text-slate-400">No hay resultados con esos filtros.</div>}
                 </div>
             </div>
         </div>)}
 
-        <NuevoProspectoModal
-            open={prospectoModal.open}
-            mode={prospectoModal.mode}
-            prospectoId={prospectoModal.prospectoId}
-            estadoInicial={prospectoModal.estadoInicial}
-            tieneChatInicial={prospectoModal.tieneChatInicial}
-            onClose={closeProspectoModal}
-            onGuardado={handleProspectoGuardado}
-            onPlantillaEnviada={handlePlantillaProspectoEnviada}
-            numeroAsesor={numeroAsesorActivo || numeroUsuarioSesion || ""}
-            requestContext={isAdmin && selectedNumeroAsesor === "Todos" ? { todos: 1 } : numeroAsesorActivo ? { numero_asesor: numeroAsesorActivo } : {}}
-            user={user}
-            isAdmin={isAdmin}
-        />
+        {prospectoModal.open && <Suspense fallback={<div className="p-4 text-sm text-slate-500">Cargando formulario...</div>}>
+            <NuevoProspectoModal
+                open={prospectoModal.open}
+                mode={prospectoModal.mode}
+                prospectoId={prospectoModal.prospectoId}
+                estadoInicial={prospectoModal.estadoInicial}
+                tieneChatInicial={prospectoModal.tieneChatInicial}
+                onClose={closeProspectoModal}
+                onGuardado={handleProspectoGuardado}
+                onPlantillaEnviada={handlePlantillaProspectoEnviada}
+                numeroAsesor={numeroAsesorActivo || numeroUsuarioSesion || ""}
+                requestContext={isAdmin && selectedNumeroAsesor === "Todos" ? { todos: 1 } : numeroAsesorActivo ? { numero_asesor: numeroAsesorActivo } : {}}
+                user={user}
+                isAdmin={isAdmin}
+            />
+        </Suspense>}
         <ContextMenu ctxMenu={ctxMenu} onDelete={eliminarCaso} onClose={() => setCtxMenu({ open: false, row: null })} />
         {/* Modal Resumen */}
         <Modal open={openSummaryModal} title={summaryInfo ? `Resumen IA · ${summaryInfo.nombre || `Prospecto ${summaryInfo.id_exp}`}` : "Resumen IA"} onClose={closeSummaryModal} footer={<button onClick={closeSummaryModal} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
@@ -3440,16 +3342,11 @@ export default function DigitalesProspectos() {
                 <Field label="Fecha y Hora de cita" icon={CalendarDays}>
                     <input type="datetime-local" value={drafter.fecha_cita || ""} onChange={(e) => setDrafter((p) => ({ ...p, fecha_cita: e.target.value }))} className={cls(inputBase, inputOk)} />
                 </Field>
-                <Field label="Asesor Asignado" icon={UserStar}>
-                    <select value={drafter.asesor_solicita || ""} onChange={(e) => setDrafter((p) => ({ ...p, asesor_solicita: e.target.value }))} className={cls(inputBase, inputOk)}>
-                        <option value="">— Selecciona —</option>
-                        {nombresAsesoresActivos.map((n) => (
-                            <option key={n} value={n}>
-                                {n}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
+                <SelectorAsesorAgenda
+                    value={drafter.asesor_solicita || ""}
+                    onChange={(nombre) => setDrafter((p) => ({ ...p, asesor_solicita: nombre }))}
+                    className={cls(inputBase, inputOk)}
+                />
                 <Field label="Tipo de cita" icon={LayoutList}>
                     <input value="Digital" disabled className={cls(inputBase, inputOk, "cursor-not-allowed opacity-80")} />
                 </Field>
@@ -3505,25 +3402,27 @@ export default function DigitalesProspectos() {
             </div>
         )}
 
-        {puedeExportarReportes && (
-            <ExportReportModal
-                isOpen={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                moduleName="Prospectos Digitales"
-                storageKey="prospectos-digitales"
-                currentFilters={{
-                    ...filters,
-                    linea_whatsapp: selectedNumeroAsesor || "Todos",
-                }}
-                filterDefinitions={filtrosConfiguradorReporte}
-                currentColumns={columnasReporteActuales}
-                availableColumns={COLUMNAS_REPORTE_PROSPECTOS}
-                totalRecords={totalFiltrado}
-                formats={["excel", "pdf"]}
-                sectionOptions={SECCIONES_REPORTE_PROSPECTOS}
-                chartOptions={GRAFICAS_REPORTE_PROSPECTOS}
-                onGenerate={generarReporteProspectos}
-            />
+        {puedeExportarReportes && showExportModal && (
+            <Suspense fallback={<div className="p-4 text-sm text-slate-500">Cargando exportación...</div>}>
+                <ExportReportModal
+                    isOpen={showExportModal}
+                    onClose={() => setShowExportModal(false)}
+                    moduleName="Prospectos Digitales"
+                    storageKey="prospectos-digitales"
+                    currentFilters={{
+                        ...filters,
+                        linea_whatsapp: selectedNumeroAsesor || "Todos",
+                    }}
+                    filterDefinitions={filtrosConfiguradorReporte}
+                    currentColumns={columnasReporteActuales}
+                    availableColumns={COLUMNAS_REPORTE_PROSPECTOS}
+                    totalRecords={totalFiltrado}
+                    formats={["excel", "pdf"]}
+                    sectionOptions={SECCIONES_REPORTE_PROSPECTOS}
+                    chartOptions={GRAFICAS_REPORTE_PROSPECTOS}
+                    onGenerate={generarReporteProspectos}
+                />
+            </Suspense>
         )}
     </div>);
 }

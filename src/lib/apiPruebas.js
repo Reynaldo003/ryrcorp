@@ -2,7 +2,7 @@
 
 const API =
   import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
-// import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+//import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const LOGIN_PATH = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/login`;
 const ACCESS_REFRESH_MARGIN_SECONDS = 60;
@@ -594,7 +594,7 @@ async function parseErrorResponse(response) {
   return text;
 }
 
-async function http(
+async function httpInterno(
   path,
   {
     method = "GET",
@@ -677,7 +677,7 @@ async function http(
       throw error;
     }
 
-    return http(path, {
+    return httpInterno(path, {
       method,
       body,
       headers,
@@ -751,6 +751,32 @@ function getNumeroAsesorIA(numeroAsesor) {
 
 function rejectMissingId(message = "Falta el ID solicitado.") {
   return Promise.reject(new Error(message));
+}
+
+// Una misma petición GET simultánea se ejecuta una sola vez por sesión/token.
+// No almacenamos respuestas: POST/PATCH y GET posteriores consultan datos actuales.
+const solicitudesGETEnCurso = new Map();
+async function http(path, opciones = {}) {
+  const metodo = String(opciones.method || "GET").toUpperCase();
+  if (
+    metodo !== "GET" ||
+    opciones.body !== undefined ||
+    opciones.headers ||
+    (opciones.responseType && opciones.responseType !== "auto")
+  ) {
+    return httpInterno(path, opciones);
+  }
+  const clave = `${getAccessToken()}|${path}`;
+  const previa = solicitudesGETEnCurso.get(clave);
+  if (previa) return previa;
+  const solicitud = httpInterno(path, opciones);
+  solicitudesGETEnCurso.set(clave, solicitud);
+  try {
+    return await solicitud;
+  } finally {
+    if (solicitudesGETEnCurso.get(clave) === solicitud)
+      solicitudesGETEnCurso.delete(clave);
+  }
 }
 
 export const api = {

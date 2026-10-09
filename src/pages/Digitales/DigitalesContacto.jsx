@@ -87,8 +87,8 @@ const CHAT_LIST_PAGE_SIZE = 20;
 const CHAT_LIST_DAYS = "";
 const CHAT_UPDATES_LIMIT = 40;
 const CHAT_CACHE_LIMIT = 80;
-const CHAT_UPDATES_INTERVAL = 2500;
-const CHAT_LIST_REFRESH_INTERVAL = 15000;
+const CHAT_UPDATES_INTERVAL = 8000;
+const CHAT_LIST_REFRESH_INTERVAL = 45000;
 const CHAT_SEARCH_DELAY = 300;
 const MAX_RECORDING_SECONDS = 300;
 
@@ -3078,8 +3078,7 @@ export default function DigitalesContacto() {
             params.set("before", "");
             params.set("before_id", "");
 
-            // Evita respuestas cacheadas.
-            params.set("_ts", String(Date.now()));
+            // URL estable para permitir agrupar solicitudes GET simultáneas.
 
             if (busqueda) {
                 params.set("q", busqueda);

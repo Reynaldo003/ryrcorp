@@ -1,3 +1,4 @@
+//src/pages/AdministracionAsesores/AsesoresCatalogo.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
     UsersRound,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { http } from "../../lib/apiClient";
-
+import { invalidarCacheAsesores } from "../../lib/apiAsesores";
 import {
     AGENCIAS_DIGITALES,
 } from "../../config/asesoresGestionComercial";
@@ -256,19 +257,13 @@ export default function AsesoresCatalogo() {
 
     const guardarAsesor = async (event) => {
         event.preventDefault();
-
         const nombre = texto(form.nombre);
-
         if (!nombre) {
-            setError(
-                "El nombre del asesor es obligatorio."
-            );
+            setError("El nombre del asesor es obligatorio.");
             return;
         }
-
         setGuardando(true);
         setError("");
-
         const payload = {
             nombre,
             telefono: texto(form.telefono),
@@ -277,27 +272,22 @@ export default function AsesoresCatalogo() {
             agencia: texto(form.agencia),
             activo: Boolean(form.activo),
         };
-
         try {
             if (asesorEditando?.id) {
-                await http(
-                    `/digitales/asesores/admin/${asesorEditando.id}/`,
-                    {
-                        method: "PATCH",
-                        data: payload,
-                    }
-                );
+                await http(`/digitales/asesores/admin/${asesorEditando.id}/`, {
+                    method: "PATCH",
+                    data: payload,
+                });
             } else {
-                await http(
-                    "/digitales/asesores/admin/",
-                    {
-                        method: "POST",
-                        data: payload,
-                    }
-                );
+                await http("/digitales/asesores/admin/", {
+                    method: "POST",
+                    data: payload,
+                });
             }
-
-            cerrarModal();
+            invalidarCacheAsesores();
+            setModalAbierto(false);
+            setAsesorEditando(null);
+            setForm(FORM_INICIAL);
             await cargarAsesores();
         } catch (err) {
             setError(mensajeError(err));
@@ -327,12 +317,9 @@ export default function AsesoresCatalogo() {
     const confirmarCambioEstado = async () => {
         const asesor = confirmacionEstado.asesor;
         const nuevoEstado = confirmacionEstado.nuevoEstado;
-
         if (!asesor) return;
-
         setProcesandoEstado(true);
         setError("");
-
         try {
             await http(`/digitales/asesores/admin/${asesor.id}/`, {
                 method: "PATCH",
@@ -340,13 +327,12 @@ export default function AsesoresCatalogo() {
                     activo: nuevoEstado,
                 },
             });
-
+            invalidarCacheAsesores();
             setConfirmacionEstado({
                 abierto: false,
                 asesor: null,
                 nuevoEstado: false,
             });
-
             await cargarAsesores();
         } catch (err) {
             setError(mensajeError(err));
@@ -471,7 +457,7 @@ export default function AsesoresCatalogo() {
                                     {tipo.label}
                                 </option>
                             ))}
-                            </select>
+                        </select>
 
                         <select
                             value={filtroArea}
@@ -911,95 +897,95 @@ export default function AsesoresCatalogo() {
                                 </button>
                             </div>
 
-                                               </form>
-                                        </div>
-                                    </div>
-                                )}
-                                {confirmacionEstado.abierto && (
-                                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4">
-                                        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        </form>
+                    </div>
+                </div>
+            )}
+            {confirmacionEstado.abierto && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4">
+                    <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-                                            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-                                                <div>
-                                                    <h3 className="text-lg font-semibold text-slate-900">
-                                                        Confirmar acción
-                                                    </h3>
+                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900">
+                                    Confirmar acción
+                                </h3>
 
-                                                    <p className="mt-1 text-xs text-slate-500">
-                                                        Confirma el cambio de estado del asesor.
-                                                    </p>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={cerrarConfirmacionEstado}
-                                                    disabled={procesandoEstado}
-                                                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-                                                >
-                                                    <X size={20} />
-                                                </button>
-                                            </div>
-
-
-                                            <div className="px-6 py-5">
-                                                <div
-                                                    className={
-                                                        confirmacionEstado.nuevoEstado
-                                                            ? "rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4"
-                                                            : "rounded-xl border border-red-100 bg-red-50 px-4 py-4"
-                                                    }
-                                                >
-                                                    <p className="text-sm text-slate-700">
-                                                        {confirmacionEstado.nuevoEstado
-                                                            ? "¿Deseas activar a "
-                                                            : "¿Deseas desactivar a "}
-
-                                                        <span className="font-semibold text-slate-900">
-                                                            {confirmacionEstado.asesor?.nombre}
-                                                        </span>
-                                                        ?
-                                                    </p>
-                                                </div>
-                                            </div>
-
-
-                                            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={cerrarConfirmacionEstado}
-                                                    disabled={procesandoEstado}
-                                                    className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-                                                >
-                                                    Cancelar
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={confirmarCambioEstado}
-                                                    disabled={procesandoEstado}
-                                                    className={
-                                                        confirmacionEstado.nuevoEstado
-                                                            ? "inline-flex min-w-[120px] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
-                                                            : "inline-flex min-w-[120px] items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
-                                                    }
-                                                >
-                                                    {procesandoEstado && (
-                                                        <LoaderCircle
-                                                            size={17}
-                                                            className="animate-spin"
-                                                        />
-                                                    )}
-
-                                                    {procesandoEstado
-                                                        ? "Procesando..."
-                                                        : confirmacionEstado.nuevoEstado
-                                                        ? "Activar"
-                                                        : "Desactivar"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Confirma el cambio de estado del asesor.
+                                </p>
                             </div>
-                        );
-                    }
+
+                            <button
+                                type="button"
+                                onClick={cerrarConfirmacionEstado}
+                                disabled={procesandoEstado}
+                                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+
+                        <div className="px-6 py-5">
+                            <div
+                                className={
+                                    confirmacionEstado.nuevoEstado
+                                        ? "rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4"
+                                        : "rounded-xl border border-red-100 bg-red-50 px-4 py-4"
+                                }
+                            >
+                                <p className="text-sm text-slate-700">
+                                    {confirmacionEstado.nuevoEstado
+                                        ? "¿Deseas activar a "
+                                        : "¿Deseas desactivar a "}
+
+                                    <span className="font-semibold text-slate-900">
+                                        {confirmacionEstado.asesor?.nombre}
+                                    </span>
+                                    ?
+                                </p>
+                            </div>
+                        </div>
+
+
+                        <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+                            <button
+                                type="button"
+                                onClick={cerrarConfirmacionEstado}
+                                disabled={procesandoEstado}
+                                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={confirmarCambioEstado}
+                                disabled={procesandoEstado}
+                                className={
+                                    confirmacionEstado.nuevoEstado
+                                        ? "inline-flex min-w-[120px] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                                        : "inline-flex min-w-[120px] items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
+                                }
+                            >
+                                {procesandoEstado && (
+                                    <LoaderCircle
+                                        size={17}
+                                        className="animate-spin"
+                                    />
+                                )}
+
+                                {procesandoEstado
+                                    ? "Procesando..."
+                                    : confirmacionEstado.nuevoEstado
+                                        ? "Activar"
+                                        : "Desactivar"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

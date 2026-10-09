@@ -1,38 +1,45 @@
 // src/pages/Inventario/InventarioIndex.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiInventario } from "../../lib/apiInventario";
-import { useECharts } from "./useECharts";
-import "./inventario.css";
+import {
+  ArrowUpRight, BarChart3, Building2, Calendar, Car, ChevronDown, ChevronUp,
+  CircleDollarSign, Clock, DollarSign, Eraser, FileSpreadsheet, FileText,
+  Landmark, Layers, LoaderCircle, Package, Percent, RefreshCw, Search,
+  ShieldAlert, Table2, TrendingUp, Users, WalletCards, X,
+} from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+} from "recharts";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
-import { FileSpreadsheet, FileText, LoaderCircle } from "lucide-react";
-import vwDark from "../../assets/vw_dark.png";
+import { apiInventario } from "../../lib/apiInventario";
+import { getVentasVNDashboard, getVentasVNDetalle } from "../../lib/apiVentasVN";
+import { useECharts } from "./useECharts";
+import "./inventario.css";
 
-const BRAND_BLUE = "#131E5C";
+const C = {
+  navy: "#001E50",
+  navyDark: "#0A1340",
+  navyLight: "#1677FF",
+  border: "#E4E7F0",
+  muted: "#8891AD",
+  text: "#1A1F3C",
+};
 
 const COLORES = [
-  "#0B143F",
+  "#001E50",
   "#10205A",
   "#142D76",
-  "#183B91",
+  "#1677FF",
   "#1C49AC",
   "#2058C6",
   "#2868D5",
   "#3479E0",
   "#438BE8",
 ];
-
-const PALETA_AGENCIAS = COLORES;
-const PALETA_ESTATUS = COLORES;
-
-const PALETA_CONDICION = {
-  Nuevo: BRAND_BLUE,
-  Usado: COLORES[7],
-  default: COLORES[4],
-};
 
 const ESTATUS_EXCLUIDOS = ["V", "O", "C", "D", "P", "T"];
 
@@ -44,6 +51,8 @@ const MODELOS_COMERCIALES = [
   "CADDY",
 ];
 
+const MESES_CORTOS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+
 function normalizarTexto(valor) {
   return String(valor ?? "")
     .normalize("NFD")
@@ -52,79 +61,64 @@ function normalizarTexto(valor) {
     .toUpperCase();
 }
 
-const KPI_ICONS = {
-  "Total activo": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"
-    />
-  ),
-  "Agencia líder": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"
-    />
-  ),
-  "% Nuevos": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M9 14.25l6-6m4.5-3.493V21.75l-4.125-2.062-4.125 2.063-4.125-2.063L3 21.75V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"
-    />
-  ),
-  "Costo inventario": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-    />
-  ),
-  "Fuera de gracia": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"
-    />
-  ),
-  "Costo financiero": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33"
-    />
-  ),
-  "Tasa aplicada": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M7.5 7.5h.008v.008H7.5V7.5zm9 9h.008v.008H16.5V16.5zM18 6L6 18"
-    />
-  ),
-  "Periodo de gracia": (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M6.75 3v2.25M17.25 3v2.25M3.75 9h16.5M5.25 5.25h13.5a1.5 1.5 0 011.5 1.5v12a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-12a1.5 1.5 0 011.5-1.5z"
-    />
-  ),
+const formatYMD = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
+
+function obtenerAgenciaVentas(nombreAgenciaInv, esComercial) {
+  if (esComercial) return "R&R VC";
+  if (!nombreAgenciaInv) return "";
+
+  const n = normalizarTexto(nombreAgenciaInv);
+  if (n.includes("CORDOBA")) return "VW Córdoba";
+  if (n.includes("ORIZABA")) return "VW Orizaba";
+  if (n.includes("POZA RICA")) return "VW Poza Rica";
+  if (n.includes("TUXPAN")) return "VW Tuxpan";
+  if (n.includes("TUXTEPEC")) return "VW Tuxtepec";
+
+  return nombreAgenciaInv;
+}
+
+function procesarRespuestaVentas(rawResponse) {
+  if (!rawResponse) return { lista: [], resumen: null };
+
+  if (Array.isArray(rawResponse)) {
+    return { lista: rawResponse, resumen: null };
+  }
+
+  if (typeof rawResponse === "object") {
+    const pos =
+      rawResponse.data ||
+      rawResponse.ventas ||
+      rawResponse.detalle ||
+      rawResponse.items ||
+      rawResponse.resultados ||
+      rawResponse.registros ||
+      rawResponse.rows ||
+      rawResponse.results ||
+      rawResponse.vehiculos ||
+      rawResponse.ventas_detalle ||
+      rawResponse.lista;
+
+    if (Array.isArray(pos)) {
+      return { lista: pos, resumen: rawResponse };
+    }
+
+    return { lista: [], resumen: rawResponse };
+  }
+
+  return { lista: [], resumen: null };
+}
 
 function numeroSeguro(valor) {
   const numero = Number(valor);
   return Number.isFinite(numero) ? numero : 0;
 }
 
-function formatMoneda(valor, decimales = 2) {
+function formatMoneda(valor, decimales = 0) {
   return `$${numeroSeguro(valor).toLocaleString("es-MX", {
     minimumFractionDigits: decimales,
     maximumFractionDigits: decimales,
@@ -135,94 +129,37 @@ function obtenerReglaPenetracion(penetracion) {
   const valor = Math.max(0, Math.min(100, numeroSeguro(penetracion)));
 
   if (valor < 38) {
-    return {
-      rango: "< 38%",
-      bono: 0,
-      descuentoWholesale: 0,
-    };
+    return { rango: "< 38%", bono: 0, descuentoWholesale: 0 };
   }
-
   if (valor < 42) {
-    return {
-      rango: "38% a < 42%",
-      bono: 0.5,
-      descuentoWholesale: 0,
-    };
+    return { rango: "38% a < 42%", bono: 0.5, descuentoWholesale: 0 };
   }
-
   if (valor < 48) {
-    return {
-      rango: "42% a < 48%",
-      bono: 1,
-      descuentoWholesale: -1.5,
-    };
+    return { rango: "42% a < 48%", bono: 1, descuentoWholesale: -1.5 };
   }
-
   if (valor < 53) {
-    return {
-      rango: "48% a < 53%",
-      bono: 2.25,
-      descuentoWholesale: -2,
-    };
+    return { rango: "48% a < 53%", bono: 2.25, descuentoWholesale: -2 };
   }
-
-  return {
-    rango: ">= 53%",
-    bono: 3.5,
-    descuentoWholesale: -2.5,
-  };
+  return { rango: ">= 53%", bono: 3.5, descuentoWholesale: -2.5 };
 }
 
-function calcularFinanciamientoVehiculo(
-  vehiculo,
-  periodoGracia,
-  tasaAnual
-) {
-  const antiguedad =
-    vehiculo.diasEnStock === null ||
-      vehiculo.diasEnStock === undefined
-      ? null
-      : numeroSeguro(vehiculo.diasEnStock);
-
-  if (antiguedad === null) {
-    return {
-      ...vehiculo,
-      diasFueraGracia: null,
-      costoFinancieroDiario: null,
-      costoFinancieroTotal: null,
-    };
-  }
-
-  const diasFuera =
-    antiguedad > periodoGracia
-      ? antiguedad - periodoGracia
-      : null;
-
-  if (diasFuera === null) {
-    return {
-      ...vehiculo,
-      diasFueraGracia: null,
-      costoFinancieroDiario: null,
-      costoFinancieroTotal: null,
-    };
-  }
-
+function calcularFinanciamientoVehiculo(vehiculo, periodoGracia, tasaAnual) {
   const valorCompra = Number(vehiculo.VrNF_Compra);
+  const tieneValorValid = Number.isFinite(valorCompra) && valorCompra > 0;
 
-  if (!Number.isFinite(valorCompra)) {
-    return {
-      ...vehiculo,
-      diasFueraGracia: diasFuera,
-      costoFinancieroDiario: null,
-      costoFinancieroTotal: null,
-    };
-  }
+  const costoFinancieroDiario = tieneValorValid ? (valorCompra * (tasaAnual / 100)) / 360 : 0;
 
-  const costoFinancieroDiario =
-    (valorCompra * (tasaAnual / 100)) / 360;
+  const antiguedad = vehiculo.diasEnStock === null || vehiculo.diasEnStock === undefined
+    ? null
+    : numeroSeguro(vehiculo.diasEnStock);
 
-  const costoFinancieroTotal =
-    costoFinancieroDiario * diasFuera;
+  const diasFuera = (antiguedad !== null && antiguedad > periodoGracia)
+    ? antiguedad - periodoGracia
+    : null;
+
+  const costoFinancieroTotal = (diasFuera !== null && tieneValorValid)
+    ? costoFinancieroDiario * diasFuera
+    : 0;
 
   return {
     ...vehiculo,
@@ -232,1581 +169,334 @@ function calcularFinanciamientoVehiculo(
   };
 }
 
-function KPICard({
-  label,
-  value,
-  sub,
-  color = BRAND_BLUE,
-  destacado = false,
-}) {
-  return (
-    <div
-      className={`rounded-xl border p-4 shadow-[0_2px_8px_rgba(19,30,92,0.05)] ${destacado
-        ? "border-[#131E5C] bg-[#131E5C] text-white"
-        : "border-[#B9C4D7] bg-white"
-        }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div
-          className={`font-black uppercase tracking-[0.07em] ${destacado ? "text-white" : "text-[#1A2344]"
-            }`}
-        >
-          {label}
-        </div>
-
-        <span
-          className={`flex h-9 w-9 items-center justify-center rounded-lg ${destacado
-            ? "bg-white/15 text-white"
-            : "bg-[#EAF0FF]"
-            }`}
-          style={!destacado ? { color } : undefined}
-        >
-          <svg
-            width="20"
-            height="20"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            {KPI_ICONS[label]}
-          </svg>
-        </span>
-      </div>
-
-      <div
-        className={`mt-6 text-[32px] font-black leading-none ${destacado ? "text-white" : "text-[#07184C]"
-          }`}
-      >
-        {value}
-      </div>
-
-      <div
-        className={`mt-4 border-t pt-3 font-semibold ${destacado
-          ? "border-white/15 text-white/80"
-          : "border-[#E6EAF1] text-[#67728B]"
-          }`}
-      >
-        {sub || "\u00A0"}
-      </div>
-    </div>
-  );
+function obtenerColorAntiguedad(dias, periodoGracia) {
+  if (dias <= periodoGracia) return COLORES[3];
+  if (dias <= periodoGracia + 30) return "#d97706";
+  if (dias <= periodoGracia + 60) return "#ea580c";
+  return "#dc2626";
 }
 
-function Panel({ titulo, subtitulo, children, alto, extra }) {
-  return (
-    <div className="rounded-xl border border-[#B9C4D7] bg-white p-4 shadow-[0_2px_8px_rgba(19,30,92,0.05)]">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-black uppercase tracking-[0.06em] text-[#152754]">
-            {titulo}
-          </h3>
-
-          {subtitulo && (
-            <p className="mt-1 text-[13px] font-medium text-[#7A859C]">
-              {subtitulo}
-            </p>
-          )}
-        </div>
-
-        {extra}
-      </div>
-
-      <div style={alto ? { height: alto } : undefined}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function ChartDiv({ option, loading, onEvents }) {
-  const ref = useECharts(option, {
-    loading,
-    onEvents,
-  });
-
-  return (
-    <div
-      ref={ref}
-      style={{
-        width: "100%",
-        height: "100%",
-      }}
-    />
-  );
-}
-
-function EmptyState({
-  mensaje = "Sin datos para los filtros seleccionados",
-}) {
-  return (
-    <div
-      className="w-full h-full flex flex-col items-center justify-center gap-2"
-      style={{ color: `${BRAND_BLUE}55` }}
-    >
-      <svg
-        width="32"
-        height="32"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M9 17v-2a4 4 0 014-4h0a4 4 0 014 4v2M3 17v-2a4 4 0 014-4h0M12 7a4 4 0 100-8 4 4 0 000 8z"
-        />
-      </svg>
-
-      <span className="text-sm">
-        {mensaje}
-      </span>
-    </div>
-  );
-}
-
-function Badge({ label, color = BRAND_BLUE }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
-      style={{
-        background: `${color}12`,
-        color,
-      }}
-    >
-      <span
-        className="w-1.5 h-1.5 rounded-full inline-block"
-        style={{ background: color }}
-      />
-
-      {label}
-    </span>
-  );
-}
-
-function Seccion({ titulo, subtitulo, children, className = "" }) {
-  return (
-    <section
-      className={`relative rounded-xl border border-[#9EA9BD] bg-white px-2 pb-4 pt-7 shadow-sm ${className}`}
-    >
-      <div className="absolute -top-[14px] left-5 flex max-w-[calc(100%_-_40px)] items-center gap-3 bg-white px-2">
-        <h2 className="whitespace-nowrap text-[18px] font-black text-[#07184C]">
-          {titulo}
-        </h2>
-
-        <div className="hidden h-px w-24 bg-[#748199] sm:block" />
-      </div>
-
-      {subtitulo && (
-        <div className="mb-4 font-medium text-[#67728B]">
-          {subtitulo}
-        </div>
-      )}
-
-      {children}
-    </section>
-  );
-}
-
-function Tarjeta({ children, className = "" }) {
-  return (
-    <div
-      className={`rounded-xl border border-[#B9C4D7] bg-white p-4 shadow-[0_2px_8px_rgba(19,30,92,0.05)] ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function GrupoFiltro({ titulo, children }) {
-  return (
-    <div>
-      <div className="mb-2 text-[12px] font-black uppercase  text-[#67728B]">
-        {titulo}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function BotonFiltro({ activo, children, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg border px-4 py-2 text-[13px] font-bold transition ${activo
-        ? "border-[#131E5C] bg-[#131E5C] text-white shadow-sm"
-        : "border-[#131E5C] bg-white text-[#152754] hover:border-[#131E5C] hover:bg-[#EEF2F8]"
-        }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function CampoFinanciero({
-  titulo,
-  descripcion,
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  suffix,
-}) {
-  return (
-    <div>
-      <label className="text-[12px] font-black uppercase tracking-[0.06em] text-[#67728B]">
-        {titulo}
-      </label>
-
-      <div className="relative mt-2">
-        <input
-          type="number"
-          value={value}
-          onChange={onChange}
-          min={min}
-          max={max}
-          step={step}
-          className="h-10 w-full rounded-lg border border-[#C8D0DF] bg-[#F7F8FC] px-3 pr-11 font-bold text-[#152754] outline-none transition focus:border-[#1555C7] focus:bg-white"
-        />
-
-        {suffix && (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-bold text-[#7A859C]">
-            {suffix}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-1 text-[14px] font-medium text-[#8A94A8]">
-        {descripcion}
-      </div>
-    </div>
-  );
-}
-
-function MetricaFinanciera({ titulo, valor, detalle }) {
-  return (
-    <div className="rounded-lg border border-[#D7DEEA] bg-white px-4 py-3">
-      <div className="text-[13px] font-semibold text-[#67728B]">
-        {titulo}
-      </div>
-
-      <div className="mt-1 text-[19px] font-black text-[#07184C]">
-        {valor}
-      </div>
-
-      {detalle && (
-        <div className="mt-1 text-[12px] font-medium text-[#8A94A8]">
-          {detalle}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FiltrosInventario({
-  filtrosDisponibles,
-  agenciaSeleccionada,
-  setAgenciaSeleccionada,
-  modelosComerciales,
-  setModelosComerciales,
-  estatusSeleccionado,
-  setEstatusSeleccionado,
-
-  condicionInventario,
-  setCondicionInventario,
-
-  periodoGracia,
-  setPeriodoGracia,
-  tiie,
-  setTiie,
-  spreadBase,
-  setSpreadBase,
-  penetracionRetail,
-  setPenetracionRetail,
-  reglaPenetracion,
-  spreadEfectivo,
-  tasaAnual,
-}) {
-  const estatusDisponibles = filtrosDisponibles.estatus.filter(
-    (estatus) => !ESTATUS_EXCLUIDOS.includes(estatus.codigo)
-  );
-
-  const seleccionarTodasAgencias = () => {
-    setAgenciaSeleccionada("");
-    setModelosComerciales(false);
-  };
-
-  const seleccionarVehiculosComerciales = () => {
-    setAgenciaSeleccionada("");
-    setModelosComerciales(true);
-  };
-
-  const seleccionarAgencia = (codigo) => {
-    setModelosComerciales(false);
-    setAgenciaSeleccionada(codigo);
-  };
-
-  return (
-    <div className="space-y-5 pl-3 pr-3">
-      <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-9">
-
-        {/* AGENCIA */}
-        <div className="min-w-0 xl:col-span-4">
-          <GrupoFiltro titulo="Agencia">
-            <BotonFiltro
-              activo={!agenciaSeleccionada && !modelosComerciales}
-              onClick={seleccionarTodasAgencias}
-            >
-              Todas
-            </BotonFiltro>
-
-            <BotonFiltro
-              activo={modelosComerciales}
-              onClick={seleccionarVehiculosComerciales}
-            >
-              R&R Vehículos Comerciales
-            </BotonFiltro>
-
-            {filtrosDisponibles.agencias.map((agencia) => (
-              <BotonFiltro
-                key={agencia.codigo}
-                activo={
-                  !modelosComerciales &&
-                  agenciaSeleccionada === agencia.codigo
-                }
-                onClick={() => seleccionarAgencia(agencia.codigo)}
-              >
-                {agencia.nombre}
-              </BotonFiltro>
-            ))}
-          </GrupoFiltro>
-        </div>
-
-        {/* ESTATUS */}
-        <div className="min-w-0 xl:col-span-3">
-          <GrupoFiltro titulo="Estatus">
-            <BotonFiltro
-              activo={!estatusSeleccionado}
-              onClick={() => setEstatusSeleccionado("")}
-            >
-              Todos
-            </BotonFiltro>
-
-            {estatusDisponibles.map((estatus) => (
-              <BotonFiltro
-                key={estatus.codigo}
-                activo={estatusSeleccionado === estatus.codigo}
-                onClick={() => setEstatusSeleccionado(estatus.codigo)}
-              >
-                {estatus.nombre}
-              </BotonFiltro>
-            ))}
-          </GrupoFiltro>
-        </div>
-
-        {/* PERIODO DE GRACIA */}
-        <div className="min-w-0 xl:col-span-2">
-          <GrupoFiltro titulo="Periodo de gracia">
-            {[30, 45, 60].map((dias) => (
-              <BotonFiltro
-                key={dias}
-                activo={periodoGracia === dias}
-                onClick={() => setPeriodoGracia(dias)}
-              >
-                {dias} días
-              </BotonFiltro>
-            ))}
-          </GrupoFiltro>
-        </div>
-
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:max-w-3xl">
-
-        <CampoFinanciero
-          titulo="TIIE 28 días"
-          descripcion="Tasa anual de referencia"
-          value={tiie}
-          onChange={(e) => setTiie(e.target.value)}
-          min="0"
-          step="0.0001"
-          suffix="%"
-        />
-
-        <CampoFinanciero
-          titulo="Spread base"
-          descripcion="Antes del descuento wholesale"
-          value={spreadBase}
-          onChange={(e) => setSpreadBase(e.target.value)}
-          step="0.01"
-          suffix="pp"
-        />
-
-        <CampoFinanciero
-          titulo="Penetración retail"
-          descripcion="Define bono y descuento"
-          value={penetracionRetail}
-          onChange={(e) => setPenetracionRetail(e.target.value)}
-          min="0"
-          max="100"
-          step="0.01"
-          suffix="%"
-        />
-
-      </div>
-
-
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricaFinanciera
-          titulo="Bono penetración"
-          valor={`${reglaPenetracion.bono.toFixed(2)} pp`}
-          detalle={reglaPenetracion.rango}
-        />
-
-        <MetricaFinanciera
-          titulo="Descuento wholesale"
-          valor={`${reglaPenetracion.descuentoWholesale.toFixed(2)} pp`}
-          detalle="Ajuste sobre spread"
-        />
-
-        <MetricaFinanciera
-          titulo="Spread efectivo"
-          valor={`${spreadEfectivo.toFixed(2)} pp`}
-          detalle="Spread base + descuento"
-        />
-
-        <MetricaFinanciera
-          titulo="TIIE + Spread"
-          valor={`${tasaAnual.toFixed(4)}%`}
-          detalle="Tasa anual aplicada"
-        />
-      </div>
-    </div>
-  );
-}
-
-function obtenerColorAntiguedad(
-  dias,
-  periodoGracia
-) {
-  if (dias <= periodoGracia) {
-    return COLORES[7];
-  }
-
-  if (dias <= periodoGracia + 30) {
-    return COLORES[5];
-  }
-
-  if (dias <= periodoGracia + 60) {
-    return COLORES[3];
-  }
-
-  return COLORES[0];
-}
-
-function TablaVehiculos({
-  vehiculos,
-  cargando,
-  error,
-  familiaFiltro,
-  onClearFamilia,
-  periodoGracia,
-}) {
+function TablaVehiculos({ vehiculos, cargando, error, familiaFiltro, onClearFamilia, periodoGracia }) {
   const [query, setQuery] = useState("");
   const [pagina, setPagina] = useState(1);
   const [filtAgencia, setFiltAgencia] = useState("");
   const [filtEstatus, setFiltEstatus] = useState("");
-  const [filtCondicion, setFiltCondicion] =
-    useState("");
-  const [filtFamilia, setFiltFamilia] =
-    useState("");
-  const [filtDiasMin, setFiltDiasMin] =
-    useState("");
-  const [filtDiasMax, setFiltDiasMax] =
-    useState("");
+  const [filtCondicion, setFiltCondicion] = useState("");
+  const [filtFamilia, setFiltFamilia] = useState("");
+  const [filtDiasMin, setFiltDiasMin] = useState("");
+  const [filtDiasMax, setFiltDiasMax] = useState("");
 
   const POR_PAGINA = 12;
 
-  const agencias = useMemo(
-    () =>
-      [
-        ...new Set(
-          vehiculos
-            .map((v) => v.agenciaNombre)
-            .filter(Boolean)
-        ),
-      ].sort(),
-    [vehiculos]
-  );
-
-  const estatuses = useMemo(
-    () =>
-      [
-        ...new Set(
-          vehiculos
-            .map((v) => v.estatusNombre)
-            .filter(Boolean)
-        ),
-      ].sort(),
-    [vehiculos]
-  );
-
-  const familias = useMemo(
-    () =>
-      [
-        ...new Set(
-          vehiculos
-            .map((v) => v.NmFamilia)
-            .filter(Boolean)
-        ),
-      ].sort(),
-    [vehiculos]
-  );
+  const agencias = useMemo(() => [...new Set(vehiculos.map((v) => v.agenciaNombre).filter(Boolean))].sort(), [vehiculos]);
+  const estatuses = useMemo(() => [...new Set(vehiculos.map((v) => v.estatusNombre).filter(Boolean))].sort(), [vehiculos]);
+  const familias = useMemo(() => [...new Set(vehiculos.map((v) => v.NmFamilia).filter(Boolean))].sort(), [vehiculos]);
 
   const filtrados = useMemo(() => {
     const q = query.trim().toLowerCase();
-
     return vehiculos.filter((v) => {
-      if (
-        familiaFiltro &&
-        (v.NmFamilia || "").toLowerCase() !==
-        familiaFiltro.toLowerCase()
-      ) {
-        return false;
-      }
-
-      if (
-        filtAgencia &&
-        v.agenciaNombre !== filtAgencia
-      ) {
-        return false;
-      }
-
-      if (
-        filtEstatus &&
-        v.estatusNombre !== filtEstatus
-      ) {
-        return false;
-      }
-
+      if (familiaFiltro && (v.NmFamilia || "").toLowerCase() !== familiaFiltro.toLowerCase()) return false;
+      if (filtAgencia && v.agenciaNombre !== filtAgencia) return false;
+      if (filtEstatus && v.estatusNombre !== filtEstatus) return false;
       if (filtCondicion) {
-        const condicion =
-          {
-            N: "Nuevo",
-            U: "Usado",
-          }[(v.CondUso || "").trim()];
-
-        if (condicion !== filtCondicion) {
-          return false;
-        }
+        const condicion = { N: "Nuevo", U: "Usado" }[(v.CondUso || "").trim()];
+        if (condicion !== filtCondicion) return false;
       }
-
-      if (
-        filtFamilia &&
-        (v.NmFamilia || "") !== filtFamilia
-      ) {
-        return false;
-      }
-
-      if (
-        filtDiasMin !== "" &&
-        (v.diasEnStock ?? 0) <
-        Number(filtDiasMin)
-      ) {
-        return false;
-      }
-
-      if (
-        filtDiasMax !== "" &&
-        (v.diasEnStock ?? 0) >
-        Number(filtDiasMax)
-      ) {
-        return false;
-      }
-
+      if (filtFamilia && (v.NmFamilia || "") !== filtFamilia) return false;
+      if (filtDiasMin !== "" && (v.diasEnStock ?? 0) < Number(filtDiasMin)) return false;
+      if (filtDiasMax !== "" && (v.diasEnStock ?? 0) > Number(filtDiasMax)) return false;
       if (q) {
-        return [
-          v.NmFamilia,
-          v.NmMarca,
-          v.EdiModelo,
-          v.agenciaNombre,
-          v.estatusNombre,
-          v.SitVeiculo,
-          v.NrChassi,
-        ].some((campo) =>
-          (campo || "")
-            .toLowerCase()
-            .includes(q)
-        );
+        return [v.NmFamilia, v.NmMarca, v.EdiModelo, v.agenciaNombre, v.estatusNombre, v.SitVeiculo, v.NrChassi]
+          .some((campo) => (campo || "").toLowerCase().includes(q));
       }
-
       return true;
     });
-  }, [
-    vehiculos,
-    query,
-    familiaFiltro,
-    filtAgencia,
-    filtEstatus,
-    filtCondicion,
-    filtFamilia,
-    filtDiasMin,
-    filtDiasMax,
-  ]);
+  }, [vehiculos, query, familiaFiltro, filtAgencia, filtEstatus, filtCondicion, filtFamilia, filtDiasMin, filtDiasMax]);
 
-  useEffect(() => {
-    setPagina(1);
-  }, [
-    query,
-    vehiculos,
-    filtAgencia,
-    filtEstatus,
-    filtCondicion,
-    filtFamilia,
-    filtDiasMin,
-    filtDiasMax,
-  ]);
+  useEffect(() => { setPagina(1); }, [query, vehiculos, filtAgencia, filtEstatus, filtCondicion, filtFamilia, filtDiasMin, filtDiasMax]);
 
-  const totalPaginas = Math.ceil(
-    filtrados.length / POR_PAGINA
-  );
+  const totalPaginas = Math.ceil(filtrados.length / POR_PAGINA);
+  const paginados = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const condLabel = (condicion) => ({ N: "Nuevo", U: "Usado" }[(condicion || "").trim()] ?? condicion ?? "—");
 
-  const paginados = filtrados.slice(
-    (pagina - 1) * POR_PAGINA,
-    pagina * POR_PAGINA
-  );
+  const totalCosto = filtrados.reduce((total, vehiculo) => total + numeroSeguro(vehiculo.VrNF_Compra), 0);
+  const totalCostoDiario = filtrados.reduce((total, vehiculo) => total + numeroSeguro(vehiculo.costoFinancieroDiario), 0);
+  const totalCostoFinanciero = filtrados.reduce((total, vehiculo) => total + numeroSeguro(vehiculo.costoFinancieroTotal), 0);
 
-  const condLabel = (condicion) =>
-  ({
-    N: "Nuevo",
-    U: "Usado",
-  }[(condicion || "").trim()] ??
-    condicion ??
-    "—");
-
-  const totalCosto = filtrados.reduce(
-    (total, vehiculo) =>
-      total +
-      numeroSeguro(vehiculo.VrNF_Compra),
-    0
-  );
-
-  const totalCostoFinanciero =
-    filtrados.reduce(
-      (total, vehiculo) =>
-        total +
-        numeroSeguro(
-          vehiculo.costoFinancieroTotal
-        ),
-      0
-    );
-
-  const hayFiltros =
-    filtAgencia ||
-    filtEstatus ||
-    filtCondicion ||
-    filtFamilia ||
-    filtDiasMin ||
-    filtDiasMax;
+  const hayFiltros = filtAgencia || filtEstatus || filtCondicion || filtFamilia || filtDiasMin || filtDiasMax;
 
   const limpiarFiltros = () => {
-    setFiltAgencia("");
-    setFiltEstatus("");
-    setFiltCondicion("");
-    setFiltFamilia("");
-    setFiltDiasMin("");
-    setFiltDiasMax("");
-    setQuery("");
+    setFiltAgencia(""); setFiltEstatus(""); setFiltCondicion(""); setFiltFamilia(""); setFiltDiasMin(""); setFiltDiasMax(""); setQuery("");
   };
 
-  const selectCls =
-    "vw-control text-xs border rounded-lg px-2 py-1.5 bg-white";
+  const selectCls = "h-8 border border-slate-200 rounded-lg px-2 text-xs bg-white text-[#001E50] outline-none focus:border-[#1677FF]";
 
   return (
-    <div>
-      <div className="relative mb-3">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2"
-          width="14"
-          height="14"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          style={{ color: `${BRAND_BLUE}88` }}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z"
-          />
-        </svg>
-
-        <input
-          type="text"
-          value={query}
-          onChange={(e) =>
-            setQuery(e.target.value)
-          }
-          placeholder="Buscar por VIN, modelo, agencia…"
-          className="vw-control w-full pl-8 pr-8 py-1.5 text-xs border rounded-lg bg-white"
-        />
-
-        {query && (
-          <button
-            onClick={() => setQuery("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2"
-            style={{
-              color: `${BRAND_BLUE}88`,
-            }}
-          >
-            <svg
-              width="12"
-              height="12"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      <div
-        className="flex flex-wrap gap-2 mb-3 p-3 rounded-xl"
-        style={{
-          background: `${BRAND_BLUE}06`,
-          border: `1px solid ${BRAND_BLUE}10`,
-        }}
-      >
-        <select
-          value={filtAgencia}
-          onChange={(e) =>
-            setFiltAgencia(e.target.value)
-          }
-          className={selectCls}
-        >
-          <option value="">
-            Todas las agencias
-          </option>
-
-          {agencias.map((agencia) => (
-            <option
-              key={agencia}
-              value={agencia}
-            >
-              {agencia}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filtEstatus}
-          onChange={(e) =>
-            setFiltEstatus(e.target.value)
-          }
-          className={selectCls}
-        >
-          <option value="">
-            Todos los estatus
-          </option>
-
-          {estatuses.map((estatus) => (
-            <option
-              key={estatus}
-              value={estatus}
-            >
-              {estatus}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filtCondicion}
-          onChange={(e) =>
-            setFiltCondicion(e.target.value)
-          }
-          className={selectCls}
-        >
-          <option value="">
-            Nuevo y Usado
-          </option>
-          <option value="Nuevo">
-            Nuevo
-          </option>
-          <option value="Usado">
-            Usado
-          </option>
-        </select>
-
-        <select
-          value={filtFamilia}
-          onChange={(e) =>
-            setFiltFamilia(e.target.value)
-          }
-          className={selectCls}
-        >
-          <option value="">
-            Todas las familias
-          </option>
-
-          {familias.map((familia) => (
-            <option
-              key={familia}
-              value={familia}
-            >
-              {familia}
-            </option>
-          ))}
-        </select>
-
-        <div className="flex items-center gap-1">
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
-            type="number"
-            value={filtDiasMin}
-            onChange={(e) =>
-              setFiltDiasMin(e.target.value)
-            }
-            placeholder="Días min"
-            min={0}
-            className={`${selectCls} w-24`}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por VIN, modelo, agencia…"
+            className="h-8 w-full pl-8 pr-8 text-xs border border-slate-200 rounded-lg bg-white text-[#001E50] outline-none focus:border-[#1677FF]"
           />
-
-          <span
-            className="text-xs"
-            style={{
-              color: `${BRAND_BLUE}88`,
-            }}
-          >
-            —
-          </span>
-
-          <input
-            type="number"
-            value={filtDiasMax}
-            onChange={(e) =>
-              setFiltDiasMax(e.target.value)
-            }
-            placeholder="Días max"
-            min={0}
-            className={`${selectCls} w-24`}
-          />
+          {query && (
+            <button onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
-        {hayFiltros && (
-          <button
-            onClick={limpiarFiltros}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium"
-            style={{
-              background: `${BRAND_BLUE}12`,
-              color: BRAND_BLUE,
-            }}
-          >
-            Limpiar filtros
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={filtAgencia} onChange={(e) => setFiltAgencia(e.target.value)} className={selectCls}>
+            <option value="">Todas las agencias</option>
+            {agencias.map((a) => (<option key={a} value={a}>{a}</option>))}
+          </select>
+
+          <select value={filtEstatus} onChange={(e) => setFiltEstatus(e.target.value)} className={selectCls}>
+            <option value="">Todos los estatus</option>
+            {estatuses.map((e) => (<option key={e} value={e}>{e}</option>))}
+          </select>
+
+          <select value={filtCondicion} onChange={(e) => setFiltCondicion(e.target.value)} className={selectCls}>
+            <option value="">Nuevo / Usado</option>
+            <option value="Nuevo">Nuevo</option>
+            <option value="Usado">Usado</option>
+          </select>
+
+          <select value={filtFamilia} onChange={(e) => setFiltFamilia(e.target.value)} className={selectCls}>
+            <option value="">Todas las familias</option>
+            {familias.map((f) => (<option key={f} value={f}>{f}</option>))}
+          </select>
+
+          <div className="flex items-center gap-1">
+            <input type="number" value={filtDiasMin} onChange={(e) => setFiltDiasMin(e.target.value)} placeholder="Días min" min={0} className={`${selectCls} w-20`} />
+            <span className="text-xs text-slate-400">—</span>
+            <input type="number" value={filtDiasMax} onChange={(e) => setFiltDiasMax(e.target.value)} placeholder="Días max" min={0} className={`${selectCls} w-20`} />
+          </div>
+
+          {hayFiltros && (
+            <button onClick={limpiarFiltros} className="h-8 inline-flex items-center gap-1 text-xs px-2.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-100">
+              <Eraser className="h-3 w-3" /> Limpiar
+            </button>
+          )}
+        </div>
       </div>
 
       {familiaFiltro && (
-        <div className="flex items-center gap-2 mb-2">
-          <span
-            className="text-xs"
-            style={{
-              color: `${BRAND_BLUE}88`,
-            }}
-          >
-            Filtrando por modelo:
-          </span>
-
-          <span
-            className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
-            style={{
-              background: `${COLORES[7]}15`,
-              color: COLORES[7],
-            }}
-          >
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-medium">Filtrando por modelo:</span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#1677FF]/10 text-[#1677FF]">
             {familiaFiltro}
-
-            <button
-              onClick={onClearFamilia}
-            >
-              <svg
-                width="10"
-                height="10"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+            <button onClick={onClearFamilia} className="hover:text-red-500">
+              <X className="h-3 w-3" />
             </button>
           </span>
         </div>
       )}
 
       {!cargando && !error && (
-        <p
-          className="text-xs mb-2"
-          style={{
-            color: `${BRAND_BLUE}77`,
-          }}
-        >
-          {filtrados.length.toLocaleString(
-            "es-MX"
-          )}{" "}
-          vehículo
-          {filtrados.length !== 1
-            ? "s"
-            : ""}
-          {query && ` · "${query}"`}
+        <p className="text-xs text-slate-500 font-semibold">
+          {filtrados.length.toLocaleString("es-MX")} vehículo{filtrados.length !== 1 ? "s" : ""} encontrado{filtrados.length !== 1 ? "s" : ""}
         </p>
       )}
 
-      {error && (
-        <p
-          className="text-sm text-center py-6"
-          style={{ color: BRAND_BLUE }}
-        >
-          {error}
-        </p>
-      )}
+      {error && <p className="text-xs text-center py-6 text-red-500 font-bold">{error}</p>}
 
       {cargando && (
-        <div
-          className="flex items-center justify-center py-10 gap-2 text-sm"
-          style={{
-            color: `${BRAND_BLUE}88`,
-          }}
-        >
-          <svg
-            className="animate-spin"
-            width="16"
-            height="16"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 12a8 8 0 018-8v8H4z"
-            />
-          </svg>
-
-          Cargando…
+        <div className="flex items-center justify-center py-12 gap-2 text-xs font-bold text-[#001E50]">
+          <LoaderCircle className="h-4 w-4 animate-spin text-[#1677FF]" /> Cargando inventario…
         </div>
       )}
 
-      {!cargando &&
-        !error &&
-        filtrados.length === 0 && (
-          <p
-            className="text-center text-xs py-8"
-            style={{
-              color: `${BRAND_BLUE}77`,
-            }}
-          >
-            Sin resultados.
-          </p>
-        )}
+      {!cargando && !error && filtrados.length === 0 && (
+        <p className="text-center text-xs py-10 text-slate-400">Sin vehículos para los filtros seleccionados.</p>
+      )}
 
-      {!cargando &&
-        !error &&
-        paginados.length > 0 && (
-          <>
-            <div
-              className="overflow-auto rounded-xl"
-              style={{
-                border: `1px solid ${BRAND_BLUE}10`,
-              }}
-            >
-              <table className="w-full text-xs">
-                <thead>
-                  <tr
-                    className="text-left"
-                    style={{
-                      background:
-                        `${BRAND_BLUE}08`,
-                      borderBottom: `1px solid ${BRAND_BLUE}12`,
-                    }}
-                  >
-                    {[
-                      "VIN",
-                      "Familia",
-                      "Modelo",
-                      "Agencia",
-                      "Condición",
-                      "Estatus",
-                      "F. Factura",
-                      "Antigüedad",
-                      "Fuera gracia",
-                      "Valor Compra",
-                      "Costo diario",
-                      "Costo financiero",
-                      "Situación",
-                    ].map((header) => (
-                      <th
-                        key={header}
-                        className="px-3 py-2.5 font-semibold whitespace-nowrap"
-                        style={{
-                          color: `${BRAND_BLUE}BB`,
-                        }}
-                      >
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
+      {!cargando && !error && paginados.length > 0 && (
+        <>
+          <div className="overflow-auto rounded-xl border border-slate-200">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left bg-slate-100 border-b border-slate-200 text-[#001E50]">
+                  {["VIN / Chasis", "Familia", "Modelo", "Agencia", "Condición", "Estatus", "F. Factura", "Antigüedad", "Fuera Gracia", "Valor Compra", "Costo Diario", "Costo Financiero Total", "Situación"].map((header) => (
+                    <th key={header} className="px-3 py-2.5 font-extrabold whitespace-nowrap">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginados.map((vehiculo, index) => {
+                  const colorAntiguedad = obtenerColorAntiguedad(vehiculo.diasEnStock ?? 0, periodoGracia);
+                  return (
+                    <tr key={`${vehiculo.NrChassi}-${index}`} className="hover:bg-slate-50/80 transition">
+                      <td className="px-3 py-2 font-mono font-bold text-[#001E50] text-[11px] whitespace-nowrap">
+                        {vehiculo.NrChassi || "—"}
+                      </td>
+                      <td className="px-3 py-2 font-semibold text-[#001E50] whitespace-nowrap">{vehiculo.NmFamilia || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{vehiculo.EdiModelo || "—"}</td>
+                      <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{vehiculo.agenciaNombre}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{condLabel(vehiculo.CondUso)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#001E50]/10 text-[#001E50]">
+                          {vehiculo.estatusNombre}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{vehiculo.DtFaturamento || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {vehiculo.diasEnStock != null ? (
+                          <span className="font-bold px-2 py-0.5 rounded-full text-[11px]" style={{ background: `${colorAntiguedad}15`, color: colorAntiguedad }}>
+                            {vehiculo.diasEnStock}d
+                          </span>
+                        ) : "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {vehiculo.diasFueraGracia != null ? (
+                          <span className="font-bold px-2 py-0.5 rounded-full text-[11px] bg-red-100 text-red-700">
+                            {vehiculo.diasFueraGracia}d
+                          </span>
+                        ) : (
+                          <span className="font-medium px-2 py-0.5 rounded-full text-[11px] bg-emerald-100 text-emerald-700">
+                            En gracia
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 font-semibold text-slate-800 whitespace-nowrap">
+                        {vehiculo.VrNF_Compra != null ? formatMoneda(vehiculo.VrNF_Compra, 2) : "—"}
+                      </td>
+                      <td className="px-3 py-2 font-bold text-[#1677FF] whitespace-nowrap">
+                        {vehiculo.costoFinancieroDiario != null ? formatMoneda(vehiculo.costoFinancieroDiario, 2) : "—"}
+                      </td>
+                      <td className="px-3 py-2 font-extrabold text-[#001E50] whitespace-nowrap">
+                        {vehiculo.costoFinancieroTotal != null ? formatMoneda(vehiculo.costoFinancieroTotal, 2) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-slate-400 text-[11px] whitespace-nowrap">{vehiculo.SitVeiculo || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-100 font-bold text-xs text-[#001E50] border-t-2 border-slate-300">
+                  <td colSpan={9} className="px-3 py-2.5 text-right font-extrabold">
+                    Total ({filtrados.length.toLocaleString("es-MX")} vehículos):
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-black">{formatMoneda(totalCosto, 0)}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-black text-[#1677FF]">{formatMoneda(totalCostoDiario, 0)}/día</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-black text-[#001E50]">{formatMoneda(totalCostoFinanciero, 0)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
 
-                <tbody>
-                  {paginados.map(
-                    (vehiculo, index) => {
-                      const colorAntiguedad =
-                        obtenerColorAntiguedad(
-                          vehiculo.diasEnStock ??
-                          0,
-                          periodoGracia
-                        );
-
-                      return (
-                        <tr
-                          key={`${vehiculo.NrChassi}-${index}`}
-                          style={{
-                            borderBottom: `1px solid ${BRAND_BLUE}08`,
-                            background:
-                              index % 2 === 0
-                                ? "#FFFFFF"
-                                : `${BRAND_BLUE}03`,
-                          }}
-                        >
-                          <td className="px-3 py-2 font-mono whitespace-nowrap">
-                            <span
-                              className="font-semibold"
-                              style={{
-                                color:
-                                  BRAND_BLUE,
-                                fontSize:
-                                  "11px",
-                                letterSpacing:
-                                  "0.03em",
-                              }}
-                            >
-                              {vehiculo.NrChassi ||
-                                "—"}
-                            </span>
-                          </td>
-
-                          <td
-                            className="px-3 py-2 font-medium whitespace-nowrap"
-                            style={{
-                              color:
-                                COLORES[1],
-                            }}
-                          >
-                            {vehiculo.NmFamilia ||
-                              "—"}
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}BB`,
-                            }}
-                          >
-                            {vehiculo.EdiModelo ||
-                              "—"}
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}BB`,
-                            }}
-                          >
-                            {
-                              vehiculo.agenciaNombre
-                            }
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}BB`,
-                            }}
-                          >
-                            {condLabel(
-                              vehiculo.CondUso
-                            )}
-                          </td>
-
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span
-                              className="px-2 py-0.5 rounded-sm text-xs font-semibold"
-                              style={{
-                                background:
-                                  `${BRAND_BLUE}12`,
-                                color:
-                                  BRAND_BLUE,
-                              }}
-                            >
-                              {
-                                vehiculo.estatusNombre
-                              }
-                            </span>
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}99`,
-                            }}
-                          >
-                            {vehiculo.DtFaturamento ||
-                              "—"}
-                          </td>
-
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {vehiculo.diasEnStock !=
-                              null ? (
-                              <span
-                                className="font-medium px-2 py-0.5 rounded-full"
-                                style={{
-                                  background:
-                                    `${colorAntiguedad}14`,
-                                  color:
-                                    colorAntiguedad,
-                                }}
-                              >
-                                {
-                                  vehiculo.diasEnStock
-                                }
-                                d
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {vehiculo.diasFueraGracia !=
-                              null ? (
-                              <span
-                                className="font-semibold px-2 py-0.5 rounded-full"
-                                style={{
-                                  background:
-                                    `${COLORES[2]}14`,
-                                  color:
-                                    COLORES[2],
-                                }}
-                              >
-                                {
-                                  vehiculo.diasFueraGracia
-                                }
-                                d
-                              </span>
-                            ) : (
-                              <span
-                                className="font-medium px-2 py-0.5 rounded-full"
-                                style={{
-                                  background:
-                                    `${COLORES[7]}12`,
-                                  color:
-                                    COLORES[7],
-                                }}
-                              >
-                                En gracia
-                              </span>
-                            )}
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}BB`,
-                            }}
-                          >
-                            {vehiculo.VrNF_Compra !=
-                              null
-                              ? formatMoneda(
-                                vehiculo.VrNF_Compra
-                              )
-                              : "—"}
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}BB`,
-                            }}
-                          >
-                            {vehiculo.costoFinancieroDiario !=
-                              null
-                              ? formatMoneda(
-                                vehiculo.costoFinancieroDiario
-                              )
-                              : "—"}
-                          </td>
-
-                          <td
-                            className="px-3 py-2 font-semibold whitespace-nowrap"
-                            style={{
-                              color:
-                                BRAND_BLUE,
-                            }}
-                          >
-                            {vehiculo.costoFinancieroTotal !=
-                              null
-                              ? formatMoneda(
-                                vehiculo.costoFinancieroTotal
-                              )
-                              : "—"}
-                          </td>
-
-                          <td
-                            className="px-3 py-2 whitespace-nowrap"
-                            style={{
-                              color:
-                                `${BRAND_BLUE}77`,
-                            }}
-                          >
-                            {vehiculo.SitVeiculo ||
-                              "—"}
-                          </td>
-                        </tr>
-                      );
-                    }
-                  )}
-                </tbody>
-
-                <tfoot>
-                  <tr
-                    style={{
-                      background:
-                        `${BRAND_BLUE}08`,
-                      borderTop: `2px solid ${BRAND_BLUE}18`,
-                    }}
-                  >
-                    <td
-                      colSpan={9}
-                      className="px-3 py-2.5 font-semibold text-xs"
-                      style={{
-                        color: BRAND_BLUE,
-                      }}
-                    >
-                      Total (
-                      {filtrados.length.toLocaleString(
-                        "es-MX"
-                      )}{" "}
-                      vehículos)
-                    </td>
-
-                    <td
-                      className="px-3 py-2.5 font-bold whitespace-nowrap text-xs"
-                      style={{
-                        color: BRAND_BLUE,
-                      }}
-                    >
-                      {formatMoneda(totalCosto)}
-                    </td>
-
-                    <td />
-
-                    <td
-                      className="px-3 py-2.5 font-bold whitespace-nowrap text-xs"
-                      style={{
-                        color: BRAND_BLUE,
-                      }}
-                    >
-                      {formatMoneda(
-                        totalCostoFinanciero
-                      )}
-                    </td>
-
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {totalPaginas > 1 && (
-              <div
-                className="flex items-center justify-between mt-3 pt-3"
-                style={{
-                  borderTop: `1px solid ${BRAND_BLUE}10`,
-                }}
-              >
-                <span
-                  className="text-xs"
-                  style={{
-                    color: `${BRAND_BLUE}77`,
-                  }}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-slate-500 font-medium">Página {pagina} de {totalPaginas}</span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                  disabled={pagina === 1}
+                  className="px-3 py-1 text-xs rounded-lg border border-slate-200 bg-white font-bold text-[#001E50] hover:bg-slate-100 disabled:opacity-40"
                 >
-                  Página {pagina} de{" "}
-                  {totalPaginas}
-                </span>
-
-                <div className="flex gap-1">
-                  <button
-                    onClick={() =>
-                      setPagina((actual) =>
-                        Math.max(
-                          1,
-                          actual - 1
-                        )
-                      )
-                    }
-                    disabled={pagina === 1}
-                    className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40"
-                    style={{
-                      borderColor:
-                        `${BRAND_BLUE}22`,
-                      color: BRAND_BLUE,
-                    }}
-                  >
-                    ← Anterior
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      setPagina((actual) =>
-                        Math.min(
-                          totalPaginas,
-                          actual + 1
-                        )
-                      )
-                    }
-                    disabled={
-                      pagina === totalPaginas
-                    }
-                    className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40"
-                    style={{
-                      borderColor:
-                        `${BRAND_BLUE}22`,
-                      color: BRAND_BLUE,
-                    }}
-                  >
-                    Siguiente →
-                  </button>
-                </div>
+                  ← Anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                  disabled={pagina === totalPaginas}
+                  className="px-3 py-1 text-xs rounded-lg border border-slate-200 bg-white font-bold text-[#001E50] hover:bg-slate-100 disabled:opacity-40"
+                >
+                  Siguiente →
+                </button>
               </div>
-            )}
-          </>
-        )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
 export default function InventarioIndex() {
   const navigate = useNavigate();
-
   const tablaRef = useRef(null);
+  const reporteVisualRef = useRef(null);
 
-  const [
-    filtrosDisponibles,
-    setFiltrosDisponibles,
-  ] = useState({
-    agencias: [],
-    estatus: [],
-  });
+  // VISTA ACTIVA: "dashboard" | "detalle"
+  const [vistaActiva, setVistaActiva] = useState("dashboard");
 
-  const [
-    agenciaSeleccionada,
-    setAgenciaSeleccionada,
-  ] = useState("");
+  // Filtros generales
+  const [filtrosDisponibles, setFiltrosDisponibles] = useState({ agencias: [], estatus: [] });
+  const [agenciaSeleccionada, setAgenciaSeleccionada] = useState("");
+  const [modelosComerciales, setModelosComerciales] = useState(false);
+  const [estatusSeleccionado, setEstatusSeleccionado] = useState("");
+  const [condicionInventario, setCondicionInventario] = useState("N");
+  const [familiaFiltro, setFamiliaFiltro] = useState("");
 
-  const [
-    modelosComerciales,
-    setModelosComerciales,
-  ] = useState(false);
+  // Fechas (Ventas / Rotación) - Default últimos 30 días
+  const hoy = new Date();
+  const hace30dias = new Date();
+  hace30dias.setDate(hace30dias.getDate() - 30);
 
-  const [
-    estatusSeleccionado,
-    setEstatusSeleccionado,
-  ] = useState("");
+  const [fechaDesde, setFechaDesde] = useState(formatYMD(hace30dias));
+  const [fechaHasta, setFechaHasta] = useState(formatYMD(hoy));
 
+  // Datos Inventario
+  const [vehiculos, setVehiculos] = useState([]);
+  const [porAgencia, setPorAgencia] = useState([]);
+  const [porEstatus, setPorEstatus] = useState([]);
+  const [porMarca, setPorMarca] = useState([]);
+  const [nuevoUsado, setNuevoUsado] = useState([]);
+  const [nacionalImportado, setNacionalImportado] = useState([]);
+  const [costoTotal, setCostoTotal] = useState(0);
+  const [antiguedad, setAntiguedad] = useState([]);
 
-  const [
-    condicionInventario,
-    setCondicionInventario,
-  ] = useState("N");
+  // Estado Ventas
+  const [ventasData, setVentasData] = useState(null);
+  const [cargandoVentas, setCargandoVentas] = useState(false);
 
-  const [familiaFiltro, setFamiliaFiltro] =
-    useState("");
+  // Accordion drilldown modelo
+  const [modeloExpandido, setModeloExpandido] = useState(null);
 
-  const [vehiculos, setVehiculos] =
-    useState([]);
-
-  const [porAgencia, setPorAgencia] =
-    useState([]);
-
-  const [porEstatus, setPorEstatus] =
-    useState([]);
-
-  const [porMarca, setPorMarca] =
-    useState([]);
-
-  const [nuevoUsado, setNuevoUsado] =
-    useState([]);
-
-  const [
-    nacionalImportado,
-    setNacionalImportado,
-  ] = useState([]);
-
-  const [costoTotal, setCostoTotal] =
-    useState(0);
-
-  const [antiguedad, setAntiguedad] =
-    useState([]);
-
-  const [cargando, setCargando] =
-    useState(true);
-
-  const [cargandoTabla, setCargandoTabla] =
-    useState(true);
-
+  // Loadings y Errores
+  const [cargando, setCargando] = useState(true);
+  const [cargandoTabla, setCargandoTabla] = useState(true);
   const [error, setError] = useState("");
+  const [errorTabla, setErrorTabla] = useState("");
 
-  const [errorTabla, setErrorTabla] =
-    useState("");
+  // Parámetros financieros
+  const [periodoGracia, setPeriodoGracia] = useState(30);
+  const [tiie, setTiie] = useState("6.7458");
+  const [spreadBase, setSpreadBase] = useState("0");
+  const [penetracionRetail, setPenetracionRetail] = useState("0");
 
-  // Parámetros financieros.
-  const [periodoGracia, setPeriodoGracia] =
-    useState(30);
-
-  // Valor inicial según el dato mostrado.
-  const [tiie, setTiie] =
-    useState("6.7458");
-
-  // Debe configurarse con el spread contractual.
-  const [spreadBase, setSpreadBase] =
-    useState("0");
-
-  const [
-    penetracionRetail,
-    setPenetracionRetail,
-  ] = useState("0");
-
-  const tiieNumero = useMemo(
-    () => numeroSeguro(tiie),
-    [tiie]
-  );
-
-  const spreadBaseNumero = useMemo(
-    () => numeroSeguro(spreadBase),
-    [spreadBase]
-  );
-
-  const reglaPenetracion = useMemo(
-    () =>
-      obtenerReglaPenetracion(
-        penetracionRetail
-      ),
-    [penetracionRetail]
-  );
-
-  const spreadEfectivo = useMemo(
-    () =>
-      spreadBaseNumero +
-      reglaPenetracion.descuentoWholesale,
-    [
-      spreadBaseNumero,
-      reglaPenetracion.descuentoWholesale,
-    ]
-  );
-
-  const tasaAnual = useMemo(
-    () => tiieNumero + spreadEfectivo,
-    [tiieNumero, spreadEfectivo]
-  );
+  const tiieNumero = useMemo(() => numeroSeguro(tiie), [tiie]);
+  const spreadBaseNumero = useMemo(() => numeroSeguro(spreadBase), [spreadBase]);
+  const reglaPenetracion = useMemo(() => obtenerReglaPenetracion(penetracionRetail), [penetracionRetail]);
+  const spreadEfectivo = useMemo(() => spreadBaseNumero + reglaPenetracion.descuentoWholesale, [spreadBaseNumero, reglaPenetracion.descuentoWholesale]);
+  const tasaAnual = useMemo(() => tiieNumero + spreadEfectivo, [tiieNumero, spreadEfectivo]);
 
   const agenciaActual = useMemo(() => {
-    return filtrosDisponibles.agencias.find(
-      (agencia) =>
-        String(agencia.codigo) ===
-        String(agenciaSeleccionada)
-    );
-  }, [
-    filtrosDisponibles.agencias,
-    agenciaSeleccionada,
-  ]);
+    return filtrosDisponibles.agencias.find((agencia) => String(agencia.codigo) === String(agenciaSeleccionada));
+  }, [filtrosDisponibles.agencias, agenciaSeleccionada]);
 
-  const esAgenciaCordoba = useMemo(() => {
-    const nombre = normalizarTexto(
-      agenciaActual?.nombre
-    );
-
-    return nombre.includes("CORDOBA");
-  }, [agenciaActual]);
-
+  // Cargar Filtros de Inventario
   useEffect(() => {
-    apiInventario
-      .getFiltros()
-      .then(setFiltrosDisponibles)
-      .catch(() =>
-        setFiltrosDisponibles({
-          agencias: [],
-          estatus: [],
-        })
-      );
+    apiInventario.getFiltros().then(setFiltrosDisponibles).catch(() => setFiltrosDisponibles({ agencias: [], estatus: [] }));
   }, []);
 
-  useEffect(() => {
+  // Cargar APIs de Inventario
+  const cargarInventarioData = useCallback(() => {
     const params = {
-      agencia:
-        agenciaSeleccionada || undefined,
-
-      estatus:
-        estatusSeleccionado || undefined,
-
-      modelos:
-        modelosComerciales
-          ? MODELOS_COMERCIALES.join(",")
-          : undefined,
-
-      condicion:
-        condicionInventario,
+      agencia: agenciaSeleccionada || undefined,
+      estatus: estatusSeleccionado || undefined,
+      modelos: modelosComerciales ? MODELOS_COMERCIALES.join(",") : undefined,
+      condicion: condicionInventario,
     };
-
-    /*
-     * Este endpoint lo dejamos sin condición porque sirve
-     * para comparar Nuevo vs Usado.
-     */
-    const paramsNuevoUsado = {
-      agencia:
-        agenciaSeleccionada || undefined,
-
-      estatus:
-        estatusSeleccionado || undefined,
-
-      modelos:
-        modelosComerciales
-          ? MODELOS_COMERCIALES.join(",")
-          : undefined,
-    };
+    const paramsNuevoUsado = { ...params, condicion: undefined };
 
     setCargando(true);
     setError("");
@@ -1815,1488 +505,628 @@ export default function InventarioIndex() {
       apiInventario.getPorAgencia(params),
       apiInventario.getPorEstatus(params),
       apiInventario.getPorMarca(params),
-
-      apiInventario.getNuevoUsado(
-        paramsNuevoUsado
-      ),
-
-      apiInventario.getNacionalImportado(
-        params
-      ),
-
+      apiInventario.getNuevoUsado(paramsNuevoUsado),
+      apiInventario.getNacionalImportado(params),
       apiInventario.getCosto(params),
-
       apiInventario.getAntiguedad(params),
     ])
-      .then(
-        ([
-          agencia,
-          estatus,
-          marca,
-          nu,
-          ni,
-          costo,
-          antig,
-        ]) => {
-          setPorAgencia(agencia);
-
-          setPorEstatus(
-            estatus.filter(
-              (item) =>
-                !ESTATUS_EXCLUIDOS.includes(
-                  item.estatus
-                )
-            )
-          );
-
-          setPorMarca(
-            marca.slice(0, 13)
-          );
-
-          setNuevoUsado(
-            nu.filter(
-              (item) =>
-                item.condicion === "Nuevo" ||
-                item.condicion === "Usado"
-            )
-          );
-
-          setNacionalImportado(ni);
-
-          setCostoTotal(costo);
-
-          setAntiguedad(antig);
-        }
-      )
-      .catch(() =>
-        setError(
-          "No se pudo cargar el inventario."
-        )
-      )
-      .finally(() =>
-        setCargando(false)
-      );
+      .then(([agencia, estatus, marca, nu, ni, costo, antig]) => {
+        setPorAgencia(agencia);
+        setPorEstatus(estatus.filter((item) => !ESTATUS_EXCLUIDOS.includes(item.estatus)));
+        setPorMarca(marca.slice(0, 13));
+        setNuevoUsado(nu.filter((item) => item.condicion === "Nuevo" || item.condicion === "Usado"));
+        setNacionalImportado(ni);
+        setCostoTotal(costo);
+        setAntiguedad(antig);
+      })
+      .catch(() => setError("No se pudo cargar el resumen de inventario."))
+      .finally(() => setCargando(false));
 
     setCargandoTabla(true);
     setErrorTabla("");
 
-    apiInventario
-      .getInventario(params)
+    apiInventario.getInventario(params)
       .then((data) => {
-        const vehiculosActivos =
-          data.filter(
-            (vehiculo) =>
-              !ESTATUS_EXCLUIDOS.includes(
-                (
-                  vehiculo.StEstoque || ""
-                ).trim()
-              )
-          );
-
-        setVehiculos(
-          vehiculosActivos
-        );
+        const vehiculosActivos = data.filter((vehiculo) => !ESTATUS_EXCLUIDOS.includes((vehiculo.StEstoque || "").trim()));
+        setVehiculos(vehiculosActivos);
       })
-      .catch(() =>
-        setErrorTabla(
-          "No se pudo cargar el listado."
-        )
-      )
-      .finally(() =>
-        setCargandoTabla(false)
-      );
-  }, [
-    agenciaSeleccionada,
-    estatusSeleccionado,
-    modelosComerciales,
-    condicionInventario,
-  ]);
+      .catch(() => setErrorTabla("No se pudo cargar el listado de unidades."))
+      .finally(() => setCargandoTabla(false));
+  }, [agenciaSeleccionada, estatusSeleccionado, modelosComerciales, condicionInventario]);
 
-  const vehiculosCalculados = useMemo(
-    () =>
-      vehiculos.map((vehiculo) =>
-        calcularFinanciamientoVehiculo(
-          vehiculo,
-          periodoGracia,
-          tasaAnual
-        )
-      ),
-    [vehiculos, periodoGracia, tasaAnual]
-  );
+  useEffect(() => {
+    cargarInventarioData();
+  }, [cargarInventarioData]);
 
-  const totalGeneral =
-    vehiculosCalculados.length;
+  // Cargar Datos Ventas (VentasVN API)
+  const cargarVentasData = useCallback(() => {
+    setCargandoVentas(true);
+    const nombreUnificadoVentas = obtenerAgenciaVentas(agenciaActual?.nombre, modelosComerciales);
 
-  const costoFinancieroTotal = useMemo(
-    () =>
-      vehiculosCalculados.reduce(
-        (total, vehiculo) =>
-          total +
-          numeroSeguro(
-            vehiculo.costoFinancieroTotal
-          ),
-        0
-      ),
-    [vehiculosCalculados]
-  );
+    const paramsVentas = {
+      fecha_desde: fechaDesde,
+      fecha_hasta: fechaHasta,
+      agencia: nombreUnificadoVentas || undefined,
+    };
 
-  const unidadesFueraGracia = useMemo(
-    () =>
-      vehiculosCalculados.filter(
-        (vehiculo) =>
-          numeroSeguro(
-            vehiculo.diasFueraGracia
-          ) > 0
-      ).length,
-    [vehiculosCalculados]
-  );
+    Promise.allSettled([
+      getVentasVNDetalle(paramsVentas),
+      getVentasVNDashboard(paramsVentas),
+    ])
+      .then(([resDetalle, resDashboard]) => {
+        const dataDetalle = resDetalle.status === "fulfilled" ? resDetalle.value : null;
+        const dataDashboard = resDashboard.status === "fulfilled" ? resDashboard.value : null;
+
+        const parsedDetalle = procesarRespuestaVentas(dataDetalle);
+        const parsedDashboard = procesarRespuestaVentas(dataDashboard);
+
+        if (parsedDetalle.lista.length > 0) {
+          setVentasData(dataDetalle);
+        } else if (parsedDashboard.lista.length > 0) {
+          setVentasData(dataDashboard);
+        } else if (dataDashboard) {
+          setVentasData(dataDashboard);
+        } else if (dataDetalle) {
+          setVentasData(dataDetalle);
+        } else {
+          setVentasData(null);
+        }
+      })
+      .finally(() => setCargandoVentas(false));
+  }, [fechaDesde, fechaHasta, agenciaActual, modelosComerciales]);
+
+  useEffect(() => {
+    cargarVentasData();
+  }, [cargarVentasData]);
+
+  // Cálculos de Vehículos
+  const vehiculosCalculados = useMemo(() => {
+    return vehiculos.map((v) => calcularFinanciamientoVehiculo(v, periodoGracia, tasaAnual));
+  }, [vehiculos, periodoGracia, tasaAnual]);
+
+  const totalGeneral = vehiculosCalculados.length;
+
+  const costoDiarioTotal = useMemo(() => {
+    return vehiculosCalculados.reduce((total, v) => total + numeroSeguro(v.costoFinancieroDiario), 0);
+  }, [vehiculosCalculados]);
+
+  const costoFinancieroTotal = useMemo(() => {
+    return vehiculosCalculados.reduce((total, v) => total + numeroSeguro(v.costoFinancieroTotal), 0);
+  }, [vehiculosCalculados]);
+
+  const unidadesFueraGracia = useMemo(() => {
+    return vehiculosCalculados.filter((v) => numeroSeguro(v.diasFueraGracia) > 0).length;
+  }, [vehiculosCalculados]);
 
   const agenciaLider = useMemo(() => {
-    if (!porAgencia.length) {
-      return null;
-    }
-
-    return [...porAgencia].sort(
-      (a, b) => b.total - a.total
-    )[0];
+    return porAgencia.length ? [...porAgencia].sort((a, b) => b.total - a.total)[0] : null;
   }, [porAgencia]);
 
   const pctNuevo = useMemo(() => {
-    const total = nuevoUsado.reduce(
-      (acumulado, item) =>
-        acumulado + item.total,
-      0
-    );
-
-    const nuevos = nuevoUsado
-      .filter(
-        (item) =>
-          item.condicion === "Nuevo"
-      )
-      .reduce(
-        (acumulado, item) =>
-          acumulado + item.total,
-        0
-      );
-
-    return total > 0
-      ? Math.round((nuevos / total) * 100)
-      : 0;
+    const total = nuevoUsado.reduce((acumulado, item) => acumulado + item.total, 0);
+    const nuevos = nuevoUsado.filter((item) => item.condicion === "Nuevo").reduce((acumulado, item) => acumulado + item.total, 0);
+    return total > 0 ? Math.round((nuevos / total) * 100) : 0;
   }, [nuevoUsado]);
 
-  const eventosModelo = useMemo(
-    () => ({
-      click: (params) => {
-        setFamiliaFiltro((actual) =>
-          actual.toLowerCase() ===
-            params.name.toLowerCase()
-            ? ""
-            : params.name
-        );
+  // Métricas de Ventas y Rotación
+  const metricasVentas = useMemo(() => {
+    const { lista, resumen } = procesarRespuestaVentas(ventasData);
 
-        setTimeout(() => {
-          tablaRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 100);
-      },
-    }),
-    []
-  );
+    let canceladasCount = 0;
+    let validasCount = 0;
+    let costoVendidoTotal = 0;
 
+    if (lista.length > 0) {
+      lista.forEach((v) => {
+        const sit = String(
+          v.situacion ?? v.Situacion ?? v.SitVeiculo ?? v.estatus ?? v.Estatus ?? v.estado ?? v.sit_veiculo ?? ""
+        ).trim().toUpperCase();
+
+        const esCancelada = sit === "X" || sit === "CANCELADA" || sit === "CANCELADO" || sit === "C" || sit === "CANC" || v.cancelada === true;
+
+        if (esCancelada) {
+          canceladasCount++;
+        } else {
+          validasCount++;
+          const costo = numeroSeguro(
+            v.VrNF_Compra ?? v.vr_nf_compra ?? v.VrCompra ?? v.vr_compra ?? v.costo_compra ??
+            v.CostoCompra ?? v.costo_vehiculo ?? v.costo ?? v.Costo ?? v.precio_costo ??
+            v.PrecioCosto ?? v.valor_compra ?? v.ValorCompra ?? v.VrNF ?? v.vr_nf ??
+            v.monto ?? v.total ?? v.VrVenda ?? v.vr_venda
+          );
+          costoVendidoTotal += costo;
+        }
+      });
+    } else if (resumen) {
+      costoVendidoTotal = numeroSeguro(
+        resumen.costo_vendido ?? resumen.costoVendido ?? resumen.costo_total ??
+        resumen.costoTotal ?? resumen.total_costo ?? resumen.monto_total ??
+        resumen.total ?? resumen.costo ?? resumen.VrNF_Compra ?? resumen.vr_nf_compra
+      );
+      validasCount = numeroSeguro(
+        resumen.validas ?? resumen.unidades_vendidas ?? resumen.unidades ??
+        resumen.total_ventas ?? resumen.ventas ?? resumen.cantidad
+      );
+      canceladasCount = numeroSeguro(
+        resumen.canceladas ?? resumen.ventas_canceladas ?? resumen.total_canceladas ?? resumen.cancelados
+      );
+    }
+
+    const d1 = new Date(fechaDesde);
+    const d2 = new Date(fechaHasta);
+    const diffTime = Math.abs(d2 - d1);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    const mesesPeriodo = diffDays / 30.41;
+
+    const ventasPromedioMensualCosto = mesesPeriodo > 0 ? costoVendidoTotal / mesesPeriodo : 0;
+    const ventasPromedioMensualUnidades = mesesPeriodo > 0 ? validasCount / mesesPeriodo : 0;
+
+    const rotacion = costoTotal > 0 ? costoVendidoTotal / costoTotal : 0;
+    const mesesVenta = ventasPromedioMensualCosto > 0 ? costoTotal / ventasPromedioMensualCosto : 0;
+    const mesesVentaUnidades = ventasPromedioMensualUnidades > 0 ? totalGeneral / ventasPromedioMensualUnidades : 0;
+
+    return {
+      canceladas: canceladasCount,
+      validas: validasCount,
+      costoVendido: costoVendidoTotal,
+      rotacion,
+      mesesVenta,
+      mesesVentaUnidades
+    };
+  }, [ventasData, costoTotal, totalGeneral, fechaDesde, fechaHasta]);
+
+  // Agrupación de Costo Financiero por Agencia (para barras delgadas)
   const costosPorAgencia = useMemo(() => {
     const agrupado = {};
-
     vehiculosCalculados.forEach((vehiculo) => {
       const familia = String(vehiculo.NmFamilia || "").trim().toUpperCase();
-      const esVehiculoComercial =
-        MODELOS_COMERCIALES.some((modelo) =>
-          familia.includes(modelo.toUpperCase())
-        );
+      const esVehiculoComercial = MODELOS_COMERCIALES.some((m) => familia.includes(m.toUpperCase()));
+      const agencia = esVehiculoComercial ? "R&R VC" : vehiculo.agenciaNombre || "Sin agencia";
 
-      // Los modelos comerciales se consideran una agencia virtual.
-      const agencia = esVehiculoComercial
-        ? "Vehiculos Comerciales"
-        : vehiculo.agenciaNombre || "Sin agencia";
-
-      if (!agrupado[agencia]) {
-        agrupado[agencia] = {
-          agencia,
-          total: 0,
-          vehiculosFuera: 0,
-        };
-      }
-
-      agrupado[agencia].total += numeroSeguro(
-        vehiculo.costoFinancieroTotal
-      );
-
-      if (
-        numeroSeguro(
-          vehiculo.diasFueraGracia
-        ) > 0
-      ) {
-        agrupado[agencia].vehiculosFuera += 1;
-      }
+      if (!agrupado[agencia]) agrupado[agencia] = { agencia, totalFinanciero: 0, totalDiario: 0, unidades: 0, vehiculosFuera: 0 };
+      agrupado[agencia].totalFinanciero += numeroSeguro(vehiculo.costoFinancieroTotal);
+      agrupado[agencia].totalDiario += numeroSeguro(vehiculo.costoFinancieroDiario);
+      agrupado[agencia].unidades += 1;
+      if (numeroSeguro(vehiculo.diasFueraGracia) > 0) agrupado[agencia].vehiculosFuera += 1;
     });
 
-    return Object.values(agrupado)
-      .filter((item) => item.total > 0)
-      .sort((a, b) => b.total - a.total);
+    const lista = Object.values(agrupado).sort((a, b) => b.totalFinanciero - a.totalFinanciero);
+    const maxFinanciero = Math.max(1, ...lista.map((i) => i.totalFinanciero));
+    return { lista, maxFinanciero };
   }, [vehiculosCalculados]);
 
-  const optionCostoFinancieroAgencia =
-    useMemo(() => {
-      if (!costosPorAgencia.length) {
-        return null;
+  // AGRUPACIÓN DE MODELOS CON CÁLCULO DE ANTIGÜEDAD PROMEDIO (DÍAS EN STOCK)
+  const modelosAgrupados = useMemo(() => {
+    const map = new Map();
+
+    vehiculosCalculados.forEach((r) => {
+      const famOriginal = r.NmFamilia || "DESCONOCIDO";
+      const grupo = famOriginal.toUpperCase().trim();
+      const costoComp = numeroSeguro(r.VrNF_Compra);
+      const costoDiario = numeroSeguro(r.costoFinancieroDiario);
+      const costoFin = numeroSeguro(r.costoFinancieroTotal);
+      const diasStock = numeroSeguro(r.diasEnStock);
+
+      if (!map.has(grupo)) {
+        map.set(grupo, {
+          modelo: grupo,
+          unidades: 0,
+          costoCompra: 0,
+          costoDiario: 0,
+          costoFin: 0,
+          sumaDiasStock: 0,
+          familiasMap: new Map(),
+        });
       }
 
-      return {
-        tooltip: {
-          trigger: "axis",
-          axisPointer: {
-            type: "none",
-          },
-          backgroundColor: "#FFFFFF",
-          borderColor: `${BRAND_BLUE}22`,
-          borderWidth: 1,
-          textStyle: {
-            color: BRAND_BLUE,
-            fontSize: 12,
-          },
-          formatter: (params) => {
-            const item = params[0];
-            const detalle =
-              costosPorAgencia[
-              item.dataIndex
-              ];
+      const item = map.get(grupo);
+      item.unidades += 1;
+      item.costoCompra += costoComp;
+      item.costoDiario += costoDiario;
+      item.costoFin += costoFin;
+      item.sumaDiasStock += diasStock;
 
-            return `
-              <b>${item.name}</b><br/>
-              Costo financiero: <b>${formatMoneda(
-              item.value
-            )}</b><br/>
-              Fuera de gracia: <b>${detalle.vehiculosFuera
-              } vehículos</b>
-            `;
-          },
-        },
-        grid: {
-          left: 8,
-          right: 20,
-          top: 15,
-          bottom: 10,
-          containLabel: true,
-        },
-        xAxis: {
-          type: "category",
-          data: costosPorAgencia.map(
-            (item) => item.agencia
-          ),
-          axisLine: {
-            lineStyle: {
-              color: `${BRAND_BLUE}22`,
-            },
-          },
-          axisTick: {
-            show: false,
-          },
-          axisLabel: {
-            color: `${BRAND_BLUE}BB`,
-            fontSize: 11,
-          },
-        },
-        yAxis: {
-          type: "value",
-          splitLine: {
-            lineStyle: {
-              color: `${BRAND_BLUE}10`,
-              type: "dashed",
-            },
-          },
-          axisLabel: {
-            color: `${BRAND_BLUE}88`,
-            fontSize: 10,
-            formatter: (valor) =>
-              `$${(
-                valor / 1000
-              ).toFixed(0)}k`,
-          },
-        },
-        series: [
-          {
-            name: "Costo financiero",
-            type: "bar",
-            barWidth: "45%",
-            data: costosPorAgencia.map(
-              (item, index) => ({
-                value: item.total,
-                itemStyle: {
-                  color:
-                    COLORES[
-                    index %
-                    COLORES.length
-                    ],
-                  borderRadius: [
-                    6, 6, 0, 0,
-                  ],
-                },
-              })
-            ),
-            label: {
-              show: true,
-              position: "top",
-              color: BRAND_BLUE,
-              fontSize: 10,
-              fontWeight: 600,
-              formatter: (params) =>
-                `$${(
-                  params.value / 1000
-                ).toFixed(0)}k`,
-            },
-          },
-        ],
+      const famData = item.familiasMap.get(famOriginal) || {
+        familia: famOriginal,
+        unidades: 0,
+        costoCompra: 0,
+        costoDiario: 0,
+        costoFin: 0,
+        sumaDiasStock: 0,
       };
-    }, [costosPorAgencia]);
+      famData.unidades += 1;
+      famData.costoCompra += costoComp;
+      famData.costoDiario += costoDiario;
+      famData.costoFin += costoFin;
+      famData.sumaDiasStock += diasStock;
+      item.familiasMap.set(famOriginal, famData);
+    });
 
-  const optionPorAgencia = useMemo(() => {
-    if (!porAgencia.length) {
-      return null;
+    const list = Array.from(map.values())
+      .map((item) => ({
+        ...item,
+        antiguedadPromedio: item.unidades > 0 ? Math.round(item.sumaDiasStock / item.unidades) : 0,
+        familias: Array.from(item.familiasMap.values())
+          .map((f) => ({
+            ...f,
+            antiguedadPromedio: f.unidades > 0 ? Math.round(f.sumaDiasStock / f.unidades) : 0,
+          }))
+          .sort((a, b) => b.unidades - a.unidades),
+      }))
+      .sort((a, b) => b.unidades - a.unidades);
+
+    const maxUnidadesModelo = Math.max(1, ...list.map((m) => m.unidades));
+    return { list, maxUnidadesModelo };
+  }, [vehiculosCalculados]);
+
+  // Preset de Fechas
+  const setPresetFechas = (tipo) => {
+    const h = new Date();
+    if (tipo === "30dias") {
+      const d = new Date(); d.setDate(d.getDate() - 30);
+      setFechaDesde(formatYMD(d)); setFechaHasta(formatYMD(h));
+    } else if (tipo === "mesActual") {
+      const d = new Date(h.getFullYear(), h.getMonth(), 1);
+      setFechaDesde(formatYMD(d)); setFechaHasta(formatYMD(h));
+    } else if (tipo === "mesAnterior") {
+      const d1 = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+      const d2 = new Date(h.getFullYear(), h.getMonth(), 0);
+      setFechaDesde(formatYMD(d1)); setFechaHasta(formatYMD(d2));
+    } else if (tipo === "anioActual") {
+      const d = new Date(h.getFullYear(), 0, 1);
+      setFechaDesde(formatYMD(d)); setFechaHasta(formatYMD(h));
     }
-
-    const sorted = [...porAgencia].sort(
-      (a, b) => b.total - a.total
-    );
-
-    return {
-      tooltip: {
-        trigger: "axis",
-        axisPointer: {
-          type: "none",
-        },
-        backgroundColor: "#FFFFFF",
-        borderColor: `${BRAND_BLUE}22`,
-        borderWidth: 1,
-        textStyle: {
-          color: BRAND_BLUE,
-          fontSize: 12,
-        },
-        formatter: (params) => {
-          const item = params[0];
-
-          const porcentaje =
-            totalGeneral > 0
-              ? (
-                (item.value /
-                  totalGeneral) *
-                100
-              ).toFixed(1)
-              : 0;
-
-          return `
-            <b>${item.name}</b><br/>
-            Vehículos: <b>${item.value.toLocaleString(
-            "es-MX"
-          )}</b><br/>
-            ${porcentaje}% del total
-          `;
-        },
-      },
-      grid: {
-        left: 8,
-        right: 16,
-        top: 20,
-        bottom: 8,
-        containLabel: true,
-      },
-      xAxis: {
-        type: "category",
-        data: sorted.map(
-          (item) => item.agenciaNombre
-        ),
-        axisLine: {
-          lineStyle: {
-            color: `${BRAND_BLUE}22`,
-          },
-        },
-        axisTick: {
-          show: false,
-        },
-        axisLabel: {
-          color: `${BRAND_BLUE}BB`,
-          fontSize: 11,
-          fontWeight: 500,
-        },
-      },
-      yAxis: {
-        type: "value",
-        splitLine: {
-          lineStyle: {
-            color: `${BRAND_BLUE}10`,
-            type: "dashed",
-          },
-        },
-        axisLabel: {
-          color: `${BRAND_BLUE}88`,
-          fontSize: 10,
-          formatter: (valor) =>
-            valor.toLocaleString("es-MX"),
-        },
-      },
-      series: [
-        {
-          name: "Vehículos",
-          type: "bar",
-          barWidth: "45%",
-          data: sorted.map(
-            (item, index) => ({
-              value: item.total,
-              itemStyle: {
-                color:
-                  PALETA_AGENCIAS[
-                  index %
-                  PALETA_AGENCIAS.length
-                  ],
-                borderRadius: [
-                  6, 6, 0, 0,
-                ],
-              },
-            })
-          ),
-          label: {
-            show: true,
-            position: "top",
-            color: BRAND_BLUE,
-            fontSize: 11,
-            fontWeight: 600,
-            formatter: (params) =>
-              params.value.toLocaleString(
-                "es-MX"
-              ),
-          },
-        },
-      ],
-    };
-  }, [porAgencia, totalGeneral]);
-
-  const optionPorEstatus = useMemo(() => {
-    if (!porEstatus.length) {
-      return null;
-    }
-
-    return {
-      tooltip: {
-        trigger: "item",
-        backgroundColor: "#FFFFFF",
-        borderColor: `${BRAND_BLUE}22`,
-        borderWidth: 1,
-        textStyle: {
-          color: BRAND_BLUE,
-          fontSize: 12,
-        },
-        formatter: (params) =>
-          `<b>${params.name}</b><br/>${params.value.toLocaleString(
-            "es-MX"
-          )} vehículos<br/><b>${params.percent
-          }%</b>`,
-      },
-      legend: {
-        bottom: 0,
-        textStyle: {
-          color: `${BRAND_BLUE}BB`,
-          fontSize: 11,
-        },
-        icon: "circle",
-        itemWidth: 8,
-        itemHeight: 8,
-        itemGap: 12,
-      },
-      color: PALETA_ESTATUS,
-      series: [
-        {
-          name: "Estatus",
-          type: "pie",
-          radius: ["50%", "75%"],
-          center: ["50%", "42%"],
-          itemStyle: {
-            borderColor: "#FFFFFF",
-            borderWidth: 3,
-          },
-          label: {
-            show: true,
-            color: BRAND_BLUE,
-            fontSize: 11,
-            formatter: "{b}\n{d}%",
-          },
-          emphasis: {
-            scaleSize: 5,
-          },
-          data: porEstatus.map(
-            (item) => ({
-              name: item.estatusNombre,
-              value: item.total,
-            })
-          ),
-        },
-      ],
-    };
-  }, [porEstatus]);
-
-  const optionPorMarca = useMemo(() => {
-    if (!porMarca.length) {
-      return null;
-    }
-
-    const datos = [...porMarca].reverse();
-
-    return {
-      tooltip: {
-        trigger: "axis",
-        axisPointer: {
-          type: "none",
-        },
-        backgroundColor: "#FFFFFF",
-        borderColor: `${BRAND_BLUE}22`,
-        borderWidth: 1,
-        textStyle: {
-          color: BRAND_BLUE,
-          fontSize: 12,
-        },
-        formatter: (params) =>
-          `<b>${params[0].name}</b><br/>Vehículos: <b>${params[0].value.toLocaleString(
-            "es-MX"
-          )}</b>`,
-      },
-      grid: {
-        left: 8,
-        right: 80,
-        top: 12,
-        bottom: 12,
-        containLabel: true,
-      },
-      xAxis: {
-        type: "value",
-        splitLine: {
-          lineStyle: {
-            color: `${BRAND_BLUE}10`,
-            type: "dashed",
-          },
-        },
-        axisLabel: {
-          color: `${BRAND_BLUE}88`,
-          fontSize: 10,
-        },
-      },
-      yAxis: {
-        type: "category",
-        data: datos.map(
-          (item) => item.familia
-        ),
-        axisLine: {
-          show: false,
-        },
-        axisTick: {
-          show: false,
-        },
-        axisLabel: {
-          color: BRAND_BLUE,
-          fontSize: 11,
-          fontWeight: 500,
-        },
-      },
-      series: [
-        {
-          name: "Vehículos",
-          type: "bar",
-          data: datos.map(
-            (item, index) => {
-              const activo =
-                familiaFiltro &&
-                item.familia.toLowerCase() ===
-                familiaFiltro.toLowerCase();
-
-              const inactivo =
-                familiaFiltro && !activo;
-
-              return {
-                value: item.total,
-                itemStyle: {
-                  color: inactivo
-                    ? `${BRAND_BLUE}33`
-                    : COLORES[
-                    index %
-                    COLORES.length
-                    ],
-                  borderRadius: [
-                    0, 6, 6, 0,
-                  ],
-                  opacity: inactivo
-                    ? 0.4
-                    : 1,
-                },
-              };
-            }
-          ),
-          barWidth: "60%",
-          label: {
-            show: true,
-            position: "right",
-            color: BRAND_BLUE,
-            fontSize: 11,
-            fontWeight: 600,
-            formatter: (params) =>
-              params.value.toLocaleString(
-                "es-MX"
-              ),
-          },
-          cursor: "pointer",
-        },
-      ],
-    };
-  }, [porMarca, familiaFiltro]);
-
-  const optionNuevoUsado =
-    useMemo(() => {
-      if (!nuevoUsado.length) {
-        return null;
-      }
-
-      const agencias = [
-        ...new Set(
-          nuevoUsado.map(
-            (item) => item.agenciaNombre
-          )
-        ),
-      ];
-
-      const condiciones = [
-        "Nuevo",
-        "Usado",
-      ];
-
-      const series = condiciones.map(
-        (condicion) => ({
-          name: condicion,
-          type: "bar",
-          stack: "total",
-          data: agencias.map((agencia) => {
-            const fila =
-              nuevoUsado.find(
-                (item) =>
-                  item.agenciaNombre ===
-                  agencia &&
-                  item.condicion ===
-                  condicion
-              );
-
-            return fila ? fila.total : 0;
-          }),
-          itemStyle: {
-            color:
-              PALETA_CONDICION[
-              condicion
-              ] ||
-              PALETA_CONDICION.default,
-            borderRadius:
-              condicion === "Usado"
-                ? [6, 6, 0, 0]
-                : [0, 0, 0, 0],
-          },
-          barWidth: "45%",
-          label: {
-            show: true,
-            color: "#FFFFFF",
-            fontSize: 10,
-            fontWeight: 600,
-            formatter: (params) =>
-              params.value > 0
-                ? params.value.toLocaleString(
-                  "es-MX"
-                )
-                : "",
-          },
-        })
-      );
-
-      return {
-        tooltip: {
-          trigger: "axis",
-          axisPointer: {
-            type: "none",
-          },
-          backgroundColor: "#FFFFFF",
-          borderColor:
-            `${BRAND_BLUE}22`,
-          borderWidth: 1,
-          textStyle: {
-            color: BRAND_BLUE,
-            fontSize: 12,
-          },
-        },
-        legend: {
-          top: 0,
-          textStyle: {
-            color: `${BRAND_BLUE}BB`,
-            fontSize: 11,
-          },
-          icon: "circle",
-          itemWidth: 8,
-          itemHeight: 8,
-        },
-        grid: {
-          left: 8,
-          right: 16,
-          top: 32,
-          bottom: 8,
-          containLabel: true,
-        },
-        xAxis: {
-          type: "category",
-          data: agencias,
-          axisLine: {
-            lineStyle: {
-              color: `${BRAND_BLUE}22`,
-            },
-          },
-          axisTick: {
-            show: false,
-          },
-          axisLabel: {
-            color: `${BRAND_BLUE}BB`,
-            fontSize: 11,
-          },
-        },
-        yAxis: {
-          type: "value",
-          splitLine: {
-            lineStyle: {
-              color: `${BRAND_BLUE}10`,
-              type: "dashed",
-            },
-          },
-          axisLabel: {
-            color: `${BRAND_BLUE}88`,
-            fontSize: 10,
-          },
-        },
-        series,
-      };
-    }, [nuevoUsado]);
-
-  const optionNacionalImportado =
-    useMemo(() => {
-      if (!nacionalImportado.length) {
-        return null;
-      }
-
-      return {
-        tooltip: {
-          trigger: "item",
-          backgroundColor: "#FFFFFF",
-          borderColor:
-            `${BRAND_BLUE}22`,
-          borderWidth: 1,
-          textStyle: {
-            color: BRAND_BLUE,
-            fontSize: 12,
-          },
-          formatter: (params) =>
-            `<b>${params.name}</b><br/>${params.value.toLocaleString(
-              "es-MX"
-            )} vehículos<br/><b>${params.percent
-            }%</b>`,
-        },
-        legend: {
-          bottom: 0,
-          textStyle: {
-            color: `${BRAND_BLUE}BB`,
-            fontSize: 11,
-          },
-          icon: "circle",
-          itemWidth: 8,
-          itemHeight: 8,
-        },
-        color: [
-          BRAND_BLUE,
-          COLORES[7],
-        ],
-        series: [
-          {
-            name: "Origen",
-            type: "pie",
-            radius: ["45%", "70%"],
-            center: ["50%", "42%"],
-            itemStyle: {
-              borderColor: "#FFFFFF",
-              borderWidth: 3,
-            },
-            label: {
-              show: true,
-              color: BRAND_BLUE,
-              fontSize: 11,
-              formatter: "{b}\n{d}%",
-            },
-            emphasis: {
-              scaleSize: 5,
-            },
-            data: nacionalImportado.map(
-              (item) => ({
-                name: item.tipoNombre,
-                value: item.total,
-              })
-            ),
-          },
-        ],
-      };
-    }, [nacionalImportado]);
-
-  const optionAntiguedad =
-    useMemo(() => {
-      if (!antiguedad.length) {
-        return null;
-      }
-
-      const orden = [
-        "+120",
-        "91-120",
-        "61-90",
-        "31-60",
-        "0-30",
-      ];
-
-      const datos = orden.map(
-        (rango) =>
-          antiguedad.find(
-            (item) =>
-              item.rango === rango
-          ) ?? {
-            rango,
-            total: 0,
-          }
-      );
-
-      return {
-        tooltip: {
-          trigger: "axis",
-          axisPointer: {
-            type: "none",
-          },
-          backgroundColor: "#FFFFFF",
-          borderColor:
-            `${BRAND_BLUE}22`,
-          borderWidth: 1,
-          textStyle: {
-            color: BRAND_BLUE,
-            fontSize: 12,
-          },
-          formatter: (params) =>
-            `<b>${params[0].name} días</b><br/>Vehículos: <b>${params[0].value.toLocaleString(
-              "es-MX"
-            )}</b>`,
-        },
-        grid: {
-          left: 8,
-          right: 60,
-          top: 8,
-          bottom: 8,
-          containLabel: true,
-        },
-        xAxis: {
-          type: "value",
-          splitLine: {
-            lineStyle: {
-              color: `${BRAND_BLUE}10`,
-              type: "dashed",
-            },
-          },
-          axisLabel: {
-            color: `${BRAND_BLUE}88`,
-            fontSize: 10,
-          },
-        },
-        yAxis: {
-          type: "category",
-          data: datos.map(
-            (item) => item.rango
-          ),
-          axisLine: {
-            show: false,
-          },
-          axisTick: {
-            show: false,
-          },
-          axisLabel: {
-            color: BRAND_BLUE,
-            fontSize: 12,
-            fontWeight: 600,
-          },
-        },
-        series: [
-          {
-            name: "Vehículos",
-            type: "bar",
-            data: datos.map(
-              (item, index) => ({
-                value: item.total,
-                itemStyle: {
-                  color:
-                    COLORES[
-                    index %
-                    COLORES.length
-                    ],
-                  borderRadius: [
-                    0, 6, 6, 0,
-                  ],
-                },
-              })
-            ),
-            barWidth: "55%",
-            label: {
-              show: true,
-              position: "right",
-              color: BRAND_BLUE,
-              fontSize: 12,
-              fontWeight: 600,
-              formatter: (params) =>
-                params.value > 0
-                  ? params.value.toLocaleString(
-                    "es-MX"
-                  )
-                  : "",
-            },
-          },
-        ],
-      };
-    }, [antiguedad]);
-
-  // ── Funciones para formatear el nombre del archivo según filtros ──
-  const limpiarNombreArchivo = (valor) => {
-    return String(valor ?? "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9_-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .toLowerCase();
   };
 
-  const obtenerSelloFecha = () => {
-    const ahora = new Date();
-    const dos = (valor) => String(valor).padStart(2, "0");
-    return `${ahora.getFullYear()}${dos(ahora.getMonth() + 1)}${dos(ahora.getDate())}_${dos(ahora.getHours())}${dos(ahora.getMinutes())}`;
-  };
+  // Botones Concesionarios
+  const agenciasPills = useMemo(() => {
+    const agsInv = filtrosDisponibles.agencias || [];
+    return [
+      { id: "todas", label: "Todas las agencias", click: () => { setAgenciaSeleccionada(""); setModelosComerciales(false); } },
+      { id: "comerciales", label: "R&R Vehículos Comerciales", click: () => { setAgenciaSeleccionada(""); setModelosComerciales(true); } },
+      ...agsInv.map((a) => ({
+        id: a.codigo,
+        label: a.nombre,
+        click: () => { setModelosComerciales(false); setAgenciaSeleccionada(a.codigo); },
+      })),
+    ];
+  }, [filtrosDisponibles.agencias]);
 
-  const crearNombreReporteInventario = (extension) => {
-    // 1. Resolver nombre del Dealer / Agencia
-    let dealerDesc = "todos_los_dealers";
-    if (modelosComerciales) {
-      dealerDesc = "vehiculos_comerciales";
-    } else if (agenciaActual?.nombre) {
-      dealerDesc = agenciaActual.nombre;
-    }
-
-    // 2. Resolver Estatus
-    let estatusDesc = "todos_los_estatus";
-    if (estatusSeleccionado) {
-      const estatusObj = filtrosDisponibles.estatus.find(
-        (e) => String(e.codigo) === String(estatusSeleccionado)
-      );
-      estatusDesc = estatusObj?.nombre || estatusSeleccionado;
-    }
-
-    const graciaDesc = periodoGracia ? `gracia_${periodoGracia}_dias` : "";
-    const dealerLimpio = limpiarNombreArchivo(dealerDesc) || "todos_los_dealers";
-    const estatusLimpio = limpiarNombreArchivo(estatusDesc) || "todos_los_estatus";
-    const graciaLimpia = graciaDesc ? `_${limpiarNombreArchivo(graciaDesc)}` : "";
-    const modeloLimpio = familiaFiltro ? `_${limpiarNombreArchivo(familiaFiltro)}` : "";
-
-    return `reporte_inventario_${dealerLimpio}_${estatusLimpio}${graciaLimpia}${modeloLimpio}_${obtenerSelloFecha()}.${extension}`;
-  };
-  
+  // Exportaciones
   const [exportando, setExportando] = useState(null);
-
-  const descargarBlob = (blob, nombreArchivo) => {
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement("a");
-    enlace.href = url;
-    enlace.download = nombreArchivo;
-    document.body.appendChild(enlace);
-    enlace.click();
-    enlace.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
 
   const exportarInventarioExcel = async () => {
     if (!vehiculosCalculados.length || exportando) return;
     setExportando("excel");
     try {
       const workbook = new ExcelJS.Workbook();
-      const hoja = workbook.addWorksheet("Inventario", {
-        views: [{ state: "frozen", ySplit: 1 }],
-        pageSetup: { orientation: "landscape" },
-      });
-
-      const columnas = [
-        { header: "VIN", key: "vin", width: 22 },
-        { header: "Familia", key: "familia", width: 18 },
-        { header: "Modelo", key: "modelo", width: 28 },
-        { header: "Agencia", key: "agencia", width: 20 },
-        { header: "Condición", key: "condicion", width: 12 },
-        { header: "Estatus", key: "estatus", width: 14 },
-        { header: "F. Factura", key: "fecha_factura", width: 14 },
-        { header: "Antigüedad (d)", key: "antiguedad", width: 15 },
-        { header: "Fuera Gracia (d)", key: "fuera_gracia", width: 16 },
-        { header: "Valor Compra", key: "valor_compra", width: 18 },
-        { header: "Costo Diario", key: "costo_diario", width: 16 },
-        { header: "Costo Financiero Total", key: "costo_total", width: 22 },
-        { header: "Situación", key: "situacion", width: 14 },
+      const hoja = workbook.addWorksheet("Inventario", { views: [{ state: "frozen", ySplit: 1 }], pageSetup: { orientation: "landscape" } });
+      hoja.columns = [
+        { header: "VIN", key: "vin", width: 22 }, { header: "Familia", key: "familia", width: 18 }, { header: "Modelo", key: "modelo", width: 28 }, { header: "Agencia", key: "agencia", width: 20 },
+        { header: "Condición", key: "condicion", width: 12 }, { header: "Estatus", key: "estatus", width: 14 }, { header: "F. Factura", key: "fecha_factura", width: 14 },
+        { header: "Antigüedad (d)", key: "antiguedad", width: 15 }, { header: "Fuera Gracia (d)", key: "fuera_gracia", width: 16 }, { header: "Valor Compra", key: "valor_compra", width: 18 },
+        { header: "Costo Diario", key: "costo_diario", width: 16 }, { header: "Costo Financiero Total", key: "costo_total", width: 22 }, { header: "Situación", key: "situacion", width: 14 },
       ];
-
-      hoja.columns = columnas;
-
-      // Encabezado estilizado
-      hoja.getRow(1).eachCell((cell) => {
-        cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-      });
-
+      hoja.getRow(1).eachCell((cell) => { cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } }; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001E50" } }; cell.alignment = { horizontal: "center", vertical: "middle" }; });
       vehiculosCalculados.forEach((v) => {
-        hoja.addRow({
-          vin: v.NrChassi || "—",
-          familia: v.NmFamilia || "—",
-          modelo: v.EdiModelo || "—",
-          agencia: v.agenciaNombre || "—",
-          condicion: v.CondUso === "N" ? "Nuevo" : v.CondUso === "U" ? "Usado" : v.CondUso,
-          estatus: v.estatusNombre || "—",
-          fecha_factura: v.DtFaturamento || "—",
-          antiguedad: v.diasEnStock ?? 0,
-          fuera_gracia: v.diasFueraGracia ?? 0,
-          valor_compra: Number(v.VrNF_Compra) || 0,
-          costo_diario: v.costoFinancieroDiario || 0,
-          costo_total: v.costoFinancieroTotal || 0,
-          situacion: v.SitVeiculo || "—",
-        });
+        hoja.addRow({ vin: v.NrChassi || "—", familia: v.NmFamilia || "—", modelo: v.EdiModelo || "—", agencia: v.agenciaNombre || "—", condicion: v.CondUso === "N" ? "Nuevo" : v.CondUso === "U" ? "Usado" : v.CondUso, estatus: v.estatusNombre || "—", fecha_factura: v.DtFaturamento || "—", antiguedad: v.diasEnStock ?? 0, fuera_gracia: v.diasFueraGracia ?? 0, valor_compra: Number(v.VrNF_Compra) || 0, costo_diario: v.costoFinancieroDiario || 0, costo_total: v.costoFinancieroTotal || 0, situacion: v.SitVeiculo || "—" });
       });
-
-      hoja.getColumn(10).numFmt = "$#,##0.00";
-      hoja.getColumn(11).numFmt = "$#,##0.00";
-      hoja.getColumn(12).numFmt = "$#,##0.00";
-
+      hoja.getColumn(10).numFmt = "$#,##0.00"; hoja.getColumn(11).numFmt = "$#,##0.00"; hoja.getColumn(12).numFmt = "$#,##0.00";
       const buffer = await workbook.xlsx.writeBuffer();
-      descargarBlob(
-        new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-        crearNombreReporteInventario("xlsx")
-      );
-    } catch (err) {
-      console.error("Error generando Excel de inventario:", err);
-      alert("Error al exportar inventario a Excel.");
-    } finally {
-      setExportando(null);
-    }
-  };
-
-  const reporteVisualRef = useRef(null);
-
-  const esperarRenderCompleto = async () => {
-    if (document.fonts?.ready) await document.fonts.ready;
-    await new Promise((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(resolve));
-    });
-    // Breve pausa para asegurar que ECharts pinte los gráficos en el canvas
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  };
-
-  const agregarCanvasPaginadoPdf = (doc, canvas) => {
-    const margen = 8;
-    const anchoPagina = doc.internal.pageSize.getWidth();
-    const altoPagina = doc.internal.pageSize.getHeight();
-    const anchoUtil = anchoPagina - margen * 2;
-    const altoUtil = altoPagina - margen * 2;
-    const pixelesPorMm = canvas.width / anchoUtil;
-    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
-
-    let posicionY = 0;
-    let primeraPagina = true;
-
-    while (posicionY < canvas.height) {
-      if (!primeraPagina) doc.addPage("a4", "landscape");
-      primeraPagina = false;
-
-      const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
-      const corte = document.createElement("canvas");
-      corte.width = canvas.width;
-      corte.height = altoActualPx;
-      const contexto = corte.getContext("2d");
-      if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
-      contexto.fillStyle = "#ffffff";
-      contexto.fillRect(0, 0, corte.width, corte.height);
-      contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
-
-      const altoImagenMm = altoActualPx / pixelesPorMm;
-      doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
-      posicionY += altoActualPx;
-    }
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob); const enlace = document.createElement("a"); enlace.href = url; enlace.download = `reporte_inventario_${formatYMD(new Date())}.xlsx`;
+      document.body.appendChild(enlace); enlace.click(); enlace.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { alert("Error al exportar a Excel."); } finally { setExportando(null); }
   };
 
   const exportarInventarioPdf = async () => {
-    if (!vehiculosCalculados.length || exportando) return;
-    setExportando("pdf");
-
+    if (!vehiculosCalculados.length || exportando) return; setExportando("pdf");
     try {
-      if (!reporteVisualRef.current) throw new Error("No se encontró el contenedor visual.");
-
-      await esperarRenderCompleto();
-
-      // 1. Capturar todo el bloque de KPIs y gráficas en alta resolución
-      const canvas = await html2canvas(reporteVisualRef.current, {
-        scale: 1.35,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#ffffff",
-        logging: false,
-      });
-
+      if (document.fonts?.ready) await document.fonts.ready;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const canvas = await html2canvas(reporteVisualRef.current, { scale: 1.4, useCORS: true, backgroundColor: "#ffffff", logging: false });
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
-      doc.setProperties({
-        title: `Reporte de Inventario - ${new Date().toLocaleDateString("es-MX")}`,
-        author: "CRM Grupo Automotriz R&R",
-      });
-
-      // 2. Paginar e insertar las gráficas capturadas al inicio del documento
-      agregarCanvasPaginadoPdf(doc, canvas);
-
-      // 3. Agregar la tabla detallada en las páginas siguientes
-      doc.addPage("a4", "landscape");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(19, 30, 92);
-      doc.text("Detalle de Inventario de Unidades", 10, 12);
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100);
-      doc.text(
-        `Generado: ${new Date().toLocaleString("es-MX")} · Total: ${vehiculosCalculados.length} unidades`,
-        10,
-        16
-      );
-
+      const anchoUtil = doc.internal.pageSize.getWidth() - 16;
+      const pixelesPorMm = canvas.width / anchoUtil;
+      doc.addImage(canvas.toDataURL("image/png"), "PNG", 8, 8, anchoUtil, canvas.height / pixelesPorMm, undefined, "FAST");
+      doc.addPage("a4", "landscape"); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(0, 30, 80);
+      doc.text("Detalle de Inventario Físico de Unidades", 10, 12);
       autoTable(doc, {
-        startY: 19,
-        head: [["VIN", "Familia", "Modelo", "Agencia", "Cond.", "Estatus", "F. Factura", "Antig.", "F. Gracia", "Valor Compra", "Costo Fin."]],
-        body: vehiculosCalculados.map((v) => [
-          v.NrChassi || "—",
-          v.NmFamilia || "—",
-          (v.EdiModelo || "—").slice(0, 20),
-          v.agenciaNombre || "—",
-          v.CondUso === "N" ? "Nuevo" : "Usado",
-          v.estatusNombre || "—",
-          v.DtFaturamento || "—",
-          `${v.diasEnStock ?? 0}d`,
-          v.diasFueraGracia ? `${v.diasFueraGracia}d` : "0d",
-          v.VrNF_Compra ? `$${Number(v.VrNF_Compra).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—",
-          v.costoFinancieroTotal ? `$${Number(v.costoFinancieroTotal).toLocaleString("es-MX", { maximumFractionDigits: 2 })}` : "$0.00",
-        ]),
-        theme: "grid",
-        styles: { fontSize: 6.5, cellPadding: 1.2 },
-        headStyles: { fillColor: [19, 30, 92], textColor: 255 },
-        margin: { left: 8, right: 8, bottom: 10 },
-        didDrawPage: () => {
-          const ancho = doc.internal.pageSize.getWidth();
-          const alto = doc.internal.pageSize.getHeight();
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7);
-          doc.setTextColor(107, 114, 128);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
-        },
+        startY: 16,
+        head: [["VIN", "Familia", "Modelo", "Agencia", "Cond.", "Estatus", "F. Factura", "Antig.", "F. Gracia", "Valor Compra", "Costo Diario", "Costo Total"]],
+        body: vehiculosCalculados.map((v) => [v.NrChassi || "—", v.NmFamilia || "—", (v.EdiModelo || "—").slice(0, 18), v.agenciaNombre || "—", v.CondUso === "N" ? "Nuevo" : "Usado", v.estatusNombre || "—", v.DtFaturamento || "—", `${v.diasEnStock ?? 0}d`, v.diasFueraGracia ? `${v.diasFueraGracia}d` : "0d", formatMoneda(v.VrNF_Compra, 0), formatMoneda(v.costoFinancieroDiario, 0), formatMoneda(v.costoFinancieroTotal, 0)]),
+        theme: "grid", styles: { fontSize: 6, cellPadding: 1 }, headStyles: { fillColor: [0, 30, 80], textColor: 255 }, margin: { left: 8, right: 8, bottom: 8 },
       });
-
-      doc.save(crearNombreReporteInventario("pdf"));
-    } catch (err) {
-      console.error("Error generando PDF de inventario:", err);
-      alert("Error al exportar inventario a PDF.");
-    } finally {
-      setExportando(null);
-    }
+      doc.save(`reporte_inventario_${formatYMD(new Date())}.pdf`);
+    } catch (err) { alert("Error al exportar a PDF."); } finally { setExportando(null); }
   };
 
   return (
-    <div className="inventario-page min-h-screen text-[14px] text-[#1A2344]">
-      <main className="space-y-8 px-2 py-4 lg:px-4">
-        {/* Barra superior con botones de exportación */}
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-6 pt-1">
+    <div className="min-h-screen bg-[#F8FAFC]">
+      <main className="space-y-4 py-3 px-1 sm:px-2">
+        {/* HEADER TOP BAR */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-extrabold text-[#131E5C]">Inventario</h1>
-            <p className="text-xs font-semibold text-[#8891AD]">Control físico y costos financieros de unidades activas</p>
+            <h1 className="text-xl font-extrabold text-[#001E50] tracking-tight">Control de Inventario</h1>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-xl border border-[#001E50]/20 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setVistaActiva("dashboard")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "dashboard" ? "bg-[#001E50] text-white shadow" : "text-[#001E50] hover:bg-slate-100"
+                  }`}
+              >
+                <BarChart3 className="h-3.5 w-3.5" /> Gráficos
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaActiva("detalle")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "detalle" ? "bg-[#001E50] text-white shadow" : "text-[#001E50] hover:bg-slate-100"
+                  }`}
+              >
+                <Table2 className="h-3.5 w-3.5" /> Tabla Detalle
+              </button>
+            </div>
 
-          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={exportarInventarioExcel}
               disabled={!vehiculosCalculados.length || Boolean(exportando)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:opacity-50"
             >
-              {exportando === "excel" ? <LoaderCircle size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-              {exportando === "excel" ? "Generando..." : "Exportar Excel"}
+              {exportando === "excel" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+              Excel
             </button>
 
             <button
+              type="button"
               onClick={exportarInventarioPdf}
               disabled={!vehiculosCalculados.length || Boolean(exportando)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-100 disabled:opacity-50"
             >
-              {exportando === "pdf" ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}
-              {exportando === "pdf" ? "Generando..." : "Exportar PDF"}
+              {exportando === "pdf" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              PDF
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { cargarInventarioData(); cargarVentasData(); }}
+              disabled={cargando || cargandoTabla || cargandoVentas}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#001E50]/20 bg-white px-3 text-xs font-bold text-[#001E50] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
+            >
+              {cargando || cargandoTabla || cargandoVentas ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Actualizar
             </button>
           </div>
         </div>
 
-        {/* Filtros generales */}
-        <Seccion titulo='Filtros'>
-          <FiltrosInventario
-            filtrosDisponibles={filtrosDisponibles}
+        {/* HERO CARD BANNER ESTILO VOLVO */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#001E50] via-[#0A1340] to-[#050B28] text-white shadow-xl border border-[#001E50]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(22,119,255,0.15),transparent_70%)] pointer-events-none" />
+          <Car className="absolute -right-6 -bottom-6 h-56 w-56 text-white/[0.04] pointer-events-none transform -rotate-12" />
 
-            agenciaSeleccionada={agenciaSeleccionada}
-            setAgenciaSeleccionada={setAgenciaSeleccionada}
-
-            modelosComerciales={modelosComerciales}
-            setModelosComerciales={setModelosComerciales}
-
-            estatusSeleccionado={estatusSeleccionado}
-            setEstatusSeleccionado={setEstatusSeleccionado}
-
-            condicionInventario={condicionInventario}
-            setCondicionInventario={setCondicionInventario}
-
-            periodoGracia={periodoGracia}
-            setPeriodoGracia={setPeriodoGracia}
-
-            tiie={tiie}
-            setTiie={setTiie}
-
-            spreadBase={spreadBase}
-            setSpreadBase={setSpreadBase}
-
-            penetracionRetail={penetracionRetail}
-            setPenetracionRetail={setPenetracionRetail}
-
-            reglaPenetracion={reglaPenetracion}
-            spreadEfectivo={spreadEfectivo}
-            tasaAnual={tasaAnual}
-          />
-
-          {error && (
-            <div className="rounded-xl border border-[#C8D0DF] bg-[#F7F8FC] px-4 py-3 font-semibold text-[#131E5C]">
-              {error}
-            </div>
-          )}
-        </Seccion>
-        {/* ========================================================================= */}
-        {/* ── BLOQUE VISUAL CAPTURADO POR EL PDF (Gráficas y KPIs) ──────────────── */}
-        {/* ========================================================================= */}
-        <div ref={reporteVisualRef} className="space-y-6 bg-white p-2 rounded-xl">
-          
-          {/* Resumen de Inventario */}
-          <Seccion titulo="Resumen de Inventario">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KPICard
-                label="Total activo"
-                value={
-                  cargandoTabla
-                    ? "…"
-                    : totalGeneral.toLocaleString("es-MX")
-                }
-                sub="Inventario considerado"
-              />
-
-              <KPICard
-                label="Costo inventario"
-                value={
-                  cargando
-                    ? "…"
-                    : formatMoneda(costoTotal, 0)
-                }
-                sub="Suma valor de compra"
-              />
-
-              <KPICard
-                label="Fuera de gracia"
-                value={
-                  cargandoTabla
-                    ? "…"
-                    : unidadesFueraGracia.toLocaleString("es-MX")
-                }
-                sub={`Más de ${periodoGracia} días`}
-              />
-
-              <KPICard
-                label="Costo financiero"
-                value={
-                  cargandoTabla
-                    ? "…"
-                    : formatMoneda(costoFinancieroTotal, 0)
-                }
-                sub="Costo acumulado actual"
-                destacado
-              />
+          {/* ENCABEZADO Y MÉTRICAS CLAVE */}
+          <div className="relative p-5 pb-4 border-b border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-sky-300/80">
+                  VOLKSWAGEN AUTOMOTRIZ R&R · CONTROL FÍSICO Y FINANCIERO DE UNIDADES
+                </p>
+                <h2 className="text-2xl font-black tracking-tight text-white mt-0.5">
+                  Dashboard de Inventario
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-white/10 backdrop-blur-md px-3 py-1 text-[11px] font-bold text-white border border-white/15">
+                  Tasa Aplicada: <strong className="text-sky-300">{tasaAnual.toFixed(4)}%</strong> (TIIE + Spread)
+                </span>
+              </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KPICard
-                label="Agencia líder"
-                value={
-                  cargando
-                    ? "…"
-                    : agenciaLider?.agenciaNombre || "—"
-                }
-                sub={
-                  agenciaLider
-                    ? `${agenciaLider.total.toLocaleString("es-MX")} vehículos`
-                    : ""
-                }
-              />
+            {/* MÉTRICAS EN BLOQUES ESTILO VOLVO */}
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-white/10">
 
-              <KPICard
-                label="% Nuevos"
-                value={cargando ? "…" : `${pctNuevo}%`}
-                sub="Del total activo"
-              />
+              <div className="pt-2 sm:pt-0 sm:px-3 first:px-0">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  TOTAL ACTIVO
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-white">
+                    {cargandoTabla ? "…" : totalGeneral.toLocaleString("es-MX")}
+                  </span>
+                  <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300 border border-sky-500/30">
+                    {pctNuevo}% nuev.
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Unidades en stock activo</p>
+              </div>
 
-              <KPICard
-                label="Tasa aplicada"
-                value={`${tasaAnual.toFixed(4)}%`}
-                sub="TIIE + spread efectivo"
-              />
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  VALOR DE COMPRA
+                </span>
+                <span className="text-2xl font-black text-white block">
+                  {cargando ? "…" : formatMoneda(costoTotal, 0)}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Capital total invertido</p>
+              </div>
 
-              <KPICard
-                label="Periodo de gracia"
-                value={`${periodoGracia} días`}
-                sub="Parámetro actual"
-              />
+              <div className="pt-2 sm:pt-0 sm:px-3 bg-white/5 sm:bg-transparent p-2 sm:p-0 rounded-xl">
+                <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 block mb-1">
+                  COSTO DIARIO
+                </span>
+                <span className="text-2xl font-black text-sky-300 block">
+                  {cargandoTabla ? "…" : `${formatMoneda(costoDiarioTotal, 0)}/día`}
+                </span>
+                <p className="text-[10px] text-sky-200/80 mt-1">Interés diario generado</p>
+              </div>
+
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  COSTO FINANCIERO ACUM.
+                </span>
+                <span className="text-2xl font-black text-emerald-400 block">
+                  {cargandoTabla ? "…" : formatMoneda(costoFinancieroTotal, 0)}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Acumulado fuera de gracia</p>
+              </div>
+
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  FUERA DE GRACIA
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-amber-300">
+                    {cargandoTabla ? "…" : unidadesFueraGracia}
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-200/80">uds.</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Más de {periodoGracia} días en stock</p>
+              </div>
+
+              <div className="pt-2 sm:pt-0 sm:px-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300/80 block mb-1">
+                  ROTACIÓN (PERIODO)
+                </span>
+                <span className="text-2xl font-black text-sky-300 block">
+                  {cargandoVentas ? "…" : `${metricasVentas.rotacion.toFixed(2)}x`}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {metricasVentas.mesesVenta.toFixed(1)} meses venta (valor)
+                </p>
+              </div>
+
             </div>
-          </Seccion>
+          </div>
 
-          {/* Financiamiento y antigüedad */}
-          <Seccion
-            titulo="Costo Financiero"
-            subtitulo="Antigüedad del inventario y costo generado fuera del periodo de gracia"
-          >
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <Panel
-                titulo="Antigüedad en Stock"
-                subtitulo="Días desde facturación"
-                alto={300}
-              >
-                {optionAntiguedad ? (
-                  <ChartDiv
-                    option={optionAntiguedad}
-                    loading={cargando}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </Panel>
+          {/* BOTONES DE AGENCIAS / CONCESIONARIOS */}
+          <div className="bg-black/30 backdrop-blur-md px-5 py-2.5 flex flex-wrap items-center gap-2 border-t border-white/10">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 mr-2">Concesionarios:</span>
+            {agenciasPills.map((pill) => {
+              const activa = pill.id === "todas"
+                ? (!agenciaSeleccionada && !modelosComerciales)
+                : pill.id === "comerciales"
+                  ? modelosComerciales
+                  : (agenciaSeleccionada === pill.id && !modelosComerciales);
 
-              <Panel
-                titulo="Costo financiero por agencia"
-                subtitulo={`Tasa ${tasaAnual.toFixed(4)}% · Gracia ${periodoGracia} días`}
-                alto={300}
-              >
-                {optionCostoFinancieroAgencia ? (
-                  <ChartDiv
-                    option={optionCostoFinancieroAgencia}
-                    loading={cargandoTabla}
-                  />
-                ) : (
-                  <EmptyState mensaje="No existen vehículos fuera del periodo de gracia" />
-                )}
-              </Panel>
-            </div>
-          </Seccion>
-
-          {/* Distribución del Inventario (Gráficas) */}
-          <Seccion
-            titulo="Distribución del Inventario"
-            subtitulo="Composición actual de las unidades activas"
-          >
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <Panel
-                titulo="Inventario por modelo"
-                subtitulo={
-                  familiaFiltro
-                    ? `Filtrando: ${familiaFiltro} · Selecciona la misma barra para quitar el filtro`
-                    : "Top unidades en stock · Selecciona una barra para filtrar la tabla"
-                }
-                alto={500}
-                extra={
-                  !cargando && porMarca.length > 0 ? (
-                    <Badge
-                      label={`${porMarca.length} modelos`}
-                      color={COLORES[7]}
-                    />
-                  ) : null
-                }
-              >
-                {optionPorMarca ? (
-                  <ChartDiv
-                    option={optionPorMarca}
-                    loading={cargando}
-                    onEvents={eventosModelo}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </Panel>
-
-              <Panel
-                titulo="Inventario por agencia"
-                subtitulo="Total de vehículos activos"
-                alto={500}
-                extra={
-                  !cargando && porAgencia.length > 0 ? (
-                    <Badge
-                      label={`${porAgencia.length} agencias`}
-                      color={COLORES[7]}
-                    />
-                  ) : null
-                }
-              >
-                {optionPorAgencia ? (
-                  <ChartDiv
-                    option={optionPorAgencia}
-                    loading={cargando}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </Panel>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 ">
-              <Panel
-                titulo="Nacional vs. Importado"
-                subtitulo="Tipo de nacionalización"
-                alto={280}
-              >
-                {optionNacionalImportado ? (
-                  <ChartDiv
-                    option={optionNacionalImportado}
-                    loading={cargando}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </Panel>
-            </div>
-          </Seccion>
+              return (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={pill.click}
+                  className={`inline-flex items-center justify-center rounded-full px-3.5 py-1 text-[11px] font-bold transition-all ${activa
+                      ? "bg-white text-[#001E50] shadow-md scale-105"
+                      : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                    }`}
+                >
+                  {pill.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {/* ========================================================================= */}
-        {/* ── FIN DEL BLOQUE VISUAL ─────────────────────────────────────────────── */}
-        {/* ========================================================================= */}
 
-        {/* Detalle del Inventario (Tabla completa al final) */}
-        <Seccion titulo="Detalle del Inventario">
-          <div ref={tablaRef}>
+        {/* PARÁMETROS FINANCIEROS Y RANGO DE VENTAS DE ROTACIÓN */}
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 items-center">
+
+            <div className="lg:col-span-3">
+              <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                Periodo de Gracia (Días)
+              </label>
+              <div className="flex gap-1.5">
+                {[30, 45, 60].map((dias) => (
+                  <button
+                    key={dias}
+                    type="button"
+                    onClick={() => setPeriodoGracia(dias)}
+                    className={`flex-1 rounded-lg border py-1 text-xs font-bold transition ${periodoGracia === dias
+                        ? "border-[#001E50] bg-[#001E50] text-white shadow-sm"
+                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                  >
+                    {dias}d
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-4">
+              <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                Rango Fechas Ventas (Rotación)
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  className="h-8 w-full text-[11px] border border-slate-200 rounded-lg px-2 bg-white text-[#001E50] font-bold outline-none focus:border-[#1677FF]"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                />
+                <span className="text-slate-400 font-bold text-xs">-</span>
+                <input
+                  type="date"
+                  className="h-8 w-full text-[11px] border border-slate-200 rounded-lg px-2 bg-white text-[#001E50] font-bold outline-none focus:border-[#1677FF]"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <button type="button" onClick={() => setPresetFechas("30dias")} className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-[#001E50] hover:bg-slate-100">
+                  30d
+                </button>
+                <button type="button" onClick={() => setPresetFechas("mesActual")} className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-[#001E50] hover:bg-slate-100">
+                  Mes actual
+                </button>
+                <button type="button" onClick={() => setPresetFechas("mesAnterior")} className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-[#001E50] hover:bg-slate-100">
+                  Mes ant.
+                </button>
+                <button type="button" onClick={() => setPresetFechas("anioActual")} className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-[#001E50] hover:bg-slate-100">
+                  Año actual
+                </button>
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 grid grid-cols-3 gap-2">
+              <div>
+                <label className="mb-0.5 block text-[9px] font-black uppercase text-slate-400">TIIE 28d</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={tiie}
+                  onChange={(e) => setTiie(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-[#001E50] outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-0.5 block text-[9px] font-black uppercase text-slate-400">Spread</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={spreadBase}
+                  onChange={(e) => setSpreadBase(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-[#001E50] outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-0.5 block text-[9px] font-black uppercase text-slate-400">Penetración %</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={penetracionRetail}
+                  onChange={(e) => setPenetracionRetail(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-[#001E50] outline-none"
+                />
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* TABLA O DASHBOARD */}
+        {vistaActiva === "detalle" ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" ref={tablaRef}>
+            <h3 className="font-extrabold text-[#001E50] text-sm mb-3">Detalle Individual de Unidades en Inventario</h3>
             <TablaVehiculos
               vehiculos={vehiculosCalculados}
               cargando={cargandoTabla}
@@ -3306,7 +1136,261 @@ export default function InventarioIndex() {
               periodoGracia={periodoGracia}
             />
           </div>
-        </Seccion>
+        ) : (
+          <div ref={reporteVisualRef} className="space-y-4">
+
+            {/* FILA 1: COSTO FINANCIERO Y ROTACIÓN */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+
+              {/* COSTO FINANCIERO POR AGENCIA */}
+              <div className="lg:col-span-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                    <Building2 className="h-3.5 w-3.5" />
+                    <span>Costo Financiero por Concesionario</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Gracia: {periodoGracia} días
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 scrollbar-thin">
+                  {costosPorAgencia.lista.length === 0 ? (
+                    <p className="py-10 text-center text-xs text-slate-400">Sin unidades fuera del periodo de gracia</p>
+                  ) : (
+                    costosPorAgencia.lista.map((item) => {
+                      const pct = Math.min(100, Math.round((item.totalFinanciero / costosPorAgencia.maxFinanciero) * 100));
+                      return (
+                        <div key={item.agencia} className="flex items-center gap-3 text-xs bg-slate-50/70 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-100/80 transition">
+                          <span className="flex h-6 px-2 shrink-0 items-center justify-center rounded-lg bg-[#001E50] text-[10px] font-black text-white">
+                            {item.unidades} uds.
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex justify-between font-bold text-[#1A1F3C] text-[11px] mb-1">
+                              <span className="truncate">{item.agencia}</span>
+                              <span className="shrink-0 text-slate-500 ml-2">{item.vehiculosFuera} fuera gracia</span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                              <div className="h-full rounded-full bg-[#001E50] transition-all duration-300" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 min-w-[100px]">
+                            <span className="font-black text-[#1677FF] text-xs block">
+                              {formatMoneda(item.totalFinanciero, 0)}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-400 block">
+                              {formatMoneda(item.totalDiario, 0)}/día
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* RENTABILIDAD Y ROTACIÓN */}
+              <div className="lg:col-span-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      <span>Análisis de Ventas y Rotación</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Periodo: {fechaDesde} al {fechaHasta}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">COSTO DE LO VENDIDO</span>
+                      <span className="text-xl font-black text-emerald-600 block">{formatMoneda(metricasVentas.costoVendido, 0)}</span>
+                      <p className="text-[10px] font-bold text-slate-500 mt-1">{metricasVentas.validas} uds. ({metricasVentas.canceladas} canceladas)</p>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">ROTACIÓN INVENTARIO</span>
+                      <span className="text-xl font-black text-[#001E50] block">{metricasVentas.rotacion.toFixed(2)}x</span>
+                      <p className="text-[10px] font-bold text-slate-500 mt-1">Costo Vendido / Costo Inventario</p>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">MESES VENTA (VALOR)</span>
+                      <span className="text-xl font-black text-amber-600 block">{metricasVentas.mesesVenta.toFixed(1)} m.</span>
+                      <p className="text-[10px] font-bold text-slate-500 mt-1">Inv / Venta Prom. Mensual ($)</p>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">MESES VENTA (UDS)</span>
+                      <span className="text-xl font-black text-[#1677FF] block">{metricasVentas.mesesVentaUnidades.toFixed(1)} m.</span>
+                      <p className="text-[10px] font-bold text-slate-500 mt-1">Inv / Venta Prom. Mensual (Uds)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#001E50]/5 p-3 rounded-xl border border-[#001E50]/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-[#001E50]" />
+                    <span className="text-xs font-bold text-[#001E50]">Impacto de Permanencia Diaria:</span>
+                  </div>
+                  <span className="text-xs font-black text-[#1677FF]">
+                    {formatMoneda(costoDiarioTotal, 0)} costo financiero/día
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* FILA 2: ANÁLISIS DE MODELOS CON ANTIGÜEDAD PROMEDIO Y ANTIGÜEDAD POR RANGOS */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+
+              {/* MODELOS Y VARIANTES CON ANTIGÜEDAD PROMEDIO INCORPORADA */}
+              <div className="lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                    <Layers className="h-3.5 w-3.5" />
+                    <span>Inventario por Modelo y Variantes (Antigüedad Promedio)</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    Clica un modelo para desplegar sus familias
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1 scrollbar-thin">
+                  {modelosAgrupados.list.length === 0 ? (
+                    <p className="py-12 text-center text-xs text-slate-400">Sin datos de modelos en inventario</p>
+                  ) : (
+                    modelosAgrupados.list.map((m) => {
+                      const estaExpandido = modeloExpandido === m.modelo;
+                      const pctBarra = Math.min(100, Math.round((m.unidades / modelosAgrupados.maxUnidadesModelo) * 100));
+
+                      return (
+                        <div key={m.modelo} className="rounded-xl border border-slate-200 overflow-hidden transition">
+
+                          <div
+                            onClick={() => setModeloExpandido(estaExpandido ? null : m.modelo)}
+                            className="flex items-center gap-3 p-2.5 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition"
+                          >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#001E50] text-white">
+                              {estaExpandido ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            </span>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between font-extrabold text-[#001E50] text-xs mb-1">
+                                <div className="flex items-center gap-2">
+                                  <span>{m.modelo}</span>
+                                  {/* MOSTRAR ANTIGÜEDAD PROMEDIO POR MODELO */}
+                                  <span className="inline-flex items-center gap-1 rounded bg-amber-50 text-amber-800 border border-amber-200/80 px-1.5 py-0.5 text-[10px] font-bold">
+                                    <Clock className="h-3 w-3 text-amber-600" />
+                                    Prom. {m.antiguedadPromedio}d en stock
+                                  </span>
+                                </div>
+                                <span className="text-slate-500">{m.unidades} uds.</span>
+                              </div>
+                              <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                                <div className="h-full rounded-full bg-[#001E50] transition-all duration-300" style={{ width: `${pctBarra}%` }} />
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 min-w-[130px] pl-2 border-l border-slate-200">
+                              <div className="text-xs font-black text-[#001E50]">{formatMoneda(m.costoCompra, 0)}</div>
+                              <div className="text-[10px] font-bold text-[#1677FF]">
+                                {formatMoneda(m.costoDiario, 0)}/día
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* DRILLDOWN INTERACTIVO CON ANTIGÜEDAD PROMEDIO DE SUB-FAMILIAS */}
+                          {estaExpandido && (
+                            <div className="p-3 bg-white border-t border-slate-100 space-y-2 pl-8">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                                Variantes y Familias de {m.modelo}:
+                              </p>
+                              {m.familias.map((fam) => {
+                                const pctSub = Math.min(100, Math.round((fam.unidades / m.unidades) * 100));
+                                return (
+                                  <div key={fam.familia} className="flex items-center gap-3 text-xs bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                                    <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between font-bold text-slate-700 text-[11px] mb-0.5">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="truncate">{fam.familia}</span>
+                                          {/* ANTIGÜEDAD PROMEDIO POR SUB-FAMILIA */}
+                                          <span className="shrink-0 text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/60">
+                                            {fam.antiguedadPromedio}d prom.
+                                          </span>
+                                        </div>
+                                        <span className="shrink-0 text-slate-500 ml-2">{fam.unidades} uds.</span>
+                                      </div>
+                                      <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                                        <div className="h-full rounded-full bg-[#1677FF] transition-all duration-300" style={{ width: `${pctSub}%` }} />
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0 min-w-[120px]">
+                                      <div className="text-[11px] font-bold text-[#001E50]">{formatMoneda(fam.costoCompra, 0)}</div>
+                                      <div className="text-[10px] font-bold text-[#1677FF]">{formatMoneda(fam.costoDiario, 0)}/día</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* ANTIGÜEDAD EN STOCK Y ORIGEN */}
+              <div className="lg:col-span-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Antigüedad en Stock</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {(antiguedad || []).map((item) => {
+                    const color = item.rango === "+120" ? "#dc2626" : item.rango === "91-120" ? "#ea580c" : item.rango === "61-90" ? "#d97706" : "#001E50";
+                    const maxA = Math.max(1, ...(antiguedad || []).map(a => a.total));
+                    const pctBar = Math.min(100, Math.round((item.total / maxA) * 100));
+
+                    return (
+                      <div key={item.rango} className="flex items-center gap-3 text-xs bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <span className="font-extrabold text-[#001E50] w-14 shrink-0">{item.rango}d</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pctBar}%`, backgroundColor: color }} />
+                          </div>
+                        </div>
+                        <span className="font-black text-xs min-w-[40px] text-right" style={{ color }}>{item.total} uds.</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="border-t border-slate-100 pt-3">
+                  <span className="text-[10px] font-black uppercase text-slate-400 block mb-2">Origen de las Unidades</span>
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    {(nacionalImportado || []).map((ni) => (
+                      <div key={ni.tipoNombre} className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-500 block">{ni.tipoNombre}</span>
+                        <span className="text-lg font-black text-[#001E50]">{ni.total} uds.</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
 
       </main>
     </div>

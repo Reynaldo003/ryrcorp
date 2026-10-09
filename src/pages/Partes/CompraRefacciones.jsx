@@ -87,7 +87,7 @@ function fechaCorta(value) {
   const raw = String(value).trim();
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[3]}/${iso[2]}`;
-  const mx = raw.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})/);
+  const mx = raw.match(/^(\d{2})[/-](\d{2})[/-](\d{4})/);
   if (mx) return `${mx[1]}/${mx[2]}`;
   return raw.slice(0, 10);
 }
@@ -104,9 +104,13 @@ export default function CompraRefacciones() {
   const [mesSel, setMesSel] = useState(null); // null = Todo el año
   const [datos, setDatos] = useState([]);
   // Datos paginados: únicamente para la tabla visible.
-  const [datosAnalisis, setDatosAnalisis] = useState([]);
-  // Datos completos del filtro actual: métricas, proveedores y gráficas.
+  const [analisis, setAnalisis] = useState({
+    agencias: [], proveedores: [],
+    vw_mexico: { total: 0, facturas: 0, cantidad: 0 },
+    autopart: { total: 0, facturas: 0, cantidad: 0 },
+  });
   const [loadingAnalisis, setLoadingAnalisis] = useState(true);
+  const solicitudActual = useRef(0);
   const [totalRegistros, setTotalRegistros] = useState(0);
   const [metricas, setMetricas] = useState({
     registros: 0,
@@ -144,37 +148,27 @@ export default function CompraRefacciones() {
     }
     setPagina(1);
   }, [añoSel, mesSel]);
-  // ── FILTRADO EXCLUSIVO VW DE MÉXICO ──
-  const facturasVWDeMexico = useMemo(() => {
-    return datosAnalisis.filter((f) => {
-      const prov = String(f.proveedor || "").toUpperCase();
-      return prov.includes("VOLKSWAGEN") || prov.includes("VW DE MEXICO") || prov.includes("VW MEXICO");
-    });
-  }, [datosAnalisis]);
+  // Los totales llegan ya agregados desde PostgreSQL.
   const metricasVWMexico = useMemo(() => {
+    const datosVW = analisis.vw_mexico;
+    const total = numero(datosVW.total);
     return {
-      total: facturasVWDeMexico.reduce((acc, f) => acc + numero(f.total), 0),
-      facturas: facturasVWDeMexico.length,
-      cantidad: facturasVWDeMexico.reduce((acc, f) => acc + numero(f.qtprodutos), 0),
-      porcentaje: metricas.total > 0 ? ((facturasVWDeMexico.reduce((acc, f) => acc + numero(f.total), 0) / metricas.total) * 100).toFixed(1) : "0.0"
+      total,
+      facturas: numero(datosVW.facturas),
+      cantidad: numero(datosVW.cantidad),
+      porcentaje: metricas.total > 0 ? ((total / metricas.total) * 100).toFixed(1) : "0.0",
     };
-  }, [facturasVWDeMexico, metricas.total]);
-  // ── MÉTRICA SUBALTERNA "AUTOPART" (CÓDIGO AP) ──
+  }, [analisis.vw_mexico, metricas.total]);
   const metricasAutopart = useMemo(() => {
-    const facturasAP = datosAnalisis.filter((f) =>
-      String(f.codigo || "").toUpperCase() === "AP" ||
-      String(f.linea || "").toUpperCase() === "AP" ||
-      String(f.marca || "").toUpperCase() === "AP" ||
-      String(f.serie || "").toUpperCase().includes("AP")
-    );
-    const totalAP = facturasAP.reduce((acc, f) => acc + numero(f.total), 0);
+    const datosAP = analisis.autopart;
+    const total = numero(datosAP.total);
     return {
-      facturas: facturasAP.length,
-      total: totalAP,
-      cantidad: facturasAP.reduce((acc, f) => acc + numero(f.qtprodutos), 0),
-      porcentaje: metricas.total > 0 ? ((totalAP / metricas.total) * 100).toFixed(1) : "0.0"
+      total,
+      facturas: numero(datosAP.facturas),
+      cantidad: numero(datosAP.cantidad),
+      porcentaje: metricas.total > 0 ? ((total / metricas.total) * 100).toFixed(1) : "0.0",
     };
-  }, [datosAnalisis, metricas.total]);
+  }, [analisis.autopart, metricas.total]);
   const limpiarNombreArchivo = (valor) => {
     return String(valor ?? "")
       .normalize("NFD")
@@ -197,12 +191,6 @@ export default function CompraRefacciones() {
     if (totalRegistros === 0 || exportando) return;
     setExportando("excel");
     try {
-      const respuestaCompleta = await getCompraRefTipificada({
-        ...parametros,
-        page: 1,
-        page_size: totalRegistros > 0 ? totalRegistros : 5000,
-      });
-      const filasAExportar = Array.isArray(respuestaCompleta?.results) ? respuestaCompleta.results : datos;
       const workbook = new ExcelJS.Workbook();
       const hoja = workbook.addWorksheet("Compras", {
         views: [{ state: "frozen", ySplit: 1 }],
@@ -226,22 +214,31 @@ export default function CompraRefacciones() {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001E50" } };
         cell.alignment = { horizontal: "center" };
       });
-      filasAExportar.forEach((f) => {
-        const sub = numero(f.subtotal);
-        hoja.addRow({
-          agencia: f.agencia || "—",
-          nrnota: f.nrnota ?? "—",
-          serie: f.serie || "—",
-          nrpedunpar: f.nrpedunpar || "—",
-          qtprodutos: numero(f.qtprodutos),
-          proveedor: f.proveedor || "—",
-          dtemissao: f.dtemissao || "—",
-          dtentrada: f.dtentrada || "—",
-          subtotal: sub,
-          iva: sub * 0.16,
-          total: numero(f.total),
+      const tamanioLote = 1000;
+      const paginasExcel = Math.ceil(totalRegistros / tamanioLote);
+      for (let paginaExcel = 1; paginaExcel <= paginasExcel; paginaExcel++) {
+        const respuesta = await getCompraRefTipificada({
+          ...parametros, page: paginaExcel, page_size: tamanioLote, solo_detalle: 1,
         });
-      });
+        const lote = Array.isArray(respuesta?.results) ? respuesta.results : [];
+        if (!lote.length) break;
+        lote.forEach((f) => {
+          const sub = numero(f.subtotal);
+          hoja.addRow({
+            agencia: f.agencia || "—",
+            nrnota: f.nrnota ?? "—",
+            serie: f.serie || "—",
+            nrpedunpar: f.nrpedunpar || "—",
+            qtprodutos: numero(f.qtprodutos),
+            proveedor: f.proveedor || "—",
+            dtemissao: f.dtemissao || "—",
+            dtentrada: f.dtentrada || "—",
+            subtotal: sub,
+            iva: sub * 0.16,
+            total: numero(f.total),
+          });
+        });
+      }
       hoja.getColumn(9).numFmt = "$#,##0.00";
       hoja.getColumn(10).numFmt = "$#,##0.00";
       hoja.getColumn(11).numFmt = "$#,##0.00";
@@ -315,14 +312,13 @@ export default function CompraRefacciones() {
     q: qDebounce || undefined,
   }), [agencia, fechaDesde, fechaHasta, qDebounce]);
   const consultar = useCallback(async () => {
+    const idSolicitud = ++solicitudActual.current;
     setLoading(true);
+    setLoadingAnalisis(true);
     setError("");
     try {
-      const response = await getCompraRefTipificada({
-        ...parametros,
-        page: pagina,
-        page_size: pageSize,
-      });
+      const response = await getCompraRefTipificada({ ...parametros, page: pagina, page_size: pageSize });
+      if (idSolicitud !== solicitudActual.current) return;
       setDatos(Array.isArray(response?.results) ? response.results : []);
       setTotalRegistros(Number(response?.count || 0));
       setMetricas({
@@ -331,101 +327,53 @@ export default function CompraRefacciones() {
         subtotal: Number(response?.metricas?.subtotal || 0),
         total: Number(response?.metricas?.total || 0),
       });
+      setAnalisis({
+        agencias: Array.isArray(response?.analisis?.agencias) ? response.analisis.agencias : [],
+        proveedores: Array.isArray(response?.analisis?.proveedores) ? response.analisis.proveedores : [],
+        vw_mexico: response?.analisis?.vw_mexico || { total: 0, facturas: 0, cantidad: 0 },
+        autopart: response?.analisis?.autopart || { total: 0, facturas: 0, cantidad: 0 },
+      });
       setFacturaAbierta(null);
     } catch (err) {
+      if (idSolicitud !== solicitudActual.current) return;
       console.error("Error cargando compras de refacciones:", err);
       setDatos([]);
       setTotalRegistros(0);
       setMetricas({ registros: 0, cantidad_total: 0, subtotal: 0, total: 0 });
+      setAnalisis({
+        agencias: [], proveedores: [],
+        vw_mexico: { total: 0, facturas: 0, cantidad: 0 },
+        autopart: { total: 0, facturas: 0, cantidad: 0 }
+      });
       setError(err?.message || "No fue posible cargar las compras de refacciones.");
     } finally {
-      setLoading(false);
+      if (idSolicitud === solicitudActual.current) {
+        setLoading(false);
+        setLoadingAnalisis(false);
+      }
     }
   }, [parametros, pagina, pageSize]);
-  const consultarAnalisis = useCallback(async () => {
-    setLoadingAnalisis(true);
-    try {
-      // Se consulta en bloques para no depender de que el backend permita
-      // un page_size enorme. El resultado final contiene TODO el filtro actual.
-      const pageSizeAnalisis = 200;
-      const primeraRespuesta = await getCompraRefTipificada({
-        ...parametros,
-        page: 1,
-        page_size: pageSizeAnalisis,
-      });
-      const primeraPagina = Array.isArray(primeraRespuesta?.results)
-        ? primeraRespuesta.results
-        : [];
-      const total = Number(primeraRespuesta?.count || primeraPagina.length || 0);
-      const totalPaginasAnalisis = Math.max(1, Math.ceil(total / pageSizeAnalisis));
-      const todosLosRegistros = [...primeraPagina];
-      for (let paginaAnalisis = 2; paginaAnalisis <= totalPaginasAnalisis; paginaAnalisis += 1) {
-        const response = await getCompraRefTipificada({
-          ...parametros,
-          page: paginaAnalisis,
-          page_size: pageSizeAnalisis,
-        });
-        const resultados = Array.isArray(response?.results) ? response.results : [];
-        todosLosRegistros.push(...resultados);
-      }
-      setDatosAnalisis(todosLosRegistros);
-    } catch (err) {
-      console.error("Error cargando análisis completo de compras:", err);
-      setDatosAnalisis([]);
-    } finally {
-      setLoadingAnalisis(false);
-    }
-  }, [parametros]);
   const actualizarTodo = useCallback(() => {
-    consultar();
-    consultarAnalisis();
-  }, [consultar, consultarAnalisis]);
-  useEffect(() => {
     consultar();
   }, [consultar]);
   useEffect(() => {
-    consultarAnalisis();
-  }, [consultarAnalisis]);
+    consultar();
+  }, [consultar]);
   const totalPaginas = useMemo(() => Math.max(1, Math.ceil(totalRegistros / pageSize)), [totalRegistros, pageSize]);
   const analisisGeneral = useMemo(() => {
-    const agenciasMap = {};
-    const proveedoresMap = {};
-    datosAnalisis.forEach((factura) => {
-      const totalFactura = numero(factura.total);
-      const nombreAgencia = factura.agencia || "Sin agencia";
-      const nombreProveedor = factura.proveedor || "Sin proveedor";
-      if (!agenciasMap[nombreAgencia]) {
-        agenciasMap[nombreAgencia] = { total: 0, facturas: 0 };
-      }
-      agenciasMap[nombreAgencia].total += totalFactura;
-      agenciasMap[nombreAgencia].facturas += 1;
-      if (!proveedoresMap[nombreProveedor]) {
-        proveedoresMap[nombreProveedor] = { total: 0, facturas: 0 };
-      }
-      proveedoresMap[nombreProveedor].total += totalFactura;
-      proveedoresMap[nombreProveedor].facturas += 1;
-    });
-    const agencias = Object.entries(agenciasMap)
-      .map(([type, values]) => ({ type, ...values }))
-      .sort((a, b) => b.total - a.total);
-    const proveedores = Object.entries(proveedoresMap)
-      .map(([nombre, values]) => ({ nombre, ...values }))
-      .sort((a, b) => b.total - a.total);
+    const agencias = analisis.agencias.map((item) => ({
+      type: item.type, total: numero(item.total), facturas: numero(item.facturas),
+    }));
+    const proveedores = analisis.proveedores.map((item) => ({
+      nombre: item.nombre, total: numero(item.total), facturas: numero(item.facturas),
+    }));
     const distribucion = agencia
       ? proveedores.map((item) => ({ type: item.nombre, value: item.facturas }))
       : agencias.map((item) => ({ type: item.type, value: item.total }));
-    const totalProveedores = proveedores.reduce(
-      (acc, item) => acc + numero(item.total),
-      0
-    );
-    return {
-      agencias,
-      proveedores,
-      distribucion,
-      maxProveedor: Math.max(...proveedores.map((item) => item.total), 1),
-      totalVisible: totalProveedores,
-    };
-  }, [datosAnalisis, agencia]);
+    const totalProveedores = proveedores.reduce((total, item) => total + item.total, 0);
+    const maxProveedor = proveedores.reduce((max, item) => Math.max(max, item.total), 1);
+    return { agencias, proveedores, distribucion, maxProveedor, totalVisible: totalProveedores };
+  }, [analisis, agencia]);
   async function desplegarFactura(factura) {
     const clave = claveFactura(factura);
     if (facturaAbierta === clave) {
@@ -437,7 +385,7 @@ export default function CompraRefacciones() {
     setLoadingPiezas((prev) => ({ ...prev, [clave]: true }));
     setErrorPiezas((prev) => ({ ...prev, [clave]: "" }));
     try {
-      const response = await getCompraRefPiezas({ agencia: factura.agencia, nrnota: factura.nrnota });
+      const response = await getCompraRefPiezas({ agencia: factura.agencia, nrnota: factura.nrnota, serie: factura.serie || undefined });
       setPiezasPorFactura((prev) => ({
         ...prev,
         [clave]: {
@@ -737,7 +685,7 @@ export default function CompraRefacciones() {
               Cargando análisis completo...
             </div>
           )}
-          {mostrarAnalisis && !loadingAnalisis && datosAnalisis.length > 0 && (
+          {mostrarAnalisis && !loadingAnalisis && metricas.registros > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 h-[210px]">
               <VWPieCard
                 title={agencia ? "Distribución por Proveedor" : "Importe por Agencia"}
@@ -755,7 +703,7 @@ export default function CompraRefacciones() {
               />
             </div>
           )}
-          {mostrarAnalisis && !loadingAnalisis && datosAnalisis.length === 0 && (
+          {mostrarAnalisis && !loadingAnalisis && metricas.registros === 0 && (
             <div className="flex-1 flex items-center justify-center text-xs text-slate-400 italic bg-white rounded-xl border border-dashed border-slate-300 min-h-[210px]">
               No hay datos registrados en el periodo seleccionado
             </div>
@@ -795,22 +743,18 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
       </div>
     );
   }
-
   const diferencia = numero(totalFacturado) - numero(totalVisible);
   const conciliado = Math.abs(diferencia) < 0.01;
-
   return (
     <div className="bg-white rounded-xl border border-slate-200/80 p-3 h-[210px] flex flex-col overflow-hidden">
       <div className="text-[10px] font-vw-head font-bold text-slate-500 uppercase border-b border-slate-100 pb-1 mb-2 shrink-0">
         <Briefcase className="inline h-3 w-3 mr-1 text-[#1677FF]" />
         Proveedores por Importe
       </div>
-
       <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
         {data.map((item, idx) => {
           const pctWidth = maxVal > 0 ? (item.total / maxVal) * 100 : 0;
           const share = totalVisible > 0 ? (item.total / totalVisible) * 100 : 0;
-
           return (
             <div
               key={item.nombre}
@@ -822,7 +766,6 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
                   <span className="bg-[#001E50] text-white rounded text-[8px] px-1 font-bold shrink-0">
                     {idx + 1}
                   </span>
-
                   <span
                     className="font-vw-head font-bold text-[#001E50] truncate"
                     title={item.nombre}
@@ -830,7 +773,6 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
                     {item.nombre}
                   </span>
                 </div>
-
                 <div className="text-right shrink-0 font-vw-head font-bold text-slate-700 ml-2">
                   {moneyCompact(item.total)}
                   <span className="text-[#1677FF] text-[9px] ml-1">
@@ -838,7 +780,6 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
                   </span>
                 </div>
               </div>
-
               <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-[#001E50] rounded-full group-hover:bg-[#1677FF] transition-all duration-300"
@@ -851,7 +792,6 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
           );
         })}
       </div>
-
       <div className="mt-2 pt-2 border-t border-slate-100 shrink-0 text-[13px] font-vw-text bg-white">
         <div className="flex items-center justify-between gap-2">
           <span className="text-slate-500">Total proveedores</span>
@@ -859,7 +799,6 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
             {money(totalVisible)}
           </span>
         </div>
-
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <span className="text-slate-500">Diferencia vs. facturación</span>
           <span
@@ -873,7 +812,6 @@ function VWTopProveedores({ data, maxVal, totalVisible, totalFacturado, onRowCli
     </div>
   );
 }
-
 function VWPieCard({ title, icon: Icon, data = [], total = 0, isCurrency = false }) {
   const formattedData = data.map((item, index) => ({
     ...item,
