@@ -135,6 +135,7 @@ import SolicitudesCredito from "./pages/GestionNegocio/SolicitudesCredito";
 import Valuaciones from "./pages/GestionNegocio/Valuaciones";
 
 import CompraRefacciones from "./pages/Partes/CompraRefacciones";
+import VentaRefacciones from "./pages/Partes/VentaRefacciones";
 import RefaccionesObsolescencia from "./pages/RefaccionesObsolescencia/RefaccionesObsolescencia";
 import Presupuestos from "./pages/Presupuestos/Presupuestos";
 import Gota from "./pages/Servicio/Gota";
@@ -645,6 +646,14 @@ export const router = createBrowserRouter(
                                     element: (
                                         <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
                                             <CompraRefacciones />
+                                        </RequirePermission>
+                                    ),
+                                },
+                                {
+                                    path: "venta_refacciones",
+                                    element: (
+                                        <RequirePermission anyOf={["USUARIOS_ADMIN", "CRM_COORDINADOR_DIGITAL"]}>
+                                            <VentaRefacciones />
                                         </RequirePermission>
                                     ),
                                 },
@@ -1301,7 +1310,7 @@ export const router = createBrowserRouter(
                                 </RequirePermission>
                             ),
                         },
-                        
+
                         {
                             path: "tableros",
                             element: (

@@ -1,5 +1,5 @@
 // src/pages/GestionNegocio/GestionNegocioTopNav.jsx
-import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign, Cog } from "lucide-react";
+import { CarFront, Users, ArchiveX, LayoutList, ShoppingCart, BadgeDollarSign, CircleDollarSign, Cog, DollarSign } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import vwDark from "../../assets/vw_dark.png";
 import { useAuth } from "../../auth/AuthContext";
@@ -24,6 +24,12 @@ export default function GestionTopNav() {
             to: "/partes/compra_refacciones",
             icon: ShoppingCart,
             show: submoduloVisible(user, "partes", "compra_refacciones", partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
+        },
+        {
+            label: "Venta de Refacciones",
+            to: "/partes/venta_refacciones",
+            icon: DollarSign,
+            show: submoduloVisible(user, "partes", "venta_refacciones", partesActivo || hasAnyPermission(["USUARIOS_ADMIN", "CRM_CALIDAD", "CRM_VENTAS"])),
         },
     ].filter((tab) => tab.show);
     return (
