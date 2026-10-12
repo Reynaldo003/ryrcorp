@@ -26,6 +26,7 @@ import {
     UserSearch,
     QrCode,
     Settings2,
+    ScrollText,
 } from "lucide-react";
 
 // Orden de las secciones tal como aparecen en el menú.
@@ -241,6 +242,14 @@ export const INTERFACES = [
         to: "/configuracion",
         label: "Configuración",
         icon: Settings2,
+        permisos: ["USUARIOS_ADMIN"],
+    },
+    {
+        key: "logs",
+        section: "Configuración",
+        to: "/logs",
+        label: "Logs por Usuario",
+        icon: ScrollText,
         permisos: ["USUARIOS_ADMIN"],
     },
 ];

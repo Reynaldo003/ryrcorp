@@ -38,6 +38,7 @@ import { Loader2 } from "lucide-react";
 const CitasLayout = React.lazy(() => import("./pages/Citas/CitasLayout"));
 const CitasOverView = React.lazy(() => import("./pages/Citas/CitasOverView"));
 const RegistroCitas = React.lazy(() => import("./pages/Citas/RegistroCitas"));
+const LogsUsuario = React.lazy(() => import("./pages/LogsUsuario/LogsUsuario"));
 
 import CitasPisoLayout from "./pages/CitasPiso/CitasPisoLayout";
 import CitasPisoOverView from "./pages/CitasPiso/CitasPisoOverView";
@@ -1251,6 +1252,17 @@ export const router = createBrowserRouter(
                             element: (
                                 <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
                                     <QR />
+                                </RequirePermission>
+                            ),
+                        },
+
+                        {
+                            path: "logs",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                    <React.Suspense fallback={<div className="flex items-center justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-[#131E5C]" /></div>}>
+                                        <LogsUsuario />
+                                    </React.Suspense>
                                 </RequirePermission>
                             ),
                         },
