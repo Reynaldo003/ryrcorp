@@ -307,7 +307,7 @@ function mapearEncuestaComun(item, fuente) {
 
 function esNoConformidad(item) {
     const s = item.severidad;
-    return s >= 1 && s <= 3;
+    return s >= 1 && s <= 4;
 }
 
 
@@ -316,7 +316,7 @@ function agruparPor(datos, obtenerClave, limite = 10) {
     datos.forEach((item) => {
         const clave = obtenerClave(item) || "Sin dato";
         if (!map.has(clave)) {
-            map.set(clave, { name: clave, total: 0, rating1: 0, rating2: 0, rating3: 0 });
+            map.set(clave, { name: clave, total: 0, rating1: 0, rating2: 0, rating3: 0, rating4: 0 });
         }
         const actual = map.get(clave);
         actual.total += 1;
@@ -324,6 +324,7 @@ function agruparPor(datos, obtenerClave, limite = 10) {
         if (r === 1) actual.rating1 += 1;
         else if (r === 2) actual.rating2 += 1;
         else if (r === 3) actual.rating3 += 1;
+        else if (r === 4) actual.rating4 += 1;
     });
     return Array.from(map.values())
         .sort((a, b) => b.total - a.total)
@@ -1232,11 +1233,23 @@ function ChartCard({ title, subtitle, children, className = "" }) {
     );
 }
 
+function BarrasSeveridad() {
+    return (
+        <>
+            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
+            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
+            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} />
+            <Bar dataKey="rating4" name="4 ★ Aceptable" stackId="a" fill={CHART_COLOR} fillOpacity={0.28} radius={[5, 5, 0, 0]} />
+        </>
+    );
+}
+
 function VistaGraficas({ datos }) {
     const total = datos.length;
     const rating1 = datos.filter((d) => d.severidad === 1).length;
     const rating2 = datos.filter((d) => d.severidad === 2).length;
     const rating3 = datos.filter((d) => d.severidad === 3).length;
+    const rating4 = datos.filter((d) => d.severidad === 4).length;
 
     const porMes = useMemo(() => {
         const map = new Map();
@@ -1244,7 +1257,7 @@ function VistaGraficas({ datos }) {
             if (!item.anio || !item.mes) return;
             const key = `${item.anio}-${String(item.mes).padStart(2, "0")}`;
             if (!map.has(key)) {
-                map.set(key, { key, name: `${MESES[item.mes - 1]?.slice(0, 3)} ${item.anio}`, total: 0, rating1: 0, rating2: 0, rating3: 0 });
+                map.set(key, { key, name: `${MESES[item.mes - 1]?.slice(0, 3)} ${item.anio}`, total: 0, rating1: 0, rating2: 0, rating3: 0, rating4: 0 });
             }
             const a = map.get(key);
             a.total += 1;
@@ -1252,6 +1265,7 @@ function VistaGraficas({ datos }) {
             if (r === 1) a.rating1 += 1;
             else if (r === 2) a.rating2 += 1;
             else if (r === 3) a.rating3 += 1;
+            else if (r === 4) a.rating4 += 1;
         });
         return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
     }, [datos]);
@@ -1280,6 +1294,7 @@ function VistaGraficas({ datos }) {
         { name: "1 ★  Crítico", value: rating1, color: CHART_COLOR, opacity: 1 },
         { name: "2 ★  Grave", value: rating2, color: CHART_COLOR, opacity: 0.92 },
         { name: "3 ★  Leve", value: rating3, color: CHART_COLOR, opacity: 0.85 },
+        { name: "4 ★  Aceptable", value: rating4, color: CHART_COLOR, opacity: 0.78 },
     ].filter((d) => d.value > 0);
 
     const CustomTooltipRating = ({ active, payload }) => {
@@ -1309,11 +1324,12 @@ function VistaGraficas({ datos }) {
                                 <Legend wrapperStyle={{ fontSize: 12 }} />
                             </PieChart>
                         </ResponsiveContainer>
-                        <div className="grid w-full grid-cols-3 gap-2 text-center">
+                        <div className="grid w-full grid-cols-4 gap-2 text-center">
                             {[
                                 { label: "1 ★ Crítico", value: rating1, opacity: 1 },
                                 { label: "2 ★ Grave", value: rating2, opacity: 0.72 },
                                 { label: "3 ★ Leve", value: rating3, opacity: 0.45 },
+                                { label: "4 ★ Aceptable", value: rating4, opacity: 0.28 },
                             ].map((item) => (
                                 <div key={item.label} className="rounded-lg bg-[#131E5C]/[0.07] p-2">
                                     <p className="text-xl font-black" style={{ color: CHART_COLOR, opacity: item.opacity }}>{numero(item.value)}</p>
@@ -1331,9 +1347,7 @@ function VistaGraficas({ datos }) {
                             <XAxis dataKey="name" interval={0} angle={-25} textAnchor="end" height={60} tick={{ fontSize: 10, fill: "#6b7280" }} />
                             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                             <Tooltip contentStyle={TooltipStyle} />
-                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
-                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
-                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
+                            <BarrasSeveridad />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
                         </BarChart>
                     </ResponsiveContainer>
@@ -1372,6 +1386,16 @@ function VistaGraficas({ datos }) {
                                 border: "#FEF08A",
                                 text: "#A16207",
                             },
+                            {
+                                nivel: "Aceptable",
+                                stars: "★★★★",
+                                desc: "Satisfacción 4 de 5",
+                                value: rating4,
+                                pct: total ? ((rating4 / total) * 100).toFixed(1) : "0.0",
+                                bg: "#F7FEE7",
+                                border: "#D9F99D",
+                                text: "#4D7C0F",
+                            },
                         ].map((item) => (
                             <div
                                 key={item.nivel}
@@ -1402,9 +1426,7 @@ function VistaGraficas({ datos }) {
                         <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                         <Tooltip contentStyle={TooltipStyle} />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
-                        <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
-                        <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
+                        <BarrasSeveridad />
                         <Line type="monotone" dataKey="total" name="Total" stroke={CHART_COLOR} strokeWidth={2.5} dot={{ r: 3, fill: CHART_COLOR }} />
                     </BarChart>
                 </ResponsiveContainer>
@@ -1422,9 +1444,7 @@ function VistaGraficas({ datos }) {
                             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                             <Tooltip contentStyle={TooltipStyle} />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
-                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
-                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
-                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
+                            <BarrasSeveridad />
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartCard>
@@ -1440,9 +1460,7 @@ function VistaGraficas({ datos }) {
                             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                             <Tooltip contentStyle={TooltipStyle} />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
-                            <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
-                            <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
-                            <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
+                            <BarrasSeveridad />
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartCard>
@@ -1459,9 +1477,7 @@ function VistaGraficas({ datos }) {
                         <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
                         <Tooltip contentStyle={TooltipStyle} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="rating1" name="1 ★ Crítico" stackId="a" fill={CHART_COLOR} fillOpacity={1} />
-                        <Bar dataKey="rating2" name="2 ★ Grave" stackId="a" fill={CHART_COLOR} fillOpacity={0.72} />
-                        <Bar dataKey="rating3" name="3 ★ Leve" stackId="a" fill={CHART_COLOR} fillOpacity={0.45} radius={[5, 5, 0, 0]} />
+                        <BarrasSeveridad />
                     </BarChart>
                 </ResponsiveContainer>
             </ChartCard>
@@ -1625,8 +1641,9 @@ export default function NoConformidad() {
         const critico = datosFiltrados.filter((d) => d.severidad === 1).length;
         const grave = datosFiltrados.filter((d) => d.severidad === 2).length;
         const leve = datosFiltrados.filter((d) => d.severidad === 3).length;
+        const aceptable = datosFiltrados.filter((d) => d.severidad === 4).length;
         const conComentario = datosFiltrados.filter((d) => d.comentario).length;
-        return { total, critico, grave, leve, conComentario };
+        return { total, critico, grave, leve, aceptable, conComentario };
     }, [datosFiltrados]);
 
     function refrescarDatos() {
@@ -1847,11 +1864,12 @@ export default function NoConformidad() {
             </div>
 
             {/* Stat cards */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
                 <StatCard label="Total NC" value={numero(resumen.total)} sub="no conformidades" color={RED} />
                 <StatCard label="Crítico (1 ★)" value={numero(resumen.critico)} sub="satisfacción 1/5" color={RED} />
                 <StatCard label="Grave (2 ★)" value={numero(resumen.grave)} sub="satisfacción 2/5" color={ORANGE} />
                 <StatCard label="Leve (3 ★)" value={numero(resumen.leve)} sub="satisfacción 3/5" color="#A16207" />
+                <StatCard label="Aceptable (4 ★)" value={numero(resumen.aceptable)} sub="satisfacción 4/5" color="#84CC16" />
                 <StatCard label="Con comentario" value={numero(resumen.conComentario)} sub="texto capturado" color={NAVY} />
             </div>
 
