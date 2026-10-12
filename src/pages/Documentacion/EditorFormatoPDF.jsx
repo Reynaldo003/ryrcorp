@@ -11,17 +11,13 @@ import {
     StandardFonts,
 } from "pdf-lib";
 import { FileText, Loader2, Save, Search, X } from "lucide-react";
-
 import "./EditorFormatoPDF.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-
 pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url,).toString();
-
 /* ============================================================
  * UTILIDADES
  * ============================================================ */
-
 function nombreLegible(nombre = "") {
     return String(nombre)
         .split(".")
@@ -30,7 +26,6 @@ function nombreLegible(nombre = "") {
         .replace(/([a-z])([A-Z])/g, "$1 $2")
         .trim();
 }
-
 function tipoCampoPdf(field) {
     if (field instanceof PDFTextField) return "text";
     if (field instanceof PDFCheckBox) return "checkbox";
@@ -39,11 +34,9 @@ function tipoCampoPdf(field) {
     if (field instanceof PDFOptionList) return "optionlist";
     return "unknown";
 }
-
 /* ============================================================
  * CARGAR PDF
  * ============================================================ */
-
 async function cargarPdfComoBytes(url) {
     const response = await fetch(url, {
         method: "GET",
@@ -52,34 +45,27 @@ async function cargarPdfComoBytes(url) {
             Accept: "application/pdf",
         },
     });
-
     if (!response.ok) {
         throw new Error(
             `No fue posible cargar el PDF. HTTP ${response.status}.`,
         );
     }
-
     const bytes = new Uint8Array(
         await response.arrayBuffer(),
     );
-
     const cabecera = new TextDecoder("latin1").decode(
         bytes.slice(0, 5),
     );
-
     if (cabecera !== "%PDF-") {
         throw new Error(
             "El archivo recibido no corresponde a un PDF válido.",
         );
     }
-
     return bytes;
 }
-
 /* ============================================================
  * CAMPOS DEL PDF
  * ============================================================ */
-
 async function obtenerCamposPdf(bytes) {
     const pdfDoc = await PDFDocument.load(
         bytes,
@@ -88,13 +74,10 @@ async function obtenerCamposPdf(bytes) {
             updateMetadata: false,
         },
     );
-
     const form = pdfDoc.getForm();
-
     return form.getFields().map((field) => {
         const tipo = tipoCampoPdf(field);
         const nombre = field.getName();
-
         const campo = {
             nombre,
             label: nombreLegible(nombre),
@@ -108,57 +91,42 @@ async function obtenerCamposPdf(bytes) {
             multiline: false,
             maxLength: null,
         };
-
         try {
             switch (tipo) {
                 case "text":
                     campo.valor =
                         field.getText() || "";
-
                     campo.multiline =
                         typeof field.isMultiline === "function"
                             ? field.isMultiline()
                             : false;
-
                     campo.maxLength =
                         typeof field.getMaxLength === "function"
                             ? field.getMaxLength() || null
                             : null;
-
                     break;
-
                 case "checkbox":
                     campo.valor =
                         field.isChecked();
                     break;
-
                 case "dropdown":
                     campo.opciones =
                         field.getOptions() || [];
-
                     campo.valor =
                         field.getSelected()?.[0] || "";
-
                     break;
-
                 case "radio":
                     campo.opciones =
                         field.getOptions() || [];
-
                     campo.valor =
                         field.getSelected() || "";
-
                     break;
-
                 case "optionlist":
                     campo.opciones =
                         field.getOptions() || [];
-
                     campo.valor =
                         field.getSelected() || [];
-
                     break;
-
                 default:
                     campo.readonly = true;
                     break;
@@ -169,15 +137,12 @@ async function obtenerCamposPdf(bytes) {
                 error,
             );
         }
-
         return campo;
     });
 }
-
 /* ============================================================
  * RESTAURAR JSON GUARDADO
  * ============================================================ */
-
 async function aplicarCamposIniciales(
     bytesOriginales,
     valores = {},
@@ -189,7 +154,6 @@ async function aplicarCamposIniciales(
     ) {
         return bytesOriginales;
     }
-
     const pdfDoc = await PDFDocument.load(
         bytesOriginales,
         {
@@ -197,12 +161,9 @@ async function aplicarCamposIniciales(
             updateMetadata: false,
         },
     );
-
     const form = pdfDoc.getForm();
-
     for (const field of form.getFields()) {
         const nombre = field.getName();
-
         if (
             !Object.prototype.hasOwnProperty.call(
                 valores,
@@ -211,10 +172,8 @@ async function aplicarCamposIniciales(
         ) {
             continue;
         }
-
         const tipo = tipoCampoPdf(field);
         const valor = valores[nombre];
-
         try {
             switch (tipo) {
                 case "text":
@@ -225,13 +184,11 @@ async function aplicarCamposIniciales(
                             : String(valor),
                     );
                     break;
-
                 case "checkbox":
                     valor
                         ? field.check()
                         : field.uncheck();
                     break;
-
                 case "dropdown":
                     if (valor) {
                         field.select(
@@ -241,7 +198,6 @@ async function aplicarCamposIniciales(
                         field.clear?.();
                     }
                     break;
-
                 case "radio":
                     if (valor) {
                         field.select(
@@ -251,7 +207,6 @@ async function aplicarCamposIniciales(
                         field.clear?.();
                     }
                     break;
-
                 case "optionlist": {
                     const seleccion =
                         Array.isArray(valor)
@@ -259,16 +214,13 @@ async function aplicarCamposIniciales(
                             : valor
                                 ? [String(valor)]
                                 : [];
-
                     if (seleccion.length) {
                         field.select(seleccion);
                     } else {
                         field.clear?.();
                     }
-
                     break;
                 }
-
                 default:
                     break;
             }
@@ -279,13 +231,11 @@ async function aplicarCamposIniciales(
             );
         }
     }
-
     try {
         const font =
             await pdfDoc.embedFont(
                 StandardFonts.Helvetica,
             );
-
         form.updateFieldAppearances(font);
     } catch (error) {
         console.warn(
@@ -293,7 +243,6 @@ async function aplicarCamposIniciales(
             error,
         );
     }
-
     return pdfDoc.save({
         useObjectStreams: false,
         addDefaultPage: false,
@@ -304,24 +253,18 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
     if (!bytesOriginales?.length) {
         throw new Error("No existe una plantilla PDF cargada.");
     }
-
     const pdfDoc = await PDFDocument.load(bytesOriginales, {
         ignoreEncryption: false,
         updateMetadata: false,
     });
-
     const form = pdfDoc.getForm();
-
     for (const field of form.getFields()) {
         const nombre = field.getName();
-
         if (!Object.prototype.hasOwnProperty.call(valores, nombre)) {
             continue;
         }
-
         const tipo = tipoCampoPdf(field);
         const valor = valores[nombre];
-
         try {
             switch (tipo) {
                 case "text":
@@ -331,7 +274,6 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
                             : String(valor)
                     );
                     break;
-
                 case "checkbox":
                     if (valor) {
                         field.check();
@@ -339,7 +281,6 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
                         field.uncheck();
                     }
                     break;
-
                 case "dropdown":
                     if (
                         valor !== null &&
@@ -351,7 +292,6 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
                         field.clear?.();
                     }
                     break;
-
                 case "radio":
                     if (
                         valor !== null &&
@@ -363,34 +303,26 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
                         field.clear?.();
                     }
                     break;
-
                 case "optionlist": {
                     const seleccion = Array.isArray(valor)
                         ? valor
                         : valor
                             ? [String(valor)]
                             : [];
-
                     if (seleccion.length) {
                         field.select(seleccion);
                     } else {
                         field.clear?.();
                     }
-
                     break;
                 }
-
                 default:
                     break;
             }
         } catch (error) {
-            console.warn(
-                `No se pudo aplicar el valor al campo "${nombre}":`,
-                error
-            );
+            throw new Error(`No se pudo guardar el campo "${nombre}": ${error.message}`);
         }
     }
-
     /*
      * Conservamos los campos editables.
      * NO usamos form.flatten().
@@ -404,7 +336,6 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
             error
         );
     }
-
     return pdfDoc.save({
         useObjectStreams: false,
         addDefaultPage: false,
@@ -414,7 +345,6 @@ async function generarPdfFinal(bytesOriginales, valores = {}) {
 /* ============================================================
  * EXTRAER JSON DEL PDF FINAL
  * ============================================================ */
-
 async function extraerCamposPdf(bytesModificados) {
     const pdfDoc = await PDFDocument.load(
         bytesModificados,
@@ -423,41 +353,33 @@ async function extraerCamposPdf(bytesModificados) {
             updateMetadata: false,
         },
     );
-
     const form = pdfDoc.getForm();
     const valores = {};
-
     for (const field of form.getFields()) {
         const nombre = field.getName();
         const tipo = tipoCampoPdf(field);
-
         try {
             switch (tipo) {
                 case "text":
                     valores[nombre] =
                         field.getText() || "";
                     break;
-
                 case "checkbox":
                     valores[nombre] =
                         field.isChecked();
                     break;
-
                 case "dropdown":
                     valores[nombre] =
                         field.getSelected()?.[0] || "";
                     break;
-
                 case "radio":
                     valores[nombre] =
                         field.getSelected() || "";
                     break;
-
                 case "optionlist":
                     valores[nombre] =
                         field.getSelected() || [];
                     break;
-
                 default:
                     break;
             }
@@ -468,13 +390,50 @@ async function extraerCamposPdf(bytesModificados) {
             );
         }
     }
-
     return valores;
 }
-
 /* ============================================================
  * CAMPO DEL MENÚ LATERAL
  * ============================================================ */
+/* Corresponde anotaciones de PDF.js con widgets y opciones reales de pdf-lib. */
+async function crearMapaRadios(pdf, bytes) {
+    const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: false, updateMetadata: false });
+    const radioWidgets = new Map();
+    for (const field of pdfDoc.getForm().getFields()) {
+        if (!(field instanceof PDFRadioGroup)) continue;
+        const opciones = new Set(field.getOptions());
+        radioWidgets.set(field.getName(), field.acroField.getWidgets().map(widget => {
+            const r = widget.getRectangle();
+            const opcion = widget.getOnValue()?.decodeText();
+            return {
+                rect: [r.x, r.y, r.x + r.width, r.y + r.height],
+                opcion: opciones.has(opcion) ? opcion : null,
+                usado: false,
+            };
+        }));
+    }
+    const mapa = new Map();
+    for (let pagina = 1; pagina <= pdf.numPages; pagina++) {
+        const page = await pdf.getPage(pagina);
+        for (const anotacion of await page.getAnnotations()) {
+            if (anotacion.fieldType !== "Btn" || !anotacion.radioButton) continue;
+            const rect = anotacion.rect;
+            if (!Array.isArray(rect) || rect.length !== 4) continue;
+            const coincidencias = (radioWidgets.get(anotacion.fieldName) || []).filter(item =>
+                !item.usado && item.opcion !== null &&
+                item.rect.every((numero, i) => Math.abs(numero - rect[i]) < 1.5)
+            );
+            if (coincidencias.length !== 1) {
+                console.warn("Opción de radio sin correspondencia inequívoca", anotacion.fieldName, anotacion.id);
+                continue;
+            }
+            const opcion = coincidencias[0];
+            opcion.usado = true;
+            mapa.set(String(anotacion.id), { nombre: anotacion.fieldName, valor: opcion.opcion });
+        }
+    }
+    return mapa;
+}
 
 function CampoLateral({
     campo,
@@ -484,7 +443,6 @@ function CampoLateral({
 }) {
     const inputClass =
         "h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#131E5C] outline-none transition focus:border-[#131E5C] focus:ring-2 focus:ring-[#131E5C]/10 disabled:bg-slate-100 disabled:text-slate-400";
-
     return (
         <div className="rounded-xl border border-slate-200 bg-white p-3">
             <div className="mb-2 flex items-start justify-between gap-2">
@@ -496,7 +454,6 @@ function CampoLateral({
                     >
                         {campo.label}
                     </div>
-
                     <div
                         className="mt-0.5 truncate text-[9px] text-slate-400"
                         title={campo.nombre}
@@ -504,14 +461,12 @@ function CampoLateral({
                         {campo.nombre}
                     </div>
                 </div>
-
                 {campo.maxLength ? (
                     <span className="shrink-0 text-[9px] font-bold text-slate-400">
                         {String(valor || "").length}/{campo.maxLength}
                     </span>
                 ) : null}
             </div>
-
             {campo.tipo === "text" ? (
                 campo.multiline ? (
                     <textarea
@@ -542,7 +497,6 @@ function CampoLateral({
                     />
                 )
             ) : null}
-
             {campo.tipo === "checkbox" ? (
                 <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -557,13 +511,11 @@ function CampoLateral({
                         }
                         className="h-4 w-4 accent-[#131E5C]"
                     />
-
                     <span className="text-xs font-semibold text-slate-600">
                         {valor ? "Sí" : "No"}
                     </span>
                 </label>
             ) : null}
-
             {(campo.tipo === "dropdown" ||
                 campo.tipo === "radio") ? (
                 <select
@@ -580,7 +532,6 @@ function CampoLateral({
                     <option value="">
                         Selecciona...
                     </option>
-
                     {campo.opciones.map((opcion) => (
                         <option
                             key={opcion}
@@ -591,7 +542,6 @@ function CampoLateral({
                     ))}
                 </select>
             ) : null}
-
             {campo.tipo === "optionlist" ? (
                 <select
                     multiple
@@ -624,7 +574,6 @@ function CampoLateral({
                     ))}
                 </select>
             ) : null}
-
             {campo.tipo === "unknown" ? (
                 <div className="text-[10px] font-semibold text-slate-400">
                     Tipo de campo no compatible.
@@ -633,11 +582,9 @@ function CampoLateral({
         </div>
     );
 }
-
 /* ============================================================
  * COMPONENTE PRINCIPAL
  * ============================================================ */
-
 export default function EditorFormatoPdf({
     open,
     expediente,
@@ -649,66 +596,51 @@ export default function EditorFormatoPdf({
     const contenedorRef = useRef(null);
     const pdfProxyRef = useRef(null);
     const pdfBaseRef = useRef(null);
-
+    const opcionesRadioRef = useRef(new Map());
+    const valoresRef = useRef({});
+    const radioSinResolverRef = useRef(false);
     const [pdfBytes, setPdfBytes] =
         useState(null);
-
     const [numPages, setNumPages] =
         useState(0);
-
     const [anchoPagina, setAnchoPagina] =
         useState(900);
-
     const [loading, setLoading] =
         useState(false);
-
     const [guardando, setGuardando] =
         useState(false);
-
     const [error, setError] =
         useState("");
-
     const [campos, setCampos] =
         useState([]);
-
     const [valoresCampos, setValoresCampos] =
         useState({});
-
     const [busqueda, setBusqueda] =
         useState("");
-
     const archivoPdf = useMemo(() => {
         if (!pdfBytes) return null;
-
         return {
             data: pdfBytes,
         };
     }, [pdfBytes]);
-
     const camposFiltrados = useMemo(() => {
         const q = String(busqueda)
             .trim()
             .toLowerCase();
-
         if (!q) return campos;
-
         return campos.filter((campo) =>
             `${campo.label} ${campo.nombre}`
                 .toLowerCase()
                 .includes(q)
         );
     }, [campos, busqueda]);
-
     /* ========================================================
      * BUSCAR CONTROL REAL DE PDF.JS
      * ======================================================== */
-
     const obtenerControlesPdf = (nombre) => {
         const contenedor =
             contenedorRef.current;
-
         if (!contenedor) return [];
-
         return Array.from(
             contenedor.querySelectorAll(
                 ".annotationLayer input, .annotationLayer textarea, .annotationLayer select",
@@ -718,11 +650,9 @@ export default function EditorFormatoPdf({
                 elemento.name === nombre,
         );
     };
-
     /* ========================================================
      * APLICAR VALOR DEL MENÚ AL PDF VISUAL
      * ======================================================== */
-
     const aplicarValorEnPdf = (
         campo,
         valor,
@@ -731,14 +661,11 @@ export default function EditorFormatoPdf({
             obtenerControlesPdf(
                 campo.nombre,
             );
-
         if (!controles.length) return;
-
         if (campo.tipo === "text") {
             controles.forEach((control) => {
                 control.value =
                     valor ?? "";
-
                 control.dispatchEvent(
                     new Event(
                         "input",
@@ -747,7 +674,6 @@ export default function EditorFormatoPdf({
                         },
                     ),
                 );
-
                 control.dispatchEvent(
                     new Event(
                         "change",
@@ -757,15 +683,12 @@ export default function EditorFormatoPdf({
                     ),
                 );
             });
-
             return;
         }
-
         if (campo.tipo === "checkbox") {
             controles.forEach((control) => {
                 control.checked =
                     !!valor;
-
                 control.dispatchEvent(
                     new Event(
                         "change",
@@ -775,32 +698,20 @@ export default function EditorFormatoPdf({
                     ),
                 );
             });
-
             return;
         }
-
         if (campo.tipo === "radio") {
-            const seleccionado =
-                controles.find(
-                    (control) =>
-                        String(
-                            control.value,
-                        ) ===
-                        String(valor),
-                );
-
-            if (seleccionado) {
-                seleccionado.click();
-            }
-
+            const seleccionado = controles.find(control => {
+                const opcion = opcionesRadioRef.current.get(String(control.dataset.elementId));
+                return opcion?.nombre === campo.nombre && opcion.valor === valor;
+            });
+            if (seleccionado && !seleccionado.checked) seleccionado.click();
             return;
         }
-
         if (campo.tipo === "dropdown") {
             controles.forEach((control) => {
                 control.value =
                     valor || "";
-
                 control.dispatchEvent(
                     new Event(
                         "input",
@@ -809,7 +720,6 @@ export default function EditorFormatoPdf({
                         },
                     ),
                 );
-
                 control.dispatchEvent(
                     new Event(
                         "change",
@@ -819,10 +729,8 @@ export default function EditorFormatoPdf({
                     ),
                 );
             });
-
             return;
         }
-
         if (campo.tipo === "optionlist") {
             controles.forEach((control) => {
                 if (
@@ -831,12 +739,10 @@ export default function EditorFormatoPdf({
                 ) {
                     return;
                 }
-
                 const seleccion =
                     Array.isArray(valor)
                         ? valor.map(String)
                         : [];
-
                 Array.from(
                     control.options,
                 ).forEach((option) => {
@@ -847,7 +753,6 @@ export default function EditorFormatoPdf({
                             ),
                         );
                 });
-
                 control.dispatchEvent(
                     new Event(
                         "change",
@@ -859,52 +764,38 @@ export default function EditorFormatoPdf({
             });
         }
     };
-
     /* ========================================================
      * CAMBIO DESDE EL MENÚ
      * ======================================================== */
-
     const cambiarCampoDesdeMenu = (
         campo,
         valor,
     ) => {
-        setValoresCampos(
-            (prev) => ({
-                ...prev,
-                [campo.nombre]: valor,
-            }),
-        );
-
+        valoresRef.current = { ...valoresRef.current, [campo.nombre]: valor };
+        setValoresCampos(valoresRef.current);
         aplicarValorEnPdf(
             campo,
             valor,
         );
     };
-
     /* ========================================================
      * UBICAR CAMPO
      * ======================================================== */
-
     const ubicarCampoPdf = (campo) => {
         const controles =
             obtenerControlesPdf(
                 campo.nombre,
             );
-
         const control =
             controles[0];
-
         if (!control) return;
-
         control.scrollIntoView({
             behavior: "smooth",
             block: "center",
             inline: "center",
         });
-
         window.setTimeout(() => {
             control.focus?.();
-
             if (
                 control instanceof
                 HTMLInputElement &&
@@ -914,23 +805,17 @@ export default function EditorFormatoPdf({
             }
         }, 350);
     };
-
     /* ========================================================
      * DETECTAR CAMBIOS HECHOS DIRECTAMENTE EN PDF
      * ======================================================== */
-
     useEffect(() => {
         if (!open) return;
-
         const contenedor =
             contenedorRef.current;
-
         if (!contenedor) return;
-
         const escucharCambio = (event) => {
             const elemento =
                 event.target;
-
             if (
                 !(
                     elemento instanceof
@@ -943,7 +828,6 @@ export default function EditorFormatoPdf({
             ) {
                 return;
             }
-
             if (
                 !elemento.closest(
                     ".annotationLayer",
@@ -951,14 +835,10 @@ export default function EditorFormatoPdf({
             ) {
                 return;
             }
-
             const nombre =
                 elemento.name;
-
             if (!nombre) return;
-
             let valor;
-
             if (
                 elemento instanceof
                 HTMLInputElement &&
@@ -967,18 +847,31 @@ export default function EditorFormatoPdf({
             ) {
                 valor =
                     elemento.checked;
-            } else if (
-                elemento instanceof
-                HTMLInputElement &&
-                elemento.type ===
-                "radio"
+           } else if (
+                elemento instanceof HTMLInputElement &&
+                elemento.type === "radio"
             ) {
                 if (!elemento.checked) {
                     return;
                 }
-
-                valor =
-                    elemento.value;
+                const idAnotacion = elemento.dataset.elementId;
+                const opcion = opcionesRadioRef.current.get(
+                    String(idAnotacion)
+                );
+                if (!opcion || opcion.nombre !== nombre) {
+                    console.warn(
+                        "No se encontró la opción real del radio:",
+                        {
+                            nombre,
+                            idAnotacion
+                        }
+                    );
+                    radioSinResolverRef.current = true;
+                    setError(`No se identificó la selección del campo "${nombre}".`);
+                    return;
+                }
+                valor = opcion.valor;
+                radioSinResolverRef.current = false;
             } else if (
                 elemento instanceof
                 HTMLSelectElement &&
@@ -995,15 +888,9 @@ export default function EditorFormatoPdf({
                 valor =
                     elemento.value;
             }
-
-            setValoresCampos(
-                (prev) => ({
-                    ...prev,
-                    [nombre]: valor,
-                }),
-            );
+            valoresRef.current = { ...valoresRef.current, [nombre]: valor };
+            setValoresCampos(valoresRef.current);
         };
-
         /*
          * Event delegation.
          *
@@ -1015,20 +902,17 @@ export default function EditorFormatoPdf({
             escucharCambio,
             true,
         );
-
         contenedor.addEventListener(
             "change",
             escucharCambio,
             true,
         );
-
         return () => {
             contenedor.removeEventListener(
                 "input",
                 escucharCambio,
                 true,
             );
-
             contenedor.removeEventListener(
                 "change",
                 escucharCambio,
@@ -1036,19 +920,14 @@ export default function EditorFormatoPdf({
             );
         };
     }, [open]);
-
     /* ========================================================
      * MEDIR PDF
      * ======================================================== */
-
     useEffect(() => {
         if (!open) return;
-
         const elemento =
             contenedorRef.current;
-
         if (!elemento) return;
-
         const actualizar = () => {
             /*
              * Ahora tenemos menú lateral,
@@ -1057,7 +936,6 @@ export default function EditorFormatoPdf({
              */
             const disponible =
                 elemento.clientWidth - 32;
-
             setAnchoPagina(
                 Math.max(
                     320,
@@ -1068,26 +946,20 @@ export default function EditorFormatoPdf({
                 ),
             );
         };
-
         actualizar();
-
         const observer =
             new ResizeObserver(
                 actualizar,
             );
-
         observer.observe(
             elemento,
         );
-
         return () =>
             observer.disconnect();
     }, [open]);
-
     /* ========================================================
      * CARGAR PLANTILLA Y DETECTAR CAMPOS
      * ======================================================== */
-
     useEffect(() => {
         if (
             !open ||
@@ -1095,59 +967,48 @@ export default function EditorFormatoPdf({
         ) {
             return;
         }
-
         let activo = true;
-
         const cargar = async () => {
             setLoading(true);
             setError("");
             setPdfBytes(null);
             setNumPages(0);
             setCampos([]);
+            valoresRef.current = {};
+            opcionesRadioRef.current = new Map();
+            radioSinResolverRef.current = false;
             setValoresCampos({});
             setBusqueda("");
-
             pdfProxyRef.current = null;
             pdfBaseRef.current = null;
-
             try {
                 const originales =
                     await cargarPdfComoBytes(
                         formato.url,
                     );
-
                 const preparados =
                     await aplicarCamposIniciales(
                         originales,
                         camposIniciales,
                     );
-
                 pdfBaseRef.current = new Uint8Array(preparados);
-
                 const camposDetectados =
                     await obtenerCamposPdf(
                         preparados,
                     );
-
                 if (!activo) return;
-
                 const valores = {};
-
                 camposDetectados.forEach(
                     (campo) => {
                         valores[campo.nombre] =
                             campo.valor;
                     },
                 );
-
                 setCampos(
                     camposDetectados,
                 );
-
-                setValoresCampos(
-                    valores,
-                );
-
+                valoresRef.current = valores;
+                setValoresCampos(valores);
                 setPdfBytes(
                     new Uint8Array(
                         preparados,
@@ -1158,20 +1019,16 @@ export default function EditorFormatoPdf({
                     "Error cargando editor PDF:",
                     err,
                 );
-
                 if (activo) {
                     setError(
                         err?.message ||
                         "No fue posible cargar el PDF.",
                     );
-
                     setLoading(false);
                 }
             }
         };
-
         cargar();
-
         return () => {
             activo = false;
         };
@@ -1179,46 +1036,45 @@ export default function EditorFormatoPdf({
         open,
         formato?.url,
     ]);
-
     /* ========================================================
      * DOCUMENTO PDF.JS LISTO
      * ======================================================== */
-
-    const documentoCargado = (pdf) => {
-        pdfProxyRef.current =
-            pdf;
-
-        setNumPages(
-            pdf.numPages || 0,
-        );
-
-        setLoading(false);
+    const documentoCargado = async (pdf) => {
+        pdfProxyRef.current = pdf;
+        setNumPages(pdf.numPages || 0);
+        try {
+            const mapa = await crearMapaRadios(pdf, pdfBaseRef.current);
+            opcionesRadioRef.current = mapa;
+            console.info(`Opciones de radio asociadas: ${mapa.size}`);
+        } catch (error) {
+            console.error("Error preparando las opciones del PDF", error);
+            setError("No fue posible preparar las opciones del PDF.");
+        } finally {
+            setLoading(false);
+        }
     };
-
     const errorDocumento = (err) => {
         console.error(
             "Error cargando PDF.js:",
             err,
         );
-
         setError(
             err?.message ||
             "No fue posible renderizar el PDF.",
         );
-
         setLoading(false);
     };
-
     /* ========================================================
      * GUARDAR
      * ======================================================== */
-
     const guardar = async () => {
         if (guardando || !pdfBaseRef.current) return;
-
+        if (radioSinResolverRef.current) {
+            setError("Algún botón circular no pudo identificarse. Recarga y vuelve a seleccionar antes de guardar.");
+            return;
+        }
         setGuardando(true);
         setError("");
-
         try {
             /*
              * Si el usuario está escribiendo directamente
@@ -1228,7 +1084,6 @@ export default function EditorFormatoPdf({
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
             }
-
             /*
              * Esperamos dos frames para permitir que React procese
              * el último setValoresCampos().
@@ -1238,7 +1093,6 @@ export default function EditorFormatoPdf({
                     requestAnimationFrame(resolve)
                 )
             );
-
             /*
              * No usamos más:
              *
@@ -1249,15 +1103,13 @@ export default function EditorFormatoPdf({
              */
             const bytesModificados = await generarPdfFinal(
                 pdfBaseRef.current,
-                valoresCampos
+                valoresRef.current
             );
-
             if (!bytesModificados?.length) {
                 throw new Error(
                     "No fue posible generar el PDF modificado."
                 );
             }
-
             /*
              * Extraemos nuevamente los campos desde el PDF FINAL.
              * Así el JSON enviado a Django y el archivo PDF contienen
@@ -1266,18 +1118,15 @@ export default function EditorFormatoPdf({
             const camposFinales = await extraerCamposPdf(
                 bytesModificados
             );
-
             const folio = String(
                 expediente?.folio ||
                 expediente?.id_expediente ||
                 "expediente"
-            ).replace(/[^\w.-]+/g, "_");
-
+            ).replace(/[^\w\.-]+/g, "_");
             const nombreBase = formato.archivo.replace(
                 /\.pdf$/i,
                 ""
             );
-
             const archivo = new File(
                 [bytesModificados],
                 `${folio}-${nombreBase}.pdf`,
@@ -1285,18 +1134,18 @@ export default function EditorFormatoPdf({
                     type: "application/pdf",
                 }
             );
-
             console.log("PDF generado:", {
                 nombre: archivo.name,
                 bytes: archivo.size,
                 mb: (archivo.size / 1024 / 1024).toFixed(2),
             });
-
-            console.log(
-                "Campos que se enviarán:",
-                camposFinales
-            );
-
+            for (const campo of campos) {
+                if (campo.tipo !== "radio") continue;
+                const esperado = valoresRef.current[campo.nombre] || "";
+                if (esperado && camposFinales[campo.nombre] !== esperado) {
+                    throw new Error(`No se pudo verificar la selección de "${campo.nombre}".`);
+                }
+            }
             await onGuardar({
                 archivo,
                 campos: camposFinales,
@@ -1307,7 +1156,6 @@ export default function EditorFormatoPdf({
                 "Error guardando formato PDF:",
                 err
             );
-
             setError(
                 err?.message ||
                 "No fue posible guardar el PDF."
@@ -1317,16 +1165,13 @@ export default function EditorFormatoPdf({
         }
     };
     if (!open) return null;
-
     /* ========================================================
      * INTERFAZ
      * ======================================================== */
-
     return createPortal(
         <div className="fixed inset-0 z-[400] bg-black/65 backdrop-blur-[2px]">
             <div className="flex h-full items-center justify-center p-2 sm:p-4">
                 <div className="flex h-[96vh] w-full max-w-[1700px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-
                     {/* HEADER */}
                     <div className="flex shrink-0 items-center justify-between bg-[#131E5C] px-5 py-4">
                         <div className="min-w-0">
@@ -1334,7 +1179,6 @@ export default function EditorFormatoPdf({
                                 <FileText className="h-5 w-5" />
                                 Editar formato de solicitud
                             </div>
-
                             <div className="mt-1 truncate text-[12px] text-white">
                                 {expediente?.folio}
                                 {" · "}
@@ -1343,7 +1187,6 @@ export default function EditorFormatoPdf({
                                 {formato?.archivo}
                             </div>
                         </div>
-
                         <button
                             type="button"
                             disabled={guardando}
@@ -1353,31 +1196,25 @@ export default function EditorFormatoPdf({
                             <X className="h-4 w-4" />
                         </button>
                     </div>
-
                     {/* CONTENIDO */}
                     <div className="grid min-h-0 flex-1 lg:grid-cols-[350px_minmax(0,1fr)]">
-
                         {/* ============================
                             MENÚ LATERAL
                         ============================ */}
                         <aside className="flex min-h-0 flex-col border-r border-slate-200 bg-slate-50">
-
                             <div className="shrink-0 border-b border-slate-200 bg-white p-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
                                         <div className="text-sm font-black text-[#131E5C]">
                                             Campos del formato
                                         </div>
-
                                         <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
                                             {campos.length} campos detectados
                                         </div>
                                     </div>
                                 </div>
-
                                 <div className="mt-3 flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-[#131E5C]">
                                     <Search className="h-4 w-4 shrink-0 text-slate-400" />
-
                                     <input
                                         value={busqueda}
                                         onChange={(event) =>
@@ -1388,7 +1225,6 @@ export default function EditorFormatoPdf({
                                         placeholder="Buscar campo..."
                                         className="h-full min-w-0 flex-1 bg-transparent text-xs font-semibold text-[#131E5C] outline-none"
                                     />
-
                                     {busqueda ? (
                                         <button
                                             type="button"
@@ -1402,7 +1238,6 @@ export default function EditorFormatoPdf({
                                     ) : null}
                                 </div>
                             </div>
-
                             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
                                 {camposFiltrados.map(
                                     (campo) => (
@@ -1423,7 +1258,6 @@ export default function EditorFormatoPdf({
                                         />
                                     ),
                                 )}
-
                                 {!camposFiltrados.length ? (
                                     <div className="py-10 text-center text-xs font-semibold text-slate-400">
                                         No se encontraron campos.
@@ -1431,7 +1265,6 @@ export default function EditorFormatoPdf({
                                 ) : null}
                             </div>
                         </aside>
-
                         {/* ============================
                             PDF
                         ============================ */}
@@ -1443,14 +1276,12 @@ export default function EditorFormatoPdf({
                                 <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/80">
                                     <div className="text-center">
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#131E5C]" />
-
                                         <div className="mt-2 text-xs font-black text-[#131E5C]">
                                             Cargando formato...
                                         </div>
                                     </div>
                                 </div>
                             ) : null}
-
                             {archivoPdf ? (
                                 <Document
                                     file={archivoPdf}
@@ -1495,14 +1326,12 @@ export default function EditorFormatoPdf({
                             ) : null}
                         </div>
                     </div>
-
                     {/* ERROR */}
                     {error ? (
                         <div className="shrink-0 border-t border-red-200 bg-red-50 px-5 py-3 text-xs font-bold text-red-700">
                             {error}
                         </div>
                     ) : null}
-
                     {/* FOOTER */}
                     <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white px-5 py-3">
                         <button
@@ -1513,7 +1342,6 @@ export default function EditorFormatoPdf({
                         >
                             Cancelar
                         </button>
-
                         <button
                             type="button"
                             disabled={
@@ -1529,7 +1357,6 @@ export default function EditorFormatoPdf({
                             ) : (
                                 <Save className="h-4 w-4" />
                             )}
-
                             {guardando
                                 ? "Guardando..."
                                 : "Guardar copia en expediente"}
