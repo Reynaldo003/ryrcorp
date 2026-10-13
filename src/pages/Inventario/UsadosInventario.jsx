@@ -1,7 +1,18 @@
 // src/pages/Inventario/InventarioIndex.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import {
+    BarChart3,
+    Building2,
+    Car,
+    Clock,
+    FileSpreadsheet,
+    FileText,
+    LoaderCircle,
+    RefreshCw,
+    Table2,
+    TrendingUp,
+} from "lucide-react";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
@@ -1767,6 +1778,14 @@ export default function InventarioIndex() {
         setPenetracionRetail,
     ] = useState("0");
 
+    // Vista estilo "Control de Inventario": dashboard con gráficas o tabla detalle.
+    const [vistaActiva, setVistaActiva] =
+        useState("dashboard");
+
+    // Incrementar para forzar la recarga de datos con el botón Actualizar.
+    const [versionRecarga, setVersionRecarga] =
+        useState(0);
+
     const tiieNumero = useMemo(
         () => numeroSeguro(tiie),
         [tiie]
@@ -1967,7 +1986,61 @@ export default function InventarioIndex() {
         estatusSeleccionado,
         modelosComerciales,
         condicionInventario,
+        versionRecarga,
     ]);
+
+    // Pills de concesionarios para el banner oscuro.
+    const agenciasPills = useMemo(() => {
+        const ags = filtrosDisponibles.agencias || [];
+
+        return [
+            {
+                id: "todas",
+                label: "Todas las agencias",
+                click: () => {
+                    setAgenciaSeleccionada("");
+                    setModelosComerciales(false);
+                },
+            },
+            {
+                id: "comerciales",
+                label: "R&R Vehículos Comerciales",
+                click: () => {
+                    setAgenciaSeleccionada("");
+                    setModelosComerciales(true);
+                },
+            },
+            ...ags.map((agencia) => ({
+                id: agencia.codigo,
+                label: agencia.nombre,
+                click: () => {
+                    setModelosComerciales(false);
+                    setAgenciaSeleccionada(agencia.codigo);
+                },
+            })),
+        ];
+    }, [filtrosDisponibles.agencias]);
+
+    const unidadesNacional = useMemo(() => {
+        const fila = (nacionalImportado || []).find((item) =>
+            String(item.tipoNombre || "")
+                .toLowerCase()
+                .includes("nacional")
+        );
+
+        return fila ? numeroSeguro(fila.total) : 0;
+    }, [nacionalImportado]);
+
+    const unidadesImportado = useMemo(() => {
+        const fila = (nacionalImportado || []).find(
+            (item) =>
+                !String(item.tipoNombre || "")
+                    .toLowerCase()
+                    .includes("nacional")
+        );
+
+        return fila ? numeroSeguro(fila.total) : 0;
+    }, [nacionalImportado]);
 
     const vehiculosCalculados = useMemo(
         () =>
@@ -2041,6 +2114,72 @@ export default function InventarioIndex() {
             : 0;
     }, [nuevoUsado]);
 
+    const costoDiarioTotal = useMemo(
+        () =>
+            vehiculosCalculados.reduce(
+                (total, vehiculo) =>
+                    total +
+                    numeroSeguro(
+                        vehiculo.costoFinancieroDiario
+                    ),
+                0
+            ),
+        [vehiculosCalculados]
+    );
+
+    // Detalle por agencia para las barras delgadas estilo "Costo por Concesionario".
+    const costosPorAgenciaDetalle = useMemo(() => {
+        const agrupado = {};
+
+        vehiculosCalculados.forEach((vehiculo) => {
+            const familia = String(vehiculo.NmFamilia || "").trim().toUpperCase();
+            const esVehiculoComercial =
+                MODELOS_COMERCIALES.some((modelo) =>
+                    familia.includes(modelo.toUpperCase())
+                );
+
+            const agencia = esVehiculoComercial
+                ? "R&R VC"
+                : vehiculo.agenciaNombre || "Sin agencia";
+
+            if (!agrupado[agencia]) {
+                agrupado[agencia] = {
+                    agencia,
+                    totalFinanciero: 0,
+                    totalDiario: 0,
+                    unidades: 0,
+                    vehiculosFuera: 0,
+                };
+            }
+
+            agrupado[agencia].totalFinanciero += numeroSeguro(
+                vehiculo.costoFinancieroTotal
+            );
+            agrupado[agencia].totalDiario += numeroSeguro(
+                vehiculo.costoFinancieroDiario
+            );
+            agrupado[agencia].unidades += 1;
+
+            if (
+                numeroSeguro(
+                    vehiculo.diasFueraGracia
+                ) > 0
+            ) {
+                agrupado[agencia].vehiculosFuera += 1;
+            }
+        });
+
+        const lista = Object.values(agrupado).sort(
+            (a, b) => b.totalFinanciero - a.totalFinanciero
+        );
+        const maxFinanciero = Math.max(
+            1,
+            ...lista.map((item) => item.totalFinanciero)
+        );
+
+        return { lista, maxFinanciero };
+    }, [vehiculosCalculados]);
+
     const eventosModelo = useMemo(
         () => ({
             click: (params) => {
@@ -2051,12 +2190,15 @@ export default function InventarioIndex() {
                         : params.name
                 );
 
+                // La tabla vive en la vista detalle: cambiar a detalle y desplazar.
+                setVistaActiva("detalle");
+
                 setTimeout(() => {
                     tablaRef.current?.scrollIntoView({
                         behavior: "smooth",
                         block: "start",
                     });
-                }, 100);
+                }, 150);
             },
         }),
         []
@@ -3119,263 +3261,745 @@ export default function InventarioIndex() {
     };
 
     return (
-        <div ref={reporteRef} id="reporte-inventario-usados-exportacion" className="inventario-page min-h-screen text-[14px] text-[#1A2344]">
-            <main className="space-y-6 px-2 py-4 lg:px-4">
-                {/* BOTONES EXPORTAR EXCEL / PDF */}
-                <div className="flex items-center justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={exportarExcelInventario}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#16A34A] bg-[#16A34A] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#16A34A]"
-                    >
-                        <FileSpreadsheet className="h-4 w-4" />
-                        Exportar Excel
-                    </button>
+        <div className="inventario-page min-h-screen bg-[#F8FAFC] text-[14px] text-[#1A2344]">
+            <main className="space-y-4 px-1 py-3 sm:px-2">
+                {/* BARRA SUPERIOR: título + vista + exportar + actualizar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h1 className="text-xl font-extrabold tracking-tight text-[#001E50]">
+                            Control de Inventario
+                        </h1>
+                        <p className="text-xs font-semibold text-slate-500">
+                            Autos usados · {agenciaActual?.nombre || "Todas las agencias"}
+                            {estatusSeleccionado ? ` · ${estatusSeleccionado}` : ""}
+                        </p>
+                    </div>
 
-                    <button
-                        type="button"
-                        onClick={exportarPdfInventario}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#DC2626] bg-[#DC2626] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#DC2626]"
-                    >
-                        <FileText className="h-4 w-4" />
-                        Exportar PDF
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center rounded-xl border border-[#001E50]/20 bg-white p-1 shadow-sm">
+                            <button
+                                type="button"
+                                onClick={() => setVistaActiva("dashboard")}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "dashboard"
+                                    ? "bg-[#001E50] text-white shadow"
+                                    : "text-[#001E50] hover:bg-slate-100"
+                                    }`}
+                            >
+                                <BarChart3 className="h-3.5 w-3.5" /> Gráficos
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setVistaActiva("detalle")}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "detalle"
+                                    ? "bg-[#001E50] text-white shadow"
+                                    : "text-[#001E50] hover:bg-slate-100"
+                                    }`}
+                            >
+                                <Table2 className="h-3.5 w-3.5" /> Tabla Detalle
+                            </button>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={exportarExcelInventario}
+                            disabled={!vehiculosCalculados.length}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                            Excel
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={exportarPdfInventario}
+                            disabled={!vehiculosCalculados.length}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-100 disabled:opacity-50"
+                        >
+                            <FileText className="h-3.5 w-3.5" />
+                            PDF
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setVersionRecarga((v) => v + 1)}
+                            disabled={cargando || cargandoTabla}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#001E50]/20 bg-white px-3 text-xs font-bold text-[#001E50] shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
+                        >
+                            {cargando || cargandoTabla ? (
+                                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <RefreshCw className="h-3.5 w-3.5" />
+                            )}
+                            Actualizar
+                        </button>
+                    </div>
                 </div>
 
-                {/* Filtros generales */}
-                <Seccion titulo='Inventario'>
-                    <FiltrosInventario
-                        filtrosDisponibles={filtrosDisponibles}
+                {/* HERO OSCURO: métricas + concesionarios */}
+                <div className="relative overflow-hidden rounded-2xl border border-[#001E50] bg-gradient-to-r from-[#001E50] via-[#0A1340] to-[#050B28] text-white shadow-xl">
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(22,119,255,0.15),transparent_70%)]" />
+                    <Car className="pointer-events-none absolute -bottom-6 -right-6 h-56 w-56 -rotate-12 text-white/[0.04]" />
 
-                        agenciaSeleccionada={agenciaSeleccionada}
-                        setAgenciaSeleccionada={setAgenciaSeleccionada}
+                    <div className="relative border-b border-white/10 p-5 pb-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-sky-300/80">
+                                    VOLKSWAGEN AUTOMOTRIZ R&R · CONTROL FÍSICO Y FINANCIERO DE UNIDADES USADAS
+                                </p>
 
-                        modelosComerciales={modelosComerciales}
-                        setModelosComerciales={setModelosComerciales}
+                                <h2 className="mt-0.5 text-2xl font-black tracking-tight text-white">
+                                    Dashboard de Inventario
+                                </h2>
+                            </div>
 
-                        estatusSeleccionado={estatusSeleccionado}
-                        setEstatusSeleccionado={setEstatusSeleccionado}
+                            <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-md">
+                                    Tasa Aplicada:{" "}
+                                    <strong className="text-sky-300">
+                                        {tasaAnual.toFixed(4)}%
+                                    </strong>{" "}
+                                    (TIIE + Spread)
+                                </span>
+                            </div>
+                        </div>
 
-                        condicionInventario={condicionInventario}
-                        setCondicionInventario={setCondicionInventario}
+                        {/* FILA 1 */}
+                        <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4 lg:divide-x lg:divide-white/10">
+                            <div className="pt-2 lg:px-3 lg:pt-0 lg:first:pl-0 lg:last:pr-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    AGENCIA LÍDER
+                                </span>
 
-                        periodoGracia={periodoGracia}
-                        setPeriodoGracia={setPeriodoGracia}
+                                <span
+                                    className="block truncate text-2xl font-black text-white"
+                                    title={cargando ? "" : agenciaLider?.agenciaNombre || ""}
+                                >
+                                    {cargando ? "…" : agenciaLider?.agenciaNombre || "—"}
+                                </span>
 
-                        tiie={tiie}
-                        setTiie={setTiie}
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    {agenciaLider
+                                        ? `${agenciaLider.total.toLocaleString("es-MX")} vehículos`
+                                        : "Sin datos"}
+                                </p>
+                            </div>
 
-                        spreadBase={spreadBase}
-                        setSpreadBase={setSpreadBase}
+                            <div className="pt-2 lg:px-3 lg:pt-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    COSTO INVENTARIO
+                                </span>
 
-                        penetracionRetail={penetracionRetail}
-                        setPenetracionRetail={setPenetracionRetail}
+                                <span className="block text-2xl font-black text-white">
+                                    {cargando ? "…" : formatMoneda(costoTotal, 0)}
+                                </span>
 
-                        reglaPenetracion={reglaPenetracion}
-                        spreadEfectivo={spreadEfectivo}
-                        tasaAnual={tasaAnual}
-                    />
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    Suma valor de compra
+                                </p>
+                            </div>
+
+                            <div className="pt-2 lg:px-3 lg:pt-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    FUERA DE GRACIA
+                                </span>
+
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-black text-amber-300">
+                                        {cargandoTabla ? "…" : unidadesFueraGracia}
+                                    </span>
+
+                                    <span className="text-[10px] font-bold text-amber-200/80">
+                                        uds.
+                                    </span>
+                                </div>
+
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    Más de {periodoGracia} días en stock
+                                </p>
+                            </div>
+
+                            <div className="pt-2 lg:px-3 lg:pt-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    COSTO FINANCIERO
+                                </span>
+
+                                <span className="block text-2xl font-black text-emerald-400">
+                                    {cargandoTabla ? "…" : formatMoneda(costoFinancieroTotal, 0)}
+                                </span>
+
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    Costo acumulado actual
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* FILA 2 */}
+                        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-white/10 pt-4 lg:grid-cols-4 lg:divide-x lg:divide-white/10">
+                            <div className="pt-2 lg:px-3 lg:pt-0 lg:first:pl-0 lg:last:pr-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    % NUEVOS
+                                </span>
+
+                                <span className="block text-2xl font-black text-white">
+                                    {cargando ? "…" : `${pctNuevo}%`}
+                                </span>
+
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    Del total activo
+                                </p>
+                            </div>
+
+                            <div className="pt-2 lg:px-3 lg:pt-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    TASA APLICADA
+                                </span>
+
+                                <span className="block text-2xl font-black text-sky-300">
+                                    {tasaAnual.toFixed(4)}%
+                                </span>
+
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    TIIE + spread efectivo
+                                </p>
+                            </div>
+
+                            <div className="pt-2 lg:px-3 lg:pt-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    PERIODO DE GRACIA
+                                </span>
+
+                                <span className="block text-2xl font-black text-white">
+                                    {periodoGracia} días
+                                </span>
+
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    Parámetro actual
+                                </p>
+                            </div>
+
+                            <div className="pt-2 lg:px-3 lg:pt-0">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                    TOTAL ACTIVO
+                                </span>
+
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-black text-white">
+                                        {cargandoTabla ? "…" : totalGeneral.toLocaleString("es-MX")}
+                                    </span>
+
+                                    <span className="text-[10px] font-bold text-slate-400">
+                                        uds.
+                                    </span>
+                                </div>
+
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    Unidades en stock activo
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-white/10 bg-black/30 px-5 py-2.5 backdrop-blur-md">
+                        <span className="mr-2 text-[10px] font-black uppercase tracking-wider text-slate-300">
+                            Concesionarios:
+                        </span>
+
+                        {agenciasPills.map((pill) => {
+                            const activa =
+                                pill.id === "todas"
+                                    ? !agenciaSeleccionada && !modelosComerciales
+                                    : pill.id === "comerciales"
+                                        ? modelosComerciales
+                                        : agenciaSeleccionada === pill.id && !modelosComerciales;
+
+                            return (
+                                <button
+                                    key={pill.id}
+                                    type="button"
+                                    onClick={pill.click}
+                                    className={`inline-flex items-center justify-center rounded-full px-3.5 py-1 text-[11px] font-bold transition-all ${activa
+                                        ? "scale-105 bg-white text-[#001E50] shadow-md"
+                                        : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                                        }`}
+                                >
+                                    {pill.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* PARÁMETROS FINANCIEROS COMPACTOS */}
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:grid-cols-12">
+                        <div className="lg:col-span-3">
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                                Periodo de Gracia (Días)
+                            </label>
+
+                            <div className="flex gap-1.5">
+                                {[30, 45, 60].map((dias) => (
+                                    <button
+                                        key={dias}
+                                        type="button"
+                                        onClick={() => setPeriodoGracia(dias)}
+                                        className={`flex-1 rounded-lg border py-1 text-xs font-bold transition ${periodoGracia === dias
+                                            ? "border-[#001E50] bg-[#001E50] text-white shadow-sm"
+                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                            }`}
+                                    >
+                                        {dias}d
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-3">
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                                Estatus
+                            </label>
+
+                            <select
+                                value={estatusSeleccionado}
+                                onChange={(e) => setEstatusSeleccionado(e.target.value)}
+                                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-[#001E50] outline-none focus:border-[#1677FF]"
+                            >
+                                <option value="">Todos los estatus</option>
+
+                                {filtrosDisponibles.estatus
+                                    .filter((estatus) => !ESTATUS_EXCLUIDOS.includes(estatus.codigo))
+                                    .map((estatus) => (
+                                        <option key={estatus.codigo} value={estatus.codigo}>
+                                            {estatus.nombre}
+                                        </option>
+                                    ))}
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 lg:col-span-6">
+                            <div>
+                                <label className="mb-0.5 block text-[9px] font-black uppercase text-slate-400">
+                                    TIIE 28d
+                                </label>
+
+                                <input
+                                    type="number"
+                                    step="0.0001"
+                                    value={tiie}
+                                    onChange={(e) => setTiie(e.target.value)}
+                                    className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-[#001E50] outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-0.5 block text-[9px] font-black uppercase text-slate-400">
+                                    Spread
+                                </label>
+
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={spreadBase}
+                                    onChange={(e) => setSpreadBase(e.target.value)}
+                                    className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-[#001E50] outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-0.5 block text-[9px] font-black uppercase text-slate-400">
+                                    Penetración %
+                                </label>
+
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={penetracionRetail}
+                                    onChange={(e) => setPenetracionRetail(e.target.value)}
+                                    className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-[#001E50] outline-none"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <span className="block text-[9px] font-black uppercase text-slate-400">
+                                Bono penetración
+                            </span>
+
+                            <span className="text-xs font-black text-[#001E50]">
+                                {reglaPenetracion.bono.toFixed(2)} pp · {reglaPenetracion.rango}
+                            </span>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <span className="block text-[9px] font-black uppercase text-slate-400">
+                                Descuento wholesale
+                            </span>
+
+                            <span className="text-xs font-black text-[#001E50]">
+                                {reglaPenetracion.descuentoWholesale.toFixed(2)} pp
+                            </span>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <span className="block text-[9px] font-black uppercase text-slate-400">
+                                Spread efectivo
+                            </span>
+
+                            <span className="text-xs font-black text-[#001E50]">
+                                {spreadEfectivo.toFixed(2)} pp
+                            </span>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <span className="block text-[9px] font-black uppercase text-slate-400">
+                                TIIE + Spread
+                            </span>
+
+                            <span className="text-xs font-black text-[#001E50]">
+                                {tasaAnual.toFixed(4)}%
+                            </span>
+                        </div>
+                    </div>
 
                     {error && (
-                        <div className="rounded-xl border border-[#C8D0DF] bg-[#F7F8FC] px-4 py-3 font-semibold text-[#131E5C]">
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
                             {error}
                         </div>
                     )}
-                </Seccion>
-                {/* Resumen */}
-                <Seccion titulo="Resumen de Inventario">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <KPICard
-                            label="Total activo"
-                            value={
-                                cargandoTabla
-                                    ? "…"
-                                    : totalGeneral.toLocaleString("es-MX")
-                            }
-                            sub="Inventario considerado"
-                        />
+                </div>
+                {/* TABLA O DASHBOARD */}
+                {vistaActiva === "detalle" ? (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <h3 className="mb-3 text-sm font-extrabold text-[#001E50]">
+                            Detalle Individual de Unidades en Inventario (Usados)
+                        </h3>
 
-                        <KPICard
-                            label="Costo inventario"
-                            value={
-                                cargando
-                                    ? "…"
-                                    : formatMoneda(costoTotal, 0)
-                            }
-                            sub="Suma valor de compra"
-                        />
-
-                        <KPICard
-                            label="Fuera de gracia"
-                            value={
-                                cargandoTabla
-                                    ? "…"
-                                    : unidadesFueraGracia.toLocaleString("es-MX")
-                            }
-                            sub={`Más de ${periodoGracia} días`}
-                        />
-
-                        <KPICard
-                            label="Costo financiero"
-                            value={
-                                cargandoTabla
-                                    ? "…"
-                                    : formatMoneda(costoFinancieroTotal, 0)
-                            }
-                            sub="Costo acumulado actual"
-                            destacado
-                        />
+                        <div ref={tablaRef}>
+                            <TablaVehiculos
+                                vehiculos={vehiculosCalculados}
+                                cargando={cargandoTabla}
+                                error={errorTabla}
+                                familiaFiltro={familiaFiltro}
+                                onClearFamilia={() => setFamiliaFiltro("")}
+                                periodoGracia={periodoGracia}
+                            />
+                        </div>
                     </div>
+                ) : (
+                    <div ref={reporteRef} id="reporte-inventario-usados-exportacion" className="space-y-4">
+                        {/* FILA 1: COSTO FINANCIERO + RESUMEN */}
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                            {/* COSTO FINANCIERO POR CONCESIONARIO */}
+                            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-6">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                        <Building2 className="h-3.5 w-3.5" />
+                                        <span>Costo Financiero por Concesionario</span>
+                                    </div>
 
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <KPICard
-                            label="Agencia líder"
-                            value={
-                                cargando
-                                    ? "…"
-                                    : agenciaLider?.agenciaNombre || "—"
-                            }
-                            sub={
-                                agenciaLider
-                                    ? `${agenciaLider.total.toLocaleString("es-MX")} vehículos`
-                                    : ""
-                            }
-                        />
+                                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                                        Gracia: {periodoGracia} días
+                                    </span>
+                                </div>
 
-                        <KPICard
-                            label="% Nuevos"
-                            value={cargando ? "…" : `${pctNuevo}%`}
-                            sub="Del total activo"
-                        />
+                                <div className="scrollbar-thin max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                                    {cargandoTabla ? (
+                                        <p className="py-10 text-center text-xs font-bold text-slate-400">
+                                            Cargando costos…
+                                        </p>
+                                    ) : costosPorAgenciaDetalle.lista.length === 0 ? (
+                                        <p className="py-10 text-center text-xs text-slate-400">
+                                            Sin unidades fuera del periodo de gracia
+                                        </p>
+                                    ) : (
+                                        costosPorAgenciaDetalle.lista.map((item) => {
+                                            const pct = Math.min(
+                                                100,
+                                                Math.round(
+                                                    (item.totalFinanciero / costosPorAgenciaDetalle.maxFinanciero) * 100
+                                                )
+                                            );
 
-                        <KPICard
-                            label="Tasa aplicada"
-                            value={`${tasaAnual.toFixed(4)}%`}
-                            sub="TIIE + spread efectivo"
-                        />
+                                            return (
+                                                <div
+                                                    key={item.agencia}
+                                                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 text-xs transition hover:bg-slate-100/80"
+                                                >
+                                                    <span className="flex h-6 shrink-0 items-center justify-center rounded-lg bg-[#001E50] px-2 text-[10px] font-black text-white">
+                                                        {item.unidades} uds.
+                                                    </span>
 
-                        <KPICard
-                            label="Periodo de gracia"
-                            value={`${periodoGracia} días`}
-                            sub="Parámetro actual"
-                        />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="mb-1 flex justify-between text-[11px] font-bold text-[#1A1F3C]">
+                                                            <span className="truncate">{item.agencia}</span>
+
+                                                            <span className="ml-2 shrink-0 text-slate-500">
+                                                                {item.vehiculosFuera} fuera gracia
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                                                            <div
+                                                                className="h-full rounded-full bg-[#001E50] transition-all duration-300"
+                                                                style={{ width: `${pct}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="min-w-[100px] shrink-0 text-right">
+                                                        <span className="block text-xs font-black text-[#1677FF]">
+                                                            {formatMoneda(item.totalFinanciero, 0)}
+                                                        </span>
+
+                                                        <span className="block text-[9px] font-bold text-slate-400">
+                                                            {formatMoneda(item.totalDiario, 0)}/día
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* RESUMEN DE INVENTARIO */}
+                            <div className="flex flex-col justify-between space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-6">
+                                <div>
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                        <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                            <TrendingUp className="h-3.5 w-3.5" />
+                                            <span>Resumen de Inventario</span>
+                                        </div>
+
+                                        <span className="text-[10px] font-bold uppercase text-slate-400">
+                                            {agenciaActual?.nombre || "Todas las agencias"}
+                                        </span>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-2 gap-3">
+                                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                            <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">
+                                                AGENCIA LÍDER
+                                            </span>
+
+                                            <span className="block truncate text-xl font-black text-[#001E50]">
+                                                {cargando ? "…" : agenciaLider?.agenciaNombre || "—"}
+                                            </span>
+
+                                            <p className="mt-1 text-[10px] font-bold text-slate-500">
+                                                {agenciaLider
+                                                    ? `${agenciaLider.total.toLocaleString("es-MX")} vehículos`
+                                                    : "Sin datos"}
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                            <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">
+                                                % NUEVOS
+                                            </span>
+
+                                            <span className="block text-xl font-black text-[#001E50]">
+                                                {cargando ? "…" : `${pctNuevo}%`}
+                                            </span>
+
+                                            <p className="mt-1 text-[10px] font-bold text-slate-500">
+                                                Del total activo
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                            <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">
+                                                NACIONALES
+                                            </span>
+
+                                            <span className="block text-xl font-black text-emerald-600">
+                                                {cargando ? "…" : `${unidadesNacional.toLocaleString("es-MX")} uds.`}
+                                            </span>
+
+                                            <p className="mt-1 text-[10px] font-bold text-slate-500">
+                                                Unidades nacionalizadas
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                            <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">
+                                                IMPORTADOS
+                                            </span>
+
+                                            <span className="block text-xl font-black text-[#1677FF]">
+                                                {cargando ? "…" : `${unidadesImportado.toLocaleString("es-MX")} uds.`}
+                                            </span>
+
+                                            <p className="mt-1 text-[10px] font-bold text-slate-500">
+                                                Unidades importadas
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-xl border border-[#001E50]/10 bg-[#001E50]/5 p-3">
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-4 w-4 text-[#001E50]" />
+                                        <span className="text-xs font-bold text-[#001E50]">
+                                            Impacto de Permanencia Diaria:
+                                        </span>
+                                    </div>
+
+                                    <span className="text-xs font-black text-[#1677FF]">
+                                        {formatMoneda(costoDiarioTotal, 0)} costo financiero/día
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* FILA 2: GRÁFICAS EXISTENTES DEL MÓDULO */}
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-8">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                        <Car className="h-3.5 w-3.5" />
+                                        <span>Inventario por Modelo</span>
+                                    </div>
+
+                                    <span className="text-[10px] font-bold text-slate-400">
+                                        {familiaFiltro
+                                            ? `Filtrando: ${familiaFiltro} · clic de nuevo para quitar`
+                                            : "Clic en una barra para filtrar la tabla"}
+                                    </span>
+                                </div>
+
+                                <div style={{ height: 420 }}>
+                                    {optionPorMarca ? (
+                                        <ChartDiv
+                                            option={optionPorMarca}
+                                            loading={cargando}
+                                            onEvents={eventosModelo}
+                                        />
+                                    ) : (
+                                        <EmptyState />
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-4">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                        <Clock className="h-3.5 w-3.5" />
+                                        <span>Antigüedad en Stock</span>
+                                    </div>
+
+                                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                                        Días desde factura
+                                    </span>
+                                </div>
+
+                                <div style={{ height: 300 }}>
+                                    {optionAntiguedad ? (
+                                        <ChartDiv
+                                            option={optionAntiguedad}
+                                            loading={cargando}
+                                        />
+                                    ) : (
+                                        <EmptyState />
+                                    )}
+                                </div>
+
+                                <div className="border-t border-slate-100 pt-3">
+                                    <span className="mb-2 block text-[10px] font-black uppercase text-slate-400">
+                                        Origen de las unidades
+                                    </span>
+
+                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                        {(nacionalImportado || []).map((origen) => (
+                                            <div
+                                                key={origen.tipoNombre}
+                                                className="rounded-xl border border-slate-100 bg-slate-50 p-2"
+                                            >
+                                                <span className="block text-[10px] font-bold text-slate-500">
+                                                    {origen.tipoNombre}
+                                                </span>
+
+                                                <span className="text-lg font-black text-[#001E50]">
+                                                    {origen.total} uds.
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* FILA 3: AGENCIA + ESTATUS + ORIGEN */}
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-6">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                        <Building2 className="h-3.5 w-3.5" />
+                                        <span>Inventario por Agencia</span>
+                                    </div>
+
+                                    {!cargando && porAgencia.length > 0 ? (
+                                        <span className="rounded-full bg-[#1677FF]/10 px-2 py-0.5 text-[10px] font-bold text-[#1677FF]">
+                                            {porAgencia.length} agencias
+                                        </span>
+                                    ) : null}
+                                </div>
+
+                                <div style={{ height: 380 }}>
+                                    {optionPorAgencia ? (
+                                        <ChartDiv
+                                            option={optionPorAgencia}
+                                            loading={cargando}
+                                        />
+                                    ) : (
+                                        <EmptyState />
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                        <span>Estatus</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ height: 380 }}>
+                                    {optionPorEstatus ? (
+                                        <ChartDiv
+                                            option={optionPorEstatus}
+                                            loading={cargando}
+                                        />
+                                    ) : (
+                                        <EmptyState />
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                                        <span>Nacional vs. Importado</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ height: 380 }}>
+                                    {optionNacionalImportado ? (
+                                        <ChartDiv
+                                            option={optionNacionalImportado}
+                                            loading={cargando}
+                                        />
+                                    ) : (
+                                        <EmptyState />
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </Seccion>
-
-                {/* Financiamiento y antigüedad */}
-                <Seccion
-                    titulo="Costo Financiero"
-                    subtitulo="Antigüedad del inventario y costo generado fuera del periodo de gracia"
-                >
-                    <div className="grid grid-cols-1 gap-4">
-                        <Panel
-                            titulo="Antigüedad en Stock"
-                            subtitulo="Días desde facturación"
-                            alto={300}
-                        >
-                            {optionAntiguedad ? (
-                                <ChartDiv
-                                    option={optionAntiguedad}
-                                    loading={cargando}
-                                />
-                            ) : (
-                                <EmptyState />
-                            )}
-                        </Panel>
-                    </div>
-                </Seccion>
-
-                {/* Tabla */}
-                <Seccion
-                    titulo="Detalle del Inventario"
-                >
-                    <div ref={tablaRef}>
-                        <TablaVehiculos
-                            vehiculos={vehiculosCalculados}
-                            cargando={cargandoTabla}
-                            error={errorTabla}
-                            familiaFiltro={familiaFiltro}
-                            onClearFamilia={() => setFamiliaFiltro("")}
-                            periodoGracia={periodoGracia}
-                        />
-                    </div>
-                </Seccion>
-
-                {/* Distribución */}
-                <Seccion
-                    titulo="Distribución del Inventario"
-                    subtitulo="Composición actual de las unidades activas"
-                >
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        <Panel
-                            titulo="Inventario por modelo"
-                            subtitulo={
-                                familiaFiltro
-                                    ? `Filtrando: ${familiaFiltro} · Selecciona la misma barra para quitar el filtro`
-                                    : "Top unidades en stock · Selecciona una barra para filtrar la tabla"
-                            }
-                            alto={500}
-                            extra={
-                                !cargando && porMarca.length > 0 ? (
-                                    <Badge
-                                        label={`${porMarca.length} modelos`}
-                                        color={COLORES[7]}
-                                    />
-                                ) : null
-                            }
-                        >
-                            {optionPorMarca ? (
-                                <ChartDiv
-                                    option={optionPorMarca}
-                                    loading={cargando}
-                                    onEvents={eventosModelo}
-                                />
-                            ) : (
-                                <EmptyState />
-                            )}
-                        </Panel>
-
-                        <Panel
-                            titulo="Inventario por agencia"
-                            subtitulo="Total de vehículos activos"
-                            alto={500}
-                            extra={
-                                !cargando && porAgencia.length > 0 ? (
-                                    <Badge
-                                        label={`${porAgencia.length} agencias`}
-                                        color={COLORES[7]}
-                                    />
-                                ) : null
-                            }
-                        >
-                            {optionPorAgencia ? (
-                                <ChartDiv
-                                    option={optionPorAgencia}
-                                    loading={cargando}
-                                />
-                            ) : (
-                                <EmptyState />
-                            )}
-                        </Panel>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 ">
-                        <Panel
-                            titulo="Nacional vs. Importado"
-                            subtitulo="Tipo de nacionalización"
-                            alto={280}
-                        >
-                            {optionNacionalImportado ? (
-                                <ChartDiv
-                                    option={optionNacionalImportado}
-                                    loading={cargando}
-                                />
-                            ) : (
-                                <EmptyState />
-                            )}
-                        </Panel>
-                    </div>
-                </Seccion>
+                )}
             </main>
         </div>
     );
