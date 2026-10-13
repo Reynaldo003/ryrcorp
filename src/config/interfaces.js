@@ -27,6 +27,7 @@ import {
     QrCode,
     Settings2,
     ScrollText,
+    BarChart3,
 } from "lucide-react";
 
 // Orden de las secciones tal como aparecen en el menú.
@@ -219,6 +220,14 @@ export const INTERFACES = [
         label: "Gestor de Actividades",
         icon: CalendarCheck,
         permisos: ["USUARIOS_ADMIN", "CRM_CALIDAD"],
+    },
+    {
+        key: "business_plan",
+        section: "Herramientas",
+        to: "/business-plan",
+        label: "Business Plan",
+        icon: BarChart3,
+        permisos: ["USUARIOS_ADMIN"],
     },
     {
         key: "administrativos",
