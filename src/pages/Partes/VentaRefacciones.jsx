@@ -222,10 +222,10 @@ export default function VentaRefacciones() {
             {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
             <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Indicador titulo="Venta neta de partidas" valor={compacto(metricas.venta_neta)} descripcion="Suma de VrLiqItem" principal />
+                <Indicador titulo="Venta neta de refacciones" valor={dinero(metricas.venta_neta)} principal />
                 <Indicador titulo="Facturas" valor={numero(metricas.facturas)} descripcion={`${numero(metricas.partidas)} partidas`} />
                 <Indicador titulo="Piezas vendidas" valor={numero(metricas.cantidad_total)} descripcion="Cantidad acumulada" />
-                <Indicador titulo="Impuesto registrado (ICMS)" valor={compacto(metricas.impuesto_icms)} descripcion={`Descuentos: ${dinero(metricas.descuento)}`} />
+                <Indicador titulo="Impuesto registrado (IVA)" valor={dinero(metricas.impuesto_icms)} descripcion={`Descuentos: ${dinero(metricas.descuento)}`} />
             </section>
 
             <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -310,7 +310,6 @@ export default function VentaRefacciones() {
                     <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={pagina >= totalPaginas || cargando} className="flex items-center gap-1 rounded-full bg-[#001E50] px-3 py-2 text-white disabled:opacity-40">Siguiente<ChevronRight size={14} /></button>
                 </div>
             </footer>
-            <p className="text-[10px] text-slate-500">Venta neta = suma de VrLiqItem. ICMS = suma de VrICMS según el origen. No se calcula ni se asume un total fiscal de factura.</p>
         </div>
     );
 }
@@ -319,6 +318,6 @@ function Indicador({ titulo, valor, descripcion, principal = false }) {
     return <article className={`rounded-2xl border p-4 shadow-sm ${principal ? "border-[#001E50] bg-[#001E50] text-white" : "border-slate-200 bg-[#F8FAFC] text-[#001E50]"}`}>
         <p className={`text-xs font-semibold ${principal ? "text-blue-100" : "text-slate-500"}`}>{titulo}</p>
         <p className="my-2 text-2xl font-extrabold font-vw-head">{valor}</p>
-        <p className={`text-[11px] ${principal ? "text-blue-100" : "text-slate-500"}`}>{descripcion}</p>
+        <p className={`text-[12px] ${principal ? "text-blue-100" : "text-slate-500"}`}>{descripcion}</p>
     </article>;
 }
