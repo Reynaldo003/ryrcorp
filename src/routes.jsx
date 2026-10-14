@@ -122,6 +122,7 @@ import AnalisisFacturas from "./pages/AnalisisFacturas/AnalisisFacturas";
 import Tableros from "./pages/Tableros/Tableros";
 import AdministracionAsesores from "./pages/AdministracionAsesores/AdministracionAsesores";
 import GestorActividades from "./pages/GestorActividades/GestorActividades";
+import BusinessPlan from "./pages/BusinessPlan/BusinessPlan";
 import GestorActividadesLayout from "./pages/GestorActividades/GestorActividadesLayout";
 import VentasVN from "./pages/VentasVN/VentasVN";
 import VentasUsados from "./pages/VentasVN/VentasUsados";
@@ -1313,6 +1314,14 @@ export const router = createBrowserRouter(
                                     element: <GestorActividades />,
                                 },
                             ],
+                        },
+                        {
+                            path: "business-plan",
+                            element: (
+                                <RequirePermission anyOf={["USUARIOS_ADMIN"]}>
+                                    <BusinessPlan />
+                                </RequirePermission>
+                            ),
                         },
                         {
                             path: "facturas",

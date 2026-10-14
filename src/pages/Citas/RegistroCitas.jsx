@@ -1374,27 +1374,53 @@ export default function RegistroCitas() {
 
     const [ctxMenu, setCtxMenu] = useState({ open: false, x: 0, y: 0, row: null });
     const [sort, setSort] = useState({ key: "fecha_hora_cita", dir: "desc" });
-    const [filters, setFilters] = useState({
-        q: "",
-        agencia: "Todos",
-        asesorDigital: "Todos",
-        asesorPiso: "Todos",
-        rangoDesde: "",
-        rangoHasta: "",
-    });
-    const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
-    const [mesSeleccionado, setMesSeleccionado] = useState(null);
-    const seleccionarPeriodo = (anio, mes) => {
-        const desde = `${anio}-${String(mes || 1).padStart(2, "0")}-01`;
+    const [filters, setFilters] = useState(() => {
+        const hoy = new Date();
+        const anio = hoy.getFullYear();
+        const mes = hoy.getMonth() + 1;
 
-        const hasta = mes === 0
-            ? `${anio}-12-31`
-            : `${anio}-${String(mes).padStart(2, "0")}-${String(
-                new Date(anio, mes, 0).getDate()
-            ).padStart(2, "0")}`;
+        return {
+            q: "",
+            agencia: "Todos",
+            tipoCita: "Todas",
+            asesorDigital: "Todos",
+            asesorPiso: "Todos",
+            rangoDesde: `${anio}-${String(mes).padStart(2, "0")}-01`,
+            rangoHasta: toYMDLocal(new Date(anio, mes, 0)),
+        };
+    });
+    const [anioSeleccionado, setAnioSeleccionado] = useState(
+        () => new Date().getFullYear()
+    );
+
+    const [mesSeleccionado, setMesSeleccionado] = useState(
+        () => new Date().getMonth() + 1
+    );
+
+    const seleccionarPeriodo = (anio, mes) => {
+        const mesActual = new Date().getMonth() + 1;
+
+        // Si vuelves a pulsar el botón activo:
+        // mes seleccionado -> Todo el año
+        // Todo el año -> mes actual
+        const nuevoMes =
+            mesSeleccionado === mes
+                ? mes === 0 ? mesActual : 0
+                : mes;
+
+        const desde =
+            nuevoMes === 0
+                ? `${anio}-01-01`
+                : `${anio}-${String(nuevoMes).padStart(2, "0")}-01`;
+
+        const hasta =
+            nuevoMes === 0
+                ? `${anio}-12-31`
+                : toYMDLocal(new Date(anio, nuevoMes, 0));
 
         setAnioSeleccionado(anio);
-        setMesSeleccionado(mes);
+        setMesSeleccionado(nuevoMes);
+        setPage(1);
 
         setFilters((prev) => ({
             ...prev,
@@ -1402,6 +1428,7 @@ export default function RegistroCitas() {
             rangoHasta: hasta,
         }));
     };
+
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
@@ -1486,13 +1513,16 @@ export default function RegistroCitas() {
     const buildServerParams = useCallback((pageNum) => {
         const params = { page: pageNum || 1, page_size: PAGE_SIZE };
         if (filters.agencia && filters.agencia !== "Todos") params.agencia = filters.agencia;
+        if (filters.tipoCita && filters.tipoCita !== "Todas") {
+            params.tipo_cita = filters.tipoCita;
+        }
         if (filters.asesorDigital && filters.asesorDigital !== "Todos") params.asesor_digital = filters.asesorDigital;
         if (filters.asesorPiso && filters.asesorPiso !== "Todos") params.asesor_piso = filters.asesorPiso;
         if (debouncedQ) params.search = debouncedQ;
         if (filters.rangoDesde) params.fecha_desde = filters.rangoDesde;
         if (filters.rangoHasta) params.fecha_hasta = filters.rangoHasta;
         return params;
-    }, [filters.agencia, filters.asesorDigital, filters.asesorPiso, filters.rangoDesde, filters.rangoHasta, debouncedQ]);
+        }, [filters.agencia, filters.tipoCita, filters.asesorDigital, filters.asesorPiso, filters.rangoDesde, filters.rangoHasta, debouncedQ]);
 
     const refreshList = useCallback(async (pageNum = 1) => {
         const seq = ++requestSeq.current;
@@ -1581,6 +1611,30 @@ export default function RegistroCitas() {
             return true;
         });
     }, [citasGraficos, isAdmin, userAgencias, userTieneAgencia]);
+
+
+    // Asesores disponibles según las citas cargadas para gráficas.
+
+    // Catálogo de asesores disponible en todas las vistas.
+    const asesoresDisponibles = useMemo(() => {
+        const digitales = [
+            ...new Set(
+                nombresAsesoresDigitales
+                    .map((nombre) => normalizeStr(nombre))
+                    .filter(Boolean)
+            ),
+        ].sort((a, b) => a.localeCompare(b, "es"));
+
+        const piso = [
+            ...new Set(
+                nombresAsesoresActivos
+                    .map((nombre) => normalizeStr(nombre))
+                    .filter(Boolean)
+            ),
+        ].sort((a, b) => a.localeCompare(b, "es"));
+
+        return { digitales, piso };
+    }, [nombresAsesoresDigitales, nombresAsesoresActivos]);
 
     const filtered = useMemo(() => {
         return (citas || []).filter((c) => {
@@ -1843,16 +1897,21 @@ export default function RegistroCitas() {
 
         // Restablecer los controles de año y mes
         setAnioSeleccionado(new Date().getFullYear());
-        setMesSeleccionado(null);
+        setMesSeleccionado(new Date().getMonth() + 1);
 
         // Restablecer los filtros generales
         setFilters({
             q: "",
             agencia: "Todos",
+            tipoCita: "Todas",
             asesorDigital: "Todos",
             asesorPiso: "Todos",
-            rangoDesde: "",
-            rangoHasta: "",
+            rangoDesde: toYMDLocal(
+                new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+            ),
+            rangoHasta: toYMDLocal(
+                new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
+            ),
         });
     };
 
@@ -2098,8 +2157,8 @@ export default function RegistroCitas() {
             </div>
 
             {/* FILTROS NUEVOS: CONCESIONARIOS, AÑO Y MESES */}
-            <div className="mb-4 rounded-2xl bg-[#071D49] p-4 shadow-md">
-                <div className="flex flex-wrap items-center gap-2">
+            <div className="mb-4 flex w-full items-center gap-3 overflow-x-auto rounded-2xl bg-[#071D49] px-3 py-3 shadow-md">
+                <div className="flex shrink-0 items-center gap-1">
                     <span className="mr-3 text-xs font-bold uppercase tracking-wide text-white/70">
                         Concesionarios:
                     </span>
@@ -2125,7 +2184,7 @@ export default function RegistroCitas() {
                                         agencia: value,
                                     }));
                                 }}
-                                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                                className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
                                     activo
                                         ? "bg-white text-[#071D49] shadow-sm"
                                         : "bg-white/10 text-white hover:bg-white/20"
@@ -2136,22 +2195,159 @@ export default function RegistroCitas() {
                         );
                     })}
                 </div>
-            </div>
-            {/* FILTROS POR AÑO Y MES */}
-            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center gap-3">
+                {/* ASESORES DINÁMICOS SEGÚN TIPO DE CITA */}
+                        <div className="flex shrink-0 items-center gap-2 border-x border-white/20 px-2">
+                            {/* ASESOR DIGITAL */}
+                            {(
+                                filters.tipoCita === "Digital" ||
+                                (
+                                    filters.tipoCita !== "Tradicional" &&
+                                    asesoresDisponibles.digitales.length > 0
+                                )
+                            ) && (
+                                <div className="flex w-[145px] flex-col gap-1">
+                                    <label className="text-[10px] font-bold uppercase text-blue-200">
+                                        Asesor digital
+                                    </label>
 
+                                    <select
+                                        value={filters.asesorDigital}
+                                        onChange={(e) => {
+                                            setPage(1);
+                                            setFilters((prev) => ({
+                                                ...prev,
+                                                asesorDigital: e.target.value,
+                                            }));
+                                        }}
+                                        className="w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#071D49] outline-none"
+                                    >
+                                        <option value="Todos">Todos los asesores</option>
+
+                                        {asesoresDisponibles.digitales.map((asesor) => (
+                                            <option key={asesor} value={asesor}>
+                                                {asesor}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* ASESOR DE PISO */}
+                            {(
+                                filters.tipoCita === "Tradicional" ||
+                                (
+                                    filters.tipoCita !== "Digital" &&
+                                    asesoresDisponibles.piso.length > 0
+                                )
+                            ) && (
+                                <div className="flex w-[150px] shrink-0 flex-col gap-1">
+                                    <label className="text-[10px] font-bold uppercase text-blue-200">
+                                        Asesor de piso
+                                    </label>
+
+                                    <select
+                                        value={filters.asesorPiso}
+                                        onChange={(e) => {
+                                            setPage(1);
+                                            setFilters((prev) => ({
+                                                ...prev,
+                                                asesorPiso: e.target.value,
+                                            }));
+                                        }}
+                                        className="w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#071D49] outline-none"
+                                    >
+                                        <option value="Todos">Todos los asesores</option>
+
+                                        {asesoresDisponibles.piso.map((asesor) => (
+                                            <option key={asesor} value={asesor}>
+                                                {asesor}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                        </div>
+
+                {/* TIPO DE CITA */}
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                    <div className="flex shrink-0 items-center gap-2"></div>
+                    {/* Separador degradado */}
+                    <div className="hidden h-11 w-px bg-gradient-to-b from-transparent via-sky-300/60 to-transparent xl:block" />
+
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-blue-200">
+                            TIPO DE CITA
+                        </span>
+
+                        <div className="flex flex-nowrap items-center gap-1">
+                            {[
+                                { label: "Todas", value: "Todas" },
+                                { label: "Tradicional", value: "Tradicional" },
+                                { label: "Digital", value: "Digital" },
+                                { label: "Evento", value: "Evento" },
+                                { label: "Evento Taigun", value: "Evento Taigun" },
+                                { label: "Remarketing", value: "Remarketing" },
+                            ].map((opcion) => {
+                                const activo = filters.tipoCita === opcion.value;
+
+                                return (
+                                    <button
+                                        key={opcion.value}
+                                        type="button"
+                                        onClick={() => {
+                                            setPage(1);
+                                            setFilters((prev) => ({
+                                                ...prev,
+                                                tipoCita: opcion.value,
+                                                asesorDigital: "Todos",
+                                                asesorPiso: "Todos",
+                                            }));
+                                        }}
+                                        className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold transition-all ${
+                                            activo
+                                                ? "bg-white text-[#071D49] shadow-sm"
+                                                : "bg-white/10 text-white hover:bg-white/20"
+                                        }`}
+                                    >
+                                        {opcion.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+                {/* FILTROS POR AÑO Y MES */}
+                <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
+
+                    {/* AÑO */}
                     <select
                         value={anioSeleccionado}
                         onChange={(e) => {
-                            seleccionarPeriodo(Number(e.target.value), mesSeleccionado);
+                            const anio = Number(e.target.value);
+                            const mes = mesSeleccionado;
+
+                            setAnioSeleccionado(anio);
                             setPage(1);
+
+                            setFilters((prev) => ({
+                                ...prev,
+                                rangoDesde:
+                                    mes === 0
+                                        ? `${anio}-01-01`
+                                        : `${anio}-${String(mes).padStart(2, "0")}-01`,
+                                rangoHasta:
+                                    mes === 0
+                                        ? `${anio}-12-31`
+                                        : toYMDLocal(new Date(anio, mes, 0)),
+                            }));
                         }}
-                        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-[#071D49]"
+                        className="shrink-0 rounded-xl border border-[#D9E2F2] bg-[#F8FAFD] px-4 py-2 text-sm font-bold text-[#071D49] outline-none"
                     >
                         {Array.from(
-                            { length: new Date().getFullYear() - 2020 + 1 },
-                            (_, i) => new Date().getFullYear() - i
+                            { length: Math.max(new Date().getFullYear(), 2026) - 2020 + 1 },
+                            (_, i) => Math.max(new Date().getFullYear(), 2026) - i
                         ).map((anio) => (
                             <option key={anio} value={anio}>
                                 {anio}
@@ -2159,36 +2355,53 @@ export default function RegistroCitas() {
                         ))}
                     </select>
 
-                    <div className="h-8 w-px bg-slate-200" />
+                    <div className="h-8 w-px shrink-0 bg-slate-200" />
 
-                    {[
-                        "Todo el año",
-                        "ENE", "FEB", "MAR", "ABR",
-                        "MAY", "JUN", "JUL", "AGO",
-                        "SEP", "OCT", "NOV", "DIC"
-                    ].map((nombre, indice) => {
-                        const activo = mesSeleccionado === indice;
+                    {/* MESES DISTRIBUIDOS EN TODO EL ANCHO */}
+                    <div className="min-w-0 flex-1 overflow-x-auto">
+                        <div
+                            className="grid min-w-[850px] items-center gap-1"
+                            style={{
+                                gridTemplateColumns: "repeat(13, minmax(0, 1fr))",
+                            }}
+                        >
+                            {[
+                                "Todo el año",
+                                "ENERO",
+                                "FEBRERO",
+                                "MARZO",
+                                "ABRIL",
+                                "MAYO",
+                                "JUNIO",
+                                "JULIO",
+                                "AGOSTO",
+                                "SEPTIEMBRE",
+                                "OCTUBRE",
+                                "NOVIEMBRE",
+                                "DICIEMBRE",
+                            ].map((nombre, indice) => {
+                                const activo = mesSeleccionado === indice;
 
-                        return (
-                            <button
-                                key={nombre}
-                                type="button"
-                                onClick={() => {
-                                    seleccionarPeriodo(anioSeleccionado, indice);
-                                    setPage(1);
-                                }}
-                                className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
-                                    activo
-                                        ? "bg-[#071D49] text-white shadow-sm"
-                                        : "text-slate-600 hover:bg-slate-100"
-                                }`}
-                            >
-                                {nombre}
-                            </button>
-                        );
-                    })}
+                                return (
+                                    <button
+                                        key={nombre}
+                                        type="button"
+                                        onClick={() =>
+                                            seleccionarPeriodo(anioSeleccionado, indice)
+                                        }
+                                        className={`w-full whitespace-nowrap rounded-lg px-1 py-2.5 text-center text-[11px] font-bold transition-all ${
+                                            activo
+                                                ? "bg-[#071D49] text-white shadow-sm"
+                                                : "text-[#071D49] hover:bg-slate-100"
+                                        }`}
+                                    >
+                                        {nombre}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
-            </div>
             {vista === "calendario" && (
                 <CalendarioView
                     rows={sorted}

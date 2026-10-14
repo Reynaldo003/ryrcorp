@@ -406,25 +406,23 @@ function KpiCard({ label, value, color, bg, detail }) {
     return <div className={`rounded-xl border border-black/10 ${bg} p-4 transition-all duration-200 cursor-default select-none`} style={{ transform: hovered ? "translateY(-2px)" : "none", boxShadow: hovered ? "0 8px 24px rgba(19,30,92,0.12)" : "none" }} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}><div className="text-xs font-bold text-slate-500 mb-1">{label}</div><div className={`text-3xl font-extrabold ${color}`}>{value}</div>{hovered && detail ? <div className="mt-2 text-xs font-semibold text-slate-400 animate-pulse">{detail}</div> : null}</div>;
 }
 
-function GraficosView({ rows }) {
+function GraficosView({ resumen }) {
     const [hoveredDia, setHoveredDia] = useState(null);
-    const stats = useMemo(() => {
-        const total = rows.length;
-        const conAutoCuenta = rows.filter((r) => r.deja_auto_cuenta).length;
-        const sinAutoCuenta = total - conAutoCuenta;
-        const porMotivoIngreso = {}; for (const r of rows) { const m = r.motivo_ingreso || "Sin motivo"; porMotivoIngreso[m] = (porMotivoIngreso[m] || 0) + 1; }
-        const porAgencia = {}; for (const r of rows) { const a = r.agencia || "Sin agencia"; porAgencia[a] = (porAgencia[a] || 0) + 1; }
-        const porAsesor = {}; for (const r of rows) { const a = r.asesor_ventas || "Sin asesor"; porAsesor[a] = (porAsesor[a] || 0) + 1; }
-        const porTipoPersona = {}; for (const r of rows) { const t = r.tipo_persona || "Sin tipo"; porTipoPersona[t] = (porTipoPersona[t] || 0) + 1; }
-        const porTiempoCompra = {}; for (const r of rows) { const t = r.tiempo_compra || "Sin tiempo"; porTiempoCompra[t] = (porTiempoCompra[t] || 0) + 1; }
-        const porFormaCapitalizacion = {}; for (const r of rows) { const f = r.forma_capitalizacion || "Sin forma"; porFormaCapitalizacion[f] = (porFormaCapitalizacion[f] || 0) + 1; }
-        const porDia = { Lun: 0, Mar: 0, Mié: 0, Jue: 0, Vie: 0, Sáb: 0, Dom: 0 };
-        const daysKeys = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-        for (const r of rows) { if (!r.creado_en) continue; const d = new Date(r.creado_en); if (isNaN(d.getTime())) continue; const diaIndex = d.getDay(); const diaKey = daysKeys[diaIndex === 0 ? 6 : diaIndex - 1]; porDia[diaKey] = (porDia[diaKey] || 0) + 1; }
-        const totalPresupuesto = rows.reduce((acc, r) => acc + Number(r.presupuesto_estimado || 0), 0);
-        const promedioPresupuesto = total > 0 ? totalPresupuesto / total : 0;
-        return { total, conAutoCuenta, sinAutoCuenta, porMotivoIngreso, porAgencia, porAsesor, porTipoPersona, porTiempoCompra, porFormaCapitalizacion, porDia, promedioPresupuesto, totalPresupuesto };
-    }, [rows]);
+    // El resumen proviene del backend SIN paginación y con todos los filtros aplicados.
+    const stats = useMemo(() => ({
+        total: Number(resumen.total || 0),
+        conAutoCuenta: Number(resumen.con_auto_cuenta ?? resumen.interesados_auto_cuenta ?? 0),
+        sinAutoCuenta: Number(resumen.sin_auto_cuenta ?? (Number(resumen.total || 0) - Number(resumen.con_auto_cuenta ?? resumen.interesados_auto_cuenta ?? 0))),
+        porMotivoIngreso: resumen.por_motivo_ingreso || {},
+        porAgencia: resumen.por_agencia || {},
+        porAsesor: resumen.por_asesor || {},
+        porTipoPersona: resumen.por_tipo_persona || {},
+        porTiempoCompra: resumen.por_tiempo_compra || {},
+        porFormaCapitalizacion: resumen.por_forma_capitalizacion || {},
+        porDia: resumen.por_dia || { Lun: 0, Mar: 0, "Mié": 0, Jue: 0, Vie: 0, "Sáb": 0, Dom: 0 },
+        promedioPresupuesto: Number(resumen.promedio_presupuesto || 0),
+        totalPresupuesto: Number(resumen.total_presupuesto || 0),
+    }), [resumen]);
     const topAgencias = Object.entries(stats.porAgencia).sort((a, b) => b[1] - a[1]);
     const topAsesores = Object.entries(stats.porAsesor).sort((a, b) => b[1] - a[1]).slice(0, 8);
     const topMotivos = Object.entries(stats.porMotivoIngreso).sort((a, b) => b[1] - a[1]);
@@ -698,6 +696,7 @@ export default function TraficoPiso() {
 
     const [registros, setRegistros] = useState([]);
     const [resumen, setResumen] = useState(null);
+    const [errorResumen, setErrorResumen] = useState("");
     const [vista, setVista] = useState("agenda");
     const [beBackMap, setBeBackMap] = useState({});
     const [updatingBeBack, setUpdatingBeBack] = useState({});
@@ -712,7 +711,27 @@ export default function TraficoPiso() {
     const { guardarRespuesta, obtenerRespuesta } = useRespuestasEncuesta();
     const [enviandoEncuesta, setEnviandoEncuesta] = useState({});
 
-    const [filters, setFilters] = useState({ q: "", agencia: "Todos", tipoPersona: "Todos", tiempoCompra: "Todos", rangoDesde: "", rangoHasta: "" });
+    const [filters, setFilters] = useState(() => {
+        const hoy = new Date();
+        const anio = hoy.getFullYear();
+        const mes = hoy.getMonth() + 1;
+
+        return {
+            q: "",
+            agencia: "Todos",
+            tipoPersona: "Todos",
+            tiempoCompra: "Todos",
+            rangoDesde: `${anio}-${String(mes).padStart(2, "0")}-01`,
+            rangoHasta: toYMDLocal(new Date(anio, mes, 0)),
+        };
+    });
+    const [anioSeleccionado, setAnioSeleccionado] = useState(
+        () => new Date().getFullYear()
+    );
+
+    const [mesSeleccionado, setMesSeleccionado] = useState(
+        () => new Date().getMonth() + 1
+    );
     const [sort, setSort] = useState({ key: "creado_en", dir: "desc" });
     const [ctxMenu, setCtxMenu] = useState({ open: false, x: 0, y: 0, row: null });
     const [openModal, setOpenModal] = useState(false);
@@ -912,6 +931,8 @@ export default function TraficoPiso() {
         try {
             setLoadingList(true);
             setError("");
+            setErrorResumen("");
+            setResumen(null);
 
             const paramsLista = {
                 ...params,
@@ -921,7 +942,10 @@ export default function TraficoPiso() {
 
             const [lista, datosResumen] = await Promise.all([
                 apiTraficoPiso.list(paramsLista),
-                apiTraficoPiso.resumen(params).catch(() => null)
+                apiTraficoPiso.resumen(params).catch((err) => {
+                    setErrorResumen(err.message || "No se pudieron cargar las estadísticas.");
+                    return null;
+                })
             ]);
 
             const listaFinal = Array.isArray(lista)
@@ -961,6 +985,7 @@ export default function TraficoPiso() {
             console.error(err);
             setError(err.message || "No se pudo cargar el tráfico de piso.");
             setRegistros([]);
+            setResumen(null);
             setTotalRegistros(0);
             setHaySiguiente(false);
             setHayAnterior(false);
@@ -976,6 +1001,8 @@ export default function TraficoPiso() {
                     agencia: filters.agencia === "Todos" ? "" : filters.agencia,
                     desde: filters.rangoDesde,
                     hasta: filters.rangoHasta,
+                    tipo_persona: filters.tipoPersona === "Todos" ? "" : filters.tipoPersona,
+                    tiempo_compra: filters.tiempoCompra === "Todos" ? "" : filters.tiempoCompra,
                 });
             }
         }, [
@@ -987,6 +1014,8 @@ export default function TraficoPiso() {
             filters.agencia,
             filters.rangoDesde,
             filters.rangoHasta,
+            filters.tipoPersona,
+            filters.tiempoCompra,
         ]);
 
     async function toggleBeBack(item) {
@@ -1226,8 +1255,47 @@ export default function TraficoPiso() {
     }
 
     function onRowContextMenu(e, row) { e.preventDefault(); e.stopPropagation(); setCtxMenu({ open: true, x: e.clientX, y: e.clientY, row }); }
+    const aplicarFiltroPeriodo = (anio, mes) => {
+        const desde =
+            mes === "todo"
+                ? `${anio}-01-01`
+                : `${anio}-${String(mes).padStart(2, "0")}-01`;
+
+        const hasta =
+            mes === "todo"
+                ? `${anio}-12-31`
+                : toYMDLocal(new Date(anio, Number(mes), 0));
+
+        setPagina(1);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: desde,
+            rangoHasta: hasta,
+        }));
+    };
+
+    const cambiarAnio = (anio) => {
+        const nuevoAnio = Number(anio);
+        setAnioSeleccionado(nuevoAnio);
+        aplicarFiltroPeriodo(nuevoAnio, mesSeleccionado);
+    };
+
+    const cambiarMes = (mes) => {
+        let nuevoMes = mes;
+
+        if (mesSeleccionado === mes) {
+            nuevoMes = mes === "todo"
+                ? new Date().getMonth() + 1
+                : "todo";
+        }
+
+        setMesSeleccionado(nuevoMes);
+        aplicarFiltroPeriodo(anioSeleccionado, nuevoMes);
+    };
+
     function resetFilters() { setFilters({ q: "", agencia: "Todos", tipoPersona: "Todos", tiempoCompra: "Todos", rangoDesde: "", rangoHasta: "" }); }
-    
+
     function toggleRangoFechas(desde, hasta) {
         setPagina(1);
 
@@ -1502,180 +1570,200 @@ export default function TraficoPiso() {
             {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
             {ok && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{ok}</div>}
 
+
+{/* BARRA DE CONCESIONARIOS */}
+<div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#061E45] px-5 py-4 shadow-md">
+
+    <div className="flex flex-wrap items-center gap-2">
+
+        <span className="mr-2 text-xs font-bold text-blue-200">
+            CONCESIONARIOS:
+        </span>
+
+        {[
+            { nombre: "Todas las agencias", valor: "Todos" },
+            { nombre: "VW Córdoba", valor: "VW Cordoba" },
+            { nombre: "VW Orizaba", valor: "VW Orizaba" },
+            { nombre: "VW Poza Rica", valor: "VW Poza Rica" },
+            { nombre: "VW Tuxpan", valor: "VW Tuxpan" },
+            { nombre: "VW Tuxtepec", valor: "VW Tuxtepec" },
+        ].filter(
+            (agencia) =>
+                isAdmin ||
+                agencia.valor === "Todos" ||
+                userAgencias.some(
+                    (permitida) =>
+                        permitida.toLowerCase() === agencia.valor.toLowerCase()
+                )
+        ).map((agencia) => {
+            const activo = filters.agencia === agencia.valor;
+
+            return (
+                <button
+                    key={agencia.valor}
+                    type="button"
+                    onClick={() => {
+                        setPagina(1);
+                        setFilters((prev) => ({
+                            ...prev,
+                            agencia: agencia.valor,
+                        }));
+                    }}
+                    className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                        activo
+                            ? "bg-white text-[#061E45] shadow-sm"
+                            : "bg-[#203D68] text-white hover:bg-[#30517F]"
+                    }`}
+                >
+                    {agencia.nombre}
+                </button>
+            );
+        })}
+
+    </div>
+        {/* FILTROS ADICIONALES CON BOTONES */}
+        <div className="flex flex-wrap items-center gap-4">
+
+            {/* Separador degradado */}
+            <div className="hidden h-11 w-px bg-gradient-to-b from-transparent via-sky-300/60 to-transparent xl:block" />
+
+            {/* Tipo persona */}
+            <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-blue-200">
+                    TIPO PERSONA
+                </span>
+
+                <div className="flex flex-wrap gap-1.5">
+                    {[
+                        { label: "Todos", value: "Todos" },
+                        { label: "Física", value: "Física" },
+                        { label: "Moral", value: "Moral" },
+                    ].map((opcion) => (
+                        <button
+                            key={opcion.value}
+                            type="button"
+                            onClick={() => {
+                                setPagina(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    tipoPersona: opcion.value,
+                                }));
+                            }}
+                            className={`rounded-full px-3 py-2 text-xs font-bold transition-all ${
+                                filters.tipoPersona === opcion.value
+                                    ? "bg-white text-[#061E45] shadow-sm"
+                                    : "bg-[#203D68] text-white hover:bg-[#30517F]"
+                            }`}
+                        >
+                            {opcion.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Separador degradado */}
+            <div className="hidden h-11 w-px bg-gradient-to-b from-transparent via-sky-300/60 to-transparent xl:block" />
+
+            {/* Tiempo compra */}
+            <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-blue-200">
+                    TIEMPO COMPRA
+                </span>
+
+                <div className="flex flex-wrap gap-1.5">
+                    {[
+                        { label: "Todos", value: "Todos" },
+                        { label: "Este mes", value: "Este mes" },
+                        { label: "1–3 meses", value: "De 1 a 3 meses" },
+                        { label: "3–6 meses", value: "De 3 a 6 meses" },
+                    ].map((opcion) => (
+                        <button
+                            key={opcion.value}
+                            type="button"
+                            onClick={() => {
+                                setPagina(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    tiempoCompra: opcion.value,
+                                }));
+                            }}
+                            className={`rounded-full px-3 py-2 text-xs font-bold transition-all ${
+                                filters.tiempoCompra === opcion.value
+                                    ? "bg-white text-[#061E45] shadow-sm"
+                                    : "bg-[#203D68] text-white hover:bg-[#30517F]"
+                            }`}
+                        >
+                            {opcion.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+        </div>
+{/* FILTRO DE AÑO Y MESES */}
+<div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
+
+    {/* Selector de año */}
+    <select
+        value={anioSeleccionado}
+        onChange={(e) => cambiarAnio(e.target.value)}
+        className="shrink-0 rounded-xl border border-[#D9E2F2] bg-[#F8FAFD] px-4 py-2 text-sm font-bold text-[#061E45] outline-none"
+    >
+        {[2026, 2027, 2028, 2029, 2030].map((anio) => (
+            <option key={anio} value={anio}>
+                {anio}
+            </option>
+        ))}
+    </select>
+
+    <div className="h-8 w-px shrink-0 bg-slate-200" />
+
+    {/* Meses distribuidos uniformemente */}
+    <div className="min-w-0 flex-1 overflow-x-auto">
+        <div
+            className="grid min-w-[850px] items-center gap-1"
+            style={{
+                gridTemplateColumns: "repeat(13, minmax(0, 1fr))"
+            }}
+        >
+            {[
+                { label: "Todo el año", value: "todo" },
+                { label: "ENERO", value: 1 },
+                { label: "FEBRERO", value: 2 },
+                { label: "MARZO", value: 3 },
+                { label: "ABRIL", value: 4 },
+                { label: "MAYO", value: 5 },
+                { label: "JUNIO", value: 6 },
+                { label: "JULIO", value: 7 },
+                { label: "AGOSTO", value: 8 },
+                { label: "SEPTIEMBRE", value: 9 },
+                { label: "OCTUBRE", value: 10 },
+                { label: "NOVIEMBRE", value: 11 },
+                { label: "DICIEMBRE", value: 12 },
+            ].map((mes) => {
+                const activo = mesSeleccionado === mes.value;
+
+                return (
+                    <button
+                        key={mes.value}
+                        type="button"
+                        onClick={() => cambiarMes(mes.value)}
+                        className={`w-full whitespace-nowrap rounded-lg px-1 py-2.5 text-center text-xs font-bold transition-all ${
+                            activo
+                                ? "bg-[#061E45] text-white shadow-sm"
+                                : "text-[#061E45] hover:bg-slate-100"
+                        }`}
+                    >
+                        {mes.label}
+                    </button>
+                );
+            })}
+        </div>
+    </div>
+</div>
             {(vista === "tabla" || vista === "graficos") && (
                 <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                  <div className="grid gap-3 md:grid-cols-12">
-
-                    {/* FILA 1 */}
-                    <div className="md:col-span-4">
-                        <FilterBlock label="Búsqueda">
-                            <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
-                                <Search className="h-4 w-4 text-[#131E5C]" />
-                                <input
-                                    value={filters.q}
-                                    onChange={(e) =>
-                                        setFilters((p) => ({ ...p, q: e.target.value }))
-                                    }
-                                    placeholder="Buscar por prospecto, teléfono, asesor, ingreso..."
-                                    className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]/70"
-                                />
-                                {filters.q && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setFilters((p) => ({ ...p, q: "" }))
-                                        }
-                                        className="rounded-lg bg-white p-1 text-[#131E5C] hover:text-red-500"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                )}
-                            </div>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Dealer">
-                            <select
-                                value={filters.agencia}
-                                onChange={(e) =>
-                                    setFilters((p) => ({ ...p, agencia: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            >
-                                {dealers.map((d) => (
-                                    <option key={d} value={d}>{d}</option>
-                                ))}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-2">
-                        <FilterBlock label="Tipo persona">
-                            <select
-                                value={filters.tipoPersona}
-                                onChange={(e) =>
-                                    setFilters((p) => ({ ...p, tipoPersona: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            >
-                                <option value="Todos">Todos</option>
-                                {TIPOS_PERSONA.map((x) => (
-                                    <option key={x} value={x}>{x}</option>
-                                ))}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Tiempo compra">
-                            <select
-                                value={filters.tiempoCompra}
-                                onChange={(e) =>
-                                    setFilters((p) => ({ ...p, tiempoCompra: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            >
-                                <option value="Todos">Todos</option>
-                                {TIEMPOS_COMPRA.map((x) => (
-                                    <option key={x} value={x}>{x}</option>
-                                ))}
-                            </select>
-                        </FilterBlock>
-                    </div>
-
-                    {/* FILA 2 */}
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Desde">
-                            <input
-                                type="date"
-                                value={filters.rangoDesde}
-                                onChange={(e) =>
-                                    setFilters((p) => ({ ...p, rangoDesde: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            />
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <FilterBlock label="Hasta">
-                            <input
-                                type="date"
-                                value={filters.rangoHasta}
-                                onChange={(e) =>
-                                    setFilters((p) => ({ ...p, rangoHasta: e.target.value }))
-                                }
-                                className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                            />
-                        </FilterBlock>
-                    </div>
-
-                    <div className="md:col-span-6">
-                        <FilterBlock label="Acciones">
-                            <div className="flex flex-wrap items-center gap-2">
-
-                                <button
-                                    type="button"
-                                    onClick={setHoy}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
-                                >
-                                    Hoy
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={setAyer}
-                                    className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
-                                >
-                                    Ayer
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={setSemana}
-                                    className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-white hover:bg-sky-600"
-                                >
-                                    Semana
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={setUltimos7Dias}
-                                    className="rounded-lg bg-violet-500 px-3 py-2 text-xs font-bold text-white hover:bg-violet-600"
-                                >
-                                    7 días
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={setUltimos30Dias}
-                                    className="rounded-lg bg-indigo-500 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-600"
-                                >
-                                    30 días
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={setEsteMes}
-                                    className="rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
-                                >
-                                    Este mes
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={resetFilters}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-xs font-bold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
-                                >
-                                    <X className="h-4 w-4" />
-                                    Limpiar
-                                </button>
-
-                            </div>
-                        </FilterBlock>
-                    </div>
-
                 </div>
                 </div>
             )}
@@ -1921,7 +2009,19 @@ export default function TraficoPiso() {
                 </>
             )}
 
-            {vista === "graficos" && <GraficosView rows={sorted} />}
+            {vista === "graficos" && (
+                loadingList ? (
+                    <div className="rounded-xl border bg-white p-8 text-center text-sm text-slate-500">Cargando estadísticas...</div>
+                ) : errorResumen || !resumen ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700">
+                        {errorResumen || "No se recibió el resumen de estadísticas del servidor."}
+                    </div>
+                ) : !resumen.por_agencia || !resumen.por_asesor || !resumen.por_dia ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm font-semibold text-amber-800">
+                        El backend todavía no devuelve los grupos de estadísticas. Verifica que la función resumen actualizada esté ejecutándose en el servidor.
+                    </div>
+                ) : <GraficosView resumen={resumen} />
+            )}
 
             {/* ── Modal Resultados Encuesta Piso ── */}
             {modalResultados.open && modalResultados.item && createPortal(

@@ -82,6 +82,18 @@ const PRESETS_FECHA = [
     { id: "ayer", label: "Ayer" },
     { id: "hoy", label: "Hoy" },
 ];
+const CONCESIONARIOS_VENTAS = [
+    { id: "todas", label: "Todas las agencias" },
+    { id: "cordoba", label: "VW Córdoba", claves: ["cordoba"] },
+    { id: "orizaba", label: "VW Orizaba", claves: ["orizaba"] },
+    { id: "poza-rica", label: "VW Poza Rica", claves: ["poza rica", "poza"] },
+    { id: "tuxpan", label: "VW Tuxpan", claves: ["tuxpan"] },
+    { id: "tuxtepec", label: "VW Tuxtepec", claves: ["tuxtepec"] },
+    { id: "vc", label: "R&R VC", claves: ["r&r vc", "vehiculos comerciales", "comerciales"] },
+];
+function normalizarNombreAgencia(valor) {
+    return String(valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+}
 const TOOLTIP_STYLE = { border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 12px 30px rgba(19,30,92,.12)", fontSize: 12 };
 const inputClass = "h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10";
 
@@ -154,7 +166,7 @@ function formatoRango(desde, hasta) {
 }
 function porcentaje(value, total) { return total ? Math.round((numero(value) / total) * 100) : 0; }
 
-export default function VentasVN() {
+export default function VentasUsados() {
     const [dashboard, setDashboard] = useState({
         totales: {
             productos: 0,
@@ -324,6 +336,16 @@ export default function VentasVN() {
     const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
     const hayFiltros = Object.values(filtros).some((value) => String(value || "").trim());
     const rangoActual = useMemo(() => formatoRango(filtros.fecha_desde, filtros.fecha_hasta), [filtros.fecha_desde, filtros.fecha_hasta]);
+    const pillsConcesionarios = useMemo(() => {
+        const opciones = dashboard.opciones.agencias || [];
+        return CONCESIONARIOS_VENTAS.map((pill) => {
+            if (!pill.claves) return { ...pill, valor: "" };
+            const encontrada = opciones.find((opcion) =>
+                pill.claves.some((clave) => normalizarNombreAgencia(opcion).includes(normalizarNombreAgencia(clave)))
+            );
+            return { ...pill, valor: encontrada || pill.label };
+        });
+    }, [dashboard.opciones.agencias]);
     const presetFechaActivo = useMemo(() => {
         const match = PRESETS_FECHA.find((preset) => {
             const rango = obtenerRangoPreset(preset.id);
@@ -505,66 +527,195 @@ export default function VentasVN() {
         ...topAsesores.map((item) => numero(item.unidades_vendidas))
     );
 
-    const porcentajeDigital = dashboard.totales.unidades_vendidas
-        ? (numero(dashboard.totales.ventas_digitales) /
-            numero(dashboard.totales.unidades_vendidas)) *
-        100
-        : 0;
-
     return (
-        <div className="min-h-screen">
-            <main className="space-y-5 py-4">
+        <div className="min-h-screen bg-[#F8FAFC]">
+            <main className="space-y-4 px-1 py-3 sm:px-2">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-extrabold text-[#131E5C]">Venta Autos Usados</h1>
+                        <h1 className="text-xl font-extrabold tracking-tight text-[#001E50]">Control de Ventas</h1>
+                        <p className="text-xs font-semibold text-slate-500">
+                            Autos usados · {filtros.agencia || "Todas las agencias"} · {rangoActual}
+                        </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center rounded-xl border border-[#131E5C]/20 bg-white p-1 shadow-sm">
-                            <button type="button" onClick={() => setVistaActiva("detalle")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${vistaActiva === "detalle" ? "bg-[#131E5C] text-white shadow" : "text-[#131E5C] hover:bg-slate-100"}`}>
-                                <Table2 className="h-4 w-4" />Tabla
+                        <div className="flex items-center rounded-xl border border-[#001E50]/20 bg-white p-1 shadow-sm">
+                            <button type="button" onClick={() => setVistaActiva("dashboard")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "dashboard" ? "bg-[#001E50] text-white shadow" : "text-[#001E50] hover:bg-slate-100"}`}>
+                                <BarChart3 className="h-3.5 w-3.5" />Gráficos
                             </button>
-                            <button type="button" onClick={() => setVistaActiva("dashboard")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${vistaActiva === "dashboard" ? "bg-[#131E5C] text-white shadow" : "text-[#131E5C] hover:bg-slate-100"}`}>
-                                <BarChart3 className="h-4 w-4" />Gráficos
+                            <button type="button" onClick={() => setVistaActiva("detalle")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${vistaActiva === "detalle" ? "bg-[#001E50] text-white shadow" : "text-[#001E50] hover:bg-slate-100"}`}>
+                                <Table2 className="h-3.5 w-3.5" />Tabla Detalle
                             </button>
                         </div>
-                        <button type="button" onClick={actualizarTodo} disabled={loading || loadingDashboard} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#131E5C]/20 bg-white px-4 text-sm font-semibold text-[#131E5C] shadow-sm transition hover:bg-slate-100 disabled:opacity-50">
-                            {loading || loadingDashboard ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Actualizar
+                        <button type="button" onClick={actualizarTodo} disabled={loading || loadingDashboard} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#001E50]/20 bg-white px-3 text-xs font-bold text-[#001E50] shadow-sm transition hover:bg-slate-100 disabled:opacity-50">
+                            {loading || loadingDashboard ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}Actualizar
                         </button>
                     </div>
                 </div>
-                {/* FILTROS PRINCIPALES - ESTILO GESTIÓN DE NEGOCIO */}
-                <div className="space-y-3">
-                    {/* AGENCIAS */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        {["Todos", ...dashboard.opciones.agencias].map((agencia) => {
-                            const activa =
-                                agencia === "Todos"
-                                    ? !filtros.agencia
-                                    : filtros.agencia === agencia;
+
+                {/* HERO OSCURO: métricas + concesionarios */}
+                <div className="relative overflow-hidden rounded-2xl border border-[#001E50] bg-gradient-to-r from-[#001E50] via-[#0A1340] to-[#050B28] text-white shadow-xl">
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(22,119,255,0.15),transparent_70%)]" />
+                    <Car className="pointer-events-none absolute -bottom-6 -right-6 h-56 w-56 -rotate-12 text-white/[0.04]" />
+
+                    <div className="relative border-b border-white/10 p-5 pb-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-sky-300/80">
+                                    VOLKSWAGEN AUTOMOTRIZ R&R · VENTAS DE AUTOS USADOS
+                                </p>
+                                <h2 className="mt-0.5 text-2xl font-black tracking-tight text-white">
+                                    Dashboard de Ventas
+                                </h2>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-md">
+                                    Margen: <strong className="text-emerald-300">{loadingDashboard ? "…" : `${margen.toFixed(1)}%`}</strong> · {rangoActual}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
+                            {/* CONSOLIDADO GENERAL: izquierda, abarca 2 filas */}
+                            <div className="flex flex-col justify-between rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm lg:col-span-4 lg:row-span-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black text-[#001E50] shadow">
+                                        Consolidado
+                                    </span>
+                                </div>
+
+                                <div className="py-3 text-center">
+                                    <h4 className="mb-0.5 text-[11px] font-black uppercase tracking-widest text-slate-300/80">
+                                        Resumen Ejecutivo de Ventas
+                                    </h4>
+                                    <div className="text-5xl font-black leading-none tracking-tight text-white">
+                                        {loadingDashboard
+                                            ? "..."
+                                            : formatoNumero(dashboard.totales.unidades_vendidas)}
+                                    </div>
+                                    <div className="mt-1.5 text-[10px] font-black uppercase tracking-wider text-sky-300">
+                                        Total Unidades Vendidas
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 border-t border-white/10 pt-3">
+                                    <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300/80">
+                                            <Database className="h-3 w-3 text-emerald-300" /> Operaciones
+                                        </span>
+                                        <span className="text-sm font-black text-white">
+                                            {loadingDashboard ? "..." : formatoNumero(dashboard.totales.productos)}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300/80">
+                                            <Globe className="h-3 w-3 text-sky-300" /> Digitales
+                                        </span>
+                                        <span className="text-sm font-black text-white">
+                                            {loadingDashboard ? "..." : formatoNumero(dashboard.totales.ventas_digitales)}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300/80">
+                                            <TrendingUp className="h-3 w-3 text-emerald-300" /> Margen
+                                        </span>
+                                        <span className="text-sm font-black text-emerald-300">
+                                            {loadingDashboard ? "..." : `${margen.toFixed(1)}%`}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* FILA 1 derecha */}
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:col-span-8">
+                                <div className="pt-2 lg:px-3 lg:pt-0 lg:first:pl-0">
+                                    <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                        INGRESOS
+                                    </span>
+                                    <span className="block truncate text-2xl font-black text-white" title={money(dashboard.totales.ingresos)}>
+                                        {loadingDashboard ? "…" : money(dashboard.totales.ingresos)}
+                                    </span>
+                                    <p className="mt-1 text-[10px] text-slate-400">Valor total facturado</p>
+                                </div>
+
+                                <div className="pt-2 lg:px-3 lg:pt-0">
+                                    <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                        COSTO
+                                    </span>
+                                    <span className="block truncate text-2xl font-black text-white" title={money(dashboard.totales.costo)}>
+                                        {loadingDashboard ? "…" : money(dashboard.totales.costo)}
+                                    </span>
+                                    <p className="mt-1 text-[10px] text-slate-400">Costo total</p>
+                                </div>
+                            </div>
+
+                            {/* FILA 2 derecha */}
+                            <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-4 sm:grid-cols-3 lg:col-span-8">
+                                <div className="pt-2 lg:px-3 lg:pt-0 lg:first:pl-0">
+                                    <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                        UTILIDAD ESTIMADA
+                                    </span>
+                                    <span className="block truncate text-2xl font-black text-emerald-400" title={money(utilidad)}>
+                                        {loadingDashboard ? "…" : money(utilidad)}
+                                    </span>
+                                    <p className="mt-1 text-[10px] text-slate-400">Ingresos − Costo</p>
+                                </div>
+
+                                <div className="pt-2 lg:px-3 lg:pt-0">
+                                    <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                        MARGEN
+                                    </span>
+                                    <span className="block text-2xl font-black text-amber-300">
+                                        {loadingDashboard ? "…" : `${margen.toFixed(1)}%`}
+                                    </span>
+                                    <p className="mt-1 text-[10px] text-slate-400">Utilidad / Ingresos</p>
+                                </div>
+
+                                <div className="pt-2 lg:px-3 lg:pt-0">
+                                    <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-300/80">
+                                        VENTAS DIGITALES
+                                    </span>
+                                    <span className="block text-2xl font-black text-sky-300">
+                                        {loadingDashboard ? "…" : formatoNumero(dashboard.totales.ventas_digitales)}
+                                    </span>
+                                    <p className="mt-1 text-[10px] text-slate-400">Venta digital</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-white/10 bg-black/30 px-5 py-2.5 backdrop-blur-md">
+                        <span className="mr-2 text-[10px] font-black uppercase tracking-wider text-slate-300">
+                            CONCESIONARIOS:
+                        </span>
+                        {pillsConcesionarios.map((pill) => {
+                            const activa = pill.id === "todas"
+                                ? !filtros.agencia
+                                : filtros.agencia === pill.valor;
 
                             return (
                                 <button
-                                    key={agencia}
+                                    key={pill.id}
                                     type="button"
-                                    onClick={() =>
-                                        aplicarAgencia(agencia === "Todos" ? "" : agencia)
-                                    }
-                                    className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-xs font-vw-head font-bold transition-all ${activa
-                                        ? "border-[#001E50] bg-[#001E50] text-white"
-                                        : "border-slate-200 bg-white text-[#001E50] hover:bg-slate-50"
+                                    onClick={() => aplicarAgencia(pill.valor)}
+                                    className={`inline-flex items-center justify-center rounded-full px-3.5 py-1 text-[11px] font-bold transition-all ${activa
+                                        ? "scale-105 bg-white text-[#001E50] shadow-md"
+                                        : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
                                         }`}
                                 >
-                                    {agencia === "Todos" ? "Todas las agencias" : agencia}
+                                    {pill.label}
                                 </button>
                             );
                         })}
                     </div>
-                    {/* FILTROS COMPLEMENTARIOS DE AUTOS NUEVOS */}
-                    <div className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-2.5">
+                </div>
+                {/* FILTROS */}
+                <div className="space-y-3">
+                    {/* FILTROS COMPLEMENTARIOS */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                             <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-vw-head font-bold text-white">
                                 <SlidersHorizontal className="h-3.5 w-3.5" />
-                                <span>Filtros de Autos Nuevos</span>
+                                <span>Filtros de Autos Usados</span>
                             </div>
 
                             <button
@@ -808,99 +959,9 @@ export default function VentasVN() {
                     </div>
                 </div>
 
-                {/* RESUMEN EJECUTIVO + DESGLOSE POR ASESOR */}
+                {/* DESGLOSE POR ASESOR */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-
-                    {/* CONSOLIDADO GENERAL */}
-                    <section className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between shadow-sm">
-                        <div className="relative h-28 w-full overflow-hidden bg-[#001E50] shrink-0">
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#001E50] via-[#0A3975] to-[#1677FF]" />
-
-                            <div className="absolute right-5 top-1/2 -translate-y-1/2 opacity-20">
-                                <Car className="h-24 w-24 text-white" />
-                            </div>
-
-                            <div className="absolute top-2 left-2 bg-[#001E50] text-white text-[10px] font-vw-head font-bold px-2.5 py-0.5 rounded-full border border-white/20">
-                                Consolidado General
-                            </div>
-
-                            <div className="absolute bottom-2 left-2 flex items-center gap-1.5 text-white">
-                                <Car className="h-3.5 w-3.5 text-sky-400" />
-                                <span className="text-xs font-vw-head font-bold tracking-wide">
-                                    VW Autos Nuevos
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-vw-head font-bold text-[#1677FF] uppercase tracking-wider">
-                                        Ventas Autos Nuevos
-                                    </span>
-
-                                    <span className="bg-emerald-50 text-emerald-700 text-[9px] font-vw-head font-bold px-2 py-0.5 rounded border border-emerald-200">
-                                        Consolidado
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col items-center justify-center py-1 text-center my-auto">
-                                <h4 className="text-[11px] font-vw-head font-bold text-slate-400 uppercase tracking-widest mb-0.5">
-                                    Resumen Ejecutivo de Ventas
-                                </h4>
-
-                                <div className="text-5xl font-vw-head font-extrabold text-[#001E50] leading-none tracking-tight">
-                                    {loadingDashboard
-                                        ? "..."
-                                        : formatoNumero(dashboard.totales.unidades_vendidas)}
-                                </div>
-
-                                <div className="text-[10px] font-vw-head font-bold text-[#1677FF] uppercase tracking-wider mt-1.5">
-                                    Total Unidades Vendidas
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100">
-                                <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
-                                    <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
-                                        <Database className="h-2.5 w-2.5 text-emerald-600" />
-                                        <span>Operaciones</span>
-                                    </div>
-                                    <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
-                                        {loadingDashboard
-                                            ? "..."
-                                            : formatoNumero(dashboard.totales.productos)}
-                                    </div>
-                                </div>
-
-                                <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
-                                    <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
-                                        <Globe className="h-2.5 w-2.5 text-[#1677FF]" />
-                                        <span>Digitales</span>
-                                    </div>
-                                    <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
-                                        {loadingDashboard
-                                            ? "..."
-                                            : formatoNumero(dashboard.totales.ventas_digitales)}
-                                    </div>
-                                </div>
-
-                                <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-1.5 text-center">
-                                    <div className="text-[9px] text-slate-400 font-vw-text flex items-center justify-center gap-1">
-                                        <TrendingUp className="h-2.5 w-2.5 text-emerald-600" />
-                                        <span>Margen</span>
-                                    </div>
-                                    <div className="text-sm font-vw-head font-bold text-[#001E50] mt-0.5">
-                                        {loadingDashboard ? "..." : `${margen.toFixed(1)}%`}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* DESGLOSE POR ASESOR */}
-                    <section className="lg:col-span-8 bg-[#F8FAFC] rounded-2xl border border-slate-200 p-3.5 md:p-4 space-y-3 flex flex-col shadow-sm">
+                    <section className="lg:col-span-12 bg-[#F8FAFC] rounded-2xl border border-slate-200 p-3.5 md:p-4 space-y-3 flex flex-col shadow-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
                             <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] text-white px-3.5 py-1 text-xs font-vw-head font-bold">
                                 <Users className="h-3.5 w-3.5 text-white shrink-0" />
@@ -1030,7 +1091,7 @@ export default function VentasVN() {
                 {error && <ErrorBox>{error}</ErrorBox>}
 
                 {vistaActiva === "dashboard" && (
-                    <div className="grid gap-5 xl:grid-cols-12">
+                    <div className="grid gap-4 xl:grid-cols-12">
                         <div className="xl:col-span-7">
                             <ChartCard title="Tendencia comercial" subtitle="Ingresos, costo y unidades vendidas por mes" icon={TrendingUp} badge={rangoActual}
                                 action={
@@ -1170,7 +1231,8 @@ export default function VentasVN() {
                 )}
 
                 {vistaActiva === "detalle" && (
-                    <div className="space-y-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <h3 className="mb-3 text-sm font-extrabold text-[#001E50]">Detalle Individual de Ventas (Autos Usados)</h3>
                         <InteractiveTable
                             rows={registros}
                             columns={COLUMNAS}
@@ -1274,14 +1336,14 @@ function FilterField({ label, hint, icon: Icon = null, children }) {
 
 function ChartCard({ title, subtitle, icon: Icon, badge, action, children }) {
     return (
-        <section className="h-full overflow-hidden rounded-2xl border border-[#E4E7F0] bg-white" style={{ boxShadow: "0 4px 16px rgba(19,30,92,.04)" }}>
-            <div className="flex items-start justify-between gap-3 border-b border-[#E4E7F0] px-5 py-4">
-                <div className="flex items-start gap-3">
-                    {Icon && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#131E5C]/[0.08]"><Icon className="h-[18px] w-[18px] text-[#131E5C]" /></div>}
-                    <div>
-                        <h3 className="text-sm font-bold text-[#1A1F3C]">{title}</h3>
-                        {subtitle && <p className="mt-0.5 text-xs text-[#8891AD]">{subtitle}</p>}
+        <section className="h-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
+                <div className="min-w-0">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-bold text-white">
+                        {Icon && <Icon className="h-3.5 w-3.5" />}
+                        <span>{title}</span>
                     </div>
+                    {subtitle && <p className="mt-1.5 text-[11px] font-medium text-slate-500">{subtitle}</p>}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                     {badge && <Badge>{badge}</Badge>}
