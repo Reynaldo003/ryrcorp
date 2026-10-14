@@ -1,4 +1,4 @@
-﻿//volkswagen
+//volkswagen
 //src/pages/Digitales/DigitalesProspectos.jsx
 import { lazy, Suspense, useMemo, useState, useRef, useEffect, useDeferredValue, useCallback } from "react";
 import { Plus, Search, X, Save, User, Van, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MessageSquareShare, Building2, FileText, FileDown, Car, Trash2, Loader2, CalendarPlus, CalendarCheck, Phone, LayoutList, UserStar, ClipboardCheck, BrainCircuit, CalendarRange, Table2, BarChart3, Clock3, AlertCircle, TrendingUp, Activity, Target, Paperclip, UploadCloud, Users, Bot, UserCheck, HandCoins, Gauge, LayoutTemplate, Check, Eye } from "lucide-react";
@@ -17,6 +17,14 @@ import {
 } from "recharts";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import { ETIQUETAS_ESTADO } from "./estadosProspecto";
+
+const ETAPAS_V3_NOMBRES = Object.freeze({
+    nuevo_prospecto: "Nuevo prospecto", en_seguimiento: "En seguimiento",
+    cotizacion_enviada: "Cotización enviada", cita_agendada: "Cita agendada",
+    cita_asistida: "Cita asistida", documentos_enviados: "Documentos recibidos",
+    autorizado_no_formalizado: "Autorizado no formalizado", compra_futura: "Compra futura",
+    facturado: "Facturado", lead_perdido: "Lead perdido",
+});
 
 import {
     canonicalAsesorDigital,
@@ -651,6 +659,7 @@ function normalizeProspecto(p) {
         origen: p.canal_contacto || "",
         pauta: p.pauta || "",
         estado: p.estado || "",
+        etapa_comercial_v3: p.etapa_comercial_v3 || null,
         motivo_descalificacion: p.motivo_descalificacion || "",
         comentarios: p.comentarios || "",
         resumen: p.resumen || "",
@@ -3116,8 +3125,13 @@ export default function DigitalesProspectos() {
                                                 <span className={cls("inline-flex text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap", prioridad.cls)}>{prioridad.label}</span>
                                             </td>),
                                             estado: (<td className="px-3 py-2.5">
+                                                {ETAPAS_V3_NOMBRES[row.etapa_comercial_v3] ? (
+                                                    <div className="mb-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]" title="Etapa V3, independiente del estado histórico">
+                                                        {ETAPAS_V3_NOMBRES[row.etapa_comercial_v3]}
+                                                    </div>
+                                                ) : null}
                                                 <div className="relative inline-flex items-center">
-                                                    <select value={row.estado || "Contactado"} disabled={isUpdating} onClick={(e) => e.stopPropagation()} onChange={(e) => {
+                                                    <select value={row.estado || "Contactado"} disabled={isUpdating || Boolean(row.etapa_comercial_v3)} onClick={(e) => e.stopPropagation()} onChange={(e) => {
                                                         e.stopPropagation();
                                                         updateEstadoInline(row, e.target.value);
                                                     }} className={cls("appearance-none rounded-full border bg-transparent px-2.5 py-0.5 pr-7 text-[11px] font-semibold outline-none", badgeCls(row.estado), isUpdating ? "cursor-not-allowed opacity-70" : "cursor-pointer")}>

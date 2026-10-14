@@ -19,6 +19,14 @@ import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 import { encontrarCategoriaDeMotivo, MOTIVOS_DESCALIFICACION_POR_CATEGORIA } from "./motivosDescalificacion";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 
+const ETAPAS_COMERCIALES_V3_NOMBRES = Object.freeze({
+    nuevo_prospecto: "Nuevo prospecto", en_seguimiento: "En seguimiento",
+    cotizacion_enviada: "Cotización enviada", cita_agendada: "Cita agendada",
+    cita_asistida: "Cita asistida", documentos_enviados: "Documentos recibidos",
+    autorizado_no_formalizado: "Autorizado no formalizado", compra_futura: "Compra futura",
+    facturado: "Facturado", lead_perdido: "Lead perdido",
+});
+
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
 const MAX_RECORDING_SECONDS = 300;
@@ -39,30 +47,26 @@ const DEALERS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-const ESTADOS_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
-
-// Estados que ya no se muestran como columnas propias en la bandeja.
-// Sus prospectos se agrupan en la columna "Contactado" conservando su estado real.
-const ESTADOS_SIN_COLUMNA = [
-    "cotizacion",
-    "requiere_atencion",
-    "seguimiento",
-    "autorizado_no_formalizado",
-    "financiamiento",
+// V3 solo modifica la presentación de la bandeja. El historial operativo permanece intacto.
+const ESTADOS_LEGACY_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
+const ESTADOS_BANDEJA = [
+    { key: "nuevo_prospecto", label: "Nuevo prospecto", color: "#64748B" },
+    { key: "en_seguimiento", label: "En seguimiento", color: "#2563EB" },
+    { key: "cotizacion_enviada", label: "Cotización enviada", color: "#8B5CF6" },
+    { key: "cita_agendada", label: "Cita agendada", color: "#0E7490" },
+    { key: "cita_asistida", label: "Cita asistida", color: "#059669" },
+    { key: "documentos_enviados", label: "Documentos recibidos", color: "#0D9488" },
+    { key: "autorizado_no_formalizado", label: "Autorizado no formalizado", color: "#CA8A04" },
+    { key: "compra_futura", label: "Compra futura", color: "#F97316" },
+    { key: "facturado", label: "Facturado", color: "#0284C7" },
+    { key: "lead_perdido", label: "Lead perdido", color: "#DC2626" },
+    { key: "sin_iniciar_v3", label: "Pendiente de clasificación", color: "#94A3B8" },
 ];
-
-// Columnas visibles del tablero (Kanban) de la bandeja.
-const COLUMNAS_BANDEJA = ESTADOS_BANDEJA.filter(
-    (estado) => !ESTADOS_SIN_COLUMNA.includes(estado.key)
-);
-
-// Resuelve en qué columna del tablero debe aparecer un prospecto.
-// Los estados de ESTADOS_SIN_COLUMNA se agrupan en "contactado".
-function getColumnaBandeja(estado) {
-    const resuelto = resolverEstado(estado);
-    if (ESTADOS_SIN_COLUMNA.includes(resuelto.key)) return "contactado";
-    if (COLUMNAS_BANDEJA.some((c) => c.key === resuelto.key)) return resuelto.key;
-    return ESTADOS_BANDEJA[0].key;
+const COLUMNAS_BANDEJA = ESTADOS_BANDEJA;
+const ETAPAS_V3_KEYS = new Set(ESTADOS_BANDEJA.map((e) => e.key));
+function getColumnaBandeja(chat) {
+    const etapa = chat?.etapa_comercial_v3;
+    return ETAPAS_V3_KEYS.has(etapa) && etapa !== "sin_iniciar_v3" ? etapa : "sin_iniciar_v3";
 }
 
 // Tamaño de cada página que se pide al backend (chunk pequeño para no penalizar la carga).
@@ -122,7 +126,7 @@ function getEstadoBandeja(estado) {
     // bandeja visible; los estados retirados (p. ej. "Cierre de la Venta",
     // "Requiere Asesor") caen a la primera bandeja en vez de desaparecer.
     const resuelto = resolverEstado(estado);
-    return ESTADOS_BANDEJA.find((b) => b.key === resuelto.key) || ESTADOS_BANDEJA[0];
+    return ESTADOS_LEGACY_BANDEJA.find((b) => b.key === resuelto.key) || ESTADOS_LEGACY_BANDEJA[0];
 }
 
 // Identifica si un prospecto es "nuevo": dado de alta hace menos de 24 horas.
@@ -394,6 +398,7 @@ function PipelineSidebar({
 
 function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
     const estado = getEstadoBandeja(chat.estado);
+    const etapaV3 = chat.etapa_comercial_v3 && ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3];
     const ultimoMensaje = String(chat?.last?.text || "").trim() || "Sin mensajes recientes";
     const hora = formatHoraCorta(chat?.last?.timestamp) || chat?.last?.time || "—";
     const quiereSeminuevos = normalizeText(chat?.autoInteres).includes("seminuevos");
@@ -511,6 +516,13 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
                         </div>
                     ) : null}
 
+                    {etapaV3 ? (
+                        <div className="mt-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]"
+                             title="Etapa comercial V3 (solo lectura en esta bandeja)">
+                            {etapaV3}
+                        </div>
+                    ) : null}
+
                     {esDescalificado && motivoDesc ? (
                         <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2 py-1">
                             <Ban className="h-3 w-3 shrink-0 text-red-500" />
@@ -527,13 +539,13 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
 
                     <div className="mt-2 flex min-w-0 items-center gap-2">
                         
-                        <div className="shrink-0 max-w-[60%]" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                        {!etapaV3 ? <div className="shrink-0 max-w-[60%]" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                             <EtapaSelect
                                 estado={estado}
                                 saving={savingEtapa}
                                 onChange={handleEtapaChange}
                             />
-                        </div>
+                        </div> : <span className="text-[10px] text-slate-500">Cambiar etapa desde la ficha V3</span>}
                     </div>
                 </div>
             </div>
@@ -591,14 +603,14 @@ function EtapaSelect({ estado, onChange, saving = false }) {
                 value={estado.key}
                 disabled={saving}
                 onChange={(event) => {
-                    const opcion = ESTADOS_BANDEJA.find((b) => b.key === event.target.value);
+                    const opcion = ESTADOS_LEGACY_BANDEJA.find((b) => b.key === event.target.value);
                     if (opcion) onChange?.(opcion.label);
                 }}
                 title={`Etapa: ${estado.label}`}
                 className="max-w-full cursor-pointer appearance-none rounded-full border border-transparent py-1 pl-2 pr-6 text-xs font-extrabold outline-none transition hover:border-black/10 focus:border-black/25 disabled:cursor-wait disabled:opacity-60"
                 style={{ color: estado.color, backgroundColor: mutedColor(estado.color, 0.90) }}
             >
-                {ESTADOS_BANDEJA.map((b) => (
+                {ESTADOS_LEGACY_BANDEJA.map((b) => (
                     <option key={b.key} value={b.key} className="bg-white text-slate-700">
                         {b.label}
                     </option>
@@ -2866,7 +2878,7 @@ export default function DigitalesBandeja() {
         if (["todos", "no_leidos", "nuevos", "mios"].includes(filtroActivo)) {
             return;
         }
-        const columnaDestino = ESTADOS_SIN_COLUMNA.includes(filtroActivo) ? "contactado" : filtroActivo;
+        const columnaDestino = filtroActivo;
         const column = kanbanColumnRefs.current.get(columnaDestino);
         const container = kanbanScrollRef.current;
         if (column && container) {
@@ -3068,6 +3080,7 @@ export default function DigitalesBandeja() {
             return {
                 ...chat,
                 estado: prospecto?.estado || chat.estado,
+                etapa_comercial_v3: prospecto?.etapa_comercial_v3 || null,
                 asignadoA,
                 esMio: Boolean(chat.esMio || coincideUsuario),
                 prospectoId: prospecto?.id || "",
@@ -3101,6 +3114,7 @@ export default function DigitalesBandeja() {
             normalizaTelefonoMx(chat.telefono).includes(normalizaTelefonoMx(q) || query) ||
             normalizeText(chat.agencia).includes(query) ||
             normalizeText(chat.estado).includes(query) ||
+            normalizeText(ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3] || "Pendiente de clasificación").includes(query) ||
             normalizeText(chat.last?.text).includes(query) ||
             normalizeText(chat.asignadoA).includes(query)
         );
@@ -3137,18 +3151,16 @@ export default function DigitalesBandeja() {
         let totalUnread = 0;
 
         for (const chat of chatsEnriquecidos) {
-            const estado = getEstadoBandeja(chat.estado);
+            const etapa = getColumnaBandeja(chat);
             conteoPorEstado.set(
-                estado.key,
-                (conteoPorEstado.get(estado.key) || 0) + 1
+                etapa,
+                (conteoPorEstado.get(etapa) || 0) + 1
             );
             totalUnread += Number(chat.unread || 0);
         }
 
-        const cierres = chatsEnriquecidos.filter(
-            (chat) => resolverEstado(chat.estado).key === "cierre_venta"
-        ).length;
-        const sinAtender = conteoPorEstado.get(ESTADOS_BANDEJA[0].key) || 0;
+        const cierres = conteoPorEstado.get("facturado") || 0;
+        const sinAtender = (conteoPorEstado.get("nuevo_prospecto") || 0) + (conteoPorEstado.get("sin_iniciar_v3") || 0);
         const chatsConUnread = chatsEnriquecidos.filter(
             (chat) => Number(chat.unread || 0) > 0
         ).length;
@@ -3183,9 +3195,8 @@ export default function DigitalesBandeja() {
             items = items.filter((chat) => Number(chat.unread || 0) > 0);
         } else if (filtroActivo === "mios") {
             items = items.filter((chat) => Boolean(chat.esMio));
-        } else if (ESTADOS_SIN_COLUMNA.includes(filtroActivo)) {
-            // Estos estados viven en la columna "Contactado"; filtramos por el estado real.
-            items = items.filter((chat) => getEstadoBandeja(chat.estado).key === filtroActivo);
+        } else if (ETAPAS_V3_KEYS.has(filtroActivo)) {
+            items = items.filter((chat) => getColumnaBandeja(chat) === filtroActivo);
         }
 
         return items.sort((a, b) => {
@@ -3206,7 +3217,7 @@ export default function DigitalesBandeja() {
     const chatsPorColumna = useMemo(() => {
         const map = new Map(ESTADOS_BANDEJA.map((estado) => [estado.key, []]));
         for (const chat of chatsVisibles) {
-            const columna = getColumnaBandeja(chat.estado);
+            const columna = getColumnaBandeja(chat);
             map.get(columna)?.push(chat);
         }
         return map;
@@ -3493,10 +3504,7 @@ export default function DigitalesBandeja() {
                             <div ref={kanbanScrollRef} className="flex h-full min-w-0 items-stretch gap-3 overflow-x-auto overflow-y-hidden px-3 py-3">
                                 {COLUMNAS_BANDEJA.map((estado) => {
                                     const items = chatsPorColumna.get(estado.key) || [];
-                                    const activo =
-                                        filtroActivo === estado.key ||
-                                        (estado.key === "contactado" &&
-                                            ESTADOS_SIN_COLUMNA.includes(filtroActivo));
+                                    const activo = filtroActivo === estado.key;
                                     return (
                                         <div
                                             key={estado.key}

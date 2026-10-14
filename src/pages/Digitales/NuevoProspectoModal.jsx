@@ -16,6 +16,7 @@ import {
   obtenerNombreAsesorSesion,
 } from "../../config/lineasWhatsApp";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
+import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
 import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
@@ -170,7 +171,15 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
 
     function buildPayload(source = draft) {
         const nombre = source?.tiene_nombre && String(source?.nombre_cliente || "").trim() ? String(source.nombre_cliente).trim() : "SIN NOMBRE";
-        return { numero_asesor: numeroLinea, nombre, telefono: normalizaTelefonoMx(source?.telefono), correo: String(source?.correo || "").trim(), agencia: esEdicion ? source?.agencia || "" : contexto.agencia || source?.agencia || "", anio_auto: source?.anio_auto ? Number(source.anio_auto) : null, business: source?.linea || "", canal_contacto: source?.origen || "", pauta: source?.pauta || "", estado: source?.estado || "Contactado", motivo_descalificacion: normalizeText(source?.estado) === "descalificado" ? String(source?.motivo_descalificacion || "").trim() : "", asesor_digital: esEdicion ? source?.asesor_digital || "" : contexto.asesor_digital || source?.asesor_digital || "", asesor_ventas: source?.asesor_solicita || "", auto_interes: source?.cliente_interes || "", comentarios: source?.comentarios || "", enganche_monto: toNullableNumber(source?.enganche_monto), presupuesto_mensual: toNullableNumber(source?.presupuesto_mensual), buro_estado: source?.buro_estado || "", forma_pago: source?.forma_pago || "", tipo_cliente: source?.tipo_cliente || "", uso_vehiculo: source?.uso_vehiculo || "", plazo_compra: source?.plazo_compra || "", comprobacion_ingresos: source?.comprobacion_ingresos || "", id_cotizacion: source?.id_cotizacion || "", folio_solicitud_credito: source?.folio_solicitud_credito || "", solicitud_credito_estado: source?.solicitud_credito_estado || "", vin_facturado: String(source?.vin_facturado || "").trim().toUpperCase(), vin_estatus_entrega: source?.vin_estatus_entrega || "", primer_mensaje_cliente: source?.primer_contacto_at || null, ultimo_contacto_asesor: source?.ultimo_contacto_at || null };
+        const payload = { numero_asesor: numeroLinea, nombre, telefono: normalizaTelefonoMx(source?.telefono), correo: String(source?.correo || "").trim(), agencia: esEdicion ? source?.agencia || "" : contexto.agencia || source?.agencia || "", anio_auto: source?.anio_auto ? Number(source.anio_auto) : null, business: source?.linea || "", canal_contacto: source?.origen || "", pauta: source?.pauta || "", estado: source?.estado || "Contactado", motivo_descalificacion: normalizeText(source?.estado) === "descalificado" ? String(source?.motivo_descalificacion || "").trim() : "", asesor_digital: esEdicion ? source?.asesor_digital || "" : contexto.asesor_digital || source?.asesor_digital || "", asesor_ventas: source?.asesor_solicita || "", auto_interes: source?.cliente_interes || "", comentarios: source?.comentarios || "", enganche_monto: toNullableNumber(source?.enganche_monto), presupuesto_mensual: toNullableNumber(source?.presupuesto_mensual), buro_estado: source?.buro_estado || "", forma_pago: source?.forma_pago || "", tipo_cliente: source?.tipo_cliente || "", uso_vehiculo: source?.uso_vehiculo || "", plazo_compra: source?.plazo_compra || "", comprobacion_ingresos: source?.comprobacion_ingresos || "", id_cotizacion: source?.id_cotizacion || "", folio_solicitud_credito: source?.folio_solicitud_credito || "", solicitud_credito_estado: source?.solicitud_credito_estado || "", vin_facturado: String(source?.vin_facturado || "").trim().toUpperCase(), vin_estatus_entrega: source?.vin_estatus_entrega || "", primer_mensaje_cliente: source?.primer_contacto_at || null, ultimo_contacto_asesor: source?.ultimo_contacto_at || null };
+        // PATCH: no volver a enviar un teléfono idéntico al dato canónico del cliente.
+        // Si el usuario corrigió realmente un número inválido, se sigue enviando y
+        // el backend conserva la validación que prohíbe cambios de números válidos.
+        const telOriginal = ultimoProspectoRef.current?.telefono_out || ultimoProspectoRef.current?.telefono;
+        if (esEdicion && telOriginal && normalizaTelefonoMx(telOriginal) === payload.telefono) {
+            delete payload.telefono;
+        }
+        return payload;
     }
     function resetTemplates() { setShowTemplates(false); setTplSelected(null); setTplDraft({}); setTemplates([]); setTemplatesError(""); }
 
@@ -183,7 +192,14 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             setLoadingDetail(true);
             try {
                 const [p, evidencias] = await Promise.all([api.digitalesGetProspecto(prospectoId, requestContext), api.digitalesListEvidencias(prospectoId, requestContext).catch(() => [])]);
-                if (cancelled) return; const cargado = draftDesdeApi(p, evidencias, estadoInicial); setDraft(cargado); ultimoProspectoRef.current = { ...p, id: cargado.id_exp }; ultimaFirmaGuardadaRef.current = JSON.stringify(buildPayload(cargado));
+                if (cancelled) return;
+                const cargado = draftDesdeApi(p, evidencias, estadoInicial);
+                // Priorizar teléfono verdadero de ClienteComercial expuesto por DRF,
+                // no el alias (potencialmente desactualizado) del listado.
+                cargado.telefono = String(p?.telefono_out || cargado.telefono || "");
+                setDraft(cargado);
+                ultimoProspectoRef.current = { ...p, id: cargado.id_exp };
+                ultimaFirmaGuardadaRef.current = JSON.stringify(buildPayload(cargado));
             } catch (e) { if (!cancelled) setError(e?.message || "No se pudo abrir el prospecto para editar."); } finally { if (!cancelled) setLoadingDetail(false); }
         }
         init(); return () => { cancelled = true; };
@@ -242,9 +258,10 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             else if (ultimaFirmaGuardadaRef.current !== firma) respuesta = await api.digitalesUpdateProspecto(id, payload);
             if (procesarArchivos) await procesarEvidencias(id);
             ultimaFirmaGuardadaRef.current = firma;
-            const prospecto = { ...payload, ...(ultimoProspectoRef.current || {}), ...(respuesta?.prospecto || {}), ...(respuesta || {}), id, id_exp: id, telefono: payload.telefono, nombre: payload.nombre, business: payload.business, canal_contacto: payload.canal_contacto };
+            const telefonoConfirmado = String(respuesta?.telefono_out || respuesta?.prospecto?.telefono_out || ultimoProspectoRef.current?.telefono_out || payload.telefono || normalizaTelefonoMx(draft.telefono));
+            const prospecto = { ...payload, ...(ultimoProspectoRef.current || {}), ...(respuesta?.prospecto || {}), ...(respuesta || {}), id, id_exp: id, telefono: telefonoConfirmado, nombre: payload.nombre, business: payload.business, canal_contacto: payload.canal_contacto };
             ultimoProspectoRef.current = prospecto;
-            setDraft((p) => ({ ...p, id_exp: id, telefono: payload.telefono, ...(procesarArchivos ? { evidencias_nuevas: [], delete_evidencia_ids: [] } : {}) }));
+            setDraft((p) => ({ ...p, id_exp: id, telefono: telefonoConfirmado, ...(procesarArchivos ? { evidencias_nuevas: [], delete_evidencia_ids: [] } : {}) }));
             const info = { modo: esEdicion ? "edit" : "create", cerrar, numero_asesor: numeroLinea };
             onGuardado?.(prospecto, info); esEdicion ? onActualizado?.(prospecto, info) : onCreado?.(prospecto, info);
             if (cerrar) onClose?.(); return prospecto;
@@ -282,6 +299,12 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
     </>}>
         {loadingDetail ? <ModalSkeleton /> : !draft ? null : <div className="grid gap-3 md:grid-cols-4">
             {error ? <div className="md:col-span-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div> : null}
+            {/* V3 solo para expedientes existentes: lectura independiente del estado histórico. */}
+            {esEdicion && (draft.id_exp || prospectoId) ? (
+                <div className="md:col-span-4 min-w-0">
+                    <EtapasComercialesV3Panel expedienteId={draft.id_exp || prospectoId} />
+                </div>
+            ) : null}
             <div className="md:col-span-4 grid gap-3 md:grid-cols-3">
                 <Field label="Dealer" icon={Building2}><select value={draft.agencia || ""} onChange={(e) => setDraft((p) => ({ ...p, agencia: e.target.value }))} disabled={!isAdmin && (contexto.agencia || agenciasUsuario.length <= 1)} className={cls(inputBase, touched && !draft.agencia ? inputBad : inputOk, !isAdmin && (contexto.agencia || agenciasUsuario.length <= 1) ? "cursor-not-allowed opacity-70" : "")}><option value="">Selecciona un dealer...</option>{agencias.map((a) => <option key={a} value={a}>{a}</option>)}</select></Field>
                 <Field label="Asesor Digital" icon={User}><select value={draft.asesor_digital || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_digital: e.target.value }))} disabled={esEdicion ? !isAdmin : Boolean(contexto.asesor_digital)} className={cls(inputBase, inputOk, (esEdicion ? !isAdmin : Boolean(contexto.asesor_digital)) ? "cursor-not-allowed opacity-70" : "")}><option value="">— Selecciona —</option>{opcionesAsesoresDigitales.map((a) => (<option key={a} value={a}>{a}</option>))}</select></Field>

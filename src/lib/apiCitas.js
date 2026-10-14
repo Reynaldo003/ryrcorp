@@ -5,13 +5,14 @@ function jsonRequest(method, payload, auth = true) {
   return {
     method,
     auth,
+    retryWithoutAuth: false,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload ?? {}),
   };
 }
 
 async function fetchPage(url) {
-  const data = await http(url, { auth: false });
+  const data = await http(url, { auth: true, retryWithoutAuth: false });
   if (Array.isArray(data)) return { results: data, next: null };
   return {
     results: Array.isArray(data?.results) ? data.results : [],
@@ -47,12 +48,12 @@ export const apiCitas = {
     return fetchPage(`/citas/api/citas/${query}`);
   },
 
-  get: (id) => http(`/citas/api/citas/${id}/`, { auth: false }),
+  get: (id) => http(`/citas/api/citas/${id}/`, { auth: true, retryWithoutAuth: false }),
   create: (payload) =>
     http("/citas/api/citas/", jsonRequest("POST", payload, false)),
   update: (id, payload) =>
     http(`/citas/api/citas/${id}/`, jsonRequest("PUT", payload)),
   patch: (id, payload) =>
     http(`/citas/api/citas/${id}/`, jsonRequest("PATCH", payload)),
-  remove: (id) => http(`/citas/api/citas/${id}/`, { method: "DELETE" }),
+  remove: (id) => http(`/citas/api/citas/${id}/`, { method: "DELETE", retryWithoutAuth: false }),
 };
