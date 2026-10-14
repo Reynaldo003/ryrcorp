@@ -1,4 +1,4 @@
-//src/lib/apiVentaRef.js
+// src/lib/apiVentaRef.js
 import { buildQuery, http } from "./apiClient";
 
 const BASE_URL = "/venta-refacciones/api";
@@ -13,4 +13,8 @@ export function getVentaRefOpciones() {
 
 export function getVentaRefPiezas(params = {}) {
   return http(`${BASE_URL}/piezas/${buildQuery(params)}`);
+}
+
+export function getVentaRefAnalisis(params = {}) {
+  return http(`${BASE_URL}/analisis/${buildQuery(params)}`);
 }
