@@ -307,7 +307,19 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   // La API decide finalmente si la operación es válida.
   const permiteCotizacion = resultado?.iniciado && actual === "en_seguimiento";
   // Solo vinculamos citas realmente existentes. El backend decide si pertenecen al cliente/dealer.
-  const permiteCita = resultado?.iniciado && actual === "cotizacion_enviada";
+  const tieneHomologacionCitaHistorica =
+    resultado?.homologacion_cita_historica === true;
+
+  const permiteCita =
+    resultado?.iniciado &&
+    (
+      actual === "cotizacion_enviada" ||
+      (
+        actual === "cita_agendada" &&
+        tieneHomologacionCitaHistorica &&
+        !resultado?.cita_vinculada_id
+      )
+    );
   // Si la documentación llegó primero, se permite confirmar una visita
   // posterior sin hacer retroceder la etapa comercial.
   const asistenciaYaRegistrada = historial.some((a) => a.tipo === "cita_asistida");
