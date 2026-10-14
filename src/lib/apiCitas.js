@@ -50,7 +50,7 @@ export const apiCitas = {
 
   get: (id) => http(`/citas/api/citas/${id}/`, { auth: true, retryWithoutAuth: false }),
   create: (payload) =>
-    http("/citas/api/citas/", jsonRequest("POST", payload, false)),
+    http("/citas/api/citas/", jsonRequest("POST", payload, true)),
   update: (id, payload) =>
     http(`/citas/api/citas/${id}/`, jsonRequest("PUT", payload)),
   patch: (id, payload) =>

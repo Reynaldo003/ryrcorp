@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldAlert, FileCheck2 } from "lucide-react";
 import { apiEtapasV3 } from "../../lib/apiEtapasV3";
+import { apiCitas } from "../../lib/apiCitas";
 
 const ETAPAS = [
   ["nuevo_prospecto", "Nuevo prospecto", "Automática"],
@@ -76,7 +77,7 @@ function nuevaClaveIdempotencia() {
   return `cotizacion:${Date.now()}:${Math.random().toString(36).slice(2, 14)}`;
 }
 
-export default function EtapasComercialesV3Panel({ expedienteId }) {
+export default function EtapasComercialesV3Panel({ expedienteId, prospecto = null, onActualizado }) {
   const [revision, setRevision] = useState(0);
   const [resultado, setResultado] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -91,12 +92,20 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
   const [avisoRegistro, setAvisoRegistro] = useState("");
   const intentoRef = useRef(null);
   const [mostrarFormularioCita, setMostrarFormularioCita] = useState(false);
+  const [modoCita, setModoCita] = useState("crear");
+  const [nuevaCitaFecha, setNuevaCitaFecha] = useState("");
+  const [nuevaCitaHora, setNuevaCitaHora] = useState("12:00");
+  const [nuevaCitaAgencia, setNuevaCitaAgencia] = useState("");
+  const [nuevaCitaAuto, setNuevaCitaAuto] = useState("");
+  const [citasCliente, setCitasCliente] = useState([]);
+  const [cargandoCitasCliente, setCargandoCitasCliente] = useState(false);
   const [citaIdTexto, setCitaIdTexto] = useState("");
   const [confirmarCita, setConfirmarCita] = useState(false);
   const [guardandoCita, setGuardandoCita] = useState(false);
   const [errorCita, setErrorCita] = useState("");
   const [avisoCita, setAvisoCita] = useState("");
   const intentoCitaRef = useRef(null);
+  const citaCreadaIdRef = useRef(null);
   // Fase 12: la cita debe estar previamente vinculada; solo se registra visita real.
   const [mostrarAsistencia, setMostrarAsistencia] = useState(false);
   const [citaAsistenciaTexto, setCitaAsistenciaTexto] = useState("");
@@ -161,11 +170,21 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
     setAvisoRegistro("");
     intentoRef.current = null;
     setMostrarFormularioCita(false);
-    setCitaIdTexto("");
+    setModoCita("crear");
+    setNuevaCitaFecha("");
+    setNuevaCitaHora("12:00");
+    setNuevaCitaAgencia(prospecto?.agencia || "");
+    setNuevaCitaAuto(prospecto?.auto_interes || prospecto?.autoInteres || "");
+    setCitasCliente([]);
+    const citaGuardada = typeof sessionStorage !== "undefined" && expedienteId
+      ? sessionStorage.getItem(`v3_cita_pendiente_${expedienteId}`) || ""
+      : "";
+    setCitaIdTexto(citaGuardada);
     setConfirmarCita(false);
     setErrorCita("");
     setAvisoCita("");
     intentoCitaRef.current = null;
+    citaCreadaIdRef.current = citaGuardada ? Number(citaGuardada) : null;
     setMostrarAsistencia(false);
     setCitaAsistenciaTexto("");
     setFechaAsistencia("");
@@ -235,6 +254,55 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
 
   const actual = resultado?.etapa_comercial_v3 ?? null;
   const historial = Array.isArray(resultado?.actividades) ? resultado.actividades : [];
+
+  useEffect(() => {
+    const actCita = historial.find((a) => a.tipo === "cita_agendada" && a.cita_id);
+    const idDetectado =
+      resultado?.cita_vinculada_id ||
+      actCita?.cita_id ||
+      prospecto?.cita?.id ||
+      "";
+    if (idDetectado && !citaAsistenciaTexto) {
+      setCitaAsistenciaTexto(String(idDetectado));
+    }
+  }, [resultado, historial, prospecto, citaAsistenciaTexto]);
+
+  useEffect(() => {
+    if (!mostrarFormularioCita) return;
+    if (!nuevaCitaAgencia && prospecto?.agencia) {
+      setNuevaCitaAgencia(prospecto.agencia);
+    }
+    if (!nuevaCitaAuto && (prospecto?.auto_interes || prospecto?.autoInteres || vehiculo)) {
+      setNuevaCitaAuto(prospecto?.auto_interes || prospecto?.autoInteres || vehiculo || "");
+    }
+    let activo = true;
+    setCargandoCitasCliente(true);
+    apiCitas.list()
+      .then((lista) => {
+        if (!activo) return;
+        const todas = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
+        const telProspecto = String(prospecto?.telefono || "").replace(/\D/g, "").slice(-10);
+        const clienteId = Number(prospecto?.cliente_id || 0);
+        const agenciaExp = String(prospecto?.agencia || "").trim().toLowerCase();
+        const filtradas = todas.filter((c) => {
+          if (c?.asistencia) return false;
+          const cAgencia = String(c?.agencia || "").trim().toLowerCase();
+          if (agenciaExp && cAgencia && cAgencia !== agenciaExp) return false;
+          const cId = Number(c?.cliente?.id_cliente || c?.cliente_id || 0);
+          const cTel = String(c?.cliente?.telefono || c?.telefono || "").replace(/\D/g, "").slice(-10);
+          if (clienteId > 0 && cId === clienteId) return true;
+          if (telProspecto && telProspecto.length === 10 && cTel === telProspecto) return true;
+          return false;
+        });
+        setCitasCliente(filtradas);
+        if (filtradas.length > 0 && !citaIdTexto) {
+          setCitaIdTexto(String(filtradas[0].id));
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (activo) setCargandoCitasCliente(false); });
+    return () => { activo = false; };
+  }, [mostrarFormularioCita]);
   // En el piloto solo abrimos el registro manual después del seguimiento humano.
   // La API decide finalmente si la operación es válida.
   const permiteCotizacion = resultado?.iniciado && actual === "en_seguimiento";
@@ -293,6 +361,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
       setMostrarPerdida(false);
       setConfirmarPerdida(false);
       intentoPerdidaRef.current = null;
+      onActualizado?.();
       setRevision((valor) => valor + 1);
     } catch (err) {
       setErrorPerdida(err?.message || "No fue posible registrar Lead perdido.");
@@ -340,6 +409,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
       setMostrarCompraFutura(false);
       setConfirmarCompra(false);
       intentoCompraRef.current = null;
+      onActualizado?.();
       setRevision((valor) => valor + 1);
     } catch (err) {
       setErrorCompra(err?.message || "No fue posible registrar Compra futura.");
@@ -376,6 +446,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
       setMostrarReactivacion(false);
       setConfirmarReactivacion(false);
       intentoReactivacionRef.current = null;
+      onActualizado?.();
       setRevision((valor) => valor + 1);
     } catch (err) {
       setErrorReactivacion(err?.message || "No fue posible reactivar el seguimiento.");
@@ -424,6 +495,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
       setMostrarAutorizacion(false);
       setConfirmarAutorizacion(false);
       intentoAutorizacionRef.current = null;
+      onActualizado?.();
       setRevision((v) => v + 1);
     } catch (err) {
       setErrorAutorizacion(err?.message || "No se pudo registrar la autorización.");
@@ -472,6 +544,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
       setMostrarDocumentos(false);
       setConfirmarDocumentos(false);
       intentoDocumentosRef.current = null;
+      onActualizado?.();
       setRevision((v) => v + 1);
     } catch (err) {
       // Al reintentar la misma solicitud conservamos su clave de idempotencia.
@@ -524,6 +597,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
       setMostrarAsistencia(false);
       setConfirmarAsistencia(false);
       intentoAsistenciaRef.current = null;
+      onActualizado?.();
       setRevision((valor) => valor + 1);
     } catch (err) {
       // Reutilizamos la misma clave si falla la red. No inventamos asistencia.
@@ -537,40 +611,102 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
     if (guardandoCita || !permiteCita) return;
     setErrorCita("");
     setAvisoCita("");
-    const texto = citaIdTexto.trim();
-    const citaId = Number(texto);
-    if (!/^\d+$/.test(texto) || !Number.isSafeInteger(citaId) || citaId <= 0) {
-      setErrorCita("Indica el ID numérico de una cita ya guardada en el módulo de citas.");
-      return;
-    }
     if (!confirmarCita) {
-      setErrorCita("Confirma que esta cita ya está registrada para este prospecto.");
+      setErrorCita("Confirma los datos de la cita para este prospecto.");
       return;
-    }
-    // Reintentos de la misma operación reutilizan la clave: nunca crean otra actividad.
-    const firma = JSON.stringify([expedienteId, citaId]);
-    if (intentoCitaRef.current?.firma !== firma) {
-      const uuid = (typeof crypto !== "undefined" && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
-      intentoCitaRef.current = { firma, clave: `cita:${uuid}` };
     }
     setGuardandoCita(true);
     try {
+      let citaId = Number(citaIdTexto.trim());
+      if (modoCita === "crear") {
+        if (!citaCreadaIdRef.current) {
+          const f = nuevaCitaFecha.trim();
+          const h = (nuevaCitaHora || "12:00").trim();
+          const ag = (nuevaCitaAgencia || prospecto?.agencia || "").trim();
+          const auto = (nuevaCitaAuto || prospecto?.auto_interes || prospecto?.autoInteres || vehiculo || "Por definir").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || !/^\d{2}:\d{2}/.test(h)) {
+            setErrorCita("Selecciona la fecha y hora de la cita.");
+            setGuardandoCita(false);
+            return;
+          }
+          if (!ag) {
+            setErrorCita("Selecciona la sucursal de la cita.");
+            setGuardandoCita(false);
+            return;
+          }
+          const isoPrefijo = `${f}T${h.slice(0, 5)}`;
+          const coincidente = citasCliente.find((c) =>
+            !c?.asistencia &&
+            String(c?.agencia || "").trim().toLowerCase() === ag.toLowerCase() &&
+            String(c?.fecha_hora_cita || "").startsWith(isoPrefijo)
+          );
+          if (coincidente?.id) {
+            citaCreadaIdRef.current = Number(coincidente.id);
+          } else {
+            const payloadCita = {
+              agencia: ag,
+              auto_interes: auto,
+              fecha_hora_cita: `${isoPrefijo}:00`,
+              asistencia: false,
+              tipo_cita: "Digital",
+              motivo_cita: "Cita agendada desde seguimiento comercial",
+              fuente_prospeccion: prospecto?.canal_contacto || "Digital",
+              asesor_digital: prospecto?.asesor_digital || prospecto?.asignadoA || "",
+            };
+            if (Number(prospecto?.cliente_id) > 0) {
+              payloadCita.cliente_id = Number(prospecto.cliente_id);
+            } else {
+              payloadCita.nombre = prospecto?.nombre || "Prospecto";
+              payloadCita.telefono = prospecto?.telefono || "";
+              payloadCita.correo = prospecto?.correo || "";
+            }
+            const creada = await apiCitas.create(payloadCita);
+            if (!creada?.id) {
+              throw new Error("No se recibió el identificador de la cita creada.");
+            }
+            citaCreadaIdRef.current = Number(creada.id);
+          }
+          if (typeof sessionStorage !== "undefined" && expedienteId) {
+            sessionStorage.setItem(`v3_cita_pendiente_${expedienteId}`, String(citaCreadaIdRef.current));
+          }
+          setCitaIdTexto(String(citaCreadaIdRef.current));
+        }
+        citaId = Number(citaCreadaIdRef.current);
+      } else {
+        if (!Number.isSafeInteger(citaId) || citaId <= 0) {
+          setErrorCita("Selecciona una cita existente o agenda una nueva.");
+          setGuardandoCita(false);
+          return;
+        }
+      }
+
+      const firma = JSON.stringify([expedienteId, citaId]);
+      if (intentoCitaRef.current?.firma !== firma) {
+        const uuid = (typeof crypto !== "undefined" && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+        intentoCitaRef.current = { firma, clave: `cita:${uuid}` };
+      }
+
       const registro = await apiEtapasV3.registrarCita({
         expedienteId, citaId, claveIdempotencia: intentoCitaRef.current.clave,
       });
+      if (typeof sessionStorage !== "undefined" && expedienteId) {
+        sessionStorage.removeItem(`v3_cita_pendiente_${expedienteId}`);
+      }
       setAvisoRegistro("");
       setAvisoCita(registro?.duplicado
         ? "La cita ya estaba vinculada; se recuperó el registro anterior."
-        : "Cita vinculada correctamente. El historial se ha actualizado.");
+        : "Cita agendada y vinculada correctamente. El historial se ha actualizado.");
       setMostrarFormularioCita(false);
       setConfirmarCita(false);
       intentoCitaRef.current = null;
+      citaCreadaIdRef.current = null;
+      setCitaAsistenciaTexto(String(citaId));
+      onActualizado?.();
       setRevision((v) => v + 1);
     } catch (err) {
-      // Conservar la clave ante errores de red para un reintento idempotente.
-      setErrorCita(err?.message || "No se pudo vincular la cita. Verifica que corresponda a este cliente y agencia.");
+      setErrorCita(err?.message || "No se pudo agendar o vincular la cita. Si la cita ya se creó, pulsa nuevamente para vincularla sin duplicar.");
     } finally {
       setGuardandoCita(false);
     }
@@ -611,6 +747,7 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
         ? "La cotización ya estaba registrada; se recuperó el resultado anterior."
         : "Cotización registrada correctamente. Historial actualizado.");
       intentoRef.current = null;
+      onActualizado?.();
       setRevision((v) => v + 1);
     } catch (err) {
       // Conservar la misma clave ante un fallo de red; reintentar no duplica.
@@ -738,27 +875,96 @@ export default function EtapasComercialesV3Panel({ expedienteId }) {
                 </div>
                 {mostrarFormularioCita ? (
                   <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      ID de la cita (ya registrada)
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={15}
-                        value={citaIdTexto}
-                        onChange={(e) => { setCitaIdTexto(e.target.value.replace(/\D/g, "")); intentoCitaRef.current = null; }}
-                        disabled={guardandoCita} placeholder="Ej. 125"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <div className="flex items-center text-[11px] text-slate-500">
-                      El ID se obtiene al guardar la cita en el módulo correspondiente.
+                    <div className="flex gap-2 sm:col-span-2">
+                      <button type="button" onClick={() => { setModoCita("crear"); setErrorCita(""); }}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "crear" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+                        Agendar nueva cita
+                      </button>
+                      <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); }}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "existente" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+                        Usar cita ya existente {citasCliente.length ? `(${citasCliente.length})` : ""}
+                      </button>
                     </div>
+                    {modoCita === "crear" ? (
+                      <>
+                        {citaCreadaIdRef.current ? (
+                          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 sm:col-span-2">
+                            Cita #{citaCreadaIdRef.current} creada lista para vincular. Confirma abajo para concluir el enlace.
+                          </p>
+                        ) : null}
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Fecha de cita
+                          <input type="date" min={fechaHoyMx()} value={nuevaCitaFecha}
+                            onChange={(e) => { setNuevaCitaFecha(e.target.value); citaCreadaIdRef.current = null; }}
+                            disabled={guardandoCita}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Hora
+                          <input type="time" value={nuevaCitaHora}
+                            onChange={(e) => { setNuevaCitaHora(e.target.value); citaCreadaIdRef.current = null; }}
+                            disabled={guardandoCita}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Sucursal
+                          <select value={nuevaCitaAgencia}
+                            onChange={(e) => { setNuevaCitaAgencia(e.target.value); citaCreadaIdRef.current = null; }}
+                            disabled={guardandoCita}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+                            <option value="">— Selecciona sucursal —</option>
+                            {["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"].map((ag) => (
+                              <option key={ag} value={ag}>{ag}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Vehículo de interés
+                          <input type="text" maxLength={120} value={nuevaCitaAuto}
+                            onChange={(e) => { setNuevaCitaAuto(e.target.value); citaCreadaIdRef.current = null; }}
+                            disabled={guardandoCita} placeholder="Ej. Taos Highline"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                      </>
+                    ) : (
+                      <div className="grid gap-2 sm:col-span-2">
+                        {cargandoCitasCliente ? (
+                          <p className="text-xs text-slate-500">Buscando citas del cliente…</p>
+                        ) : citasCliente.length > 0 ? (
+                          <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                            Selecciona la cita registrada del cliente
+                            <select value={citaIdTexto}
+                              onChange={(e) => { setCitaIdTexto(e.target.value); intentoCitaRef.current = null; }}
+                              disabled={guardandoCita}
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+                              {citasCliente.map((c) => (
+                                <option key={c.id} value={String(c.id)}>
+                                  Folio #{c.id} · {c.agencia} · {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.auto_interes || "Sin auto"}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Folio / ID de cita
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={15}
+                            value={citaIdTexto}
+                            onChange={(e) => { setCitaIdTexto(e.target.value.replace(/\D/g, "")); intentoCitaRef.current = null; }}
+                            disabled={guardandoCita} placeholder="Ej. 125"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                      </div>
+                    )}
                     <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
                       <input type="checkbox" checked={confirmarCita} onChange={(e) => setConfirmarCita(e.target.checked)}
                         disabled={guardandoCita} className="mt-0.5" />
-                      Confirmo que esta cita existe y está agendada para el cliente del expediente.
+                      Confirmo que la cita está acordada con el cliente del expediente.
                     </label>
                     {errorCita ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorCita}</p> : null}
                     <div className="sm:col-span-2">
                       <button type="button" disabled={guardandoCita} onClick={registrarCita}
                         className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                        {guardandoCita ? "Vinculando…" : "Confirmar y vincular cita"}
+                        {guardandoCita ? "Guardando…" : modoCita === "crear" ? "Guardar y agendar cita" : "Confirmar y vincular cita"}
                       </button>
                     </div>
                   </div>
