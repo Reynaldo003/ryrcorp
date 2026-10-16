@@ -32,7 +32,9 @@ import {
     obtenerNombreAsesorSesion,
 } from "../../config/lineasWhatsApp";
 
-// Los módulos costosos se descargan únicamente al abrir su pantalla/modal.
+import { submoduloVisible } from "../../config/interfaces";
+
+// Los m�dulos costosos se descargan �nicamente al abrir su pantalla/modal.
 const NuevoProspectoModal = lazy(() => import("./NuevoProspectoModal"));
 const ResultadosIA = lazy(() => import("./ResultadosIA"));
 const DashboardEjecutivoBDC = lazy(() => import("./DashboardEjecutivoBDC"));
@@ -1651,7 +1653,7 @@ export default function DigitalesProspectos() {
         return !isAdmin && (["coordinador digital", "coordinador_digital"].includes(rolUsuario) || permisos.includes("CRM_COORDINADOR_DIGITAL"));
     }, [isAdmin, rolUsuario, user?.permisos]);
 
-    const puedeExportarReportes = isAdmin || isCoordinador;
+    const puedeExportarReportes = submoduloVisible(user, "comercial", "prospectos", true);
 
     const userAgencias = useMemo(() => String(user?.agencia || "").split("|").map((a) => a.trim()).filter(Boolean), [user?.agencia]);
 
