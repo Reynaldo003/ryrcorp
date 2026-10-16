@@ -1354,6 +1354,7 @@ export default function RegistroAvaluos() {
         "YAMIL MISAEL RODRIGUEZ AGUILAR",
         "Yoseth Ruiz Castellanos",
         "ZEILA NAVARRO CONTRERAS",
+        "Berenice Chavez"
     ];
 
     const ETAPAS_PROCESO = [

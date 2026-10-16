@@ -1522,7 +1522,7 @@ export default function RegistroCitas() {
         if (filters.rangoDesde) params.fecha_desde = filters.rangoDesde;
         if (filters.rangoHasta) params.fecha_hasta = filters.rangoHasta;
         return params;
-        }, [filters.agencia, filters.tipoCita, filters.asesorDigital, filters.asesorPiso, filters.rangoDesde, filters.rangoHasta, debouncedQ]);
+    }, [filters.agencia, filters.tipoCita, filters.asesorDigital, filters.asesorPiso, filters.rangoDesde, filters.rangoHasta, debouncedQ]);
 
     const refreshList = useCallback(async (pageNum = 1) => {
         const seq = ++requestSeq.current;
@@ -2184,11 +2184,10 @@ export default function RegistroCitas() {
                                         agencia: value,
                                     }));
                                 }}
-                                className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
-                                    activo
+                                className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${activo
                                         ? "bg-white text-[#071D49] shadow-sm"
                                         : "bg-white/10 text-white hover:bg-white/20"
-                                }`}
+                                    }`}
                             >
                                 {label}
                             </button>
@@ -2196,78 +2195,78 @@ export default function RegistroCitas() {
                     })}
                 </div>
                 {/* ASESORES DINÁMICOS SEGÚN TIPO DE CITA */}
-                        <div className="flex shrink-0 items-center gap-2 border-x border-white/20 px-2">
-                            {/* ASESOR DIGITAL */}
-                            {(
-                                filters.tipoCita === "Digital" ||
-                                (
-                                    filters.tipoCita !== "Tradicional" &&
-                                    asesoresDisponibles.digitales.length > 0
-                                )
-                            ) && (
-                                <div className="flex w-[145px] flex-col gap-1">
-                                    <label className="text-[10px] font-bold uppercase text-blue-200">
-                                        Asesor digital
-                                    </label>
+                <div className="flex shrink-0 items-center gap-2 border-x border-white/20 px-2">
+                    {/* ASESOR DIGITAL */}
+                    {(
+                        filters.tipoCita === "Digital" ||
+                        (
+                            filters.tipoCita !== "Tradicional" &&
+                            asesoresDisponibles.digitales.length > 0
+                        )
+                    ) && (
+                            <div className="flex w-[145px] flex-col gap-1">
+                                <label className="text-[10px] font-bold uppercase text-blue-200">
+                                    Asesor digital
+                                </label>
 
-                                    <select
-                                        value={filters.asesorDigital}
-                                        onChange={(e) => {
-                                            setPage(1);
-                                            setFilters((prev) => ({
-                                                ...prev,
-                                                asesorDigital: e.target.value,
-                                            }));
-                                        }}
-                                        className="w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#071D49] outline-none"
-                                    >
-                                        <option value="Todos">Todos los asesores</option>
+                                <select
+                                    value={filters.asesorDigital}
+                                    onChange={(e) => {
+                                        setPage(1);
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            asesorDigital: e.target.value,
+                                        }));
+                                    }}
+                                    className="w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#071D49] outline-none"
+                                >
+                                    <option value="Todos">Todos los asesores</option>
 
-                                        {asesoresDisponibles.digitales.map((asesor) => (
-                                            <option key={asesor} value={asesor}>
-                                                {asesor}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+                                    {asesoresDisponibles.digitales.map((asesor) => (
+                                        <option key={asesor} value={asesor}>
+                                            {asesor}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
-                            {/* ASESOR DE PISO */}
-                            {(
-                                filters.tipoCita === "Tradicional" ||
-                                (
-                                    filters.tipoCita !== "Digital" &&
-                                    asesoresDisponibles.piso.length > 0
-                                )
-                            ) && (
-                                <div className="flex w-[150px] shrink-0 flex-col gap-1">
-                                    <label className="text-[10px] font-bold uppercase text-blue-200">
-                                        Asesor de piso
-                                    </label>
+                    {/* ASESOR DE PISO */}
+                    {(
+                        filters.tipoCita === "Tradicional" ||
+                        (
+                            filters.tipoCita !== "Digital" &&
+                            asesoresDisponibles.piso.length > 0
+                        )
+                    ) && (
+                            <div className="flex w-[150px] shrink-0 flex-col gap-1">
+                                <label className="text-[10px] font-bold uppercase text-blue-200">
+                                    Asesor de piso
+                                </label>
 
-                                    <select
-                                        value={filters.asesorPiso}
-                                        onChange={(e) => {
-                                            setPage(1);
-                                            setFilters((prev) => ({
-                                                ...prev,
-                                                asesorPiso: e.target.value,
-                                            }));
-                                        }}
-                                        className="w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#071D49] outline-none"
-                                    >
-                                        <option value="Todos">Todos los asesores</option>
+                                <select
+                                    value={filters.asesorPiso}
+                                    onChange={(e) => {
+                                        setPage(1);
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            asesorPiso: e.target.value,
+                                        }));
+                                    }}
+                                    className="w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-[#071D49] outline-none"
+                                >
+                                    <option value="Todos">Todos los asesores</option>
 
-                                        {asesoresDisponibles.piso.map((asesor) => (
-                                            <option key={asesor} value={asesor}>
-                                                {asesor}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+                                    {asesoresDisponibles.piso.map((asesor) => (
+                                        <option key={asesor} value={asesor}>
+                                            {asesor}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
-                        </div>
+                </div>
 
                 {/* TIPO DE CITA */}
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -2304,11 +2303,10 @@ export default function RegistroCitas() {
                                                 asesorPiso: "Todos",
                                             }));
                                         }}
-                                        className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold transition-all ${
-                                            activo
+                                        className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold transition-all ${activo
                                                 ? "bg-white text-[#071D49] shadow-sm"
                                                 : "bg-white/10 text-white hover:bg-white/20"
-                                        }`}
+                                            }`}
                                     >
                                         {opcion.label}
                                     </button>
@@ -2318,90 +2316,118 @@ export default function RegistroCitas() {
                     </div>
                 </div>
             </div>
-                {/* FILTROS POR AÑO Y MES */}
-                <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
+            {/* FILTROS DE BÚSQUEDA, AÑO Y MES */}
+            <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
+                {/* BARRA DE BÚSQUEDA */}
+                <div className="flex h-10 w-[300px] shrink-0 flex-1 items-center gap-2 rounded-xl border border-[#D9E2F2] bg-[#F8FAFD] px-3 transition-all focus-within:border-[#071D49] focus-within:ring-1 focus-within:ring-[#071D49]/20">
+                    <Search className="h-4 w-4 shrink-0 text-[#071D49]" />
 
-                    {/* AÑO */}
-                    <select
-                        value={anioSeleccionado}
+                    <input
+                        type="text"
+                        value={filters.q}
                         onChange={(e) => {
-                            const anio = Number(e.target.value);
-                            const mes = mesSeleccionado;
-
-                            setAnioSeleccionado(anio);
                             setPage(1);
-
                             setFilters((prev) => ({
                                 ...prev,
-                                rangoDesde:
-                                    mes === 0
-                                        ? `${anio}-01-01`
-                                        : `${anio}-${String(mes).padStart(2, "0")}-01`,
-                                rangoHasta:
-                                    mes === 0
-                                        ? `${anio}-12-31`
-                                        : toYMDLocal(new Date(anio, mes, 0)),
+                                q: e.target.value,
                             }));
                         }}
-                        className="shrink-0 rounded-xl border border-[#D9E2F2] bg-[#F8FAFD] px-4 py-2 text-sm font-bold text-[#071D49] outline-none"
-                    >
-                        {Array.from(
-                            { length: Math.max(new Date().getFullYear(), 2026) - 2020 + 1 },
-                            (_, i) => Math.max(new Date().getFullYear(), 2026) - i
-                        ).map((anio) => (
-                            <option key={anio} value={anio}>
-                                {anio}
-                            </option>
-                        ))}
-                    </select>
+                        placeholder="Buscar cliente, teléfono, email, asesor, vehículo..."
+                        aria-label="Buscar citas"
+                        className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-[#071D49] outline-none placeholder:text-slate-400"
+                    />
 
-                    <div className="h-8 w-px shrink-0 bg-slate-200" />
-
-                    {/* MESES DISTRIBUIDOS EN TODO EL ANCHO */}
-                    <div className="min-w-0 flex-1 overflow-x-auto">
-                        <div
-                            className="grid min-w-[850px] items-center gap-1"
-                            style={{
-                                gridTemplateColumns: "repeat(13, minmax(0, 1fr))",
+                    {filters.q && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPage(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    q: "",
+                                }));
                             }}
+                            title="Limpiar búsqueda"
+                            className="shrink-0 text-slate-400 hover:text-[#071D49]"
                         >
-                            {[
-                                "Todo el año",
-                                "ENERO",
-                                "FEBRERO",
-                                "MARZO",
-                                "ABRIL",
-                                "MAYO",
-                                "JUNIO",
-                                "JULIO",
-                                "AGOSTO",
-                                "SEPTIEMBRE",
-                                "OCTUBRE",
-                                "NOVIEMBRE",
-                                "DICIEMBRE",
-                            ].map((nombre, indice) => {
-                                const activo = mesSeleccionado === indice;
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+                {/* AÑO */}
+                <select
+                    value={anioSeleccionado}
+                    onChange={(e) => {
+                        const anio = Number(e.target.value);
+                        const mes = mesSeleccionado;
 
-                                return (
-                                    <button
-                                        key={nombre}
-                                        type="button"
-                                        onClick={() =>
-                                            seleccionarPeriodo(anioSeleccionado, indice)
-                                        }
-                                        className={`w-full whitespace-nowrap rounded-lg px-1 py-2.5 text-center text-[11px] font-bold transition-all ${
-                                            activo
-                                                ? "bg-[#071D49] text-white shadow-sm"
-                                                : "text-[#071D49] hover:bg-slate-100"
+                        setAnioSeleccionado(anio);
+                        setPage(1);
+
+                        setFilters((prev) => ({
+                            ...prev,
+                            rangoDesde:
+                                mes === 0
+                                    ? `${anio}-01-01`
+                                    : `${anio}-${String(mes).padStart(2, "0")}-01`,
+                            rangoHasta:
+                                mes === 0
+                                    ? `${anio}-12-31`
+                                    : toYMDLocal(new Date(anio, mes, 0)),
+                        }));
+                    }}
+                    className="shrink-0 rounded-xl border border-[#D9E2F2] bg-[#F8FAFD] px-4 py-2 text-sm font-bold text-[#071D49] outline-none"
+                >
+                    {Array.from(
+                        { length: Math.max(new Date().getFullYear(), 2026) - 2020 + 1 },
+                        (_, i) => Math.max(new Date().getFullYear(), 2026) - i
+                    ).map((anio) => (
+                        <option key={anio} value={anio}>
+                            {anio}
+                        </option>
+                    ))}
+                </select>
+
+                <div className="h-8 w-px shrink-0 bg-slate-200" />
+                {/* MESES COMPACTOS SEGÚN EL TAMAÑO DEL TEXTO */}
+                <div className="min-w-0 shrink-0 overflow-x-auto">
+                    <div className="flex w-max items-center gap-0">
+                        {[
+                            "Todo el año",
+                            "ENERO",
+                            "FEBRERO",
+                            "MARZO",
+                            "ABRIL",
+                            "MAYO",
+                            "JUNIO",
+                            "JULIO",
+                            "AGOSTO",
+                            "SEPTIEMBRE",
+                            "OCTUBRE",
+                            "NOVIEMBRE",
+                            "DICIEMBRE",
+                        ].map((nombre, indice) => {
+                            const activo = mesSeleccionado === indice;
+
+                            return (
+                                <button
+                                    key={nombre}
+                                    type="button"
+                                    onClick={() =>
+                                        seleccionarPeriodo(anioSeleccionado, indice)
+                                    }
+                                    className={`shrink-0 whitespace-nowrap rounded-lg px-[9px] py-2.5 text-center text-xs font-bold transition-all ${activo
+                                            ? "bg-[#071D49] text-white shadow-sm"
+                                            : "text-[#071D49] hover:bg-slate-100"
                                         }`}
-                                    >
-                                        {nombre}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                                >
+                                    {nombre}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
+            </div>
             {vista === "calendario" && (
                 <CalendarioView
                     rows={sorted}
