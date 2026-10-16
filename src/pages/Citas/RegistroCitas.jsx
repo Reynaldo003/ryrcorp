@@ -2317,11 +2317,47 @@ export default function RegistroCitas() {
                         </div>
                     </div>
                 </div>
-            </div>            
-                {/* FILTROS POR AÑO Y MES */}
-                <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
+            </div>              
+            {/* FILTROS DE BÚSQUEDA, AÑO Y MES */}
+            <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
 
-                    {/* AÑO */}
+                {/* BARRA DE BÚSQUEDA */}
+                <div className="flex h-10 w-[300px] shrink-0 flex-1 items-center gap-2 rounded-xl border border-[#D9E2F2] bg-[#F8FAFD] px-3 transition-all focus-within:border-[#071D49] focus-within:ring-1 focus-within:ring-[#071D49]/20">
+                    <Search className="h-4 w-4 shrink-0 text-[#071D49]" />
+
+                    <input
+                        type="text"
+                        value={filters.q}
+                        onChange={(e) => {
+                            setPage(1);
+                            setFilters((prev) => ({
+                                ...prev,
+                                q: e.target.value,
+                            }));
+                        }}
+                        placeholder="Buscar cliente, teléfono, email, asesor, vehículo..."
+                        aria-label="Buscar citas"
+                        className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-[#071D49] outline-none placeholder:text-slate-400"
+                    />
+
+                    {filters.q && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPage(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    q: "",
+                                }));
+                            }}
+                            title="Limpiar búsqueda"
+                            className="shrink-0 text-slate-400 hover:text-[#071D49]"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+                {/* AÑO */}
                     <select
                         value={anioSeleccionado}
                         onChange={(e) => {
@@ -2355,16 +2391,10 @@ export default function RegistroCitas() {
                         ))}
                     </select>
 
-                    <div className="h-8 w-px shrink-0 bg-slate-200" />
-
-                    {/* MESES DISTRIBUIDOS EN TODO EL ANCHO */}
-                    <div className="min-w-0 flex-1 overflow-x-auto">
-                        <div
-                            className="grid min-w-[850px] items-center gap-1"
-                            style={{
-                                gridTemplateColumns: "repeat(13, minmax(0, 1fr))",
-                            }}
-                        >
+                    <div className="h-8 w-px shrink-0 bg-slate-200" />                                                                    
+                        {/* MESES COMPACTOS SEGÚN EL TAMAÑO DEL TEXTO */}
+                            <div className="min-w-0 shrink-0 overflow-x-auto">
+                                <div className="flex w-max items-center gap-0">
                             {[
                                 "Todo el año",
                                 "ENERO",
@@ -2389,7 +2419,7 @@ export default function RegistroCitas() {
                                         onClick={() =>
                                             seleccionarPeriodo(anioSeleccionado, indice)
                                         }
-                                        className={`w-full whitespace-nowrap rounded-lg px-1 py-2.5 text-center text-[11px] font-bold transition-all ${
+                                        className={`shrink-0 whitespace-nowrap rounded-lg px-[9px] py-2.5 text-center text-xs font-bold transition-all ${
                                             activo
                                                 ? "bg-[#071D49] text-white shadow-sm"
                                                 : "text-[#071D49] hover:bg-slate-100"
