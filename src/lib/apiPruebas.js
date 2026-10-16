@@ -567,16 +567,19 @@ async function parseErrorResponse(response) {
 
   const json = tryParseJson(text);
 
-  if (json?.detail) {
-    return json.detail;
+  // Las APIs comerciales envían {codigo, detalle}. Mostrar el detalle,
+  // nunca el código interno de clasificación del backend.
+  for (const campo of ["detalle", "detail", "error", "message"]) {
+    if (typeof json?.[campo] === "string" && json[campo].trim()) {
+      return json[campo];
+    }
   }
 
-  if (json?.error) {
-    return json.error;
-  }
-
-  if (json?.message) {
-    return json.message;
+  if (typeof json?.codigo === "string") {
+    if (response.status === 403) return "No tienes permiso para realizar esta operación.";
+    if (response.status === 404) return "La información solicitada no está disponible.";
+    if (response.status === 409) return "La información cambió. Actualiza el expediente e inténtalo nuevamente.";
+    return "No se pudo completar la operación. Inténtalo nuevamente.";
   }
 
   if (json && typeof json === "object") {
@@ -591,7 +594,10 @@ async function parseErrorResponse(response) {
     }
   }
 
-  return text;
+  // No presentar HTML de servidores/proxies ni trazas internas como avisos de UI.
+  return response.status >= 500
+    ? "Ocurrió un problema al guardar. Comunícalo a soporte y vuelve a intentar."
+    : text;
 }
 
 async function httpInterno(

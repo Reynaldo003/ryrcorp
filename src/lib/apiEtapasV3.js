@@ -4,6 +4,41 @@
  import { api } from "./apiPruebas";
 
  export const apiEtapasV3 = {
+   agendarCitaChat({ expedienteId, fechaHoraCita, agencia, asesorPiso, comentarios, claveIdempotencia }) {
+     return api.post("/digitales/api/etapas-v3/citas-chat/", {
+       expediente_id: Number(expedienteId),
+       fecha_hora_cita: fechaHoraCita,
+       agencia, asesor_piso: asesorPiso,
+       comentarios: comentarios || "",
+       clave_idempotencia: claveIdempotencia,
+     });
+   },
+
+   clasificarHistorico({ expedienteId, etapaDestino, datos, motivo, claveIdempotencia }) {
+     return api.post("/digitales/api/etapas-v3/clasificar-historico/", {
+       expediente_id: Number(expedienteId), etapa_destino: etapaDestino, datos,
+       motivo: motivo.trim(), confirmado: true, clave_idempotencia: claveIdempotencia,
+     });
+   },
+
+   registrarContactoExterno({ expedienteId, medio, fechaContacto, observacion, claveIdempotencia }) {
+     return api.post("/digitales/api/etapas-v3/actividades/", {
+       expediente_id: Number(expedienteId), evento: "contacto_externo_confirmado",
+       clave_idempotencia: claveIdempotencia,
+       datos: { confirmado: true, medio, fecha_contacto: fechaContacto, observacion },
+     });
+   },
+
+   corregirActividad({ expedienteId, actividadId, cambios, motivo, claveIdempotencia }) {
+     return api.post("/digitales/api/etapas-v3/correcciones/", {
+       expediente_id: Number(expedienteId),
+       actividad_id: Number(actividadId),
+       cambios,
+       motivo,
+       clave_idempotencia: claveIdempotencia,
+     });
+   },
+
    consultar(expedienteId) {
      const id = Number(expedienteId);
 

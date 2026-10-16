@@ -56,11 +56,13 @@ import {
 import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
+import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import {
     AGENCIAS_DIGITALES,
 } from "../../config/asesoresGestionComercial";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
+import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
 import {
     ESTADOS_LABELS,
     ESTADOS_PROSPECTO,
@@ -79,6 +81,20 @@ import {
 import {
     useAsesoresGestionComercial,
 } from "../../hooks/useAsesoresGestionComercial";
+
+// Etiquetas de lectura para el resumen del chat. Los cambios de etapa solo los guarda V3.
+const ETAPAS_V3_NOMBRES_CHAT = Object.freeze({
+    nuevo_prospecto: "Nuevo prospecto",
+    en_seguimiento: "En seguimiento",
+    cotizacion_enviada: "Cotización enviada",
+    cita_agendada: "Cita agendada",
+    cita_asistida: "Cita asistida",
+    documentos_enviados: "Documentos recibidos",
+    autorizado_no_formalizado: "Autorizado no formalizado",
+    compra_futura: "Compra futura",
+    facturado: "Facturado",
+    lead_perdido: "Lead perdido",
+});
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -2166,6 +2182,14 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
     function handleSubmit(e) {
         e.preventDefault();
         if (!fecha || !hora || saving) return;
+        if (!agencia || !AGENCIAS_DIGITALES.some((sucursal) => sucursal === agencia)) {
+            alert("Selecciona una agencia del catálogo.");
+            return;
+        }
+        if (!asesor || !asesores.some((nombre) => nombre === asesor)) {
+            alert("Selecciona del catálogo al asesor de piso que atenderá la cita.");
+            return;
+        }
         onGuardar({ fecha, hora, nota, agencia, asesor });
     }
 
@@ -2298,7 +2322,7 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
                             Cancelar
                         </button>
 
-                        <button type="submit" disabled={saving || !fecha || !hora} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
+                        <button type="submit" disabled={saving || !fecha || !hora || !agencia || !asesor} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />}
                             {saving ? "Guardando..." : "Agendar cita"}
                         </button>
@@ -2369,7 +2393,11 @@ function BusquedaFiltrable({ opciones = [], value = "", onChange, disabled, plac
                 ref={inputRef}
                 type="text"
                 value={texto}
-                onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
+                onChange={(e) => {
+                    setTexto(e.target.value);
+                    setAbierto(true);
+                    if (normaliza(e.target.value) !== normaliza(value)) onChange("");
+                }}
                 onPointerDown={onInputPointerDown}
                 onClick={onInputClick}
                 onFocus={() => { if (!enfocadoAlClicRef.current && !cerradoFueraRef.current) setAbierto(true); }}
@@ -2571,6 +2599,7 @@ export default function DigitalesContacto() {
     const [pautasOptions, setPautasOptions] = useState(PAUTAS_ORIGEN);
     const [headerEstado, setHeaderEstado] = useState("");
     const [showProspectoPanel, setShowProspectoPanel] = useState(false);
+    const [showEtapasV3Chat, setShowEtapasV3Chat] = useState(false);
 
     // Edición del nombre del cliente desde el header del chat
     const [editingNombre, setEditingNombre] = useState(false);
@@ -2581,6 +2610,9 @@ export default function DigitalesContacto() {
     // Modal de agendar cita
     const [showCitaModal, setShowCitaModal] = useState(false);
     const [savingCita, setSavingCita] = useState(false);
+    const [revisionCitaV3, setRevisionCitaV3] = useState(0);
+    // Misma clave para reintentos de red; cambia si cambia el formulario.
+    const citaIntentoRef = useRef(null);
     const [showNuevoProspectoModal, setShowNuevoProspectoModal] = useState(false);
 
     // Asesor asignado en la tarjeta (persiste aunque el refresh borre asesor_ventas)
@@ -2698,6 +2730,55 @@ export default function DigitalesContacto() {
         if (fromList) return fromList;
         return { id: activeTel, telefono: activeTel, nombre: prospecto?.nombre || "Prospecto", agencia: prospecto?.agencia || "", linea: prospecto?.business || "", estado: prospecto?.estado || "", unread: 0, last: { text: "", time: "" } };
     }, [activeTel, chats, prospecto]);
+
+    // Solo renderizar acciones V3 para el expediente efectivamente cargado en este chat.
+    // El ID de la lista de conversaciones NO es necesariamente el ID del expediente.
+    const expedienteV3ChatId = (() => {
+        const id = Number(prospecto?.id);
+        // En GET, ProspectoSerializer expone telefono_out; telefono es write_only.
+        const telefonoExpediente = prospecto?.telefono_out || prospecto?.telefono;
+        if (!Number.isSafeInteger(id) || id <= 0 || !activeTel || !telefonoExpediente) return null;
+        return normalizaTelefonoMx(telefonoExpediente) === normalizaTelefonoMx(activeTel) ? id : null;
+    })();
+    // El componente V3 espera nombres de escritura; el GET devuelve *_out.
+    // useMemo mantiene la referencia estable y evita recargas en cada render.
+    const prospectoV3Chat = useMemo(() => {
+        if (!prospecto || !expedienteV3ChatId) return null;
+        return {
+            ...prospecto,
+            nombre: prospecto.nombre_out || prospecto.nombre || "",
+            telefono: prospecto.telefono_out || prospecto.telefono || "",
+            correo: prospecto.correo_out || prospecto.correo || "",
+        };
+    }, [prospecto, expedienteV3ChatId]);
+    const etapaV3Chat = expedienteV3ChatId ? prospecto?.etapa_comercial_v3 : null;
+    // Nueva cita solo tras cotización y antes de registrar una cita.
+    // Reagendar una cita existente requiere su flujo específico, no crear otra desde el chat.
+    const puedeAgendarChatV3 = Boolean(expedienteV3ChatId && etapaV3Chat === "cotizacion_enviada");
+    const citaChatBloqueo = !expedienteV3ChatId
+        ? "Primero identifica el expediente comercial de este chat."
+        : !etapaV3Chat
+          ? "Primero clasifica este prospecto histórico."
+          : etapaV3Chat === "cita_agendada"
+            ? "Este prospecto ya tiene una cita agendada; para cambios utiliza la reprogramación, no otra cita nueva."
+            : etapaV3Chat === "cotizacion_enviada"
+              ? ""
+              : ["nuevo_prospecto", "en_seguimiento"].includes(etapaV3Chat)
+                ? "Para agendar una cita nueva, primero registra la cotización enviada."
+                : "Esta etapa comercial no permite crear otra cita nueva desde el chat.";
+    // El bloque heredado no controla las etapas. Se muestra al alcanzar documentos,
+    // autorización o facturación; compra futura/lead perdido no implican esos pasos.
+    const mostrarCreditoFacturacionV3 = expedienteV3ChatId && [
+        "documentos_enviados", "autorizado_no_formalizado", "facturado",
+    ].includes(etapaV3Chat);
+    const tieneFinanciamiento = ["credito", "arrendamiento"].includes(
+        String(quickEditDraft.forma_pago || prospecto?.forma_pago || "").toLowerCase()
+    );
+    useEffect(() => {
+        setShowEtapasV3Chat(false);
+        setShowCitaModal(false);
+        citaIntentoRef.current = null;
+    }, [activeTel]);
 
     const pautaOrigenMarker = useMemo(() => {
         const mensajesOrdenados = applyReactionEvents(mensajes);
@@ -4750,108 +4831,50 @@ export default function DigitalesContacto() {
         if (e.key === "Escape") { e.preventDefault(); cancelarEdicionNombre(); }
     }
 
-    // ── Agendar cita desde el chat ────────────────────────────────────────────
-    async function llamarCrearCita(payload) {
-        if (typeof apiCitas?.create === "function") return apiCitas.create(payload);
-        if (typeof api.digitalesCrearCita === "function") return api.digitalesCrearCita(payload);
-        if (typeof api.crearCita === "function") return api.crearCita(payload);
-        if (typeof api.post === "function") return api.post("/citas/crear/", payload);
-        throw new Error("Falta agregar api.digitalesCrearCita en src/lib/apiPruebas.js");
-    }
-
+    // ── Cita + actividad V3 en una única transacción del backend ──────────
     async function guardarCita({ fecha, hora, nota, agencia, asesor }) {
         if (!activeTel || savingCita) return;
-
+        if (!puedeAgendarChatV3 || !expedienteV3ChatId) {
+            alert(citaChatBloqueo || "Este expediente no permite agendar cita.");
+            return;
+        }
+        const agenciaFinal = String(agencia || "").trim();
+        const asesorPiso = String(asesor || "").trim();
+        if (!fecha || !hora || !agenciaFinal || !asesorPiso) {
+            alert("Selecciona fecha, hora, agencia y asesor de piso que atenderá la cita.");
+            return;
+        }
+        const fechaHoraCita = `${fecha}T${hora}:00`;
+        const firma = JSON.stringify([expedienteV3ChatId, fechaHoraCita, agenciaFinal, asesorPiso, nota || ""]);
+        if (!citaIntentoRef.current || citaIntentoRef.current.firma !== firma) {
+            citaIntentoRef.current = { firma, clave: `cita-chat-v3-${crypto.randomUUID()}` };
+        }
+        const expedienteAlGuardar = expedienteV3ChatId;
+        const telefonoAlGuardar = activeTel;
         setSavingCita(true);
-
         try {
-            if (!fecha || !hora) {
-                throw new Error("Selecciona fecha y hora de la cita.");
-            }
-
-            const agenciaFinal = String(agencia || prospecto?.agencia || activeChat?.agencia || "").trim();
-            const asesorPiso = String(asesor || asesorAsignado || prospecto?.asesor_ventas || "").trim();
-            const asesorDigital = String(
-                prospecto?.asesor_digital ||
-                activeChat?.asesor_digital ||
-                obtenerNombreAsesorSesion(numeroAsesorActivo, user) ||
-                ""
-            ).trim();
-
-            if (!asesorDigital) {
-                throw new Error("La cita debe tener un asesor digital.");
-            }
-
-            const fechaHoraCita = `${fecha}T${hora}:00`;
-            const nombre = activeChat?.nombre || prospecto?.nombre || "Prospecto";
-
-            await apiCitas.create({
-                ...(prospecto?.cliente_id ? { cliente_id: prospecto.cliente_id } : {}),
-                nombre,
-                telefono: activeTel,
-                correo: prospecto?.correo || "",
-                auto_interes: prospecto?.auto_interes || "",
+            await apiEtapasV3.agendarCitaChat({
+                expedienteId: expedienteAlGuardar,
+                fechaHoraCita,
                 agencia: agenciaFinal,
-                fecha_hora_cita: fechaHoraCita,
-                asistencia: false,
-                tipo_cita: "Digital",
-                motivo_cita: "Digital",
-                tipo_venta: "",
-                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || prospecto?.canal_contacto || "",
-                asesor_digital: asesorDigital,
-                asesor_piso: asesorPiso,
+                asesorPiso,
                 comentarios: nota || "",
+                claveIdempotencia: citaIntentoRef.current.clave,
             });
-
-            if (prospecto?.id) {
-                try {
-                    await api.digitalesPatchProspecto(prospecto.id, {
-                        estado: "Cita Programada",
-                        agencia: agenciaFinal,
-                        asesor_digital: asesorDigital,
-                        asesor_ventas: asesorPiso,
-                        numero_asesor: numeroAsesorActivo || "",
-                    });
-                } catch (errorPatch) {
-                    console.error("La cita se creó, pero no se pudo actualizar el prospecto:", errorPatch);
-                }
-            }
-
-            setProspecto((prev) => prev ? {
-                ...prev,
-                estado: "Cita Programada",
-                agencia: agenciaFinal || prev.agencia || "",
-                asesor_digital: asesorDigital || prev.asesor_digital || "",
-                asesor_ventas: asesorPiso || prev.asesor_ventas || "",
-                asesor_piso: asesorPiso || prev.asesor_piso || "",
-                ultima_cita_agendada: fechaHoraCita,
-            } : prev);
-
-            setAsesorAsignado(asesorPiso);
-
-            setChats((prev) => prev.map((chat) =>
-                chat.telefono === activeTel
-                    ? {
-                        ...chat,
-                        estado: "Cita Programada",
-                        agencia: agenciaFinal || chat.agencia || "",
-                        asesor_digital: asesorDigital || chat.asesor_digital || "",
-                    }
-                    : chat
-            ));
-
-            mensajesCacheRef.current.delete(activeTel);
-
-            await refreshActiveChat(activeTel).catch(() => { });
-
+            citaIntentoRef.current = null;
             setShowCitaModal(false);
-
-            alert(
-                `Cita agendada para ${formatearFechaConDia(`${fecha}T00:00:00`)} a las ${hora}.`
-            );
+            if (activeTelRef.current === telefonoAlGuardar) {
+                setRevisionCitaV3((n) => n + 1);
+                setAsesorAsignado(asesorPiso);
+                await refreshActiveChat(telefonoAlGuardar).catch((error) => {
+                    console.error("Cita guardada en V3; falló la recarga del chat:", error);
+                });
+            }
+            alert(`Cita agendada y vinculada al expediente para ${formatearFechaConDia(`${fecha}T00:00:00`)} a las ${hora}.`);
         } catch (error) {
-            console.error("Error creando cita digital:", error);
-            alert(`No se pudo agendar la cita: ${error?.message || "Error desconocido."}`);
+            console.error("No se pudo agendar y vincular la cita V3:", error);
+            const detalle = error?.response?.data?.detalle || error?.data?.detalle || error?.message;
+            alert(`No se guardó la cita: ${detalle || "Verifica los datos y vuelve a intentar."}`);
         } finally {
             setSavingCita(false);
         }
@@ -5022,39 +5045,10 @@ export default function DigitalesContacto() {
     }
 
     async function saveQuickEdit() {
-        if (!prospecto?.id || !activeTel) return;
-
-        const estadoOriginal = String(quickEditDraft.estado || "").trim();
-        const estadoNormalizado = normalizeText(estadoOriginal);
-        const motivoDescalificacion = String(
-            quickEditDraft.motivo_descalificacion || ""
-        ).trim();
-
-        if (
-            estadoNormalizado === "descalificado" &&
-            !motivoDescalificacion
-        ) {
+        if (!expedienteV3ChatId || !activeTel) {
+            alert("El expediente de este chat todavía no se ha identificado. Selecciona de nuevo la conversación.");
             return;
         }
-
-        // Reglas automáticas de bandeja:
-        // - VIN facturado + estatus "entregado" -> Entregado (prioridad).
-        // - Cita con estatus "No asistió" + contactado + Calificación Rápida llena -> No asistió (No Show).
-        // - Plazo de 3 a 6 meses o más -> Seguimiento.
-        const estado = estadoAutomaticoBandeja({
-            plazo: quickEditDraft.plazo_compra,
-            vinFacturado: quickEditDraft.vin_facturado,
-            vinEstatus: quickEditDraft.vin_estatus_entrega,
-            folioSolicitudCredito: quickEditDraft.folio_solicitud_credito,
-            evidencias: prospecto?.evidencias,
-            calificacionRapidaLlena: tieneCalificacionRapida(quickEditDraft),
-            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-            citaAsistio: citaEsAsistida(prospecto?.cita),
-            engancheMonto: quickEditDraft.enganche_monto,
-            presupuestoMensual: quickEditDraft.presupuesto_mensual,
-            idCotizacion: quickEditDraft.id_cotizacion,
-            estadoBase: estadoOriginal,
-        });
 
         setSavingQuickEdit(true);
 
@@ -5062,13 +5056,6 @@ export default function DigitalesContacto() {
             const payload = {
                 nombre: quickEditDraft.nombre || "",
                 auto_interes: quickEditDraft.auto_interes || "",
-                estado,
-
-                motivo_descalificacion:
-                    estado.toLowerCase() === "descalificado"
-                        ? motivoDescalificacion
-                        : "",
-
                 canal_contacto: quickEditDraft.canal_contacto || "",
                 comentarios: quickEditDraft.comentarios || "",
 
@@ -5094,20 +5081,22 @@ export default function DigitalesContacto() {
                 comprobacion_ingresos:
                     quickEditDraft.comprobacion_ingresos || "",
 
-                id_cotizacion: quickEditDraft.id_cotizacion || "",
-                folio_solicitud_credito:
-                    quickEditDraft.folio_solicitud_credito || "",
-                solicitud_credito_estado:
-                    quickEditDraft.solicitud_credito_estado || "",
-                vin_facturado: String(
-                    quickEditDraft.vin_facturado || ""
-                )
-                    .trim()
-                    .toUpperCase(),
-                vin_estatus_entrega:
-                    quickEditDraft.vin_estatus_entrega || "",
+                // Los campos antiguos de crédito/facturación no se guardan antes
+                // de documentos; tampoco se borran accidentalmente al guardar perfil.
                 numero_asesor: numeroAsesorActivo || "",
             };
+
+            if (mostrarCreditoFacturacionV3) {
+                Object.assign(payload, {
+                    id_cotizacion: quickEditDraft.id_cotizacion || "",
+                    ...(tieneFinanciamiento ? {
+                        folio_solicitud_credito: quickEditDraft.folio_solicitud_credito || "",
+                        solicitud_credito_estado: quickEditDraft.solicitud_credito_estado || "",
+                    } : {}),
+                    vin_facturado: String(quickEditDraft.vin_facturado || "").trim().toUpperCase(),
+                    vin_estatus_entrega: quickEditDraft.vin_estatus_entrega || "",
+                });
+            }
 
             const pautaLimpia = String(
                 quickEditDraft.pauta || ""
@@ -5118,7 +5107,7 @@ export default function DigitalesContacto() {
             }
 
             await api.digitalesPatchProspecto(
-                prospecto.id,
+                expedienteV3ChatId,
                 payload
             );
 
@@ -5126,7 +5115,7 @@ export default function DigitalesContacto() {
         } catch (error) {
             const mensaje =
                 error?.status === 404
-                    ? "No se encontró el expediente digital relacionado. Actualiza la página o selecciona nuevamente el registro."
+                    ? "El expediente ya no está disponible para edición en esta sesión o línea. Comprueba la asignación y actualiza el chat."
                     : error?.message || "No se pudo guardar la información.";
             alert(mensaje);
 
@@ -5741,12 +5730,14 @@ export default function DigitalesContacto() {
         window.open(`https://wa.me/${activeTel}`, "_blank");
     };
 
+    // El perfil es un formulario auxiliar; ni etapas V3 ni crédito/facturación
+    // se consideran requisitos para su porcentaje de completitud.
     const perfilProspectoCampos = [
         quickEditDraft.auto_interes,
-        quickEditDraft.estado,
         quickEditDraft.canal_contacto,
-        quickEditDraft.enganche_monto,
-        quickEditDraft.presupuesto_mensual,
+        ...(quickEditDraft.forma_pago === "credito" || quickEditDraft.forma_pago === "arrendamiento"
+            ? [quickEditDraft.enganche_monto, quickEditDraft.presupuesto_mensual]
+            : []),
         quickEditDraft.buro_estado,
         quickEditDraft.forma_pago,
         quickEditDraft.tipo_cliente,
@@ -5754,11 +5745,6 @@ export default function DigitalesContacto() {
         quickEditDraft.uso_vehiculo,
         quickEditDraft.comprobacion_ingresos,
         quickEditDraft.comentarios,
-        quickEditDraft.id_cotizacion,
-        quickEditDraft.folio_solicitud_credito,
-        quickEditDraft.solicitud_credito_estado,
-        quickEditDraft.vin_facturado,
-        quickEditDraft.vin_estatus_entrega,
     ];
 
     const perfilProspectoCompletados = perfilProspectoCampos.filter(
@@ -5782,8 +5768,7 @@ export default function DigitalesContacto() {
 
     const creditoFacturacionPendientes = [
         quickEditDraft.id_cotizacion,
-        quickEditDraft.folio_solicitud_credito,
-        quickEditDraft.solicitud_credito_estado,
+        ...(tieneFinanciamiento ? [quickEditDraft.folio_solicitud_credito, quickEditDraft.solicitud_credito_estado] : []),
         quickEditDraft.vin_facturado,
         quickEditDraft.vin_estatus_entrega,
     ].filter((value) => String(value ?? "").trim() === "").length;
@@ -6150,26 +6135,11 @@ export default function DigitalesContacto() {
                                                 </button>
                                             )}
                                         </span>
-                                        {/* Estado prospecto */}
-                                        {activeTel &&
-                                            String(headerEstado || "").toLowerCase() === "descalificado" ? (
-                                            <select
-                                                value={
-                                                    quickEditDraft.motivo_descalificacion || ""
-                                                }
-                                                onChange={(e) =>
-                                                    saveHeaderMotivo(e.target.value)
-                                                }
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="h-6 min-w-0 max-w-[180px] rounded-md border border-red-200 bg-red-50 px-1.5 text-[11px] font-semibold text-red-700 outline-none focus:border-red-400"
-                                                title="Motivo de descalificación"
-                                            >
-                                                {renderOptionsConValorActual(
-                                                    MOTIVOS_DESCALIFICACION,
-                                                    quickEditDraft.motivo_descalificacion,
-                                                    "Selecciona el motivo…"
-                                                )}
-                                            </select>
+                                        {/* Motivos históricos, sin editor paralelo de estado V3. */}
+                                        {activeTel && String(headerEstado || "").toLowerCase() === "descalificado" && quickEditDraft.motivo_descalificacion ? (
+                                            <span className="max-w-[150px] truncate text-[10px] font-semibold text-red-600" title={quickEditDraft.motivo_descalificacion}>
+                                                {quickEditDraft.motivo_descalificacion}
+                                            </span>
                                         ) : null}
 
                                         {/* Botón de acción: agendar cita */}
@@ -6186,9 +6156,9 @@ export default function DigitalesContacto() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={(e) => { e.stopPropagation(); setShowCitaModal(true); }}
-                                                disabled={!activeTel}
-                                                title="Agendar cita"
+                                                onClick={(e) => { e.stopPropagation(); if (puedeAgendarChatV3) setShowCitaModal(true); }}
+                                                disabled={!puedeAgendarChatV3}
+                                                title={puedeAgendarChatV3 ? "Agendar cita con asesor de piso" : citaChatBloqueo}
                                                 aria-label="Agendar cita"
                                                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#DBE7FF] text-[#1746D1] shadow-sm transition hover:bg-[#c9dcff] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                                             >
@@ -6995,6 +6965,62 @@ export default function DigitalesContacto() {
                                     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
                                         <div className="space-y-4">
 
+                                            {/* Etapas V3 dentro del chat: misma API, validaciones y auditoría.
+                                                El formulario antiguo de perfil permanece intacto en esta fase. */}
+                                            <div className="min-w-0 overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowEtapasV3Chat((abierto) => !abierto)}
+                                                    aria-expanded={showEtapasV3Chat}
+                                                    aria-controls="etapas-v3-panel-chat"
+                                                    className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-[#131E5C]/[0.03]"
+                                                >
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
+                                                            <Activity className="h-4 w-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-black text-[#131E5C]">Etapas comerciales</div>
+                                                            <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                                                                {expedienteV3ChatId
+                                                                    ? ETAPAS_V3_NOMBRES_CHAT[etapaV3Chat] || "Pendiente de clasificación"
+                                                                    : loadingChat ? "Cargando prospecto…" : "Sin expediente identificado"}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#131E5C]/10 bg-[#131E5C]/[0.05] px-2 py-1.5 text-[11px] font-extrabold text-[#131E5C]">
+                                                        {showEtapasV3Chat ? "Ocultar" : "Gestionar"}
+                                                        <ChevronDown className={cls("h-3.5 w-3.5 transition-transform", showEtapasV3Chat && "rotate-180")} />
+                                                    </span>
+                                                </button>
+                                                {showEtapasV3Chat ? (
+                                                    <div id="etapas-v3-panel-chat" className="min-w-0 border-t border-slate-100 px-3 py-3">
+                                                        {expedienteV3ChatId ? (
+                                                            <EtapasComercialesV3Panel
+                                                                key={`${expedienteV3ChatId}:${revisionCitaV3}`}
+                                                                expedienteId={expedienteV3ChatId}
+                                                                prospecto={prospectoV3Chat}
+                                                                enChat
+                                                                onAgendarCitaChat={() => {
+                                                                    if (puedeAgendarChatV3) setShowCitaModal(true);
+                                                                    else alert(citaChatBloqueo);
+                                                                }}
+                                                                onActualizado={() => {
+                                                                    // Refrescar solo los datos del chat abierto; V3 mantiene su propia consulta.
+                                                                    refreshActiveChat(activeTel).catch((error) => {
+                                                                        console.error("No se pudo refrescar el prospecto tras actualizar V3:", error);
+                                                                    });
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <p className="rounded-lg bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-800">
+                                                                Este chat aún no tiene un expediente cargado que coincida con su teléfono. Identifica el expediente para continuar.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+
                                             {/* Tarjeta del cliente: movida desde la zona de conversaciones */}
                                             <div className="rounded-2xl border border-[#131E5C]/10 bg-white p-4 shadow-sm">
                                                 <div className="mb-4 flex items-center gap-3">
@@ -7043,18 +7069,11 @@ export default function DigitalesContacto() {
                                                 </div>
 
                                                 <div className="space-y-3">
-                                                    <label className="block">
-                                                        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">
-                                                            Estado
-                                                        </span>
-                                                        <select
-                                                            value={headerEstado}
-                                                            onChange={(e) => saveHeaderEstado(e.target.value)}
-                                                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                        >
-                                                            {renderOptionsConValorActual(ESTADOS_HEADER, headerEstado, "Sin estado")}
-                                                        </select>
-                                                    </label>
+                                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                                                        <div className="text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado histórico · solo lectura</div>
+                                                        <div className="mt-1 text-sm font-bold text-slate-700">{headerEstado || "Sin estado"}</div>
+                                                        <p className="mt-1 text-[10px] text-slate-500">Las etapas y el descarte se gestionan desde Etapas comerciales.</p>
+                                                    </div>
 
                                                     {String(headerEstado || "").trim().toLowerCase() === "cita programada" ? (
                                                         <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2.5">
@@ -7068,19 +7087,6 @@ export default function DigitalesContacto() {
                                                                     : "Sin fecha registrada"}
                                                             </div>
                                                         </div>
-                                                    ) : null}
-
-                                                    {String(headerEstado || "").toLowerCase() === "descalificado" ? (
-                                                        <label className="block">
-                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-red-600">
-                                                                Motivo de descalificación
-                                                            </span>
-                                                            <MotivoDescalificacionPicker
-                                                                value={quickEditDraft.motivo_descalificacion || ""}
-                                                                onChange={(motivo) => saveHeaderMotivo(motivo)}
-                                                                invalid={!quickEditDraft.motivo_descalificacion}
-                                                            />
-                                                        </label>
                                                     ) : null}
 
                                                     <label className="block">
@@ -7117,13 +7123,19 @@ export default function DigitalesContacto() {
 
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowCitaModal(true)}
-                                                    disabled={!activeTel}
+                                                    onClick={() => { if (puedeAgendarChatV3) setShowCitaModal(true); }}
+                                                    disabled={!puedeAgendarChatV3}
+                                                    title={puedeAgendarChatV3 ? "Agendar cita con asesor de piso" : citaChatBloqueo}
                                                     className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#0f184d] disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     <CalendarPlus className="h-4 w-4" />
                                                     Agendar cita
                                                 </button>
+                                                {!puedeAgendarChatV3 ? (
+                                                    <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600">
+                                                        {citaChatBloqueo}
+                                                    </p>
+                                                ) : null}
 
                                                 <div className="mt-3 grid grid-cols-4 gap-2">
                                                     {!isDirectChatMode ? (
@@ -7384,7 +7396,8 @@ export default function DigitalesContacto() {
                                                 </div>
                                             </div>
 
-                                            {/* Crédito y facturación: mismos campos que "Perfil comercial y financiero" en editar prospecto */}
+                                            {/* Los datos auxiliares de crédito/facturación aparecen después de documentos V3. */}
+                                            {mostrarCreditoFacturacionV3 ? (
                                             <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
                                                 <div className="flex items-center justify-between gap-3 px-4 py-3.5">
                                                     <div className="flex min-w-0 items-center gap-2.5">
@@ -7419,6 +7432,8 @@ export default function DigitalesContacto() {
                                                             />
                                                         </label>
 
+                                                        {tieneFinanciamiento ? (
+                                                            <>
                                                         <label className="block">
                                                             <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Folio solicitud de crédito</span>
                                                             <input
@@ -7441,6 +7456,15 @@ export default function DigitalesContacto() {
                                                                 ))}
                                                             </select>
                                                         </label>
+
+                                                            </>
+                                                        ) : (
+                                                            <p className="rounded-lg bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-900">
+                                                                {quickEditDraft.forma_pago === "contado"
+                                                                    ? "Venta de contado: no se solicitan folios ni autorizaciones de crédito."
+                                                                    : "Selecciona Crédito o Arrendamiento en Completar perfil para mostrar los datos de financiamiento."}
+                                                            </p>
+                                                        )}
 
                                                         <label className="block">
                                                             <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
@@ -7516,6 +7540,8 @@ export default function DigitalesContacto() {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            ) : null}
 
                                             {/* Información complementaria: existe, pero no abruma */}
                                             <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">

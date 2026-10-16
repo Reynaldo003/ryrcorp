@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Activity, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldAlert, FileCheck2 } from "lucide-react";
 import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { apiCitas } from "../../lib/apiCitas";
+import "./EtapasComercialesV3Panel.chat.css";
 
 const ETAPAS = [
   ["nuevo_prospecto", "Nuevo prospecto", "Automática"],
@@ -57,6 +58,166 @@ const EVENTOS = {
   correccion: "Corrección de actividad",
 };
 
+// Una sola regularización para expedientes antiguos SIN etapa V3.
+// El formulario nunca da libertad de cambiar una etapa ya iniciada.
+const ETAPAS_HISTORICAS = ETAPAS.filter(([clave]) => clave !== "facturado");
+function ClasificacionHistoricaForm({ expedienteId, estadoAnterior, agencia, onActualizado }) {
+  const [etapa, setEtapa] = useState("");
+  const [datos, setDatos] = useState({});
+  const [motivo, setMotivo] = useState("");
+  const [confirmado, setConfirmado] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const intentoRef = useRef(null);
+  const hoy = fechaHoyMx();
+
+  const actualizar = (clave, valor) => {
+    setDatos((anterior) => ({ ...anterior, [clave]: valor }));
+    intentoRef.current = null;
+    setError("");
+  };
+  const cambiarEtapa = (valor) => {
+    setEtapa(valor);
+    setDatos({});
+    setConfirmado(false);
+    intentoRef.current = null;
+    setError("");
+  };
+  const input = (clave, etiqueta, tipo = "text", extra = {}) => (
+    <label key={clave} className="grid gap-1 text-xs font-bold text-[#131E5C]">
+      {etiqueta}
+      <input type={tipo} value={datos[clave] || ""} onChange={(e) => actualizar(clave, e.target.value)}
+        max={tipo === "date" && !["fecha_prevista_compra", "proximo_contacto"].includes(clave) ? hoy : undefined}
+        maxLength={extra.maxLength || 200}
+        className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" />
+    </label>
+  );
+  async function guardar(evento) {
+    evento.preventDefault();
+    if (guardando) return;
+    if (!etapa || !confirmado || motivo.trim().length < 10) {
+      setError("Selecciona la etapa, indica el motivo (mínimo 10 caracteres) y confirma la información.");
+      return;
+    }
+    let datosEnviar = {};
+    const valor = (clave) => String(datos[clave] || "").trim();
+    if (etapa === "en_seguimiento") {
+      datosEnviar = { medio: valor("medio"), fecha_contacto: valor("fecha_contacto"), observacion: valor("observacion") };
+    } else if (etapa === "cotizacion_enviada") {
+      datosEnviar = { fecha_envio: valor("fecha_envio"), vehiculo: valor("vehiculo"), referencia: valor("referencia") };
+    } else if (etapa === "cita_agendada") {
+      datosEnviar = { fecha_hora_cita: valor("fecha_hora_cita") };
+    } else if (etapa === "cita_asistida") {
+      datosEnviar = { fecha_hora_cita: valor("fecha_hora_cita"), fecha_asistencia_real: valor("fecha_asistencia_real") };
+    } else if (etapa === "documentos_enviados") {
+      datosEnviar = { fecha_recepcion: valor("fecha_recepcion"), documentos: valor("documentos").split("\n").map((x) => x.trim()).filter(Boolean) };
+    } else if (etapa === "autorizado_no_formalizado") {
+      datosEnviar = { fecha_autorizacion: valor("fecha_autorizacion"), referencia_autorizacion: valor("referencia_autorizacion") };
+    } else if (etapa === "compra_futura") {
+      datosEnviar = { fecha_prevista_compra: valor("fecha_prevista_compra"), proximo_contacto: valor("proximo_contacto"), observacion: valor("observacion") };
+    } else if (etapa === "lead_perdido") {
+      datosEnviar = { motivo: valor("motivo"), detalle_motivo: valor("detalle_motivo") };
+    }
+    if (!intentoRef.current) {
+      intentoRef.current = `clasificacion:${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+    }
+    setGuardando(true);
+    setError("");
+    try {
+      await apiEtapasV3.clasificarHistorico({ expedienteId, etapaDestino: etapa,
+        datos: datosEnviar, motivo, claveIdempotencia: intentoRef.current });
+      onActualizado?.();
+    } catch (err) {
+      setError(err?.message || "No se pudo clasificar el expediente histórico.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+  return (
+    <form onSubmit={guardar} className="mb-3 space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+      <div className="font-extrabold text-[#131E5C]">Clasificar prospecto histórico</div>
+      <div className="text-xs text-slate-700">Estado anterior: <strong>{estadoAnterior || "Sin estado"}</strong> · {agencia}</div>
+      <p className="text-xs text-slate-600">Selecciona una sola vez la situación real y registra los datos correspondientes. No se generan citas, cotizaciones ni ventas ficticias.</p>
+      <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Situación comercial confirmada
+        <select value={etapa} onChange={(e) => cambiarEtapa(e.target.value)} disabled={guardando}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal">
+          <option value="">— Seleccionar etapa —</option>
+          {ETAPAS_HISTORICAS.filter(([clave]) =>
+            estadoAnterior?.trim().toLowerCase() !== "descalificado" || clave === "lead_perdido"
+          ).map(([clave, etiqueta]) => <option key={clave} value={clave}>{etiqueta}</option>)}
+        </select>
+      </label>
+      {etapa === "nuevo_prospecto" ? <p className="text-xs text-amber-800">Confirma que aún no ha existido una atención comercial real.</p> : null}
+      {etapa === "en_seguimiento" ? <>
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Medio de atención real
+          <select value={datos.medio || ""} onChange={(e) => actualizar("medio", e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal">
+            <option value="">— Selecciona el medio —</option>
+            <option value="llamada">Llamada telefónica</option><option value="facebook">Facebook / Messenger</option>
+            <option value="presencial">Presencial</option><option value="whatsapp_externo">WhatsApp externo</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+        {input("fecha_contacto", "Fecha real de atención", "date")}
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Resumen del contacto
+          <textarea value={datos.observacion || ""} onChange={(e) => actualizar("observacion", e.target.value)} maxLength={600} rows={2} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" />
+        </label>
+      </> : null}
+      {etapa === "cotizacion_enviada" ? <>
+        {input("fecha_envio", "Fecha de envío", "date")}
+        {input("vehiculo", "Vehículo cotizado")}{input("referencia", "Referencia o folio de cotización")}
+      </> : null}
+      {["cita_agendada", "cita_asistida"].includes(etapa) ? <>
+        {input("fecha_hora_cita", "Fecha y hora programadas", "datetime-local")}
+        <div className="text-xs text-slate-700">Sucursal del expediente: <strong>{agencia}</strong></div>
+        {etapa === "cita_asistida" ? input("fecha_asistencia_real", "Fecha REAL en que asistió", "date") : null}
+      </> : null}
+      {etapa === "documentos_enviados" ? <>
+        {input("fecha_recepcion", "Fecha de recepción", "date")}
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Documentos recibidos (uno por línea)
+          <textarea value={datos.documentos || ""} onChange={(e) => actualizar("documentos", e.target.value)} rows={3} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" />
+        </label>
+      </> : null}
+      {etapa === "autorizado_no_formalizado" ? <>
+        {input("fecha_autorizacion", "Fecha de autorización", "date")}
+        {input("referencia_autorizacion", "Referencia de autorización (opcional)")}
+      </> : null}
+      {etapa === "compra_futura" ? <>
+        {input("fecha_prevista_compra", "Fecha prevista de compra", "date")}
+        {input("proximo_contacto", "Fecha de próximo contacto", "date")}
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Observación de compra futura
+          <textarea value={datos.observacion || ""} onChange={(e) => actualizar("observacion", e.target.value)} rows={2} maxLength={600} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" />
+        </label>
+      </> : null}
+      {etapa === "lead_perdido" ? <>
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Motivo de descarte
+          <select value={datos.motivo || ""} onChange={(e) => actualizar("motivo", e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal">
+            <option value="">— Seleccionar motivo —</option>
+            {MOTIVOS_LEAD_PERDIDO.map(([clave, nombre]) => <option key={clave} value={clave}>{nombre}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Detalles del motivo {datos.motivo === "otro_motivo" ? "(obligatorio)" : "(opcional)"}
+          <textarea value={datos.detalle_motivo || ""} onChange={(e) => actualizar("detalle_motivo", e.target.value)} rows={2} maxLength={1000} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" />
+        </label>
+      </> : null}
+      {etapa ? <>
+        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Motivo de clasificación (obligatorio)
+          <textarea value={motivo} onChange={(e) => { setMotivo(e.target.value); intentoRef.current = null; }} rows={2} maxLength={500}
+            placeholder="Por qué la etapa elegida corresponde a la situación real del prospecto" className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" />
+        </label>
+        <label className="flex items-start gap-2 text-xs text-slate-800">
+          <input type="checkbox" checked={confirmado} onChange={(e) => setConfirmado(e.target.checked)} />
+          Confirmo que los datos corresponden al expediente y a la atención real del cliente.
+        </label>
+        {error ? <p role="alert" className="text-xs font-semibold text-red-700">{error}</p> : null}
+        <button type="submit" disabled={guardando || !confirmado} className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+          {guardando ? "Guardando…" : "Confirmar clasificación histórica"}
+        </button>
+      </> : null}
+      <p className="text-[11px] text-amber-800">Operación única y auditada. No permite retrocesos ni escoger Facturado manualmente.</p>
+    </form>
+  );
+}
+
 function fechaCorta(fecha) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || "")) return "Sin fecha efectiva";
   const [anio, mes, dia] = fecha.split("-");
@@ -77,7 +238,7 @@ function nuevaClaveIdempotencia() {
   return `cotizacion:${Date.now()}:${Math.random().toString(36).slice(2, 14)}`;
 }
 
-export default function EtapasComercialesV3Panel({ expedienteId, prospecto = null, onActualizado }) {
+export default function EtapasComercialesV3Panel({ expedienteId, prospecto = null, onActualizado, compact = false, onAbrirEdicion, enChat = false, onAgendarCitaChat }) {
   const [revision, setRevision] = useState(0);
   const [resultado, setResultado] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -92,7 +253,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const [avisoRegistro, setAvisoRegistro] = useState("");
   const intentoRef = useRef(null);
   const [mostrarFormularioCita, setMostrarFormularioCita] = useState(false);
-  const [modoCita, setModoCita] = useState("crear");
+  const [modoCita, setModoCita] = useState(enChat ? "existente" : "crear");
   const [nuevaCitaFecha, setNuevaCitaFecha] = useState("");
   const [nuevaCitaHora, setNuevaCitaHora] = useState("12:00");
   const [nuevaCitaAgencia, setNuevaCitaAgencia] = useState("");
@@ -110,6 +271,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const [mostrarAsistencia, setMostrarAsistencia] = useState(false);
   const [citaAsistenciaTexto, setCitaAsistenciaTexto] = useState("");
   const [fechaAsistencia, setFechaAsistencia] = useState("");
+  const [fechaProgramadaHistorica, setFechaProgramadaHistorica] = useState("");
+  const [horaProgramadaHistorica, setHoraProgramadaHistorica] = useState("12:00");
   const [confirmarAsistencia, setConfirmarAsistencia] = useState(false);
   const [guardandoAsistencia, setGuardandoAsistencia] = useState(false);
   const [errorAsistencia, setErrorAsistencia] = useState("");
@@ -159,6 +322,21 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const [errorPerdida, setErrorPerdida] = useState("");
   const [avisoPerdida, setAvisoPerdida] = useState("");
   const intentoPerdidaRef = useRef(null);
+  // Corrección auditada de una actividad concreta, sin selector libre de etapa.
+  const [mostrarContactoExterno, setMostrarContactoExterno] = useState(false);
+  const [medioContacto, setMedioContacto] = useState("llamada");
+  const [fechaContacto, setFechaContacto] = useState(fechaHoyMx);
+  const [notaContacto, setNotaContacto] = useState("");
+  const [confirmarContacto, setConfirmarContacto] = useState(false);
+  const [guardandoContacto, setGuardandoContacto] = useState(false);
+  const [errorContacto, setErrorContacto] = useState("");
+  const intentoContactoRef = useRef(null);
+  const [actividadCorreccion, setActividadCorreccion] = useState(null);
+  const [camposCorreccion, setCamposCorreccion] = useState({});
+  const [motivoCorreccion, setMotivoCorreccion] = useState("");
+  const [errorCorreccion, setErrorCorreccion] = useState("");
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
+  const intentoCorreccionRef = useRef(null);
 
   useEffect(() => {
     setMostrarFormulario(false);
@@ -188,6 +366,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setMostrarAsistencia(false);
     setCitaAsistenciaTexto("");
     setFechaAsistencia("");
+    setFechaProgramadaHistorica("");
+    setHoraProgramadaHistorica("12:00");
     setConfirmarAsistencia(false);
     setErrorAsistencia("");
     setAvisoAsistencia("");
@@ -227,6 +407,18 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setErrorPerdida("");
     setAvisoPerdida("");
     intentoPerdidaRef.current = null;
+    setMostrarContactoExterno(false);
+    setMedioContacto("llamada");
+    setFechaContacto(fechaHoyMx());
+    setNotaContacto("");
+    setConfirmarContacto(false);
+    setErrorContacto("");
+    intentoContactoRef.current = null;
+    setActividadCorreccion(null);
+    setCamposCorreccion({});
+    setMotivoCorreccion("");
+    setErrorCorreccion("");
+    intentoCorreccionRef.current = null;
   }, [expedienteId]);
 
 
@@ -254,6 +446,28 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
 
   const actual = resultado?.etapa_comercial_v3 ?? null;
   const historial = Array.isArray(resultado?.actividades) ? resultado.actividades : [];
+  const citasDisponibles = Array.isArray(resultado?.citas_disponibles)
+    ? resultado.citas_disponibles.filter((c) => !c.asistencia && [null, "pendiente", ""].includes(c.estado_asistencia))
+    : [];
+  const esCitaHistorica = Boolean(resultado?.homologacion_cita_historica);
+  // Solamente las citas vinculadas al expediente pueden confirmar asistencia.
+  // El resto sigue visible exclusivamente en «Usar cita ya existente», donde
+  // puede vincularse mediante un evento distinto y con autorización del backend.
+  const vinculadaAlExpediente = (c) => c.vinculada_v3 === true || c.vinculada_historica === true;
+  const citasParaAsistencia = citasDisponibles.filter(vinculadaAlExpediente);
+  const citasVinculadas = Array.isArray(resultado?.citas_disponibles)
+    ? resultado.citas_disponibles.filter(vinculadaAlExpediente)
+    : [];
+  const citasVinculadasConAsistencia = citasVinculadas.filter(
+    (c) => Boolean(c.asistencia) || ![null, "pendiente", ""].includes(c.estado_asistencia)
+  );
+  const citasSinVinculoPendientes = citasDisponibles.filter((c) => !vinculadaAlExpediente(c));
+  const citaSeleccionada = citasParaAsistencia.find((c) => String(c.id) === citaAsistenciaTexto);
+  const requiereCapturaHistorica = !citaSeleccionada && esCitaHistorica &&
+    (!Array.isArray(resultado?.citas_disponibles) || resultado.citas_disponibles.length === 0);
+  const citaSeleccionadaFutura = Boolean(
+    citaSeleccionada && String(citaSeleccionada.fecha_hora_cita || "").slice(0, 10) > fechaHoyMx()
+  );
 
   useEffect(() => {
     const actCita = historial.find((a) => a.tipo === "cita_agendada" && a.cita_id);
@@ -268,6 +482,20 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   }, [resultado, historial, prospecto, citaAsistenciaTexto]);
 
   useEffect(() => {
+    if (citasParaAsistencia.length === 0) return;
+    const vinculada = resultado?.cita_vinculada_id;
+    const candidata = citasParaAsistencia.find((c) => c.id === vinculada);
+    if (candidata) {
+      setCitaAsistenciaTexto(String(candidata.id));
+    } else if (citasParaAsistencia.length === 1) {
+      setCitaAsistenciaTexto(String(citasParaAsistencia[0].id));
+    } else {
+      // No mantener una cita obsoleta o ajena al vínculo al cambiar expediente.
+      setCitaAsistenciaTexto("");
+    }
+  }, [resultado]);
+
+  useEffect(() => {
     if (!mostrarFormularioCita) return;
     if (!nuevaCitaAgencia && prospecto?.agencia) {
       setNuevaCitaAgencia(prospecto.agencia);
@@ -275,34 +503,14 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     if (!nuevaCitaAuto && (prospecto?.auto_interes || prospecto?.autoInteres || vehiculo)) {
       setNuevaCitaAuto(prospecto?.auto_interes || prospecto?.autoInteres || vehiculo || "");
     }
-    let activo = true;
-    setCargandoCitasCliente(true);
-    apiCitas.list()
-      .then((lista) => {
-        if (!activo) return;
-        const todas = Array.isArray(lista) ? lista : Array.isArray(lista?.results) ? lista.results : [];
-        const telProspecto = String(prospecto?.telefono || "").replace(/\D/g, "").slice(-10);
-        const clienteId = Number(prospecto?.cliente_id || 0);
-        const agenciaExp = String(prospecto?.agencia || "").trim().toLowerCase();
-        const filtradas = todas.filter((c) => {
-          if (c?.asistencia) return false;
-          const cAgencia = String(c?.agencia || "").trim().toLowerCase();
-          if (agenciaExp && cAgencia && cAgencia !== agenciaExp) return false;
-          const cId = Number(c?.cliente?.id_cliente || c?.cliente_id || 0);
-          const cTel = String(c?.cliente?.telefono || c?.telefono || "").replace(/\D/g, "").slice(-10);
-          if (clienteId > 0 && cId === clienteId) return true;
-          if (telProspecto && telProspecto.length === 10 && cTel === telProspecto) return true;
-          return false;
-        });
-        setCitasCliente(filtradas);
-        if (filtradas.length > 0 && !citaIdTexto) {
-          setCitaIdTexto(String(filtradas[0].id));
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (activo) setCargandoCitasCliente(false); });
-    return () => { activo = false; };
-  }, [mostrarFormularioCita]);
+    // Citas recuperadas por Django para este expediente, no por páginas genéricas.
+    const opciones = citasDisponibles;
+    setCitasCliente(opciones);
+    setCargandoCitasCliente(false);
+    if (opciones.length && !opciones.some((c) => String(c.id) === citaIdTexto)) {
+      setCitaIdTexto(String(opciones[0].id));
+    }
+  }, [mostrarFormularioCita, resultado]);
   // En el piloto solo abrimos el registro manual después del seguimiento humano.
   // La API decide finalmente si la operación es válida.
   const permiteCotizacion = resultado?.iniciado && actual === "en_seguimiento";
@@ -478,8 +686,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
       setErrorAutorizacion("Selecciona una fecha válida que no sea futura.");
       return;
     }
-    if (!referencia || referencia.length > 120) {
-      setErrorAutorizacion("Indica la referencia o folio de autorización (máximo 120 caracteres).");
+    if (referencia.length > 120) {
+      setErrorAutorizacion("La referencia o folio, si se captura, admite máximo 120 caracteres.");
       return;
     }
     if (!confirmarAutorizacion) {
@@ -571,11 +779,17 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setErrorAsistencia("");
     setAvisoAsistencia("");
 
-    const idTexto = citaAsistenciaTexto.trim();
-    const citaId = Number(idTexto);
+    const citaId = citaSeleccionada?.id ?? null;
     const fecha = fechaAsistencia.trim();
-    if (!/^\d+$/.test(idTexto) || !Number.isSafeInteger(citaId) || citaId <= 0) {
-      setErrorAsistencia("Escribe el ID numérico de la cita ya vinculada a este expediente.");
+    if (citaId === null && !requiereCapturaHistorica) {
+      setErrorAsistencia("Selecciona una cita registrada del prospecto. Si hay varias, elige la que corresponda por fecha y sucursal.");
+      return;
+    }
+    if (requiereCapturaHistorica && (
+      !/^\d{4}-\d{2}-\d{2}$/.test(fechaProgramadaHistorica) ||
+      !/^\d{2}:\d{2}$/.test(horaProgramadaHistorica)
+    )) {
+      setErrorAsistencia("Indica la fecha y hora originales de la cita histórica.");
       return;
     }
     // La fecha del navegador es una ayuda; Django valida contra la fecha programada real.
@@ -588,7 +802,9 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
       setErrorAsistencia("Debes confirmar expresamente que el cliente acudió a su cita.");
       return;
     }
-    const firma = JSON.stringify([expedienteId, citaId, fecha]);
+    const programadaHistorica = requiereCapturaHistorica
+      ? `${fechaProgramadaHistorica}T${horaProgramadaHistorica}` : null;
+    const firma = JSON.stringify([expedienteId, citaId, fecha, programadaHistorica]);
     if (intentoAsistenciaRef.current?.firma !== firma) {
       const uuid = (typeof crypto !== "undefined" && crypto.randomUUID)
         ? crypto.randomUUID()
@@ -601,6 +817,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
         expedienteId,
         citaId,
         fechaAsistenciaReal: fecha,
+        fechaProgramadaHistorica: programadaHistorica,
+        sucursalHistorica: requiereCapturaHistorica ? prospecto?.agencia : null,
         claveIdempotencia: intentoAsistenciaRef.current.clave,
       });
       setAvisoAsistencia(registro?.duplicado
@@ -685,8 +903,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
         }
         citaId = Number(citaCreadaIdRef.current);
       } else {
-        if (!Number.isSafeInteger(citaId) || citaId <= 0) {
-          setErrorCita("Selecciona una cita existente o agenda una nueva.");
+        if (!Number.isSafeInteger(citaId) || citaId <= 0 || !citasCliente.some((c) => c.id === citaId)) {
+          setErrorCita("Selecciona una cita del prospecto por su fecha y sucursal, o agenda una nueva.");
           setGuardandoCita(false);
           return;
         }
@@ -770,14 +988,85 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   }
 
 
+  async function registrarContactoExterno() {
+    if (guardandoContacto || !confirmarContacto || notaContacto.trim().length < 10) {
+      setErrorContacto("Confirma el contacto e indica una nota de al menos 10 caracteres.");
+      return;
+    }
+    if (!intentoContactoRef.current) intentoContactoRef.current = nuevaClaveIdempotencia();
+    setGuardandoContacto(true);
+    setErrorContacto("");
+    try {
+      await apiEtapasV3.registrarContactoExterno({ expedienteId, medio: medioContacto,
+        fechaContacto, observacion: notaContacto.trim(),
+        claveIdempotencia: intentoContactoRef.current });
+      setMostrarContactoExterno(false);
+      setRevision((v) => v + 1);
+      onActualizado?.();
+    } catch (err) {
+      setErrorContacto(err?.message || "No se pudo registrar el contacto.");
+    } finally {
+      setGuardandoContacto(false);
+    }
+  }
+
+  function abrirCorreccion(item) {
+    const datos = item?.datos_efectivos || {};
+    setActividadCorreccion({ ...item, tipo: item.tipo_correccion || item.tipo });
+    setCamposCorreccion({
+      fecha_envio: datos.fecha_envio || item.fecha_actividad || "",
+      vehiculo: datos.vehiculo || "",
+      referencia: datos.referencia || "",
+      fecha_recepcion: datos.fecha_recepcion || item.fecha_actividad || "",
+      documentos: Array.isArray(datos.documentos) ? datos.documentos.join("\n") : "",
+      fecha_hora_cita: (datos.fecha_hora_cita || "").slice(0, 16),
+      fecha_asistencia_real: datos.fecha_asistencia_real || item.fecha_actividad || "",
+    });
+    setMotivoCorreccion("");
+    setErrorCorreccion("");
+    intentoCorreccionRef.current = null;
+  }
+
+  async function guardarCorreccion() {
+    if (!actividadCorreccion || guardandoCorreccion) return;
+    if (motivoCorreccion.trim().length < 8) {
+      setErrorCorreccion("Explica la corrección con al menos 8 caracteres.");
+      return;
+    }
+    const tipo = actividadCorreccion.tipo;
+    const campos = tipo === "cotizacion_enviada"
+      ? { fecha_envio: camposCorreccion.fecha_envio, vehiculo: camposCorreccion.vehiculo,
+          referencia: camposCorreccion.referencia }
+      : tipo === "documentos_recibidos"
+        ? { fecha_recepcion: camposCorreccion.fecha_recepcion,
+            documentos: camposCorreccion.documentos.split("\n").map((x) => x.trim()).filter(Boolean) }
+        : tipo === "cita_agendada"
+          ? { fecha_hora_cita: camposCorreccion.fecha_hora_cita }
+          : { fecha_asistencia_real: camposCorreccion.fecha_asistencia_real };
+    if (!intentoCorreccionRef.current) intentoCorreccionRef.current = `correccion:${crypto.randomUUID()}`;
+    setGuardandoCorreccion(true);
+    setErrorCorreccion("");
+    try {
+      await apiEtapasV3.corregirActividad({ expedienteId, actividadId: actividadCorreccion.id,
+        cambios: campos, motivo: motivoCorreccion.trim(),
+        claveIdempotencia: intentoCorreccionRef.current });
+      setActividadCorreccion(null);
+      setRevision((v) => v + 1);
+    } catch (err) {
+      setErrorCorreccion(err?.message || "No se pudo registrar la corrección.");
+    } finally {
+      setGuardandoCorreccion(false);
+    }
+  }
+
   return (
-    <section className="rounded-2xl border border-[#131E5C]/10 bg-white p-4 shadow-sm" aria-label="Etapas comerciales">
+    <section className={enChat ? "crm-v3-chat min-w-0 bg-white" : "rounded-2xl border border-[#131E5C]/10 bg-white p-4 shadow-sm"} aria-label="Etapas comerciales">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs font-extrabold text-[#131E5C]">
             <Activity className="h-4 w-4" /> Etapas comerciales
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Seguimiento separado del estado histórico · Piloto autorizado</p>
+          <p className="mt-1 text-[11px] text-slate-500">Seguimiento comercial independiente del estado histórico</p>
         </div>
         {expedienteId ? (
           <button type="button" onClick={() => setRevision((v) => v + 1)} disabled={cargando}
@@ -803,7 +1092,72 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
               ? <>Etapa vigente: <span className="font-black">{LABELS[actual] || actual}</span></>
               : "Aún no clasificado en las etapas comerciales. No se infiere la etapa desde el estado antiguo."}
           </div>
-          <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {!resultado.iniciado && resultado.clasificacion_historica?.permitida ? (
+            compact ? (
+              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Expediente antiguo pendiente de clasificación. Abre la edición comercial para registrar su situación real.</p>
+            ) : (
+              <ClasificacionHistoricaForm
+                key={expedienteId} expedienteId={expedienteId}
+                estadoAnterior={resultado.clasificacion_historica.estado_anterior}
+                agencia={resultado.clasificacion_historica.agencia}
+                onActualizado={() => { setRevision((v) => v + 1); onActualizado?.(); }}
+              />
+            )
+          ) : null}
+          {!compact && resultado.iniciado && actual === "nuevo_prospecto" ? (
+            <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs">
+              <div className="font-extrabold text-[#131E5C]">¿Se contactó por otro medio?</div>
+              <p className="mt-1 text-slate-600">Registra una llamada, Facebook, atención presencial o WhatsApp fuera del CRM. No es necesario que existan mensajes aquí, pero el contacto debe haber ocurrido realmente.</p>
+              <button type="button" onClick={() => setMostrarContactoExterno((v) => !v)} className="mt-2 rounded border border-sky-300 bg-white px-3 py-2 font-bold text-[#131E5C]">{mostrarContactoExterno ? "Cerrar" : "Registrar contacto realizado"}</button>
+              {mostrarContactoExterno ? (
+                <div className="mt-3 grid gap-2 border-t border-sky-200 pt-3">
+                  <label className="grid gap-1">Medio del contacto
+                    <select value={medioContacto} onChange={(e) => {setMedioContacto(e.target.value); intentoContactoRef.current=null;}} className="rounded border bg-white px-2 py-2">
+                      <option value="llamada">Llamada telefónica</option>
+                      <option value="facebook">Facebook / Messenger</option>
+                      <option value="presencial">Atención presencial</option>
+                      <option value="whatsapp_externo">WhatsApp fuera del CRM</option>
+                      <option value="otro">Otro medio</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1">Fecha real del contacto
+                    <input type="date" max={fechaHoyMx()} value={fechaContacto} onChange={(e) => {setFechaContacto(e.target.value); intentoContactoRef.current=null;}} className="rounded border bg-white px-2 py-2" />
+                  </label>
+                  <label className="grid gap-1">Qué se habló / evidencia operativa
+                    <textarea rows={3} maxLength={600} value={notaContacto} onChange={(e) => {setNotaContacto(e.target.value); intentoContactoRef.current=null;}} className="rounded border bg-white px-2 py-2" placeholder="Ej. Se habló por teléfono sobre el vehículo solicitado" />
+                  </label>
+                  <label className="flex items-start gap-2"><input type="checkbox" checked={confirmarContacto} onChange={(e) => setConfirmarContacto(e.target.checked)} />Confirmo que yo realmente contacté al prospecto por el canal indicado.</label>
+                  {errorContacto ? <p role="alert" className="font-bold text-red-700">{errorContacto}</p> : null}
+                  <button type="button" disabled={guardandoContacto || !confirmarContacto} onClick={registrarContactoExterno} className="rounded bg-[#131E5C] px-3 py-2 font-bold text-white disabled:opacity-50">{guardandoContacto ? "Registrando…" : "Registrar y pasar a En seguimiento"}</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {compact ? (
+            <div className="space-y-3 text-xs">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="font-semibold text-[#131E5C]">{actual ? LABELS[actual] || actual : "Sin clasificar"}</p>
+                <p className="mt-1 text-[11px] text-slate-500">Las acciones y las diez etapas se muestran en la ficha completa del prospecto.</p>
+              </div>
+              {historial.length > 0 ? (
+                <div className="min-w-0">
+                  <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-[#131E5C]">
+                    <Clock3 className="h-3.5 w-3.5 shrink-0" /> Última actividad
+                  </p>
+                  <p className="break-words text-slate-700">{historial[0].es_clasificacion_historica ? "Clasificación histórica" : (EVENTOS[historial[0].tipo] || historial[0].tipo)}</p>
+                  <p className="text-[11px] text-slate-500">{fechaCorta(historial[0].fecha_actividad)}</p>
+                </div>
+              ) : null}
+              {typeof onAbrirEdicion === "function" ? (
+                <button type="button" onClick={onAbrirEdicion}
+                  className="w-full rounded-lg bg-[#131E5C] px-3 py-2.5 font-bold text-white hover:bg-[#1c2b79]">
+                  Abrir edición comercial
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <>
+          <ol className={enChat ? "crm-v3-etapas-grid grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"}>
             {ETAPAS.map(([clave, etiqueta, clase], i) => {
               const vigente = actual === clave;
               return (
@@ -888,20 +1242,32 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                 {mostrarFormularioCita ? (
                   <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
                     <div className="flex gap-2 sm:col-span-2">
-                      <button type="button" onClick={() => { setModoCita("crear"); setErrorCita(""); }}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "crear" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
-                        Agendar nueva cita
-                      </button>
+                      {enChat && typeof onAgendarCitaChat === "function" ? (
+                        <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); onAgendarCitaChat(); }}
+                          className="rounded-lg bg-[#1746D1] px-3 py-1.5 text-xs font-bold text-white">
+                          Agendar con asesor de piso
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => { setModoCita("crear"); setErrorCita(""); }}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "crear" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+                          Agendar nueva cita
+                        </button>
+                      )}
                       <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); }}
                         className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "existente" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
                         Usar cita ya existente {citasCliente.length ? `(${citasCliente.length})` : ""}
                       </button>
                     </div>
-                    {modoCita === "crear" ? (
+                    {enChat ? (
+                      <p className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 sm:col-span-2">
+                        Usa la agenda y selecciona el asesor de piso. Una cita creada desde el chat se vincula automáticamente al expediente; las citas anteriores deben vincularse de manera individual.
+                      </p>
+                    ) : null}
+                    {modoCita === "crear" && !enChat ? (
                       <>
                         {citaCreadaIdRef.current ? (
                           <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 sm:col-span-2">
-                            Cita #{citaCreadaIdRef.current} creada lista para vincular. Confirma abajo para concluir el enlace.
+                            Cita guardada. Confirma abajo para concluir el registro comercial.
                           </p>
                         ) : null}
                         <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
@@ -951,20 +1317,15 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
                               {citasCliente.map((c) => (
                                 <option key={c.id} value={String(c.id)}>
-                                  Folio #{c.id} · {c.agencia} · {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.auto_interes || "Sin auto"}
+                                  {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.agencia} · {c.auto_interes || "Sin vehículo especificado"}
                                 </option>
                               ))}
                             </select>
                           </label>
                         ) : null}
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                          Folio / ID de cita
-                          <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={15}
-                            value={citaIdTexto}
-                            onChange={(e) => { setCitaIdTexto(e.target.value.replace(/\D/g, "")); intentoCitaRef.current = null; }}
-                            disabled={guardandoCita} placeholder="Ej. 125"
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                        </label>
+                        {citasCliente.length === 0 && !cargandoCitasCliente ? (
+                          <p className="text-xs text-amber-700">{enChat ? "No se encontró una cita para vincular. Agenda desde el botón azul indicando el asesor de piso y actualiza las etapas antes de vincularla." : "No se encontró una cita registrada de este prospecto. Selecciona «Agendar nueva cita» e indica fecha, hora y sucursal."}</p>
+                        ) : null}
                       </div>
                     )}
                     <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
@@ -1009,14 +1370,48 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                 </div>
                 {mostrarAsistencia ? (
                   <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      ID de la cita vinculada
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={15}
-                        value={citaAsistenciaTexto}
-                        onChange={(e) => { setCitaAsistenciaTexto(e.target.value.replace(/\D/g, "")); intentoAsistenciaRef.current = null; }}
-                        disabled={guardandoAsistencia} placeholder="ID de cita, no del expediente"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
+                    {citasParaAsistencia.length > 0 ? (
+                      <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                        Cita del prospecto (fecha, hora y sucursal)
+                        <select value={citaSeleccionada ? citaAsistenciaTexto : ""}
+                          onChange={(e) => { setCitaAsistenciaTexto(e.target.value); intentoAsistenciaRef.current = null; }}
+                          disabled={guardandoAsistencia}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+                          <option value="">— Selecciona la cita —</option>
+                          {citasParaAsistencia.map((c) => (
+                            <option key={c.id} value={String(c.id)}>
+                              {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.agencia}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : requiereCapturaHistorica ? (
+                      <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                        <p className="text-xs text-amber-800 sm:col-span-2">La etapa procede del CRM anterior y no existe una cita vinculada. Confirma los datos históricos reales sin crear una cita ficticia.</p>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha programada originalmente
+                          <input type="date" max={fechaHoyMx()} value={fechaProgramadaHistorica}
+                            onChange={(e) => { setFechaProgramadaHistorica(e.target.value); intentoAsistenciaRef.current = null; }}
+                            disabled={guardandoAsistencia} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Hora programada originalmente
+                          <input type="time" value={horaProgramadaHistorica}
+                            onChange={(e) => { setHoraProgramadaHistorica(e.target.value); intentoAsistenciaRef.current = null; }}
+                            disabled={guardandoAsistencia} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <p className="text-xs text-slate-600 sm:col-span-2">Sucursal: {prospecto?.agencia || "No disponible"}</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-1 text-xs text-amber-800 sm:col-span-2">
+                        {citasVinculadasConAsistencia.length > 0 ? (
+                          <p>La cita vinculada al expediente ya tiene una asistencia o clasificación registrada en el CRM anterior. No debe confirmarse por segunda vez; si la etapa comercial no coincide, revisa su clasificación histórica.</p>
+                        ) : (
+                          <p>No existe ninguna cita pendiente vinculada a este expediente para confirmar asistencia.</p>
+                        )}
+                        {citasSinVinculoPendientes.length > 0 ? (
+                          <p>Existen otras citas del mismo cliente, pero no están vinculadas al expediente comercial. No pueden utilizarse para confirmar asistencia sin una vinculación verificable.</p>
+                        ) : null}
+                      </div>
+                    )}
                     <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
                       Fecha real de visita
                       <input type="date" max={fechaHoyMx()} value={fechaAsistencia}
@@ -1024,9 +1419,11 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                         disabled={guardandoAsistencia}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                     </label>
-                    <p className="text-[11px] font-medium text-amber-800 sm:col-span-2">
-                      Una cita futura no es asistencia. Django rechazará cualquier confirmación anterior al día programado.
-                    </p>
+                    {citaSeleccionadaFutura ? (
+                      <p className="text-[11px] font-medium text-amber-800 sm:col-span-2">
+                        Esta cita está programada para una fecha futura. Solo podrá confirmarse después de que ocurra.
+                      </p>
+                    ) : null}
                     <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
                       <input type="checkbox" checked={confirmarAsistencia}
                         onChange={(e) => setConfirmarAsistencia(e.target.checked)}
@@ -1037,7 +1434,9 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                       <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorAsistencia}</p>
                     ) : null}
                     <div className="sm:col-span-2">
-                      <button type="button" disabled={guardandoAsistencia} onClick={registrarAsistencia}
+                      <button type="button"
+                        disabled={guardandoAsistencia || (!citaSeleccionada && !requiereCapturaHistorica) || citaSeleccionadaFutura}
+                        onClick={registrarAsistencia}
                         className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
                         {guardandoAsistencia ? "Confirmando…" : "Confirmar asistencia real"}
                       </button>
@@ -1127,7 +1526,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                     </label>
                     <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      Referencia o folio de autorización
+                      Referencia o folio de autorización (opcional)
                       <input type="text" maxLength={120} value={referenciaAutorizacion}
                         onChange={(e) => { setReferenciaAutorizacion(e.target.value); intentoAutorizacionRef.current = null; }}
                         disabled={guardandoAutorizacion} placeholder="Ej. AUT-DEMO-13"
@@ -1317,14 +1716,54 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
               <ul className="max-h-48 space-y-2 overflow-y-auto">
                 {historial.map((item) => (
                   <li key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-[11px]">
-                    <div className="font-bold text-[#131E5C]">{EVENTOS[item.tipo] || item.tipo}</div>
+                    <div className="font-bold text-[#131E5C]">{item.es_clasificacion_historica ? "Clasificación histórica" : item.es_homologacion_historica ? "Homologación histórica" : (EVENTOS[item.tipo] || item.tipo)}</div>
                     <div className="mt-0.5 text-slate-500">{fechaCorta(item.fecha_actividad)} · {item.usuario_crm || "Sin responsable"}</div>
                     <div className="mt-0.5 text-[10px] text-slate-400">Resultado: {LABELS[item.etapa_resultante] || item.etapa_resultante || "Sin cambio"}</div>
+                    {item.tiene_correccion ? <div className="mt-1 text-[10px] font-bold text-indigo-700">Con corrección auditada</div> : null}
+                    {item.puede_corregir ? (
+                      <button type="button" onClick={() => abrirCorreccion(item)}
+                        className="mt-2 rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-[#131E5C] hover:bg-slate-100">
+                        {item.es_homologacion_historica ? `Completar datos de ${item.tipo_correccion === "cita_agendada" ? "cita histórica" : "cotización histórica"}` : "Corregir actividad"}
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             )}
+            {actividadCorreccion ? (
+              <div className="mt-3 space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs">
+                <div className="font-extrabold text-[#131E5C]">{actividadCorreccion.es_homologacion_historica ? "Completar información histórica" : "Corregir actividad"}: {EVENTOS[actividadCorreccion.tipo] || actividadCorreccion.tipo}</div>
+                {actividadCorreccion.es_homologacion_historica ? <p className="text-amber-800">La clasificación proviene del CRM anterior. Debes registrar datos confirmados; no se inventará una nueva cotización ni cambiará la etapa.</p> : null}
+                {actividadCorreccion.tipo === "cotizacion_enviada" ? (
+                  <>
+                    <label className="grid gap-1">Fecha de envío<input type="date" value={camposCorreccion.fecha_envio} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_envio:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                    <label className="grid gap-1">Vehículo<input value={camposCorreccion.vehiculo} onChange={(e) => setCamposCorreccion((p) => ({...p, vehiculo:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                    <label className="grid gap-1">Referencia<input value={camposCorreccion.referencia} onChange={(e) => setCamposCorreccion((p) => ({...p, referencia:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                  </>
+                ) : actividadCorreccion.tipo === "documentos_recibidos" ? (
+                  <>
+                    <label className="grid gap-1">Fecha de recepción<input type="date" value={camposCorreccion.fecha_recepcion} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_recepcion:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                    <label className="grid gap-1">Documentos (uno por línea)<textarea rows={3} value={camposCorreccion.documentos} onChange={(e) => setCamposCorreccion((p) => ({...p, documentos:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                  </>
+                ) : actividadCorreccion.tipo === "cita_agendada" ? (
+                  <label className="grid gap-1">Fecha y hora de cita<input type="datetime-local" value={camposCorreccion.fecha_hora_cita} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_hora_cita:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                ) : (
+                  <label className="grid gap-1">Fecha real de asistencia<input type="date" value={camposCorreccion.fecha_asistencia_real} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_asistencia_real:e.target.value}))} className="rounded border px-2 py-1"/></label>
+                )}
+                <label className="grid gap-1 font-bold">Motivo de corrección (obligatorio)
+                  <textarea rows={2} maxLength={1000} value={motivoCorreccion} onChange={(e) => {setMotivoCorreccion(e.target.value); intentoCorreccionRef.current = null;}} className="rounded border px-2 py-1 font-normal"/>
+                </label>
+                {errorCorreccion ? <p role="alert" className="font-bold text-red-700">{errorCorreccion}</p> : null}
+                <div className="flex gap-2">
+                  <button type="button" disabled={guardandoCorreccion} onClick={guardarCorreccion} className="rounded bg-[#131E5C] px-3 py-2 font-bold text-white disabled:opacity-50">{guardandoCorreccion ? "Guardando…" : "Registrar corrección"}</button>
+                  <button type="button" disabled={guardandoCorreccion} onClick={() => setActividadCorreccion(null)} className="rounded border bg-white px-3 py-2">Cancelar</button>
+                </div>
+                <p className="text-slate-600">La actividad original no se borra ni cambia de etapa.</p>
+              </div>
+            ) : null}
           </div>
+            </>
+          )}
         </>
       ) : null}
     </section>

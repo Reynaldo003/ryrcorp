@@ -15,20 +15,10 @@ import {
   obtenerContextoLinea,
   obtenerNombreAsesorSesion,
 } from "../../config/lineasWhatsApp";
-import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
-import { ETIQUETAS_ESTADO, estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
+import { estadoAutomaticoBandeja, tieneCalificacionRapida, citaEsNoAsistio, citaEsAsistida } from "./estadosProspecto";
 
 const DEALERS = ["VW Cordoba", "VW Cordoba Usados", "VW Orizaba", "VW Orizaba Usados", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan", "Automotriz R&R"];
-const ESTADOS_PROSPECTO = [
-    "Contactado",
-    "Calificado",
-    "Pendiente de Cotización",
-    "Requiere Asesor",
-    "Financiamiento",
-    "Sin Respuesta",
-    "Descalificado",
-];
 const VEHICULOS = ["Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun", "Tiguan", "Teramont", "Crossport", "Saveiro", "Amarok", "Seminuevos", "Tera", "Avaluo", "Transporter", "Caddy", "Crafter"];
 const ANIOS_VEHICULO = Array.from({ length: 2030 - 2018 + 1 }, (_, i) => 2030 - i);
 const BURO_OPTIONS = [{ value: "", label: "— Selecciona —" }, { value: "bueno", label: "Bueno" }, { value: "regular", label: "Regular" }, { value: "iniciando", label: "Iniciando" }, { value: "desconocido", label: "Desconocido" }];
@@ -105,7 +95,7 @@ function crearDraftInicial(numeroAsesor, user, isAdmin) {
 }
 function draftDesdeApi(p, evidencias, estadoInicial = "") {
     const nombre = String(p?.nombre || "").trim(), tieneNombre = tieneNombreReal(nombre), estado = estadoInicial || p?.estado || "Contactado";
-    return { id_exp: p?.id || p?.id_exp || null, agencia: p?.agencia || "", anio_auto: p?.anio_auto || "", tiene_nombre: tieneNombre, nombre_cliente: tieneNombre ? nombre : "", telefono: String(p?.telefono || ""), correo: p?.correo || "", linea: p?.business || "", origen: p?.canal_contacto || "", pauta: p?.pauta || "", estado, motivo_descalificacion: normalizeText(estado) === "descalificado" ? p?.motivo_descalificacion || "" : "", cliente_interes: p?.auto_interes || "", comentarios: p?.comentarios || "", resumen: p?.resumen || "", resumen_actualizado_at: p?.resumen_actualizado_at || "", resumen_fuente: p?.resumen_fuente || "", asesor_digital: p?.asesor_digital || "", asesor_solicita: p?.asesor_ventas || "", primer_contacto_at: p?.primer_mensaje_cliente || p?.primer_contacto_at || null, ultimo_contacto_at: p?.ultimo_contacto_asesor || p?.ultimo_contacto_at || null, enganche_monto: p?.enganche_monto || "", presupuesto_mensual: p?.presupuesto_mensual || "", buro_estado: p?.buro_estado || "", forma_pago: p?.forma_pago || "", tipo_cliente: p?.tipo_cliente || "", uso_vehiculo: p?.uso_vehiculo || "", plazo_compra: p?.plazo_compra || "", comprobacion_ingresos: p?.comprobacion_ingresos || "", id_cotizacion: p?.id_cotizacion || "", folio_solicitud_credito: p?.folio_solicitud_credito || "", solicitud_credito_estado: p?.solicitud_credito_estado || "", vin_facturado: p?.vin_facturado || "", vin_estatus_entrega: p?.vin_estatus_entrega || "", evidencias_existentes: (Array.isArray(evidencias) ? evidencias : Array.isArray(evidencias?.results) ? evidencias.results : []).map(normalizarEvidencia), evidencias_nuevas: [], delete_evidencia_ids: [] };
+    return { id_exp: p?.id || p?.id_exp || null, cliente_id: p?.cliente_id ?? p?.cliente?.id_cliente ?? null, agencia: p?.agencia || "", anio_auto: p?.anio_auto || "", tiene_nombre: tieneNombre, nombre_cliente: tieneNombre ? nombre : "", telefono: String(p?.telefono || ""), correo: p?.correo || "", linea: p?.business || "", origen: p?.canal_contacto || "", pauta: p?.pauta || "", estado, motivo_descalificacion: normalizeText(estado) === "descalificado" ? p?.motivo_descalificacion || "" : "", cliente_interes: p?.auto_interes || "", comentarios: p?.comentarios || "", resumen: p?.resumen || "", resumen_actualizado_at: p?.resumen_actualizado_at || "", resumen_fuente: p?.resumen_fuente || "", asesor_digital: p?.asesor_digital || "", asesor_solicita: p?.asesor_ventas || "", primer_contacto_at: p?.primer_mensaje_cliente || p?.primer_contacto_at || null, ultimo_contacto_at: p?.ultimo_contacto_asesor || p?.ultimo_contacto_at || null, enganche_monto: p?.enganche_monto || "", presupuesto_mensual: p?.presupuesto_mensual || "", buro_estado: p?.buro_estado || "", forma_pago: p?.forma_pago || "", tipo_cliente: p?.tipo_cliente || "", uso_vehiculo: p?.uso_vehiculo || "", plazo_compra: p?.plazo_compra || "", comprobacion_ingresos: p?.comprobacion_ingresos || "", id_cotizacion: p?.id_cotizacion || "", folio_solicitud_credito: p?.folio_solicitud_credito || "", solicitud_credito_estado: p?.solicitud_credito_estado || "", vin_facturado: p?.vin_facturado || "", vin_estatus_entrega: p?.vin_estatus_entrega || "", evidencias_existentes: (Array.isArray(evidencias) ? evidencias : Array.isArray(evidencias?.results) ? evidencias.results : []).map(normalizarEvidencia), evidencias_nuevas: [], delete_evidencia_ids: [] };
 }
 
 function ModalBase({ open, title, onClose, children, footer }) {
@@ -172,6 +162,12 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
     function buildPayload(source = draft) {
         const nombre = source?.tiene_nombre && String(source?.nombre_cliente || "").trim() ? String(source.nombre_cliente).trim() : "SIN NOMBRE";
         const payload = { numero_asesor: numeroLinea, nombre, telefono: normalizaTelefonoMx(source?.telefono), correo: String(source?.correo || "").trim(), agencia: esEdicion ? source?.agencia || "" : contexto.agencia || source?.agencia || "", anio_auto: source?.anio_auto ? Number(source.anio_auto) : null, business: source?.linea || "", canal_contacto: source?.origen || "", pauta: source?.pauta || "", estado: source?.estado || "Contactado", motivo_descalificacion: normalizeText(source?.estado) === "descalificado" ? String(source?.motivo_descalificacion || "").trim() : "", asesor_digital: esEdicion ? source?.asesor_digital || "" : contexto.asesor_digital || source?.asesor_digital || "", asesor_ventas: source?.asesor_solicita || "", auto_interes: source?.cliente_interes || "", comentarios: source?.comentarios || "", enganche_monto: toNullableNumber(source?.enganche_monto), presupuesto_mensual: toNullableNumber(source?.presupuesto_mensual), buro_estado: source?.buro_estado || "", forma_pago: source?.forma_pago || "", tipo_cliente: source?.tipo_cliente || "", uso_vehiculo: source?.uso_vehiculo || "", plazo_compra: source?.plazo_compra || "", comprobacion_ingresos: source?.comprobacion_ingresos || "", id_cotizacion: source?.id_cotizacion || "", folio_solicitud_credito: source?.folio_solicitud_credito || "", solicitud_credito_estado: source?.solicitud_credito_estado || "", vin_facturado: String(source?.vin_facturado || "").trim().toUpperCase(), vin_estatus_entrega: source?.vin_estatus_entrega || "", primer_mensaje_cliente: source?.primer_contacto_at || null, ultimo_contacto_asesor: source?.ultimo_contacto_at || null };
+        // V3: en edición, el estado histórico y su motivo NO son controles libres.
+        // Django conserva su automatización de estado a partir de los demás campos.
+        if (esEdicion) {
+            delete payload.estado;
+            delete payload.motivo_descalificacion;
+        }
         // PATCH: no volver a enviar un teléfono idéntico al dato canónico del cliente.
         // Si el usuario corrigió realmente un número inválido, se sigue enviando y
         // el backend conserva la validación que prohíbe cambios de números válidos.
@@ -218,7 +214,6 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
         if (!esEdicion && !numeroLinea) { setError("Selecciona una línea de WhatsApp antes de crear el prospecto."); return false; }
         if (!telefonoValido) { setError("Captura un teléfono mexicano válido de 10 dígitos."); return false; }
         if (!(esEdicion ? draft.agencia : contexto.agencia || draft.agencia)) { setError("Selecciona el dealer."); return false; }
-        if (normalizeText(draft.estado) === "descalificado" && !String(draft.motivo_descalificacion || "").trim()) { setError("Selecciona el motivo de descalificación."); return false; }
         return true;
     }
     function addFiles(fileList) {
@@ -249,7 +244,9 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             estadoBase: draft.estado,
         });
         const payload = buildPayload();
-        payload.estado = estadoAuto;
+        // En edición, el servidor calcula las transiciones automáticas históricas.
+        // No mandar estado desde el navegador, ni siquiera si fue recalculado aquí.
+        if (!esEdicion) payload.estado = estadoAuto;
         const firma = JSON.stringify(payload); setSaving(true);
         try {
             let id = draft.id_exp || prospectoId, respuesta = ultimoProspectoRef.current;
@@ -302,7 +299,19 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
             {/* V3 solo para expedientes existentes: lectura independiente del estado histórico. */}
             {esEdicion && (draft.id_exp || prospectoId) ? (
                 <div className="md:col-span-4 min-w-0">
-                    <EtapasComercialesV3Panel expedienteId={draft.id_exp || prospectoId} />
+                    <EtapasComercialesV3Panel
+                        expedienteId={draft.id_exp || prospectoId}
+                        prospecto={{
+                            cliente_id: draft.cliente_id || null,
+                            nombre: draft.tiene_nombre ? draft.nombre_cliente : "SIN NOMBRE",
+                            telefono: draft.telefono || "",
+                            correo: draft.correo || "",
+                            agencia: draft.agencia || "",
+                            auto_interes: draft.cliente_interes || "",
+                            canal_contacto: draft.origen || "",
+                            asesor_digital: draft.asesor_digital || "",
+                        }}
+                    />
                 </div>
             ) : null}
             <div className="md:col-span-4 grid gap-3 md:grid-cols-3">
@@ -315,8 +324,8 @@ export default function NuevoProspectoModal({ open, mode = "create", prospectoId
                 <div><label className="inline-flex items-center gap-3 text-sm font-bold text-[#131E5C]"><input type="checkbox" checked={Boolean(draft.tiene_nombre)} onChange={(e) => setDraft((p) => ({ ...p, tiene_nombre: e.target.checked, nombre_cliente: e.target.checked ? p.nombre_cliente : "" }))} className="h-4 w-4" />Nombre del Prospecto</label><input value={draft.nombre_cliente || ""} onChange={(e) => setDraft((p) => ({ ...p, nombre_cliente: e.target.value }))} disabled={!draft.tiene_nombre} className={cls(inputBase, inputOk, !draft.tiene_nombre ? "cursor-not-allowed opacity-70" : "")} placeholder={draft.tiene_nombre ? "Nombre" : "SIN NOMBRE"} /></div>
                 <div><div className="mb-1 text-sm font-bold text-[#131E5C]">Teléfono</div><input maxLength={12} disabled={esEdicion && telefonoNormalizado} value={draft.telefono || ""} onChange={(e) => setDraft((p) => ({ ...p, telefono: e.target.value.replace(/\D/g, "").slice(0, 12) }))} className={cls(inputBase, touched && (!draft.telefono || !telefonoValido) ? inputBad : inputOk, esEdicion && telefonoNormalizado ? "cursor-not-allowed opacity-70" : "")} />{touched && telError ? <div className="mt-1 text-xs font-bold text-red-600">{telError}</div> : null}</div>
                 <div><div className="mb-1 text-sm font-bold text-[#131E5C]">Correo</div><input value={draft.correo || ""} onChange={(e) => setDraft((p) => ({ ...p, correo: e.target.value }))} className={cls(inputBase, inputOk)} placeholder="correo@ejemplo.com" /></div>
-                <div><div className="mb-1 text-sm font-bold text-[#131E5C]">Estado</div><select value={draft.estado || ""} onChange={(e) => setDraft((p) => ({ ...p, estado: e.target.value, motivo_descalificacion: normalizeText(e.target.value) === "descalificado" ? p.motivo_descalificacion : "" }))} className={cls(inputBase, inputOk)}>{ETIQUETAS_ESTADO.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-            </div>{normalizeText(draft.estado) === "descalificado" ? <div className="mt-3"><div className="mb-1 text-sm font-bold text-red-700">Motivo de descalificación *</div><MotivoDescalificacionPicker value={draft.motivo_descalificacion || ""} onChange={(motivo) => setDraft((p) => ({ ...p, motivo_descalificacion: motivo }))} invalid={touched && !draft.motivo_descalificacion} /></div> : null}
+                <div><div className="mb-1 text-sm font-bold text-[#131E5C]">Estado histórico (solo lectura)</div><div className={cls(inputBase, "flex items-center bg-neutral-100 text-slate-600 cursor-not-allowed")}>{draft.estado || "Sin definir"}</div></div>
+            </div>{normalizeText(draft.estado) === "descalificado" && draft.motivo_descalificacion ? <div className="mt-3 text-xs font-semibold text-slate-600">Motivo histórico: {draft.motivo_descalificacion}</div> : null}
                 <div className="grid gap-3 md:grid-cols-2"><div><div className="mb-1 text-sm font-bold text-[#131E5C]">Pauta de Origen</div>{loadingPautas ? <div className="flex h-10 items-center gap-2 rounded-lg bg-neutral-100 px-3 text-xs font-semibold text-[#131E5C]"><Loader2 className="h-4 w-4 animate-spin" />Cargando campañas...</div> : <select value={draft.pauta || ""} onChange={(e) => setDraft((p) => ({ ...p, pauta: e.target.value }))} className={cls(inputBase, inputOk)}><option value="">— Selecciona una pauta —</option>{draft.pauta && !pautas.some((p) => normalizeText(p) === normalizeText(draft.pauta)) ? <option value={draft.pauta}>{draft.pauta} (actual)</option> : null}{pautas.map((p) => <option key={p} value={p}>{p}</option>)}</select>}</div><div><div className="mb-1 text-sm font-bold text-[#131E5C]">Business</div><LineaPicker value={draft.linea} onChange={(linea) => setDraft((p) => ({ ...p, linea }))} /></div></div>
                 <div><div className="mb-1 text-sm font-bold text-[#131E5C]">Canal de Contacto</div><OrigenPicker value={draft.origen} onChange={(origen) => setDraft((p) => ({ ...p, origen }))} /></div></Field></div>
             <div className="md:col-span-4"><Field label="Perfil comercial y financiero" icon={Activity}><div className="grid gap-3 md:grid-cols-4">

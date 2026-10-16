@@ -3126,7 +3126,7 @@ export default function DigitalesProspectos() {
                                             </td>),
                                             estado: (<td className="px-3 py-2.5">
                                                 {ETAPAS_V3_NOMBRES[row.etapa_comercial_v3] ? (
-                                                    <div className="mb-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]" title="Etapa V3, independiente del estado histórico">
+                                                    <div className="mb-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]" title="Etapa comercial independiente del estado histórico">
                                                         {ETAPAS_V3_NOMBRES[row.etapa_comercial_v3]}
                                                     </div>
                                                 ) : null}

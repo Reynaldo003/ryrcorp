@@ -19,6 +19,7 @@ import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 import { encontrarCategoriaDeMotivo, MOTIVOS_DESCALIFICACION_POR_CATEGORIA } from "./motivosDescalificacion";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
+import NuevoProspectoModal from "./NuevoProspectoModal";
 
 const ETAPAS_COMERCIALES_V3_NOMBRES = Object.freeze({
     nuevo_prospecto: "Nuevo prospecto", en_seguimiento: "En seguimiento",
@@ -521,7 +522,7 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
 
                     {etapaV3 ? (
                         <div className="mt-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]"
-                             title="Etapa comercial V3 (solo lectura en esta bandeja)">
+                             title="Etapa comercial (solo lectura en esta bandeja)">
                             {etapaV3}
                         </div>
                     ) : null}
@@ -2608,7 +2609,7 @@ function InfoRow({ label, value, className }) {
     );
 }
 
-function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaActualizada }) {
+function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaActualizada, onAbrirEdicion }) {
     const telefono = String(prospecto?.telefono || "");
     const cita = prospecto?.cita || null;
     const estadoCita = estadoCitaDe(cita);
@@ -2716,6 +2717,8 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
                                 expedienteId={Number(prospecto.prospectoId)}
                                 prospecto={prospecto}
                                 onActualizado={onEtapaActualizada}
+                                compact
+                                onAbrirEdicion={() => onAbrirEdicion?.(Number(prospecto.prospectoId))}
                             />
                         </div>
                     ) : (
@@ -2891,6 +2894,7 @@ export default function DigitalesBandeja() {
     const [q, setQ] = useState("");
     const [drawerTel, setDrawerTel] = useState("");
     const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
+    const [expedienteEnEdicion, setExpedienteEnEdicion] = useState(null);
     const [filtroActivo, setFiltroActivo] = useState("todos");
     const [periodo, setPeriodo] = useState("recientes");
     const [orden, setOrden] = useState("reciente");
@@ -3658,6 +3662,22 @@ export default function DigitalesBandeja() {
                 onClose={() => setProspectoSeleccionado(null)}
                 onOpenChat={(telefono) => setDrawerTel(telefono)}
                 onEtapaActualizada={() => { void cargarTodo(); }}
+                onAbrirEdicion={(id) => {
+                    if (Number.isSafeInteger(id) && id > 0) setExpedienteEnEdicion(id);
+                }}
+            />
+
+            <NuevoProspectoModal
+                open={expedienteEnEdicion !== null}
+                mode="edit"
+                prospectoId={expedienteEnEdicion}
+                onClose={() => setExpedienteEnEdicion(null)}
+                onActualizado={() => { void cargarTodo(); }}
+                numeroAsesor={numeroAsesorActivo}
+                user={user}
+                isAdmin={isAdmin}
+                requestContext={{ numero_asesor: numeroAsesorActivo }}
+                tieneChatInicial={Boolean(prospectoSeleccionado?.telefono)}
             />
 
             <ChatDrawer
