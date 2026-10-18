@@ -4,6 +4,10 @@
  import { api } from "./apiPruebas";
 
  export const apiEtapasV3 = {
+   disponibilidad() {
+     return api.get("/digitales/api/etapas-v3/disponibilidad/");
+   },
+
    agendarCitaChat({ expedienteId, fechaHoraCita, agencia, asesorPiso, comentarios, claveIdempotencia }) {
      return api.post("/digitales/api/etapas-v3/citas-chat/", {
        expediente_id: Number(expedienteId),
@@ -49,6 +53,16 @@
      }
 
      return api.get(`/digitales/api/etapas-v3/expedientes/${id}/`);
+   },
+
+   registrarFacturacionVin({ expedienteId, vin }) {
+     const id = Number(expedienteId);
+     if (!Number.isSafeInteger(id) || id <= 0) {
+       return Promise.reject(new Error("No hay expediente seleccionado."));
+     }
+     return api.post(`/digitales/api/prospectos/${id}/facturacion-v3/`, {
+       vin_facturado: vin.trim().toUpperCase(), confirmado: true,
+     });
    },
 
    registrarCotizacion({

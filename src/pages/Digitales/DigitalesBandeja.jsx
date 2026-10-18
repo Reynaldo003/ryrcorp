@@ -15,6 +15,7 @@ import {
 } from "lucide-react";import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
+import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 import { encontrarCategoriaDeMotivo, MOTIVOS_DESCALIFICACION_POR_CATEGORIA } from "./motivosDescalificacion";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
@@ -64,9 +65,10 @@ const ESTADOS_BANDEJA = [
     { key: "lead_perdido", label: "Lead perdido", color: "#DC2626" },
     { key: "sin_iniciar_v3", label: "Pendiente de clasificación", color: "#94A3B8" },
 ];
-const COLUMNAS_BANDEJA = ESTADOS_BANDEJA;
 const ETAPAS_V3_KEYS = new Set(ESTADOS_BANDEJA.map((e) => e.key));
-function getColumnaBandeja(chat) {
+function getColumnaBandeja(chat, modoV3) {
+    // Sin acceso verificable a la API V3, conservar la clasificación anterior.
+    if (!modoV3) return getEstadoBandeja(chat?.estado).key;
     const etapa = chat?.etapa_comercial_v3;
     return ETAPAS_V3_KEYS.has(etapa) && etapa !== "sin_iniciar_v3" ? etapa : "sin_iniciar_v3";
 }
@@ -235,6 +237,8 @@ function PulseRing({ value = 0, label, color = BRAND_BLUE, size = 60, stroke = 6
 
 
 function PipelineSidebar({
+    columnas,
+    modoV3,
     conteoPorEstado,
     total,
     nuevosHoy,
@@ -246,7 +250,7 @@ function PipelineSidebar({
 }) {
     const maxEstado = Math.max(
         1,
-        ...ESTADOS_BANDEJA.map((estado) => conteoPorEstado.get(estado.key) || 0)
+        ...columnas.map((estado) => conteoPorEstado.get(estado.key) || 0)
     );
 
     return (
@@ -268,11 +272,15 @@ function PipelineSidebar({
                     </span>
                 </div>
 
-                <div className="grid min-w-0 grid-cols-3 gap-1">
-                    <PulseRing value={tasaAtencion} label="Atención" color="#3B82F6" size={54} stroke={5} />
-                    <PulseRing value={tasaConversion} label="Conversión" color="#F97316" size={54} stroke={5} />
-                    <PulseRing value={tasaLectura} label="Lectura" color="#8B5CF6" size={54} stroke={5} />
-                </div>
+                {modoV3 ? (
+                    <div className="grid min-w-0 grid-cols-3 gap-1">
+                        <PulseRing value={tasaAtencion} label="Atención" color="#3B82F6" size={54} stroke={5} />
+                        <PulseRing value={tasaConversion} label="Conversión" color="#F97316" size={54} stroke={5} />
+                        <PulseRing value={tasaLectura} label="Lectura" color="#8B5CF6" size={54} stroke={5} />
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-slate-500">V3 no disponible para este usuario. Se muestran los estados anteriores, sin calcular indicadores V3.</p>
+                )}
             </section>
 
             {/* PIPELINE */}
@@ -284,7 +292,7 @@ function PipelineSidebar({
                                 Estado de prospectos
                             </h2>
                             <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
-                                Etapas del proceso comercial
+                                {modoV3 ? "Etapas comerciales V3" : "Estados del CRM anterior"}
                             </p>
                         </div>
 
@@ -339,7 +347,7 @@ function PipelineSidebar({
                     </div>
 
                     <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-1">
-                        {ESTADOS_BANDEJA.map((estado) => {
+                        {columnas.map((estado) => {
                             const cantidad = conteoPorEstado.get(estado.key) || 0;
                             const porcentaje = Math.min(100, (cantidad / maxEstado) * 100);
                             const activo = filtroActivo === estado.key;
@@ -398,9 +406,9 @@ function PipelineSidebar({
     );
 }
 
-function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
+function ChatCard({ chat, onOpen, onChangeEtapa, modoV3, selected = false }) {
     const estado = getEstadoBandeja(chat.estado);
-    const etapaV3 = chat.etapa_comercial_v3 && ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3];
+    const etapaV3 = modoV3 && chat.etapa_comercial_v3 && ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3];
     const ultimoMensaje = String(chat?.last?.text || "").trim() || "Sin mensajes recientes";
     const hora = formatHoraCorta(chat?.last?.timestamp) || chat?.last?.time || "—";
     const quiereSeminuevos = normalizeText(chat?.autoInteres).includes("seminuevos");
@@ -413,8 +421,9 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
     const [savingEtapa, setSavingEtapa] = useState(false);
     const [descModalOpen, setDescModalOpen] = useState(false);
     const [descMotivo, setDescMotivo] = useState("");
-    const columnaActualKey = getColumnaBandeja(chat);
-    const columnaActual = ESTADOS_BANDEJA.find((e) => e.key === columnaActualKey) || ESTADOS_BANDEJA[0];
+    const columnaActualKey = getColumnaBandeja(chat, modoV3);
+    const columnas = modoV3 ? ESTADOS_BANDEJA : ESTADOS_LEGACY_BANDEJA;
+    const columnaActual = columnas.find((e) => e.key === columnaActualKey) || columnas[0];
 
     async function handleEtapaChange(label) {
         if (savingEtapa) return;
@@ -2609,7 +2618,7 @@ function InfoRow({ label, value, className }) {
     );
 }
 
-function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaActualizada, onAbrirEdicion }) {
+function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaActualizada, onAbrirEdicion, modoV3 }) {
     const telefono = String(prospecto?.telefono || "");
     const cita = prospecto?.cita || null;
     const estadoCita = estadoCitaDe(cita);
@@ -2620,7 +2629,9 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
     const interes = firstNonEmpty(prospecto?.auto_interes, prospecto?.interes, prospecto?.vehiculo, prospecto?.modelo) || "Por confirmar";
     const asignadoA = String(prospecto?.asignadoA || "").trim() || "Sin asignar";
     const estado = getEstadoBandeja(prospecto?.estado);
-    const etapaOficial = ESTADOS_BANDEJA.find((e) => e.key === getColumnaBandeja(prospecto)) || ESTADOS_BANDEJA[ESTADOS_BANDEJA.length - 1];
+    const etapaOficial = modoV3
+        ? (ESTADOS_BANDEJA.find((e) => e.key === getColumnaBandeja(prospecto, true)) || ESTADOS_BANDEJA[ESTADOS_BANDEJA.length - 1])
+        : estado;
     const esDescalificado = safeLower(estado?.key) === "descalificado";
     const motivoDesc = String(prospecto?.motivo_descalificacion || "").trim();
     const categoriaMotivo = esDescalificado && motivoDesc ? encontrarCategoriaDeMotivo(motivoDesc) : null;
@@ -2707,11 +2718,12 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
                         </div>
                     </div>
 
-                    {prospecto?.estado ? (
+                    {modoV3 && prospecto?.estado ? (
                         <p className="mt-2 text-[11px] text-slate-500">Estado histórico (solo referencia): {prospecto.estado}</p>
                     ) : null}
 
                     {Number.isSafeInteger(Number(prospecto?.prospectoId)) && Number(prospecto?.prospectoId) > 0 ? (
+                        modoV3 ? (
                         <div className="mt-3">
                             <EtapasComercialesV3Panel
                                 expedienteId={Number(prospecto.prospectoId)}
@@ -2721,6 +2733,13 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
                                 onAbrirEdicion={() => onAbrirEdicion?.(Number(prospecto.prospectoId))}
                             />
                         </div>
+                        ) : (
+                            <button type="button"
+                                onClick={() => onAbrirEdicion?.(Number(prospecto.prospectoId))}
+                                className="mt-3 w-full rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white">
+                                Editar prospecto
+                            </button>
+                        )
                     ) : (
                         <p className="mt-3 text-xs text-amber-700">Esta conversación no tiene expediente comercial asociado. Registra un prospecto para gestionar sus etapas.</p>
                     )}
@@ -2896,12 +2915,18 @@ export default function DigitalesBandeja() {
     const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
     const [expedienteEnEdicion, setExpedienteEnEdicion] = useState(null);
     const [filtroActivo, setFiltroActivo] = useState("todos");
+    const [modoV3, setModoV3] = useState(false);
+    const columnasBandeja = modoV3 ? ESTADOS_BANDEJA : ESTADOS_LEGACY_BANDEJA;
+    const columnasKeys = useMemo(() => new Set(columnasBandeja.map((e) => e.key)), [columnasBandeja]);
     const [periodo, setPeriodo] = useState("recientes");
     const [orden, setOrden] = useState("reciente");
 
     const requestRef = useRef(0);
     const kanbanScrollRef = useRef(null);
     const kanbanColumnRefs = useRef(new Map());
+
+    // Al alternar entre los pipelines, descartar filtros de columnas inexistentes.
+    useEffect(() => { setFiltroActivo("todos"); }, [modoV3]);
 
     useEffect(() => {
         if (["todos", "no_leidos", "nuevos", "mios"].includes(filtroActivo)) {
@@ -2959,6 +2984,15 @@ export default function DigitalesBandeja() {
             if (!Array.isArray(respuesta) && respuesta?.next) {
                 throw new Error("El listado está paginado. Antes de mostrar cifras completas debemos recorrer sus páginas.");
             }
+
+            // Un GET autenticado y de solo lectura confirma V3 para el usuario.
+            // No depende de los primeros expedientes del listado ni de sus dueños.
+            // En error se conserva temporalmente la bandeja histórica.
+            const disponibilidadV3 = await apiEtapasV3.disponibilidad()
+                .catch(() => null);
+            if (requestId !== requestRef.current) return;
+            setModoV3(disponibilidadV3?.habilitada === true);
+
             const citasResp = await apiCitas.list().catch((err) => {
                 console.warn("No se pudieron cargar citas complementarias:", err);
                 return [];
@@ -3180,11 +3214,11 @@ export default function DigitalesBandeja() {
             normalizaTelefonoMx(chat.telefono).includes(normalizaTelefonoMx(q) || query) ||
             normalizeText(chat.agencia).includes(query) ||
             normalizeText(chat.estado).includes(query) ||
-            normalizeText(ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3] || "Pendiente de clasificación").includes(query) ||
+            (modoV3 && normalizeText(ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3] || "Pendiente de clasificación").includes(query)) ||
             normalizeText(chat.last?.text).includes(query) ||
             normalizeText(chat.asignadoA).includes(query)
         );
-    }, [chatsEnriquecidos, q]);
+    }, [chatsEnriquecidos, q, modoV3]);
 
 
     const chatsNuevosHoy = useMemo(() => {
@@ -3211,13 +3245,13 @@ export default function DigitalesBandeja() {
     const statsGenerales = useMemo(() => {
         const total = chatsEnriquecidos.length;
         const conteoPorEstado = new Map(
-            ESTADOS_BANDEJA.map((estado) => [estado.key, 0])
+            columnasBandeja.map((estado) => [estado.key, 0])
         );
 
         let totalUnread = 0;
 
         for (const chat of chatsEnriquecidos) {
-            const etapa = getColumnaBandeja(chat);
+            const etapa = getColumnaBandeja(chat, modoV3);
             conteoPorEstado.set(
                 etapa,
                 (conteoPorEstado.get(etapa) || 0) + 1
@@ -3225,8 +3259,10 @@ export default function DigitalesBandeja() {
             totalUnread += Number(chat.unread || 0);
         }
 
-        const cierres = conteoPorEstado.get("facturado") || 0;
-        const sinAtender = (conteoPorEstado.get("nuevo_prospecto") || 0) + (conteoPorEstado.get("sin_iniciar_v3") || 0);
+        const cierres = modoV3 ? (conteoPorEstado.get("facturado") || 0) : 0;
+        const sinAtender = modoV3
+            ? (conteoPorEstado.get("nuevo_prospecto") || 0) + (conteoPorEstado.get("sin_iniciar_v3") || 0)
+            : 0;
         const chatsConUnread = chatsEnriquecidos.filter(
             (chat) => Number(chat.unread || 0) > 0
         ).length;
@@ -3245,7 +3281,7 @@ export default function DigitalesBandeja() {
                 ? Math.round(((total - chatsConUnread) / total) * 100)
                 : 100,
         };
-    }, [chatsEnriquecidos]);
+    }, [chatsEnriquecidos, columnasBandeja, modoV3]);
 
     const nuevosHoySet = useMemo(
         () => new Set(chatsNuevosHoy.map((chat) => chat.telefono)),
@@ -3261,8 +3297,8 @@ export default function DigitalesBandeja() {
             items = items.filter((chat) => Number(chat.unread || 0) > 0);
         } else if (filtroActivo === "mios") {
             items = items.filter((chat) => Boolean(chat.esMio));
-        } else if (ETAPAS_V3_KEYS.has(filtroActivo)) {
-            items = items.filter((chat) => getColumnaBandeja(chat) === filtroActivo);
+        } else if (columnasKeys.has(filtroActivo)) {
+            items = items.filter((chat) => getColumnaBandeja(chat, modoV3) === filtroActivo);
         }
 
         return items.sort((a, b) => {
@@ -3278,16 +3314,16 @@ export default function DigitalesBandeja() {
             if (orden === "antiguo") return ta - tb;
             return tb - ta;
         });
-    }, [filteredChats, filtroActivo, nuevosHoySet, orden]);
+    }, [filteredChats, filtroActivo, nuevosHoySet, orden, columnasKeys, modoV3]);
 
     const chatsPorColumna = useMemo(() => {
-        const map = new Map(ESTADOS_BANDEJA.map((estado) => [estado.key, []]));
+        const map = new Map(columnasBandeja.map((estado) => [estado.key, []]));
         for (const chat of chatsVisibles) {
-            const columna = getColumnaBandeja(chat);
+            const columna = getColumnaBandeja(chat, modoV3);
             map.get(columna)?.push(chat);
         }
         return map;
-    }, [chatsVisibles]);
+    }, [chatsVisibles, columnasBandeja, modoV3]);
 
     const noLeidosCount = useMemo(
         () => chatsEnriquecidos.filter((chat) => Number(chat.unread || 0) > 0).length,
@@ -3325,7 +3361,7 @@ export default function DigitalesBandeja() {
             };
         }
 
-        const estado = ESTADOS_BANDEJA.find(
+        const estado = columnasBandeja.find(
             (item) => item.key === filtroActivo
         );
 
@@ -3334,7 +3370,7 @@ export default function DigitalesBandeja() {
             color: estado?.color || BRAND_BLUE,
             description: "Prospectos en esta etapa comercial",
         };
-    }, [filtroActivo]);
+    }, [filtroActivo, columnasBandeja]);
 
     function cambiarLinea(numero) {
         const normalized = normalizaTelefonoMx(numero);
@@ -3481,6 +3517,8 @@ export default function DigitalesBandeja() {
             <div className="grid min-w-0 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
                 <div className="min-w-0 max-w-full overflow-hidden xl:h-[calc(100dvh-150px)] xl:min-h-[620px]">
                     <PipelineSidebar
+                        columnas={columnasBandeja}
+                        modoV3={modoV3}
                         conteoPorEstado={statsGenerales.conteoPorEstado}
                         total={statsGenerales.total}
                         nuevosHoy={chatsNuevosHoy.length}
@@ -3578,7 +3616,7 @@ export default function DigitalesBandeja() {
                             </div>
                         ) : (
                             <div ref={kanbanScrollRef} className="flex h-full min-w-0 items-stretch gap-3 overflow-x-auto overflow-y-hidden px-3 py-3">
-                                {COLUMNAS_BANDEJA.map((estado) => {
+                                {columnasBandeja.map((estado) => {
                                     const items = chatsPorColumna.get(estado.key) || [];
                                     const activo = filtroActivo === estado.key;
                                     return (
@@ -3624,6 +3662,7 @@ export default function DigitalesBandeja() {
                                                         <ChatCard
                                                             key={chat.id}
                                                             chat={chat}
+                                                            modoV3={modoV3}
                                                             onOpen={abrirProspecto}
                                                             onChangeEtapa={guardarEtapa}
                                                             selected={prospectoSeleccionado?.prospectoId ? Number(prospectoSeleccionado.prospectoId) === Number(chat.prospectoId) : prospectoSeleccionado?.id === chat.id}
@@ -3659,6 +3698,7 @@ export default function DigitalesBandeja() {
                 key={prospectoSeleccionado?.telefono || "ninguno"}
                 open={Boolean(prospectoSeleccionado)}
                 prospecto={prospectoSeleccionado}
+                modoV3={modoV3}
                 onClose={() => setProspectoSeleccionado(null)}
                 onOpenChat={(telefono) => setDrawerTel(telefono)}
                 onEtapaActualizada={() => { void cargarTodo(); }}

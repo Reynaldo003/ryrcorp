@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldAlert, FileCheck2 } from "lucide-react";
 import { apiEtapasV3 } from "../../lib/apiEtapasV3";
-import { apiCitas } from "../../lib/apiCitas";
+import { useAsesoresGestionComercial } from "../../hooks/useAsesoresGestionComercial";
 import "./EtapasComercialesV3Panel.chat.css";
 
 const ETAPAS = [
@@ -238,6 +238,23 @@ function nuevaClaveIdempotencia() {
   return `cotizacion:${Date.now()}:${Math.random().toString(36).slice(2, 14)}`;
 }
 
+// Montar el catálogo únicamente al abrir «Agendar nueva cita». El panel puede
+// aparecer muchas veces en listados; no lanzar una petición por cada tarjeta.
+function SelectorAsesorPisoCitaV3({ value, onChange, disabled }) {
+  const { nombresAsesoresActivos, cargando, usandoFallback } = useAsesoresGestionComercial();
+  return (
+    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+      Asesor que atenderá la cita (obligatorio)
+      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled || cargando}
+        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+        <option value="">— Selecciona asesor —</option>
+        {nombresAsesoresActivos.map((nombre) => <option key={nombre} value={nombre}>{nombre}</option>)}
+      </select>
+      {usandoFallback ? <span className="text-[11px] font-normal text-amber-800">Catálogo no disponible; se muestra la lista de respaldo utilizada por Contacto.</span> : null}
+    </label>
+  );
+}
+
 export default function EtapasComercialesV3Panel({ expedienteId, prospecto = null, onActualizado, compact = false, onAbrirEdicion, enChat = false, onAgendarCitaChat }) {
   const [revision, setRevision] = useState(0);
   const [resultado, setResultado] = useState(null);
@@ -257,7 +274,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const [nuevaCitaFecha, setNuevaCitaFecha] = useState("");
   const [nuevaCitaHora, setNuevaCitaHora] = useState("12:00");
   const [nuevaCitaAgencia, setNuevaCitaAgencia] = useState("");
-  const [nuevaCitaAuto, setNuevaCitaAuto] = useState("");
+  const [nuevaCitaAsesorPiso, setNuevaCitaAsesorPiso] = useState("");
+  const [nuevaCitaComentarios, setNuevaCitaComentarios] = useState("");
   const [citasCliente, setCitasCliente] = useState([]);
   const [cargandoCitasCliente, setCargandoCitasCliente] = useState(false);
   const [citaIdTexto, setCitaIdTexto] = useState("");
@@ -266,7 +284,6 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const [errorCita, setErrorCita] = useState("");
   const [avisoCita, setAvisoCita] = useState("");
   const intentoCitaRef = useRef(null);
-  const citaCreadaIdRef = useRef(null);
   // Fase 12: la cita debe estar previamente vinculada; solo se registra visita real.
   const [mostrarAsistencia, setMostrarAsistencia] = useState(false);
   const [citaAsistenciaTexto, setCitaAsistenciaTexto] = useState("");
@@ -322,6 +339,12 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const [errorPerdida, setErrorPerdida] = useState("");
   const [avisoPerdida, setAvisoPerdida] = useState("");
   const intentoPerdidaRef = useRef(null);
+  const [mostrarFacturacion, setMostrarFacturacion] = useState(false);
+  const [vinFacturacion, setVinFacturacion] = useState("");
+  const [confirmarFacturacion, setConfirmarFacturacion] = useState(false);
+  const [guardandoFacturacion, setGuardandoFacturacion] = useState(false);
+  const [errorFacturacion, setErrorFacturacion] = useState("");
+  const [avisoFacturacion, setAvisoFacturacion] = useState("");
   // Corrección auditada de una actividad concreta, sin selector libre de etapa.
   const [mostrarContactoExterno, setMostrarContactoExterno] = useState(false);
   const [medioContacto, setMedioContacto] = useState("llamada");
@@ -352,7 +375,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setNuevaCitaFecha("");
     setNuevaCitaHora("12:00");
     setNuevaCitaAgencia(prospecto?.agencia || "");
-    setNuevaCitaAuto(prospecto?.auto_interes || prospecto?.autoInteres || "");
+    setNuevaCitaAsesorPiso("");
+    setNuevaCitaComentarios("");
     setCitasCliente([]);
     const citaGuardada = typeof sessionStorage !== "undefined" && expedienteId
       ? sessionStorage.getItem(`v3_cita_pendiente_${expedienteId}`) || ""
@@ -362,7 +386,6 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setErrorCita("");
     setAvisoCita("");
     intentoCitaRef.current = null;
-    citaCreadaIdRef.current = citaGuardada ? Number(citaGuardada) : null;
     setMostrarAsistencia(false);
     setCitaAsistenciaTexto("");
     setFechaAsistencia("");
@@ -407,6 +430,11 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setErrorPerdida("");
     setAvisoPerdida("");
     intentoPerdidaRef.current = null;
+    setMostrarFacturacion(false);
+    setVinFacturacion("");
+    setConfirmarFacturacion(false);
+    setErrorFacturacion("");
+    setAvisoFacturacion("");
     setMostrarContactoExterno(false);
     setMedioContacto("llamada");
     setFechaContacto(fechaHoyMx());
@@ -500,9 +528,6 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     if (!nuevaCitaAgencia && prospecto?.agencia) {
       setNuevaCitaAgencia(prospecto.agencia);
     }
-    if (!nuevaCitaAuto && (prospecto?.auto_interes || prospecto?.autoInteres || vehiculo)) {
-      setNuevaCitaAuto(prospecto?.auto_interes || prospecto?.autoInteres || vehiculo || "");
-    }
     // Citas recuperadas por Django para este expediente, no por páginas genéricas.
     const opciones = citasDisponibles;
     setCitasCliente(opciones);
@@ -540,6 +565,10 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     "en_seguimiento", "cotizacion_enviada", "cita_agendada",
     "cita_asistida", "documentos_enviados", "autorizado_no_formalizado",
   ].includes(actual);
+  const permiteFacturacion = resultado?.iniciado && [
+    "en_seguimiento", "cotizacion_enviada", "cita_agendada", "cita_asistida",
+    "documentos_enviados", "autorizado_no_formalizado",
+  ].includes(actual);
   const permitePerdida = resultado?.iniciado && actual &&
     !["compra_futura", "lead_perdido", "facturado"].includes(actual);
   const permiteReactivacion = resultado?.iniciado &&
@@ -547,6 +576,31 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const recordatorioCompra = actual === "compra_futura" ? resultado?.recordatorio_compra_futura : null;
   const contactoVencido = Boolean(recordatorioCompra?.proximo_contacto &&
     recordatorioCompra.proximo_contacto <= fechaHoyMx());
+
+  async function registrarFacturacion() {
+    if (guardandoFacturacion || !permiteFacturacion) return;
+    const vin = vinFacturacion.trim().toUpperCase();
+    setErrorFacturacion("");
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
+      setErrorFacturacion("Ingresa un VIN válido de 17 caracteres."); return;
+    }
+    if (!confirmarFacturacion) {
+      setErrorFacturacion("Confirma que el VIN corresponde a un vehículo facturado."); return;
+    }
+    setGuardandoFacturacion(true);
+    try {
+      await apiEtapasV3.registrarFacturacionVin({ expedienteId, vin });
+      setMostrarFacturacion(false);
+      setConfirmarFacturacion(false);
+      setAvisoFacturacion("VIN guardado y etapa Facturado registrada correctamente.");
+      onActualizado?.();
+      setRevision((valor) => valor + 1);
+    } catch (err) {
+      setErrorFacturacion(err?.message || "No fue posible registrar el VIN facturado.");
+    } finally {
+      setGuardandoFacturacion(false);
+    }
+  }
 
   async function registrarLeadPerdido() {
     if (guardandoPerdida || !permitePerdida) return;
@@ -845,98 +899,90 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
       setErrorCita("Confirma los datos de la cita para este prospecto.");
       return;
     }
+
+    const esAlta = modoCita === "crear" && !enChat;
+    let citaId = null;
+    let firma;
+    let fechaHoraCita = "";
+    let agencia = "";
+    let asesorPiso = "";
+    let comentarios = "";
+
+    if (esAlta) {
+      const fecha = nuevaCitaFecha.trim();
+      const hora = nuevaCitaHora.trim();
+      // El backend exige que sea exactamente la sucursal del expediente.
+      agencia = String(prospecto?.agencia || nuevaCitaAgencia || "").trim();
+      asesorPiso = nuevaCitaAsesorPiso.trim();
+      comentarios = nuevaCitaComentarios.trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora)) {
+        setErrorCita("Selecciona fecha y hora válidas para la cita.");
+        return;
+      }
+      if (!agencia) {
+        setErrorCita("El expediente debe tener una agencia para agendar una cita.");
+        return;
+      }
+      if (!asesorPiso) {
+        setErrorCita("Selecciona el asesor que atenderá la cita.");
+        return;
+      }
+      if (comentarios.length > 2000) {
+        setErrorCita("Los comentarios no pueden superar 2000 caracteres.");
+        return;
+      }
+      fechaHoraCita = `${fecha}T${hora}:00`;
+      firma = JSON.stringify([expedienteId, fechaHoraCita, agencia, asesorPiso, comentarios]);
+    } else {
+      citaId = Number(citaIdTexto.trim());
+      if (!Number.isSafeInteger(citaId) || citaId <= 0 || !citasCliente.some((c) => Number(c.id) === citaId)) {
+        setErrorCita("Selecciona una cita del prospecto por su fecha y sucursal, o agenda una nueva.");
+        return;
+      }
+      firma = JSON.stringify([expedienteId, citaId]);
+    }
+
+    // Conservar la misma clave si falla la conexión: Django resuelve reintentos
+    // sin duplicar la cita o la actividad, siempre que no cambie el formulario.
+    if (intentoCitaRef.current?.firma !== firma) {
+      const uuid = (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+      intentoCitaRef.current = { firma, clave: `cita:${uuid}` };
+    }
+
     setGuardandoCita(true);
     try {
-      let citaId = Number(citaIdTexto.trim());
-      if (modoCita === "crear") {
-        if (!citaCreadaIdRef.current) {
-          const f = nuevaCitaFecha.trim();
-          const h = (nuevaCitaHora || "12:00").trim();
-          const ag = (nuevaCitaAgencia || prospecto?.agencia || "").trim();
-          const auto = (nuevaCitaAuto || prospecto?.auto_interes || prospecto?.autoInteres || vehiculo || "Por definir").trim();
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || !/^\d{2}:\d{2}/.test(h)) {
-            setErrorCita("Selecciona la fecha y hora de la cita.");
-            setGuardandoCita(false);
-            return;
-          }
-          if (!ag) {
-            setErrorCita("Selecciona la sucursal de la cita.");
-            setGuardandoCita(false);
-            return;
-          }
-          const isoPrefijo = `${f}T${h.slice(0, 5)}`;
-          const coincidente = citasCliente.find((c) =>
-            !c?.asistencia &&
-            String(c?.agencia || "").trim().toLowerCase() === ag.toLowerCase() &&
-            String(c?.fecha_hora_cita || "").startsWith(isoPrefijo)
-          );
-          if (coincidente?.id) {
-            citaCreadaIdRef.current = Number(coincidente.id);
-          } else {
-            const payloadCita = {
-              agencia: ag,
-              auto_interes: auto,
-              fecha_hora_cita: `${isoPrefijo}:00`,
-              asistencia: false,
-              tipo_cita: "Digital",
-              motivo_cita: "Cita agendada desde seguimiento comercial",
-              fuente_prospeccion: prospecto?.canal_contacto || "Digital",
-              asesor_digital: prospecto?.asesor_digital || prospecto?.asignadoA || "",
-            };
-            if (Number(prospecto?.cliente_id) > 0) {
-              payloadCita.cliente_id = Number(prospecto.cliente_id);
-            } else {
-              payloadCita.nombre = prospecto?.nombre || "Prospecto";
-              payloadCita.telefono = prospecto?.telefono || "";
-              payloadCita.correo = prospecto?.correo || "";
-            }
-            const creada = await apiCitas.create(payloadCita);
-            if (!creada?.id) {
-              throw new Error("No se recibió el identificador de la cita creada.");
-            }
-            citaCreadaIdRef.current = Number(creada.id);
-          }
-          if (typeof sessionStorage !== "undefined" && expedienteId) {
-            sessionStorage.setItem(`v3_cita_pendiente_${expedienteId}`, String(citaCreadaIdRef.current));
-          }
-          setCitaIdTexto(String(citaCreadaIdRef.current));
-        }
-        citaId = Number(citaCreadaIdRef.current);
-      } else {
-        if (!Number.isSafeInteger(citaId) || citaId <= 0 || !citasCliente.some((c) => c.id === citaId)) {
-          setErrorCita("Selecciona una cita del prospecto por su fecha y sucursal, o agenda una nueva.");
-          setGuardandoCita(false);
-          return;
-        }
-      }
-
-      const firma = JSON.stringify([expedienteId, citaId]);
-      if (intentoCitaRef.current?.firma !== firma) {
-        const uuid = (typeof crypto !== "undefined" && crypto.randomUUID)
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
-        intentoCitaRef.current = { firma, clave: `cita:${uuid}` };
-      }
-
-      const registro = await apiEtapasV3.registrarCita({
-        expedienteId, citaId, claveIdempotencia: intentoCitaRef.current.clave,
-      });
+      // Alta V3: cita y etapa en una única transacción en Django.
+      // Existente: nunca crear otra cita, solo verificar y vincularla.
+      const registro = esAlta
+        ? await apiEtapasV3.agendarCitaChat({
+            expedienteId, fechaHoraCita, agencia, asesorPiso, comentarios,
+            claveIdempotencia: intentoCitaRef.current.clave,
+          })
+        : await apiEtapasV3.registrarCita({
+            expedienteId, citaId, claveIdempotencia: intentoCitaRef.current.clave,
+          });
+      const citaVinculadaId = esAlta ? Number(registro?.cita_id) : citaId;
       if (typeof sessionStorage !== "undefined" && expedienteId) {
+        // Compatibilidad con citas pendientes del formulario V3 anterior.
         sessionStorage.removeItem(`v3_cita_pendiente_${expedienteId}`);
       }
       setAvisoRegistro("");
       setAvisoCita(registro?.duplicado
-        ? "La cita ya estaba vinculada; se recuperó el registro anterior."
+        ? "La cita ya estaba registrada; se recuperó el intento anterior."
         : "Cita agendada y vinculada correctamente. El historial se ha actualizado.");
       setMostrarFormularioCita(false);
       setConfirmarCita(false);
       intentoCitaRef.current = null;
-      citaCreadaIdRef.current = null;
-      setCitaAsistenciaTexto(String(citaId));
+      if (Number.isSafeInteger(citaVinculadaId) && citaVinculadaId > 0) {
+        setCitaAsistenciaTexto(String(citaVinculadaId));
+      }
       onActualizado?.();
       setRevision((v) => v + 1);
     } catch (err) {
-      setErrorCita(err?.message || "No se pudo agendar o vincular la cita. Si la cita ya se creó, pulsa nuevamente para vincularla sin duplicar.");
+      setErrorCita(err?.message || (esAlta
+        ? "No se pudo agendar la cita. Comprueba los datos y vuelve a intentar."
+        : "No se pudo vincular la cita existente. Revisa su fecha y sucursal."));
     } finally {
       setGuardandoCita(false);
     }
@@ -953,8 +999,8 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
       setErrorRegistro("Indica una fecha válida de envío que no sea futura.");
       return;
     }
-    if (!veh || !ref) {
-      setErrorRegistro("Escribe el vehículo y la referencia de la cotización enviada.");
+    if (!veh) {
+      setErrorRegistro("Escribe el vehículo de la cotización enviada.");
       return;
     }
     if (!confirmar) {
@@ -1180,7 +1226,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-xs font-extrabold text-[#131E5C]">Cotización enviada</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">Confirmación manual con fecha, vehículo y referencia.</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">Confirmación del envío con fecha y vehículo. La referencia es opcional.</p>
                   </div>
                   <button type="button" disabled={guardando} onClick={() => { setMostrarFormulario((v) => !v); setErrorRegistro(""); }}
                     className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
@@ -1197,9 +1243,9 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                       <input type="text" maxLength={255} value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} disabled={guardando}
                         placeholder="Ej. Jetta Trendline" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                     </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">Referencia de cotización
+                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">Referencia o folio (opcional)
                       <input type="text" maxLength={120} value={referencia} onChange={(e) => setReferencia(e.target.value)} disabled={guardando}
-                        placeholder="Folio o identificador verificable" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        placeholder="Si existe, indica el folio o referencia" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                     </label>
                     <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
                       <input type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} disabled={guardando} className="mt-0.5" />
@@ -1230,7 +1276,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                   <div>
                     <div className="text-xs font-extrabold text-[#131E5C]">Cita agendada</div>
                     <p className="mt-0.5 text-[11px] text-slate-500">
-                      Vincula una cita ya existente. No se crea otra cita ni se confirma asistencia.
+                      Agenda una nueva cita con asesor responsable o vincula una cita existente. La asistencia se confirma por separado.
                     </p>
                   </div>
                   <button type="button" disabled={guardandoCita}
@@ -1265,44 +1311,40 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                     ) : null}
                     {modoCita === "crear" && !enChat ? (
                       <>
-                        {citaCreadaIdRef.current ? (
-                          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 sm:col-span-2">
-                            Cita guardada. Confirma abajo para concluir el registro comercial.
-                          </p>
-                        ) : null}
                         <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
                           Fecha de cita
                           <input type="date" min={fechaHoyMx()} value={nuevaCitaFecha}
-                            onChange={(e) => { setNuevaCitaFecha(e.target.value); citaCreadaIdRef.current = null; }}
+                            onChange={(e) => setNuevaCitaFecha(e.target.value)}
                             disabled={guardandoCita}
                             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                         </label>
                         <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
                           Hora
                           <input type="time" value={nuevaCitaHora}
-                            onChange={(e) => { setNuevaCitaHora(e.target.value); citaCreadaIdRef.current = null; }}
+                            onChange={(e) => setNuevaCitaHora(e.target.value)}
                             disabled={guardandoCita}
                             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                         </label>
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                          Sucursal
-                          <select value={nuevaCitaAgencia}
-                            onChange={(e) => { setNuevaCitaAgencia(e.target.value); citaCreadaIdRef.current = null; }}
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs sm:col-span-2">
+                          <span className="font-bold text-[#131E5C]">Sucursal del expediente: </span>
+                          {prospecto?.agencia || nuevaCitaAgencia || "Sin agencia"}
+                          <p className="mt-1 text-[11px] text-slate-500">La cita se registra en la sucursal del prospecto, no en otra agencia.</p>
+                        </div>
+                        <SelectorAsesorPisoCitaV3
+                          value={nuevaCitaAsesorPiso}
+                          onChange={(valor) => setNuevaCitaAsesorPiso(valor)}
+                          disabled={guardandoCita}
+                        />
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                          Comentarios de la cita (opcional)
+                          <textarea value={nuevaCitaComentarios} maxLength={2000} rows={2}
+                            onChange={(e) => setNuevaCitaComentarios(e.target.value)}
                             disabled={guardandoCita}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
-                            <option value="">— Selecciona sucursal —</option>
-                            {["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"].map((ag) => (
-                              <option key={ag} value={ag}>{ag}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                          Vehículo de interés
-                          <input type="text" maxLength={120} value={nuevaCitaAuto}
-                            onChange={(e) => { setNuevaCitaAuto(e.target.value); citaCreadaIdRef.current = null; }}
-                            disabled={guardandoCita} placeholder="Ej. Taos Highline"
                             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
                         </label>
+                        <p className="text-[11px] text-slate-600 sm:col-span-2">
+                          Al confirmar, la cita y la etapa comercial se registran juntas. Si ya existe una cita pendiente para este cliente y sucursal, selecciónala en «Usar cita ya existente».
+                        </p>
                       </>
                     ) : (
                       <div className="grid gap-2 sm:col-span-2">
@@ -1324,7 +1366,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                           </label>
                         ) : null}
                         {citasCliente.length === 0 && !cargandoCitasCliente ? (
-                          <p className="text-xs text-amber-700">{enChat ? "No se encontró una cita para vincular. Agenda desde el botón azul indicando el asesor de piso y actualiza las etapas antes de vincularla." : "No se encontró una cita registrada de este prospecto. Selecciona «Agendar nueva cita» e indica fecha, hora y sucursal."}</p>
+                          <p className="text-xs text-amber-700">{enChat ? "No se encontró una cita para vincular. Agenda desde el botón azul indicando el asesor de piso y actualiza las etapas antes de vincularla." : "No se encontró una cita registrada de este prospecto. Selecciona «Agendar nueva cita» e indica fecha, hora y asesor."}</p>
                         ) : null}
                       </div>
                     )}
@@ -1595,6 +1637,47 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                         {guardandoCompra ? "Registrando…" : "Confirmar compra futura"}
                       </button>
                     </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {avisoFacturacion ? (
+              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoFacturacion}</p>
+            ) : null}
+            {permiteFacturacion ? (
+              <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-extrabold text-[#131E5C]">Facturado · captura operativa</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600">El VIN se guardará también en el campo VIN Facturado del expediente.</p>
+                  </div>
+                  <button type="button" disabled={guardandoFacturacion}
+                    onClick={() => { setMostrarFacturacion((valor) => !valor); setErrorFacturacion(""); }}
+                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                    {mostrarFacturacion ? "Cerrar" : "Registrar facturación"}
+                  </button>
+                </div>
+                {mostrarFacturacion ? (
+                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3">
+                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                      VIN facturado (17 caracteres)
+                      <input type="text" value={vinFacturacion} maxLength={17} disabled={guardandoFacturacion}
+                        onChange={(e) => setVinFacturacion(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 17))}
+                        autoComplete="off" placeholder="VIN del vehículo facturado"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                      <span className="text-[11px] font-normal text-slate-500">{vinFacturacion.length}/17 · Se registrará la fecha operativa; no verifica CFDI.</span>
+                    </label>
+                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700">
+                      <input type="checkbox" checked={confirmarFacturacion} disabled={guardandoFacturacion}
+                        onChange={(e) => setConfirmarFacturacion(e.target.checked)} className="mt-0.5" />
+                      Confirmo que este VIN corresponde a una operación facturada real.
+                    </label>
+                    {errorFacturacion ? <p role="alert" className="text-xs font-semibold text-red-700">{errorFacturacion}</p> : null}
+                    <button type="button" disabled={guardandoFacturacion || !confirmarFacturacion}
+                      onClick={registrarFacturacion}
+                      className="w-fit rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                      {guardandoFacturacion ? "Registrando…" : "Guardar VIN y marcar Facturado"}
+                    </button>
                   </div>
                 ) : null}
               </div>
