@@ -1365,7 +1365,7 @@ function getDefaultValueForTemplateField(field, context = {}, template = null) {
         return context.dato || "";
     }
 
-    return "";
+    return context.nombre || "";
 }
 
 function hasTemplateFieldValue(field, value) {
@@ -4111,6 +4111,24 @@ export default function DigitalesContacto() {
                     canalActual.toLowerCase()
             ) || "";
 
+        const asesorAuto = String(
+            prospecto?.asesor_digital ||
+            prospecto?.asesor_ventas ||
+            activeChat?.asesor_digital ||
+            obtenerNombreAsesorSesion(numeroAsesorActivo, user) ||
+            ""
+        ).trim();
+
+        const context = {
+            nombre: String(prospecto?.nombre_out || nombreProspecto).trim(),
+            agencia: bestDealer || currentAgencia,
+            modelo: String(prospecto?.auto_interes || prospecto?.cliente_interes || "").trim(),
+            canal: bestCanal || canalActual,
+            asesor: asesorAuto,
+            tema: prospecto?.auto_interes ? "auto de interés" : "cita",
+            dato: "",
+        };
+
         const values = {};
 
         for (const field of normalizedTemplate.fields || []) {
@@ -4157,7 +4175,11 @@ export default function DigitalesContacto() {
                 values[field.key] = "";
                 continue;
             }
-            values[field.key] = nombreProspecto;
+            values[field.key] = getDefaultValueForTemplateField(
+                field,
+                context,
+                normalizedTemplate
+            );
         }
 
         setTplDraft(values);

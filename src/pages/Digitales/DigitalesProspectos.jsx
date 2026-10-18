@@ -10,6 +10,7 @@ import { api } from "../../lib/apiPruebas";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { apiCitas } from "../../lib/apiCitas";
+import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { useAuth } from "../../auth/AuthContext";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -1723,6 +1724,8 @@ export default function DigitalesProspectos() {
     const reporteProspectosRef = useRef(null);
     const [openAgendaModal, setOpenAgendaModal] = useState(false);
     const [agendaInfo, setAgendaInfo] = useState(null);
+    // Se conserva entre reintentos identicos; una edicion del formulario cambia la firma.
+    const citaTablaIntentoRef = useRef(null);
     const [drafter, setDrafter] = useState({ agencia: "", fecha_cita: "", asesor_digital: "", asesor_solicita: "", tipo_cita: "Digital" });
     const [savingo, setSavingo] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
@@ -2636,6 +2639,8 @@ export default function DigitalesProspectos() {
         cargarTelefonosConChat().catch((error) => console.error("No se pudieron refrescar los chats después de enviar la plantilla:", error));
     };
     const closeAgendaModal = () => {
+        if (savingo) return;
+        citaTablaIntentoRef.current = null;
         setOpenAgendaModal(false);
         setAgendaInfo(null);
     };
@@ -2650,10 +2655,21 @@ export default function DigitalesProspectos() {
         setOpenSummaryModal(true);
     };
     const abrirAgendaCita = (row) => {
-        if (!row)
+        if (!row) return;
+        if (row.etapa_comercial_v3 && row.etapa_comercial_v3 !== "cotizacion_enviada") {
+            openEdit(row);
             return;
+        }
+        citaTablaIntentoRef.current = null;
         const nombre = `${row.cliente_nombre || ""} ${row.cliente_apellidos || ""}`.trim();
-        setAgendaInfo({ id_exp: row.id_exp, cliente_id: row.cliente_id, nombre, telefono: row.telefono || "", correo: row.correo || "", auto_interes: row.cliente_interes || "", agencia: row.agencia || "", fuente_prospeccion: row.origen || "", fecha_cita: "", asesor_digital: row.asesor_digital, asesor_solicita: row.asesor_solicita, tipo_cita: "Digital" });
+        setAgendaInfo({
+            id_exp: row.id_exp, cliente_id: row.cliente_id, nombre,
+            telefono: row.telefono || "", correo: row.correo || "",
+            auto_interes: row.cliente_interes || "", agencia: row.agencia || "",
+            fuente_prospeccion: row.origen || "", fecha_cita: "",
+            asesor_digital: row.asesor_digital, asesor_solicita: row.asesor_solicita,
+            tipo_cita: "Digital", etapa_comercial_v3: row.etapa_comercial_v3 || null,
+        });
         setOpenAgendaModal(true);
     };
     const openEdit = (row, estadoInicial = "") => {
@@ -2692,6 +2708,42 @@ export default function DigitalesProspectos() {
                 throw new Error(
                     "La cita debe tener un asesor digital."
                 );
+            }
+
+            if (agendaInfo.etapa_comercial_v3 === "cotizacion_enviada") {
+                const asesorPiso = String(drafter.asesor_solicita || "").trim();
+                if (!asesorPiso) {
+                    throw new Error("Selecciona el asesor de piso que atenderá la cita.");
+                }
+                const fechaHoraCita = drafter.fecha_cita.length === 16
+                    ? `${drafter.fecha_cita}:00`
+                    : drafter.fecha_cita;
+                const agenciaCita = String(agendaInfo.agencia || drafter.agencia || "").trim();
+                const firma = JSON.stringify([
+                    agendaInfo.id_exp, fechaHoraCita, agenciaCita, asesorPiso, ""
+                ]);
+                if (!citaTablaIntentoRef.current || citaTablaIntentoRef.current.firma !== firma) {
+                    citaTablaIntentoRef.current = {
+                        firma, clave: `cita-tabla-v3-${crypto.randomUUID()}`,
+                    };
+                }
+                await apiEtapasV3.agendarCitaChat({
+                    expedienteId: agendaInfo.id_exp,
+                    fechaHoraCita,
+                    agencia: agenciaCita,
+                    asesorPiso,
+                    comentarios: "",
+                    claveIdempotencia: citaTablaIntentoRef.current.clave,
+                });
+                citaTablaIntentoRef.current = null;
+                setVersionOperativaBDC((version) => version + 1);
+                // El guardado fue exitoso incluso si falla la recarga de la tabla.
+                setOpenAgendaModal(false);
+                setAgendaInfo(null);
+                await refreshList().catch((error) => {
+                    console.error("Cita registrada; no se pudo actualizar la tabla:", error);
+                });
+                return;
             }
 
             await apiCitas.create({
@@ -3338,7 +3390,7 @@ export default function DigitalesProspectos() {
         </Modal>
         {/* Modal Agenda */}
         <Modal open={openAgendaModal} title="Agendar cita" onClose={closeAgendaModal} footer={<>
-            <button onClick={closeAgendaModal} className="inline-flex items-center gap-2 rounded-2xl bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
+            <button onClick={closeAgendaModal} disabled={savingo} className="inline-flex items-center gap-2 rounded-2xl bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
                 <X className="h-4 w-4" /> Cerrar
             </button>
             <button onClick={handleAgendar} disabled={!agendaInfo || savingo} className="inline-flex items-center gap-2 rounded-2xl bg-[#131E5C]/85 px-4 py-2 text-sm font-bold text-white hover:bg-[#131E5C] disabled:opacity-60">
