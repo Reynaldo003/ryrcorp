@@ -55,5 +55,17 @@ export const apiCitas = {
     http(`/citas/api/citas/${id}/`, jsonRequest("PUT", payload)),
   patch: (id, payload) =>
     http(`/citas/api/citas/${id}/`, jsonRequest("PATCH", payload)),
+  consultarVinculoAsistencia: (id) =>
+    http(`/citas/api/citas/${id}/vinculo-asistencia/`, {
+      auth: true,
+      retryWithoutAuth: false,
+    }),
+  confirmarAsistencia: (id, fechaAsistenciaReal) =>
+    http(
+      `/citas/api/citas/${id}/confirmar-asistencia/`,
+      jsonRequest("POST", {
+        fecha_asistencia_real: fechaAsistenciaReal,
+      })
+    ),
   remove: (id) => http(`/citas/api/citas/${id}/`, { method: "DELETE", retryWithoutAuth: false }),
 };

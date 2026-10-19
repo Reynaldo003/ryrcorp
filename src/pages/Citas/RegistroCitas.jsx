@@ -35,6 +35,7 @@ import {
     MoreVertical,
 } from "lucide-react";
 import { apiCitas } from "../../lib/apiCitas";
+import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { api } from "../../lib/apiPruebas";
 import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
 import {
@@ -43,10 +44,6 @@ import {
 import {
     useAsesoresGestionComercial,
 } from "../../hooks/useAsesoresGestionComercial";
-import {
-    estadoAutomaticoBandeja,
-    tieneCalificacionRapida,
-} from "../Digitales/estadosProspecto";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { FileDown } from "lucide-react";
@@ -76,215 +73,6 @@ function normalizaTelefonoMx(tel) {
     if (digits.length === 10) return `52${digits}`;
     if (digits.length === 12 && digits.startsWith("52")) return digits;
     return digits;
-}
-
-function esCitaDigital(cita = {}) {
-    return normalizeStr(cita?.tipo_cita).toLowerCase() === "digital";
-}
-
-// Al guardar una cita desde el panel de Citas replica en el expediente digital
-// los mismos datos que establece Contacto al agendar: agencia, vehículo de interés,
-// asesor asignado y la etapa "Cita Programada" si la cita quedó en el futuro.
-// Solo sobrescribe con valores no vacíos para nunca borrar datos del expediente.
-async function sincronizarExpedienteConCita(cita = {}) {
-    // Una cita que no sea digital NO debe tocar ExpedienteDigital.
-    if (!esCitaDigital(cita)) {
-        return;
-    }
-
-    const telefono = normalizaTelefonoMx(
-        cita?.cliente?.telefono ||
-        cita?.telefono ||
-        ""
-    );
-
-    if (!telefono) {
-        return;
-    }
-
-    const agencia = normalizeStr(cita?.agencia || "");
-    const autoInteres = normalizeStr(cita?.auto_interes || "");
-    const asesorDigital = normalizeStr(cita?.asesor_digital || "");
-    const asesorPiso = normalizeStr(cita?.asesor_piso || "");
-
-    const fecha = cita?.fecha_hora_cita;
-    const dt = fecha ? new Date(fecha) : null;
-
-    const esFutura =
-        dt &&
-        !Number.isNaN(dt.getTime()) &&
-        dt.getTime() > Date.now();
-
-    try {
-        const lista = await api.digitalesListProspectos({});
-
-        const prospectos = Array.isArray(lista)
-            ? lista
-            : Array.isArray(lista?.results)
-                ? lista.results
-                : [];
-
-        const prospecto = prospectos.find(
-            (p) => normalizaTelefonoMx(p?.telefono) === telefono
-        );
-
-        // MUY IMPORTANTE:
-        // Si no existe expediente digital, NO lo creamos.
-        if (!prospecto?.id) {
-            return;
-        }
-
-        const cambios = {
-            ...(agencia
-                ? { agencia }
-                : {}),
-
-            ...(autoInteres
-                ? { auto_interes: autoInteres }
-                : {}),
-
-            ...(asesorDigital
-                ? { asesor_digital: asesorDigital }
-                : {}),
-
-            ...(asesorPiso
-                ? { asesor_ventas: asesorPiso }
-                : {}),
-
-            ...(esFutura
-                ? { estado: "Cita Programada" }
-                : {}),
-        };
-
-        if (Object.keys(cambios).length === 0) {
-            return;
-        }
-
-        await api.digitalesPatchProspecto(
-            prospecto.id,
-            cambios
-        );
-    } catch (error) {
-        console.error(
-            "No se pudo sincronizar el expediente digital con la cita:",
-            error
-        );
-    }
-}
-// Cuando una cita ya ocurrió, sincroniza la etapa del prospecto en la bandeja
-// de digitales: "Asistencia a la Cita" si asistió, o "No asistió" si no.
-async function sincronizarEtapaConAsistencia(cita = {}) {
-    // La asistencia de una cita tradicional no debe modificar Digitales.
-    if (!esCitaDigital(cita)) {
-        return;
-    }
-
-    const telefono = normalizaTelefonoMx(
-        cita?.cliente?.telefono ||
-        cita?.telefono ||
-        ""
-    );
-
-    if (!telefono) {
-        return;
-    }
-
-    const fecha = cita?.fecha_hora_cita;
-
-    if (!fecha) {
-        return;
-    }
-
-    const dt = new Date(fecha);
-
-    if (Number.isNaN(dt.getTime())) {
-        return;
-    }
-
-    // La cita todavía no ocurre.
-    if (dt.getTime() > Date.now()) {
-        return;
-    }
-
-    const asistio = Boolean(cita?.asistencia);
-
-    try {
-        const lista = await api.digitalesListProspectos({});
-
-        const prospectos = Array.isArray(lista)
-            ? lista
-            : Array.isArray(lista?.results)
-                ? lista.results
-                : [];
-
-        const prospecto = prospectos.find(
-            (p) => normalizaTelefonoMx(p?.telefono) === telefono
-        );
-
-        // Nunca crear expediente desde aquí.
-        if (!prospecto?.id) {
-            return;
-        }
-
-        const estado = estadoAutomaticoBandeja({
-            plazo: prospecto?.plazo_compra,
-
-            vinFacturado:
-                prospecto?.vin_facturado,
-
-            vinEstatus:
-                prospecto?.vin_estatus_entrega,
-
-            folioSolicitudCredito:
-                prospecto?.folio_solicitud_credito,
-
-            evidencias:
-                prospecto?.evidencias,
-
-            calificacionRapidaLlena:
-                tieneCalificacionRapida({
-                    enganche_monto:
-                        prospecto?.enganche_monto,
-
-                    presupuesto_mensual:
-                        prospecto?.presupuesto_mensual,
-
-                    buro_estado:
-                        prospecto?.buro_estado,
-
-                    plazo_compra:
-                        prospecto?.plazo_compra,
-                }),
-
-            citaNoAsistio:
-                !asistio,
-
-            citaAsistio:
-                asistio,
-
-            engancheMonto:
-                prospecto?.enganche_monto,
-
-            presupuestoMensual:
-                prospecto?.presupuesto_mensual,
-
-            idCotizacion:
-                prospecto?.id_cotizacion,
-
-            estadoBase:
-                prospecto?.estado || "",
-        });
-
-        await api.digitalesPatchProspecto(
-            prospecto.id,
-            { estado }
-        );
-    } catch (error) {
-        console.error(
-            "No se pudo sincronizar la etapa en la bandeja:",
-            error
-        );
-    }
 }
 
 function toDTLocal(isoOrNull) {
@@ -476,11 +264,15 @@ function MobileCardList({ rows, loading, onEdit, onContext, onToggleAsistencia, 
                                         </div>
                                         <button disabled={isUpdating} onClick={(e) => { e.stopPropagation(); onToggleAsistencia(row); }}
                                             className={["shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold",
-                                                row.asistencia ? "bg-emerald-200 text-emerald-800 border-emerald-300" : "bg-red-200 text-red-800 border-red-300",
+                                                getEstatusCita(row) === "asistio"
+                                                    ? "bg-emerald-200 text-emerald-800 border-emerald-300"
+                                                    : getEstatusCita(row) === "no_asistio"
+                                                        ? "bg-red-200 text-red-800 border-red-300"
+                                                        : "bg-amber-200 text-amber-800 border-amber-300",
                                                 isUpdating ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"].join(" ")}
                                         >
                                             {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                                            {row.asistencia ? "Sí" : "No"}
+                                            {ESTATUS_UI[getEstatusCita(row)].label}
                                         </button>
                                     </div>
                                     <div className="mt-3 grid gap-2">
@@ -561,11 +353,15 @@ function formatFullDateEs(d) {
 // Deriva el estatus real de una cita: si aún no llega la fecha, está "Pendiente";
 // si ya pasó, se basa en el campo asistencia.
 function getEstatusCita(cita) {
-    if (!cita.fecha_hora_cita) return "pendiente";
-    const dt = new Date(cita.fecha_hora_cita);
-    if (Number.isNaN(dt.getTime())) return "pendiente";
-    if (dt.getTime() > Date.now()) return "pendiente";
-    return cita.asistencia ? "asistio" : "no_asistio";
+    if (cita.estado_asistencia === "no_asistio") {
+        return "no_asistio";
+    }
+
+    if (cita.asistencia || cita.estado_asistencia === "asistio") {
+        return "asistio";
+    }
+
+    return "pendiente";
 }
 
 const ESTATUS_UI = {
@@ -808,7 +604,7 @@ function CalendarioView({ rows, loading, onEdit, onContext, onToggleAsistencia, 
                                             </td>
                                             <td className="px-4 py-3">
                                                 <button
-                                                    disabled={isUpdating || estKey === "pendiente"}
+                                                    disabled={isUpdating || estKey === "asistio" || estKey === "no_asistio" || (row.fecha_hora_cita && new Date(row.fecha_hora_cita) > new Date())}
                                                     onClick={(e) => { e.stopPropagation(); onToggleAsistencia(row); }}
                                                     className={[
                                                         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold",
@@ -1128,9 +924,17 @@ function GraficosView({ rows }) {
 
     const stats = useMemo(() => {
         const total = rows.length;
-        const asistieron = rows.filter((r) => r.asistencia).length;
-        const noAsistieron = total - asistieron;
-        const pctAsist = total > 0 ? Math.round((asistieron / total) * 100) : 0;
+        const asistieron = rows.filter(
+            (r) => r.asistencia || r.estado_asistencia === "asistio"
+        ).length;
+
+        const noAsistieron = rows.filter(
+            (r) => r.estado_asistencia === "no_asistio"
+        ).length;
+        const totalResueltas = asistieron + noAsistieron;
+        const pctAsist = totalResueltas > 0
+            ? Math.round((asistieron / totalResueltas) * 100)
+            : 0;
 
         const porTipo = {};
         for (const r of rows) { const t = r.tipo_cita || "Sin tipo"; porTipo[t] = (porTipo[t] || 0) + 1; }
@@ -1436,6 +1240,11 @@ export default function RegistroCitas() {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
     const [updatingInline, setUpdatingInline] = useState({});
+    const [confirmacionAsistencia, setConfirmacionAsistencia] = useState(null);
+    const [fechaAsistenciaReal, setFechaAsistenciaReal] = useState("");
+    const [asistenciaVerificada, setAsistenciaVerificada] = useState(false);
+    const [guardandoAsistencia, setGuardandoAsistencia] = useState(false);
+    const claveAsistenciaRef = useRef(null);
     const [pruebaClienteLookup, setPruebaClienteLookup] = useState({ loading: false, estado: "no" });
     const [debouncedQ, setDebouncedQ] = useState("");
     const requestSeq = useRef(0);
@@ -1790,9 +1599,6 @@ export default function RegistroCitas() {
                 fecha_hora_cita:
                     fromDTLocalToISO(draft.fecha_hora_cita),
 
-                asistencia:
-                    !!draft.asistencia,
-
                 tipo_cita:
                     draft.tipo_cita || "",
 
@@ -1834,10 +1640,6 @@ export default function RegistroCitas() {
                     payload
                 );
             }
-            await sincronizarExpedienteConCita(payload);
-
-            await sincronizarEtapaConAsistencia(payload);
-
             await refreshList();
 
             closeModal();
@@ -1852,21 +1654,136 @@ export default function RegistroCitas() {
         }
     };
 
-    const toggleAsistenciaInline = async (row) => {
-        const id = row?.id; if (!id) return;
+    const cerrarConfirmacionAsistencia = () => {
+        if (guardandoAsistencia) return;
+
+        setConfirmacionAsistencia(null);
+        setFechaAsistenciaReal("");
+        setAsistenciaVerificada(false);
+        claveAsistenciaRef.current = null;
+    };
+
+    const toggleAsistenciaInline = (row) => {
+        if (!row?.id || guardandoAsistencia || updatingInline[row.id]) return;
+
+        if (row.asistencia || row.estado_asistencia === "asistio") {
+            alert("Esta asistencia ya está confirmada y no puede revertirse desde el calendario.");
+            return;
+        }
+
+        if (row.estado_asistencia === "no_asistio") {
+            alert("Esta cita ya fue clasificada como inasistencia.");
+            return;
+        }
+
         if (!isAdmin && userAgencias.length > 0 && !userTieneAgencia(row.agencia)) {
-            alert("No tienes permisos para modificar registros de otra agencia."); return;
+            alert("No tienes permisos para modificar registros de otra agencia.");
+            return;
         }
-        const prev = !!row.asistencia;
-        const siguiente = !prev;
-        setCitas((p) => p.map((c) => (c.id === id ? { ...c, asistencia: siguiente } : c)));
-        setUpdatingInline((p) => ({ ...p, [id]: true }));
+
+        if (!row.fecha_hora_cita) {
+            alert("La cita no tiene una fecha programada válida.");
+            return;
+        }
+
+        const fechaProgramada = new Date(row.fecha_hora_cita);
+
+        if (
+            Number.isNaN(fechaProgramada.getTime()) ||
+            fechaProgramada > new Date()
+        ) {
+            alert("No puedes confirmar la asistencia de una cita futura.");
+            return;
+        }
+
+        setConfirmacionAsistencia(row);
+        setFechaAsistenciaReal(toYMDLocal(new Date()));
+        setAsistenciaVerificada(false);
+        claveAsistenciaRef.current = crypto.randomUUID();
+    };
+
+    const guardarConfirmacionAsistencia = async () => {
+        const row = confirmacionAsistencia;
+        if (!row?.id || guardandoAsistencia) return;
+
+        if (!asistenciaVerificada) {
+            alert("Debes confirmar expresamente que el cliente asistió.");
+            return;
+        }
+
+        const programada = new Date(row.fecha_hora_cita);
+        const fechaProgramadaLocal = toYMDLocal(programada);
+        const hoyLocal = toYMDLocal(new Date());
+
+        if (
+            !fechaAsistenciaReal ||
+            fechaAsistenciaReal < fechaProgramadaLocal ||
+            fechaAsistenciaReal > hoyLocal
+        ) {
+            alert("La fecha real debe estar entre la fecha programada y hoy.");
+            return;
+        }
+
+        const id = row.id;
+
+        setGuardandoAsistencia(true);
+        setUpdatingInline((prev) => ({ ...prev, [id]: true }));
+
         try {
-            await apiCitas.patch(id, { asistencia: siguiente });
-            await sincronizarEtapaConAsistencia({ ...row, asistencia: siguiente });
+            const vinculo = await apiCitas.consultarVinculoAsistencia(id);
+
+            if (vinculo?.tipo === "v3") {
+                if (!vinculo.expediente_id) {
+                    throw new Error("No se identificó un expediente V3 válido.");
+                }
+
+                await apiEtapasV3.registrarAsistencia({
+                    expedienteId: vinculo.expediente_id,
+                    citaId: id,
+                    fechaAsistenciaReal,
+                    claveIdempotencia: claveAsistenciaRef.current,
+                });
+            } else if (vinculo?.tipo === "tradicional") {
+                await apiCitas.confirmarAsistencia(id, fechaAsistenciaReal);
+            } else {
+                throw new Error("No se pudo identificar el flujo de confirmación.");
+            }
+
+            setCitas((prev) =>
+                prev.map((cita) =>
+                    cita.id === id
+                        ? {
+                            ...cita,
+                            asistencia: true,
+                            estado_asistencia: "asistio",
+                            fecha_asistencia_real: fechaAsistenciaReal,
+                        }
+                        : cita
+                )
+            );
+
+            setConfirmacionAsistencia(null);
+            setFechaAsistenciaReal("");
+            setAsistenciaVerificada(false);
+            claveAsistenciaRef.current = null;
+        } catch (error) {
+            console.error("Error confirmando asistencia:", error);
+
+            alert(
+                error?.response?.data?.detalle ||
+                error?.data?.detalle ||
+                error?.message ||
+                "No se pudo confirmar la asistencia."
+            );
+        } finally {
+            setGuardandoAsistencia(false);
+
+            setUpdatingInline((prev) => {
+                const siguiente = { ...prev };
+                delete siguiente[id];
+                return siguiente;
+            });
         }
-        catch (e) { console.error(e); setCitas((p) => p.map((c) => (c.id === id ? { ...c, asistencia: prev } : c))); alert("No se pudo actualizar asistencia."); }
-        finally { setUpdatingInline((p) => { const n = { ...p }; delete n[id]; return n; }); }
     };
 
     const toggleAvaluoCerrado = async (row) => {
@@ -2185,8 +2102,8 @@ export default function RegistroCitas() {
                                     }));
                                 }}
                                 className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${activo
-                                        ? "bg-white text-[#071D49] shadow-sm"
-                                        : "bg-white/10 text-white hover:bg-white/20"
+                                    ? "bg-white text-[#071D49] shadow-sm"
+                                    : "bg-white/10 text-white hover:bg-white/20"
                                     }`}
                             >
                                 {label}
@@ -2304,8 +2221,8 @@ export default function RegistroCitas() {
                                             }));
                                         }}
                                         className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold transition-all ${activo
-                                                ? "bg-white text-[#071D49] shadow-sm"
-                                                : "bg-white/10 text-white hover:bg-white/20"
+                                            ? "bg-white text-[#071D49] shadow-sm"
+                                            : "bg-white/10 text-white hover:bg-white/20"
                                             }`}
                                     >
                                         {opcion.label}
@@ -2417,8 +2334,8 @@ export default function RegistroCitas() {
                                         seleccionarPeriodo(anioSeleccionado, indice)
                                     }
                                     className={`shrink-0 whitespace-nowrap rounded-lg px-[9px] py-2.5 text-center text-xs font-bold transition-all ${activo
-                                            ? "bg-[#071D49] text-white shadow-sm"
-                                            : "text-[#071D49] hover:bg-slate-100"
+                                        ? "bg-[#071D49] text-white shadow-sm"
+                                        : "text-[#071D49] hover:bg-slate-100"
                                         }`}
                                 >
                                     {nombre}
@@ -2591,6 +2508,100 @@ export default function RegistroCitas() {
                 )
             )}
 
+            <Modal
+                open={!!confirmacionAsistencia}
+                title="Confirmar asistencia real"
+                onClose={cerrarConfirmacionAsistencia}
+                footer={
+                    <>
+                        <button
+                            type="button"
+                            onClick={cerrarConfirmacionAsistencia}
+                            disabled={guardandoAsistencia}
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={guardarConfirmacionAsistencia}
+                            disabled={
+                                guardandoAsistencia ||
+                                !asistenciaVerificada ||
+                                !fechaAsistenciaReal
+                            }
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        >
+                            {guardandoAsistencia
+                                ? "Confirmando..."
+                                : "Confirmar asistencia"}
+                        </button>
+                    </>
+                }
+            >
+                {confirmacionAsistencia && (
+                    <div className="space-y-4">
+                        <div className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+                            <div>
+                                <strong>Cliente:</strong>{" "}
+                                {confirmacionAsistencia.cliente?.nombre || "Sin nombre"}
+                            </div>
+
+                            <div>
+                                <strong>Agencia:</strong>{" "}
+                                {confirmacionAsistencia.agencia || "Sin agencia"}
+                            </div>
+
+                            <div>
+                                <strong>Cita programada:</strong>{" "}
+                                {toDTLocal(confirmacionAsistencia.fecha_hora_cita).replace("T", " ")}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                Fecha real de asistencia
+                            </label>
+
+                            <input
+                                type="date"
+                                value={fechaAsistenciaReal}
+                                min={toYMDLocal(
+                                    new Date(confirmacionAsistencia.fecha_hora_cita)
+                                )}
+                                max={toYMDLocal(new Date())}
+                                onChange={(e) => setFechaAsistenciaReal(e.target.value)}
+                                disabled={guardandoAsistencia}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                        </div>
+
+                        <label className="flex items-start gap-3 text-sm text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={asistenciaVerificada}
+                                onChange={(e) =>
+                                    setAsistenciaVerificada(e.target.checked)
+                                }
+                                disabled={guardandoAsistencia}
+                                className="mt-1"
+                            />
+
+                            <span>
+                                Confirmo que el cliente realmente asistió a esta cita
+                                en la fecha indicada.
+                            </span>
+                        </label>
+
+                        <p className="text-xs text-slate-500">
+                            Esta confirmación quedará registrada y no podrá revertirse
+                            desde el calendario.
+                        </p>
+                    </div>
+                )}
+            </Modal>
+
             <Modal open={openModal} title={mode === "create" ? "Nueva Cita" : `Editar Cita • ${draft?.id}`} onClose={closeModal} footer={
                 <>
                     <button onClick={closeModal} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-red-400 px-4 py-2 text-sm font-semibold text-white/90 hover:text-white hover:bg-red-600 disabled:opacity-60"><X className="h-4 w-4" /> Cancelar</button>
@@ -2666,7 +2677,13 @@ export default function RegistroCitas() {
 
                         <Field label="Asistencia de cita" icon={UserCheck} className="md:col-span-3">
                             <label className={["flex h-9 w-fit cursor-pointer items-center gap-2 rounded-full border px-3.5 text-xs font-bold transition-colors", draft.asistencia ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"].join(" ")}>
-                                <input type="checkbox" checked={!!draft.asistencia} onChange={(e) => setDraft((p) => ({ ...p, asistencia: e.target.checked }))} className="h-3.5 w-3.5 accent-emerald-600" />
+                                <input
+                                    type="checkbox"
+                                    checked={!!draft.asistencia}
+                                    disabled
+                                    readOnly
+                                    className="h-3.5 w-3.5 accent-emerald-600"
+                                />
                                 {draft.asistencia ? "Sí, asistió a la cita" : "Sin registrar asistencia"}
                             </label>
                         </Field>
