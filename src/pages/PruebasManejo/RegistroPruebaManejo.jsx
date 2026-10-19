@@ -779,6 +779,7 @@ export default function RegistroPruebaManejo() {
         "Luis Manuel Alvarez Martinez",
         "Luis Manuel Hernandez Espejo",
         "LUIS MANUEL PALOMARES OLAYO",
+        "LUZ EUGENIA HERNANDEZ BUSTOS",
         "Mara Erubey Soto Villegas",
         "MARCOS RAUL DIAZ RAMOS",
         "Marelly Tenorio Salinas",
@@ -891,7 +892,7 @@ export default function RegistroPruebaManejo() {
             // Tabla = una sola página.
             // Agenda / Gráficas = todos los registros.
             if (vistaActiva === "tabla") {
-               const data = await apiPruebaManejo.list({
+                const data = await apiPruebaManejo.list({
                     page: pagina,
                     page_size: PAGE_SIZE,
                     search: filters.q,
@@ -931,14 +932,14 @@ export default function RegistroPruebaManejo() {
         } finally {
             setLoadingList(false);
         }
-            }, [
-                pagina,
-                vistaActiva,
-                filters.q,
-                filters.agencia,
-                filters.rangoDesde,
-                filters.rangoHasta,
-            ]);
+    }, [
+        pagina,
+        vistaActiva,
+        filters.q,
+        filters.agencia,
+        filters.rangoDesde,
+        filters.rangoHasta,
+    ]);
 
     useEffect(() => { refreshList(); }, [refreshList]);
 
@@ -1136,91 +1137,91 @@ export default function RegistroPruebaManejo() {
 
     const resetFilters = () => setFilters({ q: "", agencia: "Todos", rangoDesde: "", rangoHasta: "" });
     const toggleRangoFechas = (desde, hasta) => {
-            setPagina(1);
+        setPagina(1);
 
-            setFilters((p) => {
-                const mismoRango =
-                    p.rangoDesde === desde &&
-                    p.rangoHasta === hasta;
+        setFilters((p) => {
+            const mismoRango =
+                p.rangoDesde === desde &&
+                p.rangoHasta === hasta;
 
-                return {
-                    ...p,
-                    rangoDesde: mismoRango ? "" : desde,
-                    rangoHasta: mismoRango ? "" : hasta,
-                };
-            });
-        };
+            return {
+                ...p,
+                rangoDesde: mismoRango ? "" : desde,
+                rangoHasta: mismoRango ? "" : hasta,
+            };
+        });
+    };
 
-        const setHoy = () => {
-            const hoy = toYMDLocal(new Date());
+    const setHoy = () => {
+        const hoy = toYMDLocal(new Date());
 
-            toggleRangoFechas(hoy, hoy);
-        };
+        toggleRangoFechas(hoy, hoy);
+    };
 
-        const setAyer = () => {
-            const ayer = new Date();
-            ayer.setDate(ayer.getDate() - 1);
+    const setAyer = () => {
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
 
-            const ymd = toYMDLocal(ayer);
+        const ymd = toYMDLocal(ayer);
 
-            toggleRangoFechas(ymd, ymd);
-        };
+        toggleRangoFechas(ymd, ymd);
+    };
 
-        const setSemana = () => {
-            const hoy = new Date();
-            const lunes = startOfWeekMonday(hoy);
-            const domingo = addDays(lunes, 6);
+    const setSemana = () => {
+        const hoy = new Date();
+        const lunes = startOfWeekMonday(hoy);
+        const domingo = addDays(lunes, 6);
 
-            toggleRangoFechas(
-                toYMDLocal(lunes),
-                toYMDLocal(domingo)
-            );
-        };
+        toggleRangoFechas(
+            toYMDLocal(lunes),
+            toYMDLocal(domingo)
+        );
+    };
 
-        const setUltimos7Dias = () => {
-            const hasta = new Date();
-            const desde = new Date();
+    const setUltimos7Dias = () => {
+        const hasta = new Date();
+        const desde = new Date();
 
-            desde.setDate(desde.getDate() - 6);
+        desde.setDate(desde.getDate() - 6);
 
-            toggleRangoFechas(
-                toYMDLocal(desde),
-                toYMDLocal(hasta)
-            );
-        };
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    };
 
-        const setUltimos30Dias = () => {
-            const hasta = new Date();
-            const desde = new Date();
+    const setUltimos30Dias = () => {
+        const hasta = new Date();
+        const desde = new Date();
 
-            desde.setDate(desde.getDate() - 29);
+        desde.setDate(desde.getDate() - 29);
 
-            toggleRangoFechas(
-                toYMDLocal(desde),
-                toYMDLocal(hasta)
-            );
-        };
+        toggleRangoFechas(
+            toYMDLocal(desde),
+            toYMDLocal(hasta)
+        );
+    };
 
-        const setEsteMes = () => {
-            const hoy = new Date();
+    const setEsteMes = () => {
+        const hoy = new Date();
 
-            const primero = new Date(
-                hoy.getFullYear(),
-                hoy.getMonth(),
-                1
-            );
+        const primero = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth(),
+            1
+        );
 
-            const ultimo = new Date(
-                hoy.getFullYear(),
-                hoy.getMonth() + 1,
-                0
-            );
+        const ultimo = new Date(
+            hoy.getFullYear(),
+            hoy.getMonth() + 1,
+            0
+        );
 
-            toggleRangoFechas(
-                toYMDLocal(primero),
-                toYMDLocal(ultimo)
-            );
-        };
+        toggleRangoFechas(
+            toYMDLocal(primero),
+            toYMDLocal(ultimo)
+        );
+    };
 
     const totalPaginas = Math.max(
         1,
@@ -1328,165 +1329,165 @@ export default function RegistroPruebaManejo() {
                 </div>
             </div>
 
-                {vistaActiva === "tabla" && (
-                        <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                            <div className="grid gap-3 md:grid-cols-12">
+            {vistaActiva === "tabla" && (
+                <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="grid gap-3 md:grid-cols-12">
 
-                                {/* FILA 1 */}
-                                <div className="md:col-span-8">
-                                    <FilterBlock label="Búsqueda">
-                                        <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
-                                            <Search className="h-4 w-4 text-[#131E5C]" />
+                        {/* FILA 1 */}
+                        <div className="md:col-span-8">
+                            <FilterBlock label="Búsqueda">
+                                <div className="flex items-center gap-2 rounded-lg border border-[#131E5C] bg-white px-3 py-2">
+                                    <Search className="h-4 w-4 text-[#131E5C]" />
 
-                                            <input
-                                                value={filters.q}
-                                                onChange={(e) =>
-                                                    setFilters((p) => ({
-                                                        ...p,
-                                                        q: e.target.value,
-                                                    }))
-                                                }
-                                                placeholder="Buscar por dealer, cliente, teléfono, serie, folio, asesor…"
-                                                className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]"
-                                            />
+                                    <input
+                                        value={filters.q}
+                                        onChange={(e) =>
+                                            setFilters((p) => ({
+                                                ...p,
+                                                q: e.target.value,
+                                            }))
+                                        }
+                                        placeholder="Buscar por dealer, cliente, teléfono, serie, folio, asesor…"
+                                        className="w-full text-sm text-[#131E5C] outline-none placeholder:text-[#131E5C]"
+                                    />
 
-                                            {filters.q ? (
-                                                <button
-                                                    onClick={() =>
-                                                        setFilters((p) => ({
-                                                            ...p,
-                                                            q: "",
-                                                        }))
-                                                    }
-                                                    className="rounded-lg p-1 bg-white text-[#131E5C] hover:bg-white/80 hover:text-red-500"
-                                                    aria-label="Limpiar búsqueda"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                            ) : null}
-                                        </div>
-                                    </FilterBlock>
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <FilterBlock label="Dealer">
-                                        <select
-                                            value={filters.agencia}
-                                            onChange={(e) =>
+                                    {filters.q ? (
+                                        <button
+                                            onClick={() =>
                                                 setFilters((p) => ({
                                                     ...p,
-                                                    agencia: e.target.value,
+                                                    q: "",
                                                 }))
                                             }
-                                            className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                            className="rounded-lg p-1 bg-white text-[#131E5C] hover:bg-white/80 hover:text-red-500"
+                                            aria-label="Limpiar búsqueda"
                                         >
-                                            {dealers.map((d) => (
-                                                <option
-                                                    key={d}
-                                                    value={d}
-                                                    className="bg-neutral-100 text-[#131E5C]"
-                                                >
-                                                    {d}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </FilterBlock>
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    ) : null}
                                 </div>
-
-                                {/* FILA 2 */}
-                                <div className="md:col-span-3">
-                                    <FilterBlock label="Desde">
-                                        <input
-                                            type="date"
-                                            value={filters.rangoDesde}
-                                            onChange={(e) =>
-                                                setFilters((p) => ({
-                                                    ...p,
-                                                    rangoDesde: e.target.value,
-                                                }))
-                                            }
-                                            className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                                        />
-                                    </FilterBlock>
-                                </div>
-
-                                <div className="md:col-span-3">
-                                    <FilterBlock label="Hasta">
-                                        <input
-                                            type="date"
-                                            value={filters.rangoHasta}
-                                            onChange={(e) =>
-                                                setFilters((p) => ({
-                                                    ...p,
-                                                    rangoHasta: e.target.value,
-                                                }))
-                                            }
-                                            className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
-                                        />
-                                    </FilterBlock>
-                                </div>
-
-                                <div className="md:col-span-6">
-                                    <FilterBlock label="Acciones">
-                                        <div className="flex flex-wrap gap-2">
-                                            <button
-                                                onClick={setHoy}
-                                                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                                            >
-                                                Hoy
-                                            </button>
-
-                                            <button
-                                                onClick={setAyer}
-                                                className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                                            >
-                                                Ayer
-                                            </button>
-
-                                            <button
-                                                onClick={setSemana}
-                                                className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-600"
-                                            >
-                                                Semana
-                                            </button>
-
-                                            <button
-                                                onClick={setUltimos7Dias}
-                                                className="rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-600"
-                                            >
-                                                7 días
-                                            </button>
-
-                                            <button
-                                                onClick={setUltimos30Dias}
-                                                className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
-                                            >
-                                                30 días
-                                            </button>
-
-                                            <button
-                                                onClick={setEsteMes}
-                                                className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
-                                            >
-                                                Este mes
-                                            </button>
-
-                                            <button
-                                                onClick={resetFilters}
-                                                className="rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
-                                            >
-                                                <span className="inline-flex items-center gap-1">
-                                                    <X className="h-4 w-4" />
-                                                    Limpiar
-                                                </span>
-                                            </button>
-                                        </div>
-                                    </FilterBlock>
-                                </div>
-
-                            </div>
+                            </FilterBlock>
                         </div>
-                    )}
+
+                        <div className="md:col-span-4">
+                            <FilterBlock label="Dealer">
+                                <select
+                                    value={filters.agencia}
+                                    onChange={(e) =>
+                                        setFilters((p) => ({
+                                            ...p,
+                                            agencia: e.target.value,
+                                        }))
+                                    }
+                                    className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                >
+                                    {dealers.map((d) => (
+                                        <option
+                                            key={d}
+                                            value={d}
+                                            className="bg-neutral-100 text-[#131E5C]"
+                                        >
+                                            {d}
+                                        </option>
+                                    ))}
+                                </select>
+                            </FilterBlock>
+                        </div>
+
+                        {/* FILA 2 */}
+                        <div className="md:col-span-3">
+                            <FilterBlock label="Desde">
+                                <input
+                                    type="date"
+                                    value={filters.rangoDesde}
+                                    onChange={(e) =>
+                                        setFilters((p) => ({
+                                            ...p,
+                                            rangoDesde: e.target.value,
+                                        }))
+                                    }
+                                    className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                />
+                            </FilterBlock>
+                        </div>
+
+                        <div className="md:col-span-3">
+                            <FilterBlock label="Hasta">
+                                <input
+                                    type="date"
+                                    value={filters.rangoHasta}
+                                    onChange={(e) =>
+                                        setFilters((p) => ({
+                                            ...p,
+                                            rangoHasta: e.target.value,
+                                        }))
+                                    }
+                                    className="w-full rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm text-[#131E5C] outline-none"
+                                />
+                            </FilterBlock>
+                        </div>
+
+                        <div className="md:col-span-6">
+                            <FilterBlock label="Acciones">
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={setHoy}
+                                        className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                    >
+                                        Hoy
+                                    </button>
+
+                                    <button
+                                        onClick={setAyer}
+                                        className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                                    >
+                                        Ayer
+                                    </button>
+
+                                    <button
+                                        onClick={setSemana}
+                                        className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-600"
+                                    >
+                                        Semana
+                                    </button>
+
+                                    <button
+                                        onClick={setUltimos7Dias}
+                                        className="rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-600"
+                                    >
+                                        7 días
+                                    </button>
+
+                                    <button
+                                        onClick={setUltimos30Dias}
+                                        className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
+                                    >
+                                        30 días
+                                    </button>
+
+                                    <button
+                                        onClick={setEsteMes}
+                                        className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
+                                    >
+                                        Este mes
+                                    </button>
+
+                                    <button
+                                        onClick={resetFilters}
+                                        className="rounded-lg border border-[#131E5C] bg-white px-3 py-2 text-sm font-semibold text-[#131E5C] hover:bg-[#131E5C] hover:text-white"
+                                    >
+                                        <span className="inline-flex items-center gap-1">
+                                            <X className="h-4 w-4" />
+                                            Limpiar
+                                        </span>
+                                    </button>
+                                </div>
+                            </FilterBlock>
+                        </div>
+
+                    </div>
+                </div>
+            )}
 
             {vistaActiva === "tabla" && (
                 <>
@@ -1544,50 +1545,50 @@ export default function RegistroPruebaManejo() {
                         </div>
                     </div>
 
-                        <div className="hidden lg:flex items-center justify-between gap-4 border-t border-black/10 bg-white px-4 py-3">
-                            <div className="text-xs font-semibold text-slate-500">
-                                {totalRegistros} registros · Página {pagina} de {totalPaginas}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    disabled={!hayAnterior || loadingList}
-                                    onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                                    className="rounded-lg border border-[#131E5C] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Anterior
-                                </button>
-
-                                {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((n) => (
-                                    <button
-                                        key={n}
-                                        type="button"
-                                        onClick={() => setPagina(n)}
-                                        disabled={loadingList}
-                                        className={[
-                                            "h-8 min-w-8 rounded-lg border px-2 text-xs font-bold transition",
-                                            pagina === n
-                                                ? "border-[#131E5C] bg-[#131E5C] text-white"
-                                                : "border-[#131E5C]/30 bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
-                                        ].join(" ")}
-                                    >
-                                        {n}
-                                    </button>
-                                ))}
-
-                                <button
-                                    type="button"
-                                    disabled={!haySiguiente || loadingList}
-                                    onClick={() =>
-                                        setPagina((p) => Math.min(totalPaginas, p + 1))
-                                    }
-                                    className="rounded-lg border border-[#131E5C] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Siguiente
-                                </button>
-                            </div>
+                    <div className="hidden lg:flex items-center justify-between gap-4 border-t border-black/10 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold text-slate-500">
+                            {totalRegistros} registros · Página {pagina} de {totalPaginas}
                         </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                disabled={!hayAnterior || loadingList}
+                                onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                                className="rounded-lg border border-[#131E5C] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Anterior
+                            </button>
+
+                            {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((n) => (
+                                <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => setPagina(n)}
+                                    disabled={loadingList}
+                                    className={[
+                                        "h-8 min-w-8 rounded-lg border px-2 text-xs font-bold transition",
+                                        pagina === n
+                                            ? "border-[#131E5C] bg-[#131E5C] text-white"
+                                            : "border-[#131E5C]/30 bg-white text-[#131E5C] hover:bg-[#131E5C]/10",
+                                    ].join(" ")}
+                                >
+                                    {n}
+                                </button>
+                            ))}
+
+                            <button
+                                type="button"
+                                disabled={!haySiguiente || loadingList}
+                                onClick={() =>
+                                    setPagina((p) => Math.min(totalPaginas, p + 1))
+                                }
+                                className="rounded-lg border border-[#131E5C] px-3 py-2 text-xs font-bold text-[#131E5C] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
 
                     <div className="grid gap-3 lg:hidden">
                         {loadingList ? (
