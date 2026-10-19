@@ -40,6 +40,11 @@ import {
     Printer,
 } from "lucide-react";
 import { apiAvaluos } from "../../lib/apiAvaluos";
+import {
+    obtenerAsesores,
+    nombresUnicosAsesores,
+    suscribirseInvalidacionAsesores,
+} from "../../lib/apiAsesores";
 import { http as httpDescarga } from "../../lib/apiPruebas";
 import ChecklistVerificacion from "./ChecklistVerificacion";
 import { createPortal } from "react-dom";
@@ -1245,6 +1250,78 @@ export default function RegistroAvaluos() {
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
     const [activeTab, setActiveTab] = useState("cliente");
+    const [asesoresCatalogo, setAsesoresCatalogo] = useState([]);
+    const [cargandoAsesores, setCargandoAsesores] = useState(false);
+    const [errorAsesores, setErrorAsesores] = useState("");
+
+    useEffect(() => {
+        if (!openModal) return;
+
+        let cancelado = false;
+
+        const cargar = async () => {
+            setCargandoAsesores(true);
+            setErrorAsesores("");
+
+            try {
+                const datos = await obtenerAsesores({
+                    activo: true,
+                    tipoAsesor: "Piso",
+                });
+
+                if (!cancelado) {
+                    setAsesoresCatalogo(Array.isArray(datos) ? datos : []);
+                }
+            } catch (error) {
+                console.error("Error cargando asesores de avalúos:", error);
+
+                if (!cancelado) {
+                    setAsesoresCatalogo([]);
+                    setErrorAsesores("No fue posible cargar los asesores.");
+                }
+            } finally {
+                if (!cancelado) setCargandoAsesores(false);
+            }
+        };
+
+        cargar();
+
+        const cancelarSuscripcion = suscribirseInvalidacionAsesores(cargar);
+
+        return () => {
+            cancelado = true;
+            cancelarSuscripcion();
+        };
+    }, [openModal]);
+
+    const asesoresDisponibles = useMemo(() => {
+        const agencia = normalizeStr(draft?.agencia).toLowerCase();
+
+        const filtrados = asesoresCatalogo.filter((asesor) =>
+            asesor.activo === true &&
+            normalizeStr(asesor.tipo_asesor).toLowerCase() === "piso" &&
+            normalizeStr(asesor.agencia).toLowerCase() === agencia
+        );
+
+        const nombres = nombresUnicosAsesores(filtrados);
+
+        const historico = normalizeStr(draft?.asesor_ventas);
+
+        if (
+            mode === "edit" &&
+            historico &&
+            !nombres.some(
+                (nombre) => nombre.toLowerCase() === historico.toLowerCase()
+            )
+        ) {
+            nombres.unshift(historico);
+        }
+
+        return nombres.sort((a, b) =>
+            a.localeCompare(b, "es", { sensitivity: "base" })
+        );
+    }, [asesoresCatalogo, draft?.agencia, draft?.asesor_ventas, mode]);
+
 
     const TABS_AVALUO = [
         { key: "cliente", label: "Cliente", icon: User },
@@ -1277,85 +1354,6 @@ export default function RegistroAvaluos() {
         ],
         []
     );
-
-    const ASESORES = [
-        "ADRIAN GALVEZ ROLDAN",
-        "AURA MARLIZETH FERNANDEZ LOPEZ",
-        "Bianca Isabel Chavez Alarcon",
-        "Blanca Patricia Hernandez Hernandez",
-        "CANDY DENISSE MARQUEZ CORTES",
-        "Carlos Arturo Garces Venegas",
-        "Cesar Ivan Salazar Reyes",
-        "Cristian Fernando Rivera Godinez",
-        "David Uriel García Navarro",
-        "DELMAR JAVIER ILLESCAS DOMINGUEZ",
-        "DULCE ABIGAIL GARCIA OLIVARES",
-        "EDGAR JESUS GOMEZ PEREZ",
-        "Edgar Omar Noguera Solis",
-        "ELIA INES ARANO REYES",
-        "ERENDIRA SANTOS COYOTZI",
-        "Estefano Marlom De Azcue Aparicio",
-        "Felix Emmanuel Solis Angeles",
-        "GEOVANI NAVA DIAZ",
-        "GERMAN JARITH SALAZAR MIRANDA",
-        "Gustavo Chontal Romero",
-        "Hector Rodriguez",
-        "IDALMY JIMENEZ SANCHEZ",
-        "IRENE DEL CARMEN GUIZA LOPEZ",
-        "Iris Yazmín Gómez Velázquez",
-        "Israel Garcia Juarez",
-        "IVAN JUAREZ ORTEGA",
-        "Javier Perez Meraz",
-        "JESSICA OLIVARES CAMPOS",
-        "JESUS XITLAMA GOMEZ",
-        "JORGE ANTONIO RODRIGUEZ MARTINEZ",
-        "JORGE LUIS ALAMILLO RODRIGUEZ",
-        "JOSE ALBERTO SEDAS FLORES",
-        "JOSE ALFREDO BARRANCA REYES",
-        "JOSE DE JESUS GARCIA ROMAN",
-        "JUAN JESUS MARQUEZ AQUINO",
-        "JUAN MANUEL SOBREVILLA VICENCIO",
-        "Julio Ramirez Lopez",
-        "LIZBETH CANO CLARA",
-        "Luis Alberto Ramirez Santamaria",
-        "LUIS ALFONSO CORIA MARROQUIN",
-        "Luis Armando Almora Perez",
-        "Luis Manuel Alvarez Martinez",
-        "Luis Manuel Hernandez Espejo",
-        "LUIS MANUEL PALOMARES OLAYO",
-        "Mara Erubey Soto Villegas",
-        "MARCOS RAUL DIAZ RAMOS",
-        "Marelly Tenorio Salinas",
-        "MARIA DE GUADALUPE VANVOLLENHOVEN DIAZ",
-        "MARIA DEL CARMEN ZAVALA VELAZQUEZ",
-        "Maria Monserrath Zarate Gamboa",
-        "MARIO ALBERTO LOPEZ RAMOS",
-        "MARISOL LAGUNES GONZALEZ",
-        "Miguel Capitanachi Paredes",
-        "NALLELY HERNANDEZ GARCIA",
-        "OCTAVIO BRUNO GONZALEZ",
-        "OLIMPIA VAZQUEZ MENDEZ",
-        "OMAR VILLIERS MONDRAGON",
-        "Paul Serrano Vera",
-        "Patricia Cano",
-        "Planta Puebla",
-        "Servicio Nuevos",
-        "Roberto Ramses Luna Fajardo",
-        "ROGELIO VAZQUEZ SANCHEZ",
-        "RUBEN ALBERTO TOSQUY ADRIANO",
-        "RUBEN ROMERO VALDES",
-        "Saja Azzam Mohammad Jamous",
-        "SANDRA LUZ PRIETO PEREZ",
-        "Sergio Ivan Quintana Martinez",
-        "Sergio Rene Delgado Sarmiento",
-        "Valeria Zilli Durante",
-        "VANESSA JIMENEZ MEDINA",
-        "VERONICA CASTILLO FUENTES",
-        "YAMIL MISAEL RODRIGUEZ AGUILAR",
-        "Yoseth Ruiz Castellanos",
-        "ZEILA NAVARRO CONTRERAS",
-        "Berenice Chavez"
-    ];
 
     const ETAPAS_PROCESO = [
         "Prospecto",
@@ -2918,7 +2916,11 @@ export default function RegistroAvaluos() {
                                         <select
                                             value={draft.agencia || ""}
                                             onChange={(e) =>
-                                                setDraft((prev) => ({ ...prev, agencia: e.target.value }))
+                                                setDraft((prev) => ({
+                                                    ...prev,
+                                                    agencia: e.target.value,
+                                                    asesor_ventas: "",
+                                                }))
                                             }
                                             disabled={!isAdmin && userAgencias.length <= 1}
                                             className={[
@@ -3042,7 +3044,6 @@ export default function RegistroAvaluos() {
                                             placeholder="correo@dominio.com"
                                         />
                                     </Field>
-
                                     <Field label="Asesor de ventas" icon={UserStar}>
                                         <select
                                             value={draft.asesor_ventas || ""}
@@ -3052,17 +3053,43 @@ export default function RegistroAvaluos() {
                                                     asesor_ventas: e.target.value,
                                                 }))
                                             }
+                                            disabled={
+                                                cargandoAsesores ||
+                                                !!errorAsesores ||
+                                                !draft.agencia
+                                            }
                                             className={[inputBase, inputOk].join(" ")}
                                         >
-                                            <option value="">Selecciona un asesor...</option>
-                                            {ASESORES.map((asesor) => (
-                                                <option key={asesor} value={asesor}>
-                                                    {asesor}
+                                            <option value="">
+                                                {cargandoAsesores
+                                                    ? "Cargando asesores..."
+                                                    : !draft.agencia
+                                                        ? "Selecciona primero un dealer"
+                                                        : "Selecciona un asesor..."}
+                                            </option>
+
+                                            {asesoresDisponibles.map((nombre) => (
+                                                <option key={nombre} value={nombre}>
+                                                    {nombre}
                                                 </option>
                                             ))}
                                         </select>
-                                    </Field>
 
+                                        {errorAsesores && (
+                                            <p className="mt-2 text-xs font-semibold text-red-600">
+                                                {errorAsesores}
+                                            </p>
+                                        )}
+
+                                        {!cargandoAsesores &&
+                                            !errorAsesores &&
+                                            draft.agencia &&
+                                            asesoresDisponibles.length === 0 && (
+                                                <p className="mt-2 text-xs text-amber-700">
+                                                    No hay asesores de Piso activos para este dealer.
+                                                </p>
+                                            )}
+                                    </Field>
                                     <Field label="Vendedor" icon={User}>
                                         <input
                                             value={draft.vendedor || ""}
