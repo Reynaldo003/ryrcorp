@@ -1660,7 +1660,15 @@ export default function DigitalesProspectos() {
 
     const isCoordinador = useMemo(() => {
         const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
-        return !isAdmin && (["coordinador digital", "coordinador_digital"].includes(rolUsuario) || permisos.includes("CRM_COORDINADOR_DIGITAL"));
+
+        // Un asesor no debe asumir la interfaz de coordinador
+        // únicamente por tener un permiso heredado.
+        const esRolAsesor = ["asesor digital", "asesor general"].includes(rolUsuario);
+
+        return !isAdmin && !esRolAsesor && (
+            ["coordinador digital", "coordinador_digital"].includes(rolUsuario) ||
+            permisos.includes("CRM_COORDINADOR_DIGITAL")
+        );
     }, [isAdmin, rolUsuario, user?.permisos]);
 
     const puedeExportarReportes = submoduloVisible(user, "comercial", "prospectos", true);
@@ -2354,11 +2362,17 @@ export default function DigitalesProspectos() {
                     throw new Error("El coordinador no tiene líneas autorizadas.");
                 }
                 filasRaw = await listarProspectosDigitalesCompletos(crearParams(numero, todos));
-            } else {
-                throw new Error("No tienes permisos para generar reportes.");
-            }
 
-            const filasExportar = getListItems(filasRaw).map(normalizeProspecto);
+                } else {
+                    // Los asesores solo solicitan su cartera autorizada.
+                    // La validación definitiva la realiza Django.
+                    const numeroPropio = normalizaTelefonoMx(numeroUsuarioSesion);
+
+                    filasRaw = await listarProspectosDigitalesCompletos(
+                        crearParams(numeroPropio, false)
+                    );
+                }
+                const filasExportar = getListItems(filasRaw).map(normalizeProspecto);
             if (!filasExportar.length) {
                 throw new Error("No hay registros para exportar con los filtros configurados.");
             }
