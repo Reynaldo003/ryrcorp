@@ -13,6 +13,11 @@ import {
     PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { apiPruebaManejo, apiEvidenciasPruebaManejo } from "../../lib/apiPruebaManejo";
+import {
+    obtenerAsesores,
+    nombresUnicosAsesores,
+    suscribirseInvalidacionAsesores,
+} from "../../lib/apiAsesores";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import * as XLSX from "xlsx";
@@ -734,81 +739,6 @@ export default function RegistroPruebaManejo() {
     const [currentWeekDate, setCurrentWeekDate] = useState(new Date());
 
     const DEALERS = ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxtepec", "VW Tuxpan"];
-    const ASESORES = [
-        "ADRIAN GALVEZ ROLDAN",
-        "AURA MARLIZETH FERNANDEZ LOPEZ",
-        "Bianca Isabel Chavez Alarcon",
-        "Blanca Patricia Hernandez Hernandez",
-        "CANDY DENISSE MARQUEZ CORTES",
-        "Carlos Arturo Garces Venegas",
-        "Cesar Ivan Salazar Reyes",
-        "Cristian Fernando Rivera Godinez",
-        "David Uriel García Navarro",
-        "DELMAR JAVIER ILLESCAS DOMINGUEZ",
-        "DULCE ABIGAIL GARCIA OLIVARES",
-        "EDGAR JESUS GOMEZ PEREZ",
-        "Edgar Omar Noguera Solis",
-        "ELIA INES ARANO REYES",
-        "ERENDIRA SANTOS COYOTZI",
-        "Estefano Marlom De Azcue Aparicio",
-        "Felix Emmanuel Solis Angeles",
-        "GEOVANI NAVA DIAZ",
-        "GERMAN JARITH SALAZAR MIRANDA",
-        "Gustavo Chontal Romero",
-        "Hector Rodriguez",
-        "IDALMY JIMENEZ SANCHEZ",
-        "IRENE DEL CARMEN GUIZA LOPEZ",
-        "Iris Yazmín Gómez Velázquez",
-        "Israel Garcia Juarez",
-        "IVAN JUAREZ ORTEGA",
-        "Javier Perez Meraz",
-        "JESSICA OLIVARES CAMPOS",
-        "JESUS XITLAMA GOMEZ",
-        "JORGE ANTONIO RODRIGUEZ MARTINEZ",
-        "JORGE LUIS ALAMILLO RODRIGUEZ",
-        "JOSE ALBERTO SEDAS FLORES",
-        "JOSE ALFREDO BARRANCA REYES",
-        "JOSE DE JESUS GARCIA ROMAN",
-        "JUAN JESUS MARQUEZ AQUINO",
-        "JUAN MANUEL SOBREVILLA VICENCIO",
-        "JULIO RAMIREZ LOPEZ",
-        "LIZBETH CANO CLARA",
-        "Luis Alberto Ramirez Santamaria",
-        "LUIS ALFONSO CORIA MARROQUIN",
-        "Luis Armando Almora Perez",
-        "Luis Manuel Alvarez Martinez",
-        "Luis Manuel Hernandez Espejo",
-        "LUIS MANUEL PALOMARES OLAYO",
-        "LUZ EUGENIA HERNANDEZ BUSTOS",
-        "Mara Erubey Soto Villegas",
-        "MARCOS RAUL DIAZ RAMOS",
-        "Marelly Tenorio Salinas",
-        "MARIA DE GUADALUPE VANVOLLENHOVEN DIAZ",
-        "MARIA DEL CARMEN ZAVALA VELAZQUEZ",
-        "Maria Monserrath Zarate Gamboa",
-        "MARIO ALBERTO LOPEZ RAMOS",
-        "MARISOL LAGUNES GONZALEZ",
-        "Miguel Capitanachi Paredes",
-        "NALLELY HERNANDEZ GARCIA",
-        "OCTAVIO BRUNO GONZALEZ",
-        "OLIMPIA VAZQUEZ MENDEZ",
-        "OMAR VILLIERS MONDRAGON",
-        "Paul Serrano Vera",
-        "Roberto Ramses Luna Fajardo",
-        "ROGELIO VAZQUEZ SANCHEZ",
-        "RUBEN ALBERTO TOSQUY ADRIANO",
-        "RUBEN ROMERO VALDES",
-        "Saja Azzam Mohammad Jamous",
-        "SANDRA LUZ PRIETO PEREZ",
-        "Sergio Ivan Quintana Martinez",
-        "Sergio Rene Delgado Sarmiento",
-        "Valeria Zilli Durante",
-        "VANESSA JIMENEZ MEDINA",
-        "VERONICA CASTILLO FUENTES",
-        "YAMIL MISAEL RODRIGUEZ AGUILAR",
-        "Yoseth Ruiz Castellanos",
-        "ZEILA NAVARRO CONTRERAS",
-    ];
 
     const VEHICULOS = [
         "Virtus", "Polo", "Jetta", "Jetta GLI", "Golf GTI", "Taos", "Nivus", "Taigun",
@@ -829,6 +759,81 @@ export default function RegistroPruebaManejo() {
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
+    const [asesoresCatalogo, setAsesoresCatalogo] = useState([]);
+    const [cargandoAsesores, setCargandoAsesores] = useState(false);
+    const [errorAsesores, setErrorAsesores] = useState("");
+
+    const cargarAsesoresPiso = useCallback(async () => {
+        setCargandoAsesores(true);
+        setErrorAsesores("");
+
+        try {
+            const datos = await obtenerAsesores({
+                activo: true,
+                tipoAsesor: "Piso",
+            });
+
+            setAsesoresCatalogo(
+                Array.isArray(datos) ? datos : []
+            );
+        } catch (error) {
+            console.error("Error cargando asesores:", error);
+            setErrorAsesores(
+                "No se pudo cargar el catálogo de asesores."
+            );
+            setAsesoresCatalogo([]);
+        } finally {
+            setCargandoAsesores(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (openModal) {
+            cargarAsesoresPiso();
+        }
+    }, [openModal, cargarAsesoresPiso]);
+
+    useEffect(() => {
+        return suscribirseInvalidacionAsesores(() => {
+            if (openModal) cargarAsesoresPiso();
+        });
+    }, [openModal, cargarAsesoresPiso]);
+
+    const asesoresDisponibles = useMemo(() => {
+        const agenciaSeleccionada = String(
+            draft?.agencia || ""
+        ).trim().toLowerCase();
+
+        const asesoresFiltrados = asesoresCatalogo.filter((asesor) => {
+            return (
+                asesor.activo === true &&
+                String(asesor.tipo_asesor || "").trim().toLowerCase() === "piso" &&
+                String(asesor.agencia || "").trim().toLowerCase() === agenciaSeleccionada
+            );
+        });
+
+        const nombres = nombresUnicosAsesores(asesoresFiltrados);
+
+        // Conserva el asesor histórico cuando se edita una prueba.
+        const asesorHistorico = String(
+            draft?.asesor_piso || ""
+        ).trim();
+
+        if (
+            mode === "edit" &&
+            asesorHistorico &&
+            !nombres.some(
+                (nombre) => nombre.toLowerCase() === asesorHistorico.toLowerCase()
+            )
+        ) {
+            nombres.unshift(asesorHistorico);
+        }
+
+        return nombres.sort((a, b) =>
+            a.localeCompare(b, "es", { sensitivity: "base" })
+        );
+    }, [asesoresCatalogo, draft?.agencia, draft?.asesor_piso, mode]);
+
     const [loadingList, setLoadingList] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -1666,7 +1671,13 @@ export default function RegistroPruebaManejo() {
                         <Field label="Dealer" icon={Building2}>
                             <select
                                 value={draft.agencia || ""}
-                                onChange={(e) => setDraft((p) => ({ ...p, agencia: e.target.value }))}
+                                onChange={(e) =>
+                                    setDraft((p) => ({
+                                        ...p,
+                                        agencia: e.target.value,
+                                        asesor_piso: mode === "create" ? "" : p.asesor_piso,
+                                    }))
+                                }
                                 disabled={!isAdmin && userAgencias.length <= 1}
                                 className={[inputBase, inputOk, !isAdmin && userAgencias.length <= 1 ? "opacity-75 cursor-not-allowed" : ""].join(" ")}
                             >
@@ -1696,10 +1707,46 @@ export default function RegistroPruebaManejo() {
                             {isInvalid("fecha_hora_cita") ? <div className="mt-2 text-xs font-bold text-red-600">Fecha y hora es requerido.</div> : null}
                         </Field>
                         <Field label="Asesor Piso" icon={UserStar}>
-                            <select value={draft.asesor_piso || ""} onChange={(e) => setDraft((p) => ({ ...p, asesor_piso: e.target.value }))} className={[inputBase, inputOk].join(" ")}>
-                                <option value="" disabled>Selecciona un asesor...</option>
-                                {ASESORES.map((d) => (<option key={d} value={d}>{d}</option>))}
+                            <select
+                                value={draft.asesor_piso || ""}
+                                onChange={(e) =>
+                                    setDraft((p) => ({
+                                        ...p,
+                                        asesor_piso: e.target.value,
+                                    }))
+                                }
+                                disabled={cargandoAsesores || !!errorAsesores || !draft.agencia}
+                                className={[inputBase, inputOk].join(" ")}
+                            >
+                                <option value="">
+                                    {cargandoAsesores
+                                        ? "Cargando asesores..."
+                                        : !draft.agencia
+                                            ? "Selecciona primero un dealer"
+                                            : "Selecciona un asesor..."}
+                                </option>
+
+                                {asesoresDisponibles.map((nombre) => (
+                                    <option key={nombre} value={nombre}>
+                                        {nombre}
+                                    </option>
+                                ))}
                             </select>
+
+                            {errorAsesores && (
+                                <p className="mt-2 text-xs font-semibold text-red-600">
+                                    {errorAsesores}
+                                </p>
+                            )}
+
+                            {!cargandoAsesores &&
+                                !errorAsesores &&
+                                draft.agencia &&
+                                asesoresDisponibles.length === 0 && (
+                                    <p className="mt-2 text-xs text-amber-700">
+                                        No hay asesores de Piso activos para este dealer.
+                                    </p>
+                                )}
                         </Field>
                         <Field label="No. Serie" icon={Hash}>
                             <input value={draft.num_serie} onChange={(e) => setDraft((p) => ({ ...p, num_serie: e.target.value }))} className={[inputBase, inputOk].join(" ")} placeholder="Ej. 3VWSA..." />
