@@ -60,11 +60,12 @@ export const apiCitas = {
       auth: true,
       retryWithoutAuth: false,
     }),
-  confirmarAsistencia: (id, fechaAsistenciaReal) =>
+  confirmarAsistencia: (id, fechaAsistenciaReal, claveIdempotencia) =>
     http(
       `/citas/api/citas/${id}/confirmar-asistencia/`,
       jsonRequest("POST", {
         fecha_asistencia_real: fechaAsistenciaReal,
+        ...(claveIdempotencia ? { clave_idempotencia: claveIdempotencia } : {}),
       })
     ),
   remove: (id) => http(`/citas/api/citas/${id}/`, { method: "DELETE", retryWithoutAuth: false }),

@@ -35,7 +35,6 @@ import {
     MoreVertical,
 } from "lucide-react";
 import { apiCitas } from "../../lib/apiCitas";
-import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { api } from "../../lib/apiPruebas";
 import { apiPruebaManejo } from "../../lib/apiPruebaManejo";
 import {
@@ -609,9 +608,15 @@ function CalendarioView({ rows, loading, onEdit, onContext, onToggleAsistencia, 
                                                     className={[
                                                         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold",
                                                         est.bg, est.text,
-                                                        estKey === "pendiente" ? "cursor-default" : "hover:opacity-80",
+                                                        (isUpdating || estKey !== "pendiente" || (row.fecha_hora_cita && new Date(row.fecha_hora_cita) > new Date()))
+                                                            ? "cursor-default opacity-80"
+                                                            : "cursor-pointer hover:opacity-80",
                                                     ].join(" ")}
-                                                    title={estKey === "pendiente" ? "La cita aún no ocurre" : "Cambiar asistencia"}
+                                                    title={
+                                                        row.fecha_hora_cita && new Date(row.fecha_hora_cita) > new Date()
+                                                            ? "La cita aún no ocurre"
+                                                            : estKey === "pendiente" ? "Confirmar asistencia" : "Asistencia ya clasificada"
+                                                    }
                                                 >
                                                     {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                                                     {est.label}
@@ -1699,7 +1704,11 @@ export default function RegistroCitas() {
         setConfirmacionAsistencia(row);
         setFechaAsistenciaReal(toYMDLocal(new Date()));
         setAsistenciaVerificada(false);
-        claveAsistenciaRef.current = crypto.randomUUID();
+        // Se conserva durante reintentos del mismo modal; nunca se reutiliza
+        // para otra cita ni después de una confirmación correcta.
+        const uuid = globalThis.crypto?.randomUUID?.()
+            || `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+        claveAsistenciaRef.current = `citas.asistencia:${row.id}:${uuid}`;
     };
 
     const guardarConfirmacionAsistencia = async () => {
@@ -1730,24 +1739,11 @@ export default function RegistroCitas() {
         setUpdatingInline((prev) => ({ ...prev, [id]: true }));
 
         try {
-            const vinculo = await apiCitas.consultarVinculoAsistencia(id);
-
-            if (vinculo?.tipo === "v3") {
-                if (!vinculo.expediente_id) {
-                    throw new Error("No se identificó un expediente V3 válido.");
-                }
-
-                await apiEtapasV3.registrarAsistencia({
-                    expedienteId: vinculo.expediente_id,
-                    citaId: id,
-                    fechaAsistenciaReal,
-                    claveIdempotencia: claveAsistenciaRef.current,
-                });
-            } else if (vinculo?.tipo === "tradicional") {
-                await apiCitas.confirmarAsistencia(id, fechaAsistenciaReal);
-            } else {
-                throw new Error("No se pudo identificar el flujo de confirmación.");
-            }
+            await apiCitas.confirmarAsistencia(
+                id,
+                fechaAsistenciaReal,
+                claveAsistenciaRef.current,
+            );
 
             setCitas((prev) =>
                 prev.map((cita) =>
