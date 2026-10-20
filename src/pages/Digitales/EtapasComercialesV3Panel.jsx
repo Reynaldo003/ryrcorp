@@ -124,8 +124,10 @@ function ClasificacionHistoricaForm({ expedienteId, estadoAnterior, agencia, onA
     setGuardando(true);
     setError("");
     try {
-      await apiEtapasV3.clasificarHistorico({ expedienteId, etapaDestino: etapa,
-        datos: datosEnviar, motivo, claveIdempotencia: intentoRef.current });
+      await apiEtapasV3.clasificarHistorico({
+        expedienteId, etapaDestino: etapa,
+        datos: datosEnviar, motivo, claveIdempotencia: intentoRef.current
+      });
       onActualizado?.();
     } catch (err) {
       setError(err?.message || "No se pudo clasificar el expediente histórico.");
@@ -543,16 +545,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
   const tieneHomologacionCitaHistorica =
     resultado?.homologacion_cita_historica === true;
 
-  const permiteCita =
-    resultado?.iniciado &&
-    (
-      actual === "cotizacion_enviada" ||
-      (
-        actual === "cita_agendada" &&
-        tieneHomologacionCitaHistorica &&
-        !resultado?.cita_vinculada_id
-      )
-    );
+  const permiteCita = Boolean(resultado?.iniciado);
   // Si la documentación llegó primero, se permite confirmar una visita
   // posterior sin hacer retroceder la etapa comercial.
   const asistenciaYaRegistrada = historial.some((a) => a.tipo === "cita_asistida");
@@ -652,7 +645,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     const contacto = fechaProximoContacto.trim();
     const observacion = observacionCompra.trim();
     if (![compra, contacto].every((fecha) => /^\d{4}-\d{2}-\d{2}$/.test(fecha) &&
-        !Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()))) {
+      !Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()))) {
       setErrorCompra("Captura ambas fechas válidas."); return;
     }
     if (compra <= fechaHoyMx() || contacto <= fechaHoyMx() || contacto > compra) {
@@ -736,7 +729,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     const fecha = fechaAutorizacion.trim();
     const referencia = referenciaAutorizacion.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) ||
-        Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()) || fecha > fechaHoyMx()) {
+      Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()) || fecha > fechaHoyMx()) {
       setErrorAutorizacion("Selecciona una fecha válida que no sea futura.");
       return;
     }
@@ -785,7 +778,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     const fecha = fechaRecepcion.trim();
     const docs = listaDocumentosTexto.split(/\r?\n/).map((d) => d.trim()).filter(Boolean);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) ||
-        Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()) || fecha > fechaHoyMx()) {
+      Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()) || fecha > fechaHoyMx()) {
       setErrorDocumentos("Selecciona una fecha de recepción válida, que no sea futura.");
       return;
     }
@@ -848,7 +841,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     }
     // La fecha del navegador es una ayuda; Django valida contra la fecha programada real.
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) ||
-        Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()) || fecha > fechaHoyMx()) {
+      Number.isNaN(new Date(`${fecha}T12:00:00`).getTime()) || fecha > fechaHoyMx()) {
       setErrorAsistencia("Captura una fecha real de asistencia válida que no sea futura.");
       return;
     }
@@ -956,12 +949,12 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
       // Existente: nunca crear otra cita, solo verificar y vincularla.
       const registro = esAlta
         ? await apiEtapasV3.agendarCitaChat({
-            expedienteId, fechaHoraCita, agencia, asesorPiso, comentarios,
-            claveIdempotencia: intentoCitaRef.current.clave,
-          })
+          expedienteId, fechaHoraCita, agencia, asesorPiso, comentarios,
+          claveIdempotencia: intentoCitaRef.current.clave,
+        })
         : await apiEtapasV3.registrarCita({
-            expedienteId, citaId, claveIdempotencia: intentoCitaRef.current.clave,
-          });
+          expedienteId, citaId, claveIdempotencia: intentoCitaRef.current.clave,
+        });
       const citaVinculadaId = esAlta ? Number(registro?.cita_id) : citaId;
       if (typeof sessionStorage !== "undefined" && expedienteId) {
         // Compatibilidad con citas pendientes del formulario V3 anterior.
@@ -1043,9 +1036,11 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setGuardandoContacto(true);
     setErrorContacto("");
     try {
-      await apiEtapasV3.registrarContactoExterno({ expedienteId, medio: medioContacto,
+      await apiEtapasV3.registrarContactoExterno({
+        expedienteId, medio: medioContacto,
         fechaContacto, observacion: notaContacto.trim(),
-        claveIdempotencia: intentoContactoRef.current });
+        claveIdempotencia: intentoContactoRef.current
+      });
       setMostrarContactoExterno(false);
       setRevision((v) => v + 1);
       onActualizado?.();
@@ -1081,11 +1076,15 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     }
     const tipo = actividadCorreccion.tipo;
     const campos = tipo === "cotizacion_enviada"
-      ? { fecha_envio: camposCorreccion.fecha_envio, vehiculo: camposCorreccion.vehiculo,
-          referencia: camposCorreccion.referencia }
+      ? {
+        fecha_envio: camposCorreccion.fecha_envio, vehiculo: camposCorreccion.vehiculo,
+        referencia: camposCorreccion.referencia
+      }
       : tipo === "documentos_recibidos"
-        ? { fecha_recepcion: camposCorreccion.fecha_recepcion,
-            documentos: camposCorreccion.documentos.split("\n").map((x) => x.trim()).filter(Boolean) }
+        ? {
+          fecha_recepcion: camposCorreccion.fecha_recepcion,
+          documentos: camposCorreccion.documentos.split("\n").map((x) => x.trim()).filter(Boolean)
+        }
         : tipo === "cita_agendada"
           ? { fecha_hora_cita: camposCorreccion.fecha_hora_cita }
           : { fecha_asistencia_real: camposCorreccion.fecha_asistencia_real };
@@ -1093,9 +1092,11 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
     setGuardandoCorreccion(true);
     setErrorCorreccion("");
     try {
-      await apiEtapasV3.corregirActividad({ expedienteId, actividadId: actividadCorreccion.id,
+      await apiEtapasV3.corregirActividad({
+        expedienteId, actividadId: actividadCorreccion.id,
         cambios: campos, motivo: motivoCorreccion.trim(),
-        claveIdempotencia: intentoCorreccionRef.current });
+        claveIdempotencia: intentoCorreccionRef.current
+      });
       setActividadCorreccion(null);
       setRevision((v) => v + 1);
     } catch (err) {
@@ -1158,7 +1159,7 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
               {mostrarContactoExterno ? (
                 <div className="mt-3 grid gap-2 border-t border-sky-200 pt-3">
                   <label className="grid gap-1">Medio del contacto
-                    <select value={medioContacto} onChange={(e) => {setMedioContacto(e.target.value); intentoContactoRef.current=null;}} className="rounded border bg-white px-2 py-2">
+                    <select value={medioContacto} onChange={(e) => { setMedioContacto(e.target.value); intentoContactoRef.current = null; }} className="rounded border bg-white px-2 py-2">
                       <option value="llamada">Llamada telefónica</option>
                       <option value="facebook">Facebook / Messenger</option>
                       <option value="presencial">Atención presencial</option>
@@ -1167,10 +1168,10 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
                     </select>
                   </label>
                   <label className="grid gap-1">Fecha real del contacto
-                    <input type="date" max={fechaHoyMx()} value={fechaContacto} onChange={(e) => {setFechaContacto(e.target.value); intentoContactoRef.current=null;}} className="rounded border bg-white px-2 py-2" />
+                    <input type="date" max={fechaHoyMx()} value={fechaContacto} onChange={(e) => { setFechaContacto(e.target.value); intentoContactoRef.current = null; }} className="rounded border bg-white px-2 py-2" />
                   </label>
                   <label className="grid gap-1">Qué se habló / evidencia operativa
-                    <textarea rows={3} maxLength={600} value={notaContacto} onChange={(e) => {setNotaContacto(e.target.value); intentoContactoRef.current=null;}} className="rounded border bg-white px-2 py-2" placeholder="Ej. Se habló por teléfono sobre el vehículo solicitado" />
+                    <textarea rows={3} maxLength={600} value={notaContacto} onChange={(e) => { setNotaContacto(e.target.value); intentoContactoRef.current = null; }} className="rounded border bg-white px-2 py-2" placeholder="Ej. Se habló por teléfono sobre el vehículo solicitado" />
                   </label>
                   <label className="flex items-start gap-2"><input type="checkbox" checked={confirmarContacto} onChange={(e) => setConfirmarContacto(e.target.checked)} />Confirmo que yo realmente contacté al prospecto por el canal indicado.</label>
                   {errorContacto ? <p role="alert" className="font-bold text-red-700">{errorContacto}</p> : null}
@@ -1203,648 +1204,648 @@ export default function EtapasComercialesV3Panel({ expedienteId, prospecto = nul
             </div>
           ) : (
             <>
-          <ol className={enChat ? "crm-v3-etapas-grid grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"}>
-            {ETAPAS.map(([clave, etiqueta, clase], i) => {
-              const vigente = actual === clave;
-              return (
-                <li key={clave} className={`flex min-w-0 gap-2 rounded-lg border p-2 text-[11px] ${vigente ? "border-[#131E5C]/40 bg-[#131E5C]/[0.06]" : "border-slate-100 bg-slate-50/60"}`}>
-                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold ${vigente ? "bg-[#131E5C] text-white" : "bg-white text-slate-400 ring-1 ring-slate-200"}`}>{i + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className={`font-bold ${vigente ? "text-[#131E5C]" : "text-slate-600"}`}>{etiqueta} {vigente ? <CheckCircle2 className="inline h-3 w-3" /> : null}</div>
-                    <div className="mt-0.5 text-[10px] text-slate-400">{clase}</div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            {avisoRegistro ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoRegistro}</p>
-            ) : null}
-            {permiteCotizacion ? (
-              <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#131E5C]">Cotización enviada</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">Confirmación del envío con fecha y vehículo. La referencia es opcional.</p>
-                  </div>
-                  <button type="button" disabled={guardando} onClick={() => { setMostrarFormulario((v) => !v); setErrorRegistro(""); }}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                    <FileCheck2 className="h-4 w-4" /> {mostrarFormulario ? "Cerrar" : "Registrar cotización"}
-                  </button>
-                </div>
-                {mostrarFormulario ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha de envío
-                      <input type="date" max={fechaHoyMx()} value={fechaEnvio} onChange={(e) => setFechaEnvio(e.target.value)} disabled={guardando}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Vehículo cotizado
-                      <input type="text" maxLength={255} value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} disabled={guardando}
-                        placeholder="Ej. Jetta Trendline" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">Referencia o folio (opcional)
-                      <input type="text" maxLength={120} value={referencia} onChange={(e) => setReferencia(e.target.value)} disabled={guardando}
-                        placeholder="Si existe, indica el folio o referencia" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} disabled={guardando} className="mt-0.5" />
-                      Confirmo que esta cotización ya fue enviada al prospecto.
-                    </label>
-                    {errorRegistro ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorRegistro}</p> : null}
-                    <div className="sm:col-span-2">
-                      <button type="button" disabled={guardando} onClick={registrarCotizacion}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                        {guardando ? "Registrando…" : "Confirmar y registrar cotización"}
+              <ol className={enChat ? "crm-v3-etapas-grid grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"}>
+                {ETAPAS.map(([clave, etiqueta, clase], i) => {
+                  const vigente = actual === clave;
+                  return (
+                    <li key={clave} className={`flex min-w-0 gap-2 rounded-lg border p-2 text-[11px] ${vigente ? "border-[#131E5C]/40 bg-[#131E5C]/[0.06]" : "border-slate-100 bg-slate-50/60"}`}>
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold ${vigente ? "bg-[#131E5C] text-white" : "bg-white text-slate-400 ring-1 ring-slate-200"}`}>{i + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={`font-bold ${vigente ? "text-[#131E5C]" : "text-slate-600"}`}>{etiqueta} {vigente ? <CheckCircle2 className="inline h-3 w-3" /> : null}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-400">{clase}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                {avisoRegistro ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoRegistro}</p>
+                ) : null}
+                {permiteCotizacion ? (
+                  <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-[#131E5C]">Cotización enviada</div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">Confirmación del envío con fecha y vehículo. La referencia es opcional.</p>
+                      </div>
+                      <button type="button" disabled={guardando} onClick={() => { setMostrarFormulario((v) => !v); setErrorRegistro(""); }}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                        <FileCheck2 className="h-4 w-4" /> {mostrarFormulario ? "Cerrar" : "Registrar cotización"}
                       </button>
                     </div>
+                    {mostrarFormulario ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha de envío
+                          <input type="date" max={fechaHoyMx()} value={fechaEnvio} onChange={(e) => setFechaEnvio(e.target.value)} disabled={guardando}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Vehículo cotizado
+                          <input type="text" maxLength={255} value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} disabled={guardando}
+                            placeholder="Ej. Jetta Trendline" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">Referencia o folio (opcional)
+                          <input type="text" maxLength={120} value={referencia} onChange={(e) => setReferencia(e.target.value)} disabled={guardando}
+                            placeholder="Si existe, indica el folio o referencia" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} disabled={guardando} className="mt-0.5" />
+                          Confirmo que esta cotización ya fue enviada al prospecto.
+                        </label>
+                        {errorRegistro ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorRegistro}</p> : null}
+                        <div className="sm:col-span-2">
+                          <button type="button" disabled={guardando} onClick={registrarCotizacion}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                            {guardando ? "Registrando…" : "Confirmar y registrar cotización"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : actual === "nuevo_prospecto" ? (
+                  <p className="mb-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                    El botón de cotización se habilitará después de registrar un seguimiento humano válido desde el backend.
+                  </p>
+                ) : null}
+
+                {avisoCita ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoCita}</p>
+                ) : null}
+                {permiteCita ? (
+                  <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-[#131E5C]">Cita agendada</div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Agenda una nueva cita con asesor responsable o vincula una cita existente. La asistencia se confirma por separado.
+                        </p>
+                      </div>
+                      <button type="button" disabled={guardandoCita}
+                        onClick={() => { setMostrarFormularioCita((v) => !v); setErrorCita(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                        {mostrarFormularioCita ? "Cerrar" : "Vincular cita agendada"}
+                      </button>
+                    </div>
+                    {mostrarFormularioCita ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                        <div className="flex gap-2 sm:col-span-2">
+                          {enChat && typeof onAgendarCitaChat === "function" ? (
+                            <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); onAgendarCitaChat(); }}
+                              className="rounded-lg bg-[#1746D1] px-3 py-1.5 text-xs font-bold text-white">
+                              Agendar con asesor de piso
+                            </button>
+                          ) : (
+                            <button type="button" onClick={() => { setModoCita("crear"); setErrorCita(""); }}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "crear" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+                              Agendar nueva cita
+                            </button>
+                          )}
+                          <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); }}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "existente" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+                            Usar cita ya existente {citasCliente.length ? `(${citasCliente.length})` : ""}
+                          </button>
+                        </div>
+                        {enChat ? (
+                          <p className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 sm:col-span-2">
+                            Usa la agenda y selecciona el asesor de piso. Una cita creada desde el chat se vincula automáticamente al expediente; las citas anteriores deben vincularse de manera individual.
+                          </p>
+                        ) : null}
+                        {modoCita === "crear" && !enChat ? (
+                          <>
+                            <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                              Fecha de cita
+                              <input type="date" min={fechaHoyMx()} value={nuevaCitaFecha}
+                                onChange={(e) => setNuevaCitaFecha(e.target.value)}
+                                disabled={guardandoCita}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                            </label>
+                            <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                              Hora
+                              <input type="time" value={nuevaCitaHora}
+                                onChange={(e) => setNuevaCitaHora(e.target.value)}
+                                disabled={guardandoCita}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                            </label>
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs sm:col-span-2">
+                              <span className="font-bold text-[#131E5C]">Sucursal del expediente: </span>
+                              {prospecto?.agencia || nuevaCitaAgencia || "Sin agencia"}
+                              <p className="mt-1 text-[11px] text-slate-500">La cita se registra en la sucursal del prospecto, no en otra agencia.</p>
+                            </div>
+                            <SelectorAsesorPisoCitaV3
+                              value={nuevaCitaAsesorPiso}
+                              onChange={(valor) => setNuevaCitaAsesorPiso(valor)}
+                              disabled={guardandoCita}
+                            />
+                            <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                              Comentarios de la cita (opcional)
+                              <textarea value={nuevaCitaComentarios} maxLength={2000} rows={2}
+                                onChange={(e) => setNuevaCitaComentarios(e.target.value)}
+                                disabled={guardandoCita}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                            </label>
+                            <p className="text-[11px] text-slate-600 sm:col-span-2">
+                              Al confirmar, la cita y la etapa comercial se registran juntas. Si ya existe una cita pendiente para este cliente y sucursal, selecciónala en «Usar cita ya existente».
+                            </p>
+                          </>
+                        ) : (
+                          <div className="grid gap-2 sm:col-span-2">
+                            {cargandoCitasCliente ? (
+                              <p className="text-xs text-slate-500">Buscando citas del cliente…</p>
+                            ) : citasCliente.length > 0 ? (
+                              <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                                Selecciona la cita registrada del cliente
+                                <select value={citaIdTexto}
+                                  onChange={(e) => { setCitaIdTexto(e.target.value); intentoCitaRef.current = null; }}
+                                  disabled={guardandoCita}
+                                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+                                  {citasCliente.map((c) => (
+                                    <option key={c.id} value={String(c.id)}>
+                                      {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.agencia} · {c.auto_interes || "Sin vehículo especificado"}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
+                            {citasCliente.length === 0 && !cargandoCitasCliente ? (
+                              <p className="text-xs text-amber-700">{enChat ? "No se encontró una cita para vincular. Agenda desde el botón azul indicando el asesor de piso y actualiza las etapas antes de vincularla." : "No se encontró una cita registrada de este prospecto. Selecciona «Agendar nueva cita» e indica fecha, hora y asesor."}</p>
+                            ) : null}
+                          </div>
+                        )}
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmarCita} onChange={(e) => setConfirmarCita(e.target.checked)}
+                            disabled={guardandoCita} className="mt-0.5" />
+                          Confirmo que la cita está acordada con el cliente del expediente.
+                        </label>
+                        {errorCita ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorCita}</p> : null}
+                        <div className="sm:col-span-2">
+                          <button type="button" disabled={guardandoCita} onClick={registrarCita}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                            {guardandoCita ? "Guardando…" : modoCita === "crear" ? "Guardar y agendar cita" : "Confirmar y vincular cita"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
-              </div>
-            ) : actual === "nuevo_prospecto" ? (
-              <p className="mb-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                El botón de cotización se habilitará después de registrar un seguimiento humano válido desde el backend.
-              </p>
-            ) : null}
 
-            {avisoCita ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoCita}</p>
-            ) : null}
-            {permiteCita ? (
-              <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#131E5C]">Cita agendada</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      Agenda una nueva cita con asesor responsable o vincula una cita existente. La asistencia se confirma por separado.
-                    </p>
-                  </div>
-                  <button type="button" disabled={guardandoCita}
-                    onClick={() => { setMostrarFormularioCita((v) => !v); setErrorCita(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                    {mostrarFormularioCita ? "Cerrar" : "Vincular cita agendada"}
-                  </button>
-                </div>
-                {mostrarFormularioCita ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <div className="flex gap-2 sm:col-span-2">
-                      {enChat && typeof onAgendarCitaChat === "function" ? (
-                        <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); onAgendarCitaChat(); }}
-                          className="rounded-lg bg-[#1746D1] px-3 py-1.5 text-xs font-bold text-white">
-                          Agendar con asesor de piso
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => { setModoCita("crear"); setErrorCita(""); }}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "crear" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
-                          Agendar nueva cita
-                        </button>
-                      )}
-                      <button type="button" onClick={() => { setModoCita("existente"); setErrorCita(""); }}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${modoCita === "existente" ? "bg-[#131E5C] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
-                        Usar cita ya existente {citasCliente.length ? `(${citasCliente.length})` : ""}
+                {actual === "documentos_enviados" && permiteAsistencia ? (
+                  <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
+                    Documentos recibidos: cuando ocurra la visita, registra aquí su asistencia. La etapa permanecerá en Documentos recibidos.
+                  </p>
+                ) : null}
+                {avisoAsistencia ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoAsistencia}</p>
+                ) : null}
+                {permiteAsistencia ? (
+                  <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-[#131E5C]">Cita asistida</div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Únicamente cuando el cliente haya acudido. La cita debe estar vinculada y su fecha programada ya debe haber ocurrido.
+                        </p>
+                      </div>
+                      <button type="button" disabled={guardandoAsistencia}
+                        onClick={() => { setMostrarAsistencia((valor) => !valor); setErrorAsistencia(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                        {mostrarAsistencia ? "Cerrar" : "Confirmar asistencia"}
                       </button>
                     </div>
-                    {enChat ? (
-                      <p className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 sm:col-span-2">
-                        Usa la agenda y selecciona el asesor de piso. Una cita creada desde el chat se vincula automáticamente al expediente; las citas anteriores deben vincularse de manera individual.
-                      </p>
-                    ) : null}
-                    {modoCita === "crear" && !enChat ? (
-                      <>
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                          Fecha de cita
-                          <input type="date" min={fechaHoyMx()} value={nuevaCitaFecha}
-                            onChange={(e) => setNuevaCitaFecha(e.target.value)}
-                            disabled={guardandoCita}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                        </label>
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                          Hora
-                          <input type="time" value={nuevaCitaHora}
-                            onChange={(e) => setNuevaCitaHora(e.target.value)}
-                            disabled={guardandoCita}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                        </label>
-                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs sm:col-span-2">
-                          <span className="font-bold text-[#131E5C]">Sucursal del expediente: </span>
-                          {prospecto?.agencia || nuevaCitaAgencia || "Sin agencia"}
-                          <p className="mt-1 text-[11px] text-slate-500">La cita se registra en la sucursal del prospecto, no en otra agencia.</p>
-                        </div>
-                        <SelectorAsesorPisoCitaV3
-                          value={nuevaCitaAsesorPiso}
-                          onChange={(valor) => setNuevaCitaAsesorPiso(valor)}
-                          disabled={guardandoCita}
-                        />
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
-                          Comentarios de la cita (opcional)
-                          <textarea value={nuevaCitaComentarios} maxLength={2000} rows={2}
-                            onChange={(e) => setNuevaCitaComentarios(e.target.value)}
-                            disabled={guardandoCita}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                        </label>
-                        <p className="text-[11px] text-slate-600 sm:col-span-2">
-                          Al confirmar, la cita y la etapa comercial se registran juntas. Si ya existe una cita pendiente para este cliente y sucursal, selecciónala en «Usar cita ya existente».
-                        </p>
-                      </>
-                    ) : (
-                      <div className="grid gap-2 sm:col-span-2">
-                        {cargandoCitasCliente ? (
-                          <p className="text-xs text-slate-500">Buscando citas del cliente…</p>
-                        ) : citasCliente.length > 0 ? (
-                          <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                            Selecciona la cita registrada del cliente
-                            <select value={citaIdTexto}
-                              onChange={(e) => { setCitaIdTexto(e.target.value); intentoCitaRef.current = null; }}
-                              disabled={guardandoCita}
+                    {mostrarAsistencia ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                        {citasParaAsistencia.length > 0 ? (
+                          <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                            Cita del prospecto (fecha, hora y sucursal)
+                            <select value={citaSeleccionada ? citaAsistenciaTexto : ""}
+                              onChange={(e) => { setCitaAsistenciaTexto(e.target.value); intentoAsistenciaRef.current = null; }}
+                              disabled={guardandoAsistencia}
                               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
-                              {citasCliente.map((c) => (
+                              <option value="">— Selecciona la cita —</option>
+                              {citasParaAsistencia.map((c) => (
                                 <option key={c.id} value={String(c.id)}>
-                                  {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.agencia} · {c.auto_interes || "Sin vehículo especificado"}
+                                  {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.agencia}
                                 </option>
                               ))}
                             </select>
                           </label>
-                        ) : null}
-                        {citasCliente.length === 0 && !cargandoCitasCliente ? (
-                          <p className="text-xs text-amber-700">{enChat ? "No se encontró una cita para vincular. Agenda desde el botón azul indicando el asesor de piso y actualiza las etapas antes de vincularla." : "No se encontró una cita registrada de este prospecto. Selecciona «Agendar nueva cita» e indica fecha, hora y asesor."}</p>
-                        ) : null}
-                      </div>
-                    )}
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmarCita} onChange={(e) => setConfirmarCita(e.target.checked)}
-                        disabled={guardandoCita} className="mt-0.5" />
-                      Confirmo que la cita está acordada con el cliente del expediente.
-                    </label>
-                    {errorCita ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorCita}</p> : null}
-                    <div className="sm:col-span-2">
-                      <button type="button" disabled={guardandoCita} onClick={registrarCita}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                        {guardandoCita ? "Guardando…" : modoCita === "crear" ? "Guardar y agendar cita" : "Confirmar y vincular cita"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {actual === "documentos_enviados" && permiteAsistencia ? (
-              <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
-                Documentos recibidos: cuando ocurra la visita, registra aquí su asistencia. La etapa permanecerá en Documentos recibidos.
-              </p>
-            ) : null}
-            {avisoAsistencia ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoAsistencia}</p>
-            ) : null}
-            {permiteAsistencia ? (
-              <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#131E5C]">Cita asistida</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      Únicamente cuando el cliente haya acudido. La cita debe estar vinculada y su fecha programada ya debe haber ocurrido.
-                    </p>
-                  </div>
-                  <button type="button" disabled={guardandoAsistencia}
-                    onClick={() => { setMostrarAsistencia((valor) => !valor); setErrorAsistencia(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                    {mostrarAsistencia ? "Cerrar" : "Confirmar asistencia"}
-                  </button>
-                </div>
-                {mostrarAsistencia ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    {citasParaAsistencia.length > 0 ? (
-                      <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
-                        Cita del prospecto (fecha, hora y sucursal)
-                        <select value={citaSeleccionada ? citaAsistenciaTexto : ""}
-                          onChange={(e) => { setCitaAsistenciaTexto(e.target.value); intentoAsistenciaRef.current = null; }}
-                          disabled={guardandoAsistencia}
-                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
-                          <option value="">— Selecciona la cita —</option>
-                          {citasParaAsistencia.map((c) => (
-                            <option key={c.id} value={String(c.id)}>
-                              {String(c.fecha_hora_cita || "").slice(0, 16).replace("T", " ")} · {c.agencia}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : requiereCapturaHistorica ? (
-                      <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-                        <p className="text-xs text-amber-800 sm:col-span-2">La etapa procede del CRM anterior y no existe una cita vinculada. Confirma los datos históricos reales sin crear una cita ficticia.</p>
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha programada originalmente
-                          <input type="date" max={fechaHoyMx()} value={fechaProgramadaHistorica}
-                            onChange={(e) => { setFechaProgramadaHistorica(e.target.value); intentoAsistenciaRef.current = null; }}
-                            disabled={guardandoAsistencia} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                        </label>
-                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Hora programada originalmente
-                          <input type="time" value={horaProgramadaHistorica}
-                            onChange={(e) => { setHoraProgramadaHistorica(e.target.value); intentoAsistenciaRef.current = null; }}
-                            disabled={guardandoAsistencia} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                        </label>
-                        <p className="text-xs text-slate-600 sm:col-span-2">Sucursal: {prospecto?.agencia || "No disponible"}</p>
-                      </div>
-                    ) : (
-                      <div className="grid gap-1 text-xs text-amber-800 sm:col-span-2">
-                        {citasVinculadasConAsistencia.length > 0 ? (
-                          <p>La cita vinculada al expediente ya tiene una asistencia o clasificación registrada en el CRM anterior. No debe confirmarse por segunda vez; si la etapa comercial no coincide, revisa su clasificación histórica.</p>
+                        ) : requiereCapturaHistorica ? (
+                          <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                            <p className="text-xs text-amber-800 sm:col-span-2">La etapa procede del CRM anterior y no existe una cita vinculada. Confirma los datos históricos reales sin crear una cita ficticia.</p>
+                            <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha programada originalmente
+                              <input type="date" max={fechaHoyMx()} value={fechaProgramadaHistorica}
+                                onChange={(e) => { setFechaProgramadaHistorica(e.target.value); intentoAsistenciaRef.current = null; }}
+                                disabled={guardandoAsistencia} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                            </label>
+                            <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Hora programada originalmente
+                              <input type="time" value={horaProgramadaHistorica}
+                                onChange={(e) => { setHoraProgramadaHistorica(e.target.value); intentoAsistenciaRef.current = null; }}
+                                disabled={guardandoAsistencia} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                            </label>
+                            <p className="text-xs text-slate-600 sm:col-span-2">Sucursal: {prospecto?.agencia || "No disponible"}</p>
+                          </div>
                         ) : (
-                          <p>No existe ninguna cita pendiente vinculada a este expediente para confirmar asistencia.</p>
+                          <div className="grid gap-1 text-xs text-amber-800 sm:col-span-2">
+                            {citasVinculadasConAsistencia.length > 0 ? (
+                              <p>La cita vinculada al expediente ya tiene una asistencia o clasificación registrada en el CRM anterior. No debe confirmarse por segunda vez; si la etapa comercial no coincide, revisa su clasificación histórica.</p>
+                            ) : (
+                              <p>No existe ninguna cita pendiente vinculada a este expediente para confirmar asistencia.</p>
+                            )}
+                            {citasSinVinculoPendientes.length > 0 ? (
+                              <p>Existen otras citas del mismo cliente, pero no están vinculadas al expediente comercial. No pueden utilizarse para confirmar asistencia sin una vinculación verificable.</p>
+                            ) : null}
+                          </div>
                         )}
-                        {citasSinVinculoPendientes.length > 0 ? (
-                          <p>Existen otras citas del mismo cliente, pero no están vinculadas al expediente comercial. No pueden utilizarse para confirmar asistencia sin una vinculación verificable.</p>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Fecha real de visita
+                          <input type="date" max={fechaHoyMx()} value={fechaAsistencia}
+                            onChange={(e) => { setFechaAsistencia(e.target.value); intentoAsistenciaRef.current = null; }}
+                            disabled={guardandoAsistencia}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        {citaSeleccionadaFutura ? (
+                          <p className="text-[11px] font-medium text-amber-800 sm:col-span-2">
+                            Esta cita está programada para una fecha futura. Solo podrá confirmarse después de que ocurra.
+                          </p>
+                        ) : null}
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmarAsistencia}
+                            onChange={(e) => setConfirmarAsistencia(e.target.checked)}
+                            disabled={guardandoAsistencia} className="mt-0.5" />
+                          Confirmo que el cliente realmente asistió a esta cita en la fecha indicada.
+                        </label>
+                        {errorAsistencia ? (
+                          <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorAsistencia}</p>
+                        ) : null}
+                        <div className="sm:col-span-2">
+                          <button type="button"
+                            disabled={guardandoAsistencia || (!citaSeleccionada && !requiereCapturaHistorica) || citaSeleccionadaFutura}
+                            onClick={registrarAsistencia}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                            {guardandoAsistencia ? "Confirmando…" : "Confirmar asistencia real"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {avisoDocumentos ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoDocumentos}</p>
+                ) : null}
+                {permiteDocumentos ? (
+                  <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-[#131E5C]">Documentos recibidos</div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Puede avanzar antes de la asistencia. La cita seguirá pendiente; declarar documentos aquí no adjunta archivos.
+                        </p>
+                      </div>
+                      <button type="button" disabled={guardandoDocumentos}
+                        onClick={() => { setMostrarDocumentos((v) => !v); setErrorDocumentos(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                        {mostrarDocumentos ? "Cerrar" : "Registrar documentos recibidos"}
+                      </button>
+                    </div>
+                    {mostrarDocumentos ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Fecha real de recepción
+                          <input type="date" value={fechaRecepcion} max={fechaHoyMx()}
+                            onChange={(e) => { setFechaRecepcion(e.target.value); intentoDocumentosRef.current = null; }}
+                            disabled={guardandoDocumentos}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                          Documentos recibidos (uno por línea)
+                          <textarea rows={4} maxLength={5000} value={listaDocumentosTexto}
+                            onChange={(e) => { setListaDocumentosTexto(e.target.value); intentoDocumentosRef.current = null; }}
+                            disabled={guardandoDocumentos}
+                            placeholder={"Identificación oficial\nComprobante de domicilio"}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmarDocumentos}
+                            onChange={(e) => setConfirmarDocumentos(e.target.checked)} disabled={guardandoDocumentos} className="mt-0.5" />
+                          Confirmo que recibí realmente los documentos indicados en la fecha señalada.
+                        </label>
+                        {errorDocumentos ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorDocumentos}</p> : null}
+                        <div className="sm:col-span-2">
+                          <button type="button" disabled={guardandoDocumentos} onClick={registrarDocumentos}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                            {guardandoDocumentos ? "Registrando…" : "Confirmar recepción de documentos"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {avisoAutorizacion ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoAutorizacion}</p>
+                ) : null}
+                {permiteAutorizacion ? (
+                  <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-[#131E5C]">Autorizado no formalizado</div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Declaración manual de crédito autorizado. No formaliza ni factura una venta y no cambia los campos históricos.
+                        </p>
+                      </div>
+                      <button type="button" disabled={guardandoAutorizacion}
+                        onClick={() => { setMostrarAutorizacion((v) => !v); setErrorAutorizacion(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                        {mostrarAutorizacion ? "Cerrar" : "Registrar autorización"}
+                      </button>
+                    </div>
+                    {mostrarAutorizacion ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Fecha efectiva de autorización
+                          <input type="date" value={fechaAutorizacion} max={fechaHoyMx()}
+                            onChange={(e) => { setFechaAutorizacion(e.target.value); intentoAutorizacionRef.current = null; }}
+                            disabled={guardandoAutorizacion}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          Referencia o folio de autorización (opcional)
+                          <input type="text" maxLength={120} value={referenciaAutorizacion}
+                            onChange={(e) => { setReferenciaAutorizacion(e.target.value); intentoAutorizacionRef.current = null; }}
+                            disabled={guardandoAutorizacion} placeholder="Ej. AUT-DEMO-13"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmarAutorizacion}
+                            onChange={(e) => setConfirmarAutorizacion(e.target.checked)} disabled={guardandoAutorizacion} className="mt-0.5" />
+                          Confirmo que existe una autorización de crédito para este prospecto en la fecha indicada.
+                        </label>
+                        {errorAutorizacion ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorAutorizacion}</p> : null}
+                        <div className="sm:col-span-2">
+                          <button type="button" disabled={guardandoAutorizacion} onClick={registrarAutorizacion}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
+                            {guardandoAutorizacion ? "Registrando…" : "Confirmar autorización de crédito"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {avisoCompra ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoCompra}</p>
+                ) : null}
+                {permiteCompraFutura ? (
+                  <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-[#131E5C]">Compra futura</div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">El cliente comprará después. No es Lead perdido ni una factura.</p>
+                      </div>
+                      <button type="button" disabled={guardandoCompra}
+                        onClick={() => { setMostrarCompraFutura((valor) => !valor); setErrorCompra(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        {mostrarCompraFutura ? "Cerrar" : "Registrar compra futura"}
+                      </button>
+                    </div>
+                    {mostrarCompraFutura ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha prevista de compra
+                          <input type="date" min={fechaHoyMx()} value={fechaCompraPrevista}
+                            onChange={(e) => { setFechaCompraPrevista(e.target.value); intentoCompraRef.current = null; }}
+                            disabled={guardandoCompra} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Próximo contacto
+                          <input type="date" min={fechaHoyMx()} max={fechaCompraPrevista || undefined} value={fechaProximoContacto}
+                            onChange={(e) => { setFechaProximoContacto(e.target.value); intentoCompraRef.current = null; }}
+                            disabled={guardandoCompra} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">Observación
+                          <textarea rows={3} maxLength={1000} value={observacionCompra}
+                            onChange={(e) => { setObservacionCompra(e.target.value); intentoCompraRef.current = null; }}
+                            disabled={guardandoCompra} placeholder="Motivo y contexto del seguimiento futuro"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmarCompra}
+                            onChange={(e) => setConfirmarCompra(e.target.checked)} disabled={guardandoCompra} className="mt-0.5" />
+                          Confirmo que el cliente expresó intención de comprar más adelante.
+                        </label>
+                        {errorCompra ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorCompra}</p> : null}
+                        <div className="sm:col-span-2">
+                          <button type="button" disabled={guardandoCompra} onClick={registrarCompraFutura}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                            {guardandoCompra ? "Registrando…" : "Confirmar compra futura"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {avisoFacturacion ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoFacturacion}</p>
+                ) : null}
+                {permiteFacturacion ? (
+                  <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-extrabold text-[#131E5C]">Facturado · captura operativa</p>
+                        <p className="mt-0.5 text-[11px] text-slate-600">El VIN se guardará también en el campo VIN Facturado del expediente.</p>
+                      </div>
+                      <button type="button" disabled={guardandoFacturacion}
+                        onClick={() => { setMostrarFacturacion((valor) => !valor); setErrorFacturacion(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        {mostrarFacturacion ? "Cerrar" : "Registrar facturación"}
+                      </button>
+                    </div>
+                    {mostrarFacturacion ? (
+                      <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3">
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
+                          VIN facturado (17 caracteres)
+                          <input type="text" value={vinFacturacion} maxLength={17} disabled={guardandoFacturacion}
+                            onChange={(e) => setVinFacturacion(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 17))}
+                            autoComplete="off" placeholder="VIN del vehículo facturado"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                          <span className="text-[11px] font-normal text-slate-500">{vinFacturacion.length}/17 · Se registrará la fecha operativa; no verifica CFDI.</span>
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700">
+                          <input type="checkbox" checked={confirmarFacturacion} disabled={guardandoFacturacion}
+                            onChange={(e) => setConfirmarFacturacion(e.target.checked)} className="mt-0.5" />
+                          Confirmo que este VIN corresponde a una operación facturada real.
+                        </label>
+                        {errorFacturacion ? <p role="alert" className="text-xs font-semibold text-red-700">{errorFacturacion}</p> : null}
+                        <button type="button" disabled={guardandoFacturacion || !confirmarFacturacion}
+                          onClick={registrarFacturacion}
+                          className="w-fit rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                          {guardandoFacturacion ? "Registrando…" : "Guardar VIN y marcar Facturado"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {avisoPerdida ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoPerdida}</p>
+                ) : null}
+                {permitePerdida ? (
+                  <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-extrabold text-[#131E5C]">Lead perdido</p>
+                        <p className="mt-0.5 text-[11px] text-slate-600">El cliente no continuará como oportunidad activa. Debes seleccionar un motivo.</p>
+                      </div>
+                      <button type="button" disabled={guardandoPerdida}
+                        onClick={() => { setMostrarPerdida((valor) => !valor); setErrorPerdida(""); }}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        {mostrarPerdida ? "Cerrar" : "Registrar lead perdido"}
+                      </button>
+                    </div>
+                    {mostrarPerdida ? (
+                      <div className="mt-3 grid gap-3 border-t border-red-200 pt-3 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                          Motivo de descarte (obligatorio)
+                          <select value={motivoPerdida} disabled={guardandoPerdida}
+                            onChange={(e) => { setMotivoPerdida(e.target.value); intentoPerdidaRef.current = null; }}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+                            <option value="">— Selecciona un motivo —</option>
+                            {MOTIVOS_LEAD_PERDIDO.map(([clave, etiqueta]) => (
+                              <option key={clave} value={clave}>{etiqueta}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
+                          {motivoPerdida === "otro_motivo" ? "Explicación obligatoria" : "Observación (opcional)"}
+                          <textarea rows={3} maxLength={1000} value={detallePerdida}
+                            onChange={(e) => { setDetallePerdida(e.target.value); intentoPerdidaRef.current = null; }}
+                            disabled={guardandoPerdida} placeholder="Contexto del descarte"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
+                          <input type="checkbox" checked={confirmarPerdida}
+                            onChange={(e) => setConfirmarPerdida(e.target.checked)} disabled={guardandoPerdida} className="mt-0.5" />
+                          Confirmo que esta oportunidad se descarta con el motivo seleccionado.
+                        </label>
+                        {errorPerdida ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorPerdida}</p> : null}
+                        <div className="sm:col-span-2">
+                          <button type="button" disabled={guardandoPerdida} onClick={registrarLeadPerdido}
+                            className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                            {guardandoPerdida ? "Registrando…" : "Confirmar Lead perdido"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {permiteReactivacion ? (
+                  <div className="mb-3 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                    {actual === "compra_futura" ? (
+                      <>
+                        <p className="text-xs font-extrabold text-[#131E5C]">Recordatorio de compra futura</p>
+                        {recordatorioCompra ? (
+                          <div className="space-y-1 text-xs text-[#131E5C]">
+                            <p>Próximo contacto: <strong>{fechaCorta(recordatorioCompra.proximo_contacto)}</strong>
+                              {contactoVencido ? <span className="ml-2 font-extrabold text-red-700">Pendiente de contactar</span> : null}</p>
+                            <p>Compra prevista: <strong>{fechaCorta(recordatorioCompra.fecha_prevista_compra)}</strong></p>
+                            <p className="whitespace-pre-wrap text-slate-600">{recordatorioCompra.observacion || "Sin observación"}</p>
+                          </div>
+                        ) : <p className="text-xs text-amber-800">No se encontró el recordatorio. Consulta la actividad registrada.</p>}
+                        <p className="text-[11px] text-slate-500">Recordatorio visible al abrir esta ficha; no envía notificaciones automáticas.</p>
+                      </>
+                    ) : (
+                      <div className="space-y-1 text-xs text-[#131E5C]">
+                        <p className="font-bold">Oportunidad perdida. Solo se puede retomar mediante una reactivación explícita y justificada.</p>
+                        <p>Motivo: <strong>{resultado?.motivo_lead_perdido?.etiqueta || "Consulta el historial de descarte"}</strong></p>
+                        {resultado?.motivo_lead_perdido?.detalle ? (
+                          <p className="whitespace-pre-wrap text-slate-600">{resultado.motivo_lead_perdido.detalle}</p>
                         ) : null}
                       </div>
                     )}
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      Fecha real de visita
-                      <input type="date" max={fechaHoyMx()} value={fechaAsistencia}
-                        onChange={(e) => { setFechaAsistencia(e.target.value); intentoAsistenciaRef.current = null; }}
-                        disabled={guardandoAsistencia}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    {citaSeleccionadaFutura ? (
-                      <p className="text-[11px] font-medium text-amber-800 sm:col-span-2">
-                        Esta cita está programada para una fecha futura. Solo podrá confirmarse después de que ocurra.
-                      </p>
-                    ) : null}
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmarAsistencia}
-                        onChange={(e) => setConfirmarAsistencia(e.target.checked)}
-                        disabled={guardandoAsistencia} className="mt-0.5" />
-                      Confirmo que el cliente realmente asistió a esta cita en la fecha indicada.
-                    </label>
-                    {errorAsistencia ? (
-                      <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorAsistencia}</p>
-                    ) : null}
-                    <div className="sm:col-span-2">
-                      <button type="button"
-                        disabled={guardandoAsistencia || (!citaSeleccionada && !requiereCapturaHistorica) || citaSeleccionadaFutura}
-                        onClick={registrarAsistencia}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                        {guardandoAsistencia ? "Confirmando…" : "Confirmar asistencia real"}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-extrabold text-[#131E5C]">Retomar seguimiento</p>
+                      <button type="button" onClick={() => setMostrarReactivacion((valor) => !valor)}
+                        disabled={guardandoReactivacion}
+                        className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        {mostrarReactivacion ? "Cerrar" : "Reactivar seguimiento"}
                       </button>
                     </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {avisoDocumentos ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoDocumentos}</p>
-            ) : null}
-            {permiteDocumentos ? (
-              <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#131E5C]">Documentos recibidos</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      Puede avanzar antes de la asistencia. La cita seguirá pendiente; declarar documentos aquí no adjunta archivos.
-                    </p>
-                  </div>
-                  <button type="button" disabled={guardandoDocumentos}
-                    onClick={() => { setMostrarDocumentos((v) => !v); setErrorDocumentos(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                    {mostrarDocumentos ? "Cerrar" : "Registrar documentos recibidos"}
-                  </button>
-                </div>
-                {mostrarDocumentos ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      Fecha real de recepción
-                      <input type="date" value={fechaRecepcion} max={fechaHoyMx()}
-                        onChange={(e) => { setFechaRecepcion(e.target.value); intentoDocumentosRef.current = null; }}
-                        disabled={guardandoDocumentos}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
-                      Documentos recibidos (uno por línea)
-                      <textarea rows={4} maxLength={5000} value={listaDocumentosTexto}
-                        onChange={(e) => { setListaDocumentosTexto(e.target.value); intentoDocumentosRef.current = null; }}
-                        disabled={guardandoDocumentos}
-                        placeholder={"Identificación oficial\nComprobante de domicilio"}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmarDocumentos}
-                        onChange={(e) => setConfirmarDocumentos(e.target.checked)} disabled={guardandoDocumentos} className="mt-0.5" />
-                      Confirmo que recibí realmente los documentos indicados en la fecha señalada.
-                    </label>
-                    {errorDocumentos ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorDocumentos}</p> : null}
-                    <div className="sm:col-span-2">
-                      <button type="button" disabled={guardandoDocumentos} onClick={registrarDocumentos}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                        {guardandoDocumentos ? "Registrando…" : "Confirmar recepción de documentos"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {avisoAutorizacion ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoAutorizacion}</p>
-            ) : null}
-            {permiteAutorizacion ? (
-              <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#131E5C]">Autorizado no formalizado</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      Declaración manual de crédito autorizado. No formaliza ni factura una venta y no cambia los campos históricos.
-                    </p>
-                  </div>
-                  <button type="button" disabled={guardandoAutorizacion}
-                    onClick={() => { setMostrarAutorizacion((v) => !v); setErrorAutorizacion(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                    {mostrarAutorizacion ? "Cerrar" : "Registrar autorización"}
-                  </button>
-                </div>
-                {mostrarAutorizacion ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      Fecha efectiva de autorización
-                      <input type="date" value={fechaAutorizacion} max={fechaHoyMx()}
-                        onChange={(e) => { setFechaAutorizacion(e.target.value); intentoAutorizacionRef.current = null; }}
-                        disabled={guardandoAutorizacion}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      Referencia o folio de autorización (opcional)
-                      <input type="text" maxLength={120} value={referenciaAutorizacion}
-                        onChange={(e) => { setReferenciaAutorizacion(e.target.value); intentoAutorizacionRef.current = null; }}
-                        disabled={guardandoAutorizacion} placeholder="Ej. AUT-DEMO-13"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmarAutorizacion}
-                        onChange={(e) => setConfirmarAutorizacion(e.target.checked)} disabled={guardandoAutorizacion} className="mt-0.5" />
-                      Confirmo que existe una autorización de crédito para este prospecto en la fecha indicada.
-                    </label>
-                    {errorAutorizacion ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorAutorizacion}</p> : null}
-                    <div className="sm:col-span-2">
-                      <button type="button" disabled={guardandoAutorizacion} onClick={registrarAutorizacion}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white hover:bg-[#1c2b79] disabled:opacity-50">
-                        {guardandoAutorizacion ? "Registrando…" : "Confirmar autorización de crédito"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {avisoCompra ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoCompra}</p>
-            ) : null}
-            {permiteCompraFutura ? (
-              <div className="mb-3 rounded-xl border border-[#131E5C]/15 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#131E5C]">Compra futura</div>
-                    <p className="mt-0.5 text-[11px] text-slate-500">El cliente comprará después. No es Lead perdido ni una factura.</p>
-                  </div>
-                  <button type="button" disabled={guardandoCompra}
-                    onClick={() => { setMostrarCompraFutura((valor) => !valor); setErrorCompra(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                    {mostrarCompraFutura ? "Cerrar" : "Registrar compra futura"}
-                  </button>
-                </div>
-                {mostrarCompraFutura ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Fecha prevista de compra
-                      <input type="date" min={fechaHoyMx()} value={fechaCompraPrevista}
-                        onChange={(e) => { setFechaCompraPrevista(e.target.value); intentoCompraRef.current = null; }}
-                        disabled={guardandoCompra} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Próximo contacto
-                      <input type="date" min={fechaHoyMx()} max={fechaCompraPrevista || undefined} value={fechaProximoContacto}
-                        onChange={(e) => { setFechaProximoContacto(e.target.value); intentoCompraRef.current = null; }}
-                        disabled={guardandoCompra} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">Observación
-                      <textarea rows={3} maxLength={1000} value={observacionCompra}
-                        onChange={(e) => { setObservacionCompra(e.target.value); intentoCompraRef.current = null; }}
-                        disabled={guardandoCompra} placeholder="Motivo y contexto del seguimiento futuro"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmarCompra}
-                        onChange={(e) => setConfirmarCompra(e.target.checked)} disabled={guardandoCompra} className="mt-0.5" />
-                      Confirmo que el cliente expresó intención de comprar más adelante.
-                    </label>
-                    {errorCompra ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorCompra}</p> : null}
-                    <div className="sm:col-span-2">
-                      <button type="button" disabled={guardandoCompra} onClick={registrarCompraFutura}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-                        {guardandoCompra ? "Registrando…" : "Confirmar compra futura"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {avisoFacturacion ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoFacturacion}</p>
-            ) : null}
-            {permiteFacturacion ? (
-              <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-extrabold text-[#131E5C]">Facturado · captura operativa</p>
-                    <p className="mt-0.5 text-[11px] text-slate-600">El VIN se guardará también en el campo VIN Facturado del expediente.</p>
-                  </div>
-                  <button type="button" disabled={guardandoFacturacion}
-                    onClick={() => { setMostrarFacturacion((valor) => !valor); setErrorFacturacion(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                    {mostrarFacturacion ? "Cerrar" : "Registrar facturación"}
-                  </button>
-                </div>
-                {mostrarFacturacion ? (
-                  <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">
-                      VIN facturado (17 caracteres)
-                      <input type="text" value={vinFacturacion} maxLength={17} disabled={guardandoFacturacion}
-                        onChange={(e) => setVinFacturacion(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 17))}
-                        autoComplete="off" placeholder="VIN del vehículo facturado"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                      <span className="text-[11px] font-normal text-slate-500">{vinFacturacion.length}/17 · Se registrará la fecha operativa; no verifica CFDI.</span>
-                    </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700">
-                      <input type="checkbox" checked={confirmarFacturacion} disabled={guardandoFacturacion}
-                        onChange={(e) => setConfirmarFacturacion(e.target.checked)} className="mt-0.5" />
-                      Confirmo que este VIN corresponde a una operación facturada real.
-                    </label>
-                    {errorFacturacion ? <p role="alert" className="text-xs font-semibold text-red-700">{errorFacturacion}</p> : null}
-                    <button type="button" disabled={guardandoFacturacion || !confirmarFacturacion}
-                      onClick={registrarFacturacion}
-                      className="w-fit rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-                      {guardandoFacturacion ? "Registrando…" : "Guardar VIN y marcar Facturado"}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {avisoPerdida ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoPerdida}</p>
-            ) : null}
-            {permitePerdida ? (
-              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-extrabold text-[#131E5C]">Lead perdido</p>
-                    <p className="mt-0.5 text-[11px] text-slate-600">El cliente no continuará como oportunidad activa. Debes seleccionar un motivo.</p>
-                  </div>
-                  <button type="button" disabled={guardandoPerdida}
-                    onClick={() => { setMostrarPerdida((valor) => !valor); setErrorPerdida(""); }}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                    {mostrarPerdida ? "Cerrar" : "Registrar lead perdido"}
-                  </button>
-                </div>
-                {mostrarPerdida ? (
-                  <div className="mt-3 grid gap-3 border-t border-red-200 pt-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
-                      Motivo de descarte (obligatorio)
-                      <select value={motivoPerdida} disabled={guardandoPerdida}
-                        onChange={(e) => { setMotivoPerdida(e.target.value); intentoPerdidaRef.current = null; }}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
-                        <option value="">— Selecciona un motivo —</option>
-                        {MOTIVOS_LEAD_PERDIDO.map(([clave, etiqueta]) => (
-                          <option key={clave} value={clave}>{etiqueta}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C] sm:col-span-2">
-                      {motivoPerdida === "otro_motivo" ? "Explicación obligatoria" : "Observación (opcional)"}
-                      <textarea rows={3} maxLength={1000} value={detallePerdida}
-                        onChange={(e) => { setDetallePerdida(e.target.value); intentoPerdidaRef.current = null; }}
-                        disabled={guardandoPerdida} placeholder="Contexto del descarte"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
-                    </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
-                      <input type="checkbox" checked={confirmarPerdida}
-                        onChange={(e) => setConfirmarPerdida(e.target.checked)} disabled={guardandoPerdida} className="mt-0.5" />
-                      Confirmo que esta oportunidad se descarta con el motivo seleccionado.
-                    </label>
-                    {errorPerdida ? <p role="alert" className="text-xs font-semibold text-red-700 sm:col-span-2">{errorPerdida}</p> : null}
-                    <div className="sm:col-span-2">
-                      <button type="button" disabled={guardandoPerdida} onClick={registrarLeadPerdido}
-                        className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-                        {guardandoPerdida ? "Registrando…" : "Confirmar Lead perdido"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {permiteReactivacion ? (
-              <div className="mb-3 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
-                {actual === "compra_futura" ? (
-                  <>
-                    <p className="text-xs font-extrabold text-[#131E5C]">Recordatorio de compra futura</p>
-                    {recordatorioCompra ? (
-                      <div className="space-y-1 text-xs text-[#131E5C]">
-                        <p>Próximo contacto: <strong>{fechaCorta(recordatorioCompra.proximo_contacto)}</strong>
-                          {contactoVencido ? <span className="ml-2 font-extrabold text-red-700">Pendiente de contactar</span> : null}</p>
-                        <p>Compra prevista: <strong>{fechaCorta(recordatorioCompra.fecha_prevista_compra)}</strong></p>
-                        <p className="whitespace-pre-wrap text-slate-600">{recordatorioCompra.observacion || "Sin observación"}</p>
+                    {mostrarReactivacion ? (
+                      <div className="grid gap-3 border-t border-blue-200 pt-3">
+                        <p className="text-xs text-slate-600">Volverá a En seguimiento. Se conservarán todas las actividades previas.</p>
+                        <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Motivo de reactivación
+                          <textarea rows={3} maxLength={1000} value={motivoReactivacion}
+                            onChange={(e) => { setMotivoReactivacion(e.target.value); intentoReactivacionRef.current = null; }}
+                            disabled={guardandoReactivacion} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                        </label>
+                        <label className="flex items-start gap-2 text-xs font-medium text-slate-700">
+                          <input type="checkbox" checked={confirmarReactivacion}
+                            onChange={(e) => setConfirmarReactivacion(e.target.checked)} disabled={guardandoReactivacion} className="mt-0.5" />
+                          Confirmo que se retomará el seguimiento activo.
+                        </label>
+                        {errorReactivacion ? <p role="alert" className="text-xs font-semibold text-red-700">{errorReactivacion}</p> : null}
+                        <div><button type="button" disabled={guardandoReactivacion} onClick={reactivarSeguimiento}
+                          className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                          {guardandoReactivacion ? "Reactivando…" : "Confirmar reactivación"}
+                        </button></div>
                       </div>
-                    ) : <p className="text-xs text-amber-800">No se encontró el recordatorio. Consulta la actividad registrada.</p>}
-                    <p className="text-[11px] text-slate-500">Recordatorio visible al abrir esta ficha; no envía notificaciones automáticas.</p>
-                  </>
-                ) : (
-                  <div className="space-y-1 text-xs text-[#131E5C]">
-                    <p className="font-bold">Oportunidad perdida. Solo se puede retomar mediante una reactivación explícita y justificada.</p>
-                    <p>Motivo: <strong>{resultado?.motivo_lead_perdido?.etiqueta || "Consulta el historial de descarte"}</strong></p>
-                    {resultado?.motivo_lead_perdido?.detalle ? (
-                      <p className="whitespace-pre-wrap text-slate-600">{resultado.motivo_lead_perdido.detalle}</p>
                     ) : null}
                   </div>
+                ) : null}
+                {avisoReactivacion ? (
+                  <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoReactivacion}</p>
+                ) : null}
+
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold text-[#131E5C]"><Clock3 className="h-3.5 w-3.5" /> Actividades registradas (últimas 30)</div>
+                {historial.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">Sin actividades comerciales registradas.</p>
+                ) : (
+                  <ul className="max-h-48 space-y-2 overflow-y-auto">
+                    {historial.map((item) => (
+                      <li key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-[11px]">
+                        <div className="font-bold text-[#131E5C]">{item.es_clasificacion_historica ? "Clasificación histórica" : item.es_homologacion_historica ? "Homologación histórica" : (EVENTOS[item.tipo] || item.tipo)}</div>
+                        <div className="mt-0.5 text-slate-500">{fechaCorta(item.fecha_actividad)} · {item.usuario_crm || "Sin responsable"}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-400">Resultado: {LABELS[item.etapa_resultante] || item.etapa_resultante || "Sin cambio"}</div>
+                        {item.tiene_correccion ? <div className="mt-1 text-[10px] font-bold text-indigo-700">Con corrección auditada</div> : null}
+                        {item.puede_corregir ? (
+                          <button type="button" onClick={() => abrirCorreccion(item)}
+                            className="mt-2 rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-[#131E5C] hover:bg-slate-100">
+                            {item.es_homologacion_historica ? `Completar datos de ${item.tipo_correccion === "cita_agendada" ? "cita histórica" : "cotización histórica"}` : "Corregir actividad"}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-extrabold text-[#131E5C]">Retomar seguimiento</p>
-                  <button type="button" onClick={() => setMostrarReactivacion((valor) => !valor)}
-                    disabled={guardandoReactivacion}
-                    className="rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                    {mostrarReactivacion ? "Cerrar" : "Reactivar seguimiento"}
-                  </button>
-                </div>
-                {mostrarReactivacion ? (
-                  <div className="grid gap-3 border-t border-blue-200 pt-3">
-                    <p className="text-xs text-slate-600">Volverá a En seguimiento. Se conservarán todas las actividades previas.</p>
-                    <label className="grid gap-1 text-xs font-bold text-[#131E5C]">Motivo de reactivación
-                      <textarea rows={3} maxLength={1000} value={motivoReactivacion}
-                        onChange={(e) => { setMotivoReactivacion(e.target.value); intentoReactivacionRef.current = null; }}
-                        disabled={guardandoReactivacion} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal" />
+                {actividadCorreccion ? (
+                  <div className="mt-3 space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs">
+                    <div className="font-extrabold text-[#131E5C]">{actividadCorreccion.es_homologacion_historica ? "Completar información histórica" : "Corregir actividad"}: {EVENTOS[actividadCorreccion.tipo] || actividadCorreccion.tipo}</div>
+                    {actividadCorreccion.es_homologacion_historica ? <p className="text-amber-800">La clasificación proviene del CRM anterior. Debes registrar datos confirmados; no se inventará una nueva cotización ni cambiará la etapa.</p> : null}
+                    {actividadCorreccion.tipo === "cotizacion_enviada" ? (
+                      <>
+                        <label className="grid gap-1">Fecha de envío<input type="date" value={camposCorreccion.fecha_envio} onChange={(e) => setCamposCorreccion((p) => ({ ...p, fecha_envio: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                        <label className="grid gap-1">Vehículo<input value={camposCorreccion.vehiculo} onChange={(e) => setCamposCorreccion((p) => ({ ...p, vehiculo: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                        <label className="grid gap-1">Referencia<input value={camposCorreccion.referencia} onChange={(e) => setCamposCorreccion((p) => ({ ...p, referencia: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                      </>
+                    ) : actividadCorreccion.tipo === "documentos_recibidos" ? (
+                      <>
+                        <label className="grid gap-1">Fecha de recepción<input type="date" value={camposCorreccion.fecha_recepcion} onChange={(e) => setCamposCorreccion((p) => ({ ...p, fecha_recepcion: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                        <label className="grid gap-1">Documentos (uno por línea)<textarea rows={3} value={camposCorreccion.documentos} onChange={(e) => setCamposCorreccion((p) => ({ ...p, documentos: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                      </>
+                    ) : actividadCorreccion.tipo === "cita_agendada" ? (
+                      <label className="grid gap-1">Fecha y hora de cita<input type="datetime-local" value={camposCorreccion.fecha_hora_cita} onChange={(e) => setCamposCorreccion((p) => ({ ...p, fecha_hora_cita: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                    ) : (
+                      <label className="grid gap-1">Fecha real de asistencia<input type="date" value={camposCorreccion.fecha_asistencia_real} onChange={(e) => setCamposCorreccion((p) => ({ ...p, fecha_asistencia_real: e.target.value }))} className="rounded border px-2 py-1" /></label>
+                    )}
+                    <label className="grid gap-1 font-bold">Motivo de corrección (obligatorio)
+                      <textarea rows={2} maxLength={1000} value={motivoCorreccion} onChange={(e) => { setMotivoCorreccion(e.target.value); intentoCorreccionRef.current = null; }} className="rounded border px-2 py-1 font-normal" />
                     </label>
-                    <label className="flex items-start gap-2 text-xs font-medium text-slate-700">
-                      <input type="checkbox" checked={confirmarReactivacion}
-                        onChange={(e) => setConfirmarReactivacion(e.target.checked)} disabled={guardandoReactivacion} className="mt-0.5" />
-                      Confirmo que se retomará el seguimiento activo.
-                    </label>
-                    {errorReactivacion ? <p role="alert" className="text-xs font-semibold text-red-700">{errorReactivacion}</p> : null}
-                    <div><button type="button" disabled={guardandoReactivacion} onClick={reactivarSeguimiento}
-                      className="rounded-lg bg-[#131E5C] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-                      {guardandoReactivacion ? "Reactivando…" : "Confirmar reactivación"}
-                    </button></div>
+                    {errorCorreccion ? <p role="alert" className="font-bold text-red-700">{errorCorreccion}</p> : null}
+                    <div className="flex gap-2">
+                      <button type="button" disabled={guardandoCorreccion} onClick={guardarCorreccion} className="rounded bg-[#131E5C] px-3 py-2 font-bold text-white disabled:opacity-50">{guardandoCorreccion ? "Guardando…" : "Registrar corrección"}</button>
+                      <button type="button" disabled={guardandoCorreccion} onClick={() => setActividadCorreccion(null)} className="rounded border bg-white px-3 py-2">Cancelar</button>
+                    </div>
+                    <p className="text-slate-600">La actividad original no se borra ni cambia de etapa.</p>
                   </div>
                 ) : null}
               </div>
-            ) : null}
-            {avisoReactivacion ? (
-              <p role="status" className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{avisoReactivacion}</p>
-            ) : null}
-
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold text-[#131E5C]"><Clock3 className="h-3.5 w-3.5" /> Actividades registradas (últimas 30)</div>
-            {historial.length === 0 ? (
-              <p className="text-[11px] text-slate-500">Sin actividades comerciales registradas.</p>
-            ) : (
-              <ul className="max-h-48 space-y-2 overflow-y-auto">
-                {historial.map((item) => (
-                  <li key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-[11px]">
-                    <div className="font-bold text-[#131E5C]">{item.es_clasificacion_historica ? "Clasificación histórica" : item.es_homologacion_historica ? "Homologación histórica" : (EVENTOS[item.tipo] || item.tipo)}</div>
-                    <div className="mt-0.5 text-slate-500">{fechaCorta(item.fecha_actividad)} · {item.usuario_crm || "Sin responsable"}</div>
-                    <div className="mt-0.5 text-[10px] text-slate-400">Resultado: {LABELS[item.etapa_resultante] || item.etapa_resultante || "Sin cambio"}</div>
-                    {item.tiene_correccion ? <div className="mt-1 text-[10px] font-bold text-indigo-700">Con corrección auditada</div> : null}
-                    {item.puede_corregir ? (
-                      <button type="button" onClick={() => abrirCorreccion(item)}
-                        className="mt-2 rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-[#131E5C] hover:bg-slate-100">
-                        {item.es_homologacion_historica ? `Completar datos de ${item.tipo_correccion === "cita_agendada" ? "cita histórica" : "cotización histórica"}` : "Corregir actividad"}
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {actividadCorreccion ? (
-              <div className="mt-3 space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs">
-                <div className="font-extrabold text-[#131E5C]">{actividadCorreccion.es_homologacion_historica ? "Completar información histórica" : "Corregir actividad"}: {EVENTOS[actividadCorreccion.tipo] || actividadCorreccion.tipo}</div>
-                {actividadCorreccion.es_homologacion_historica ? <p className="text-amber-800">La clasificación proviene del CRM anterior. Debes registrar datos confirmados; no se inventará una nueva cotización ni cambiará la etapa.</p> : null}
-                {actividadCorreccion.tipo === "cotizacion_enviada" ? (
-                  <>
-                    <label className="grid gap-1">Fecha de envío<input type="date" value={camposCorreccion.fecha_envio} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_envio:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                    <label className="grid gap-1">Vehículo<input value={camposCorreccion.vehiculo} onChange={(e) => setCamposCorreccion((p) => ({...p, vehiculo:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                    <label className="grid gap-1">Referencia<input value={camposCorreccion.referencia} onChange={(e) => setCamposCorreccion((p) => ({...p, referencia:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                  </>
-                ) : actividadCorreccion.tipo === "documentos_recibidos" ? (
-                  <>
-                    <label className="grid gap-1">Fecha de recepción<input type="date" value={camposCorreccion.fecha_recepcion} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_recepcion:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                    <label className="grid gap-1">Documentos (uno por línea)<textarea rows={3} value={camposCorreccion.documentos} onChange={(e) => setCamposCorreccion((p) => ({...p, documentos:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                  </>
-                ) : actividadCorreccion.tipo === "cita_agendada" ? (
-                  <label className="grid gap-1">Fecha y hora de cita<input type="datetime-local" value={camposCorreccion.fecha_hora_cita} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_hora_cita:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                ) : (
-                  <label className="grid gap-1">Fecha real de asistencia<input type="date" value={camposCorreccion.fecha_asistencia_real} onChange={(e) => setCamposCorreccion((p) => ({...p, fecha_asistencia_real:e.target.value}))} className="rounded border px-2 py-1"/></label>
-                )}
-                <label className="grid gap-1 font-bold">Motivo de corrección (obligatorio)
-                  <textarea rows={2} maxLength={1000} value={motivoCorreccion} onChange={(e) => {setMotivoCorreccion(e.target.value); intentoCorreccionRef.current = null;}} className="rounded border px-2 py-1 font-normal"/>
-                </label>
-                {errorCorreccion ? <p role="alert" className="font-bold text-red-700">{errorCorreccion}</p> : null}
-                <div className="flex gap-2">
-                  <button type="button" disabled={guardandoCorreccion} onClick={guardarCorreccion} className="rounded bg-[#131E5C] px-3 py-2 font-bold text-white disabled:opacity-50">{guardandoCorreccion ? "Guardando…" : "Registrar corrección"}</button>
-                  <button type="button" disabled={guardandoCorreccion} onClick={() => setActividadCorreccion(null)} className="rounded border bg-white px-3 py-2">Cancelar</button>
-                </div>
-                <p className="text-slate-600">La actividad original no se borra ni cambia de etapa.</p>
-              </div>
-            ) : null}
-          </div>
             </>
           )}
         </>

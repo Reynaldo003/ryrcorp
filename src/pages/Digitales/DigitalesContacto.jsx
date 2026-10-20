@@ -2751,21 +2751,20 @@ export default function DigitalesContacto() {
             correo: prospecto.correo_out || prospecto.correo || "",
         };
     }, [prospecto, expedienteV3ChatId]);
-    const etapaV3Chat = expedienteV3ChatId ? prospecto?.etapa_comercial_v3 : null;
-    // Nueva cita solo tras cotización y antes de registrar una cita.
-    // Reagendar una cita existente requiere su flujo específico, no crear otra desde el chat.
-    const puedeAgendarChatV3 = Boolean(expedienteV3ChatId && etapaV3Chat === "cotizacion_enviada");
+
+    const etapaV3Chat = expedienteV3ChatId
+        ? prospecto?.etapa_comercial_v3
+        : null;
+
+    const puedeAgendarChatV3 = Boolean(
+        expedienteV3ChatId && etapaV3Chat
+    );
+
     const citaChatBloqueo = !expedienteV3ChatId
         ? "Primero identifica el expediente comercial de este chat."
         : !etapaV3Chat
-          ? "Primero clasifica este prospecto histórico."
-          : etapaV3Chat === "cita_agendada"
-            ? "Este prospecto ya tiene una cita agendada; para cambios utiliza la reprogramación, no otra cita nueva."
-            : etapaV3Chat === "cotizacion_enviada"
-              ? ""
-              : ["nuevo_prospecto", "en_seguimiento"].includes(etapaV3Chat)
-                ? "Para agendar una cita nueva, primero registra la cotización enviada."
-                : "Esta etapa comercial no permite crear otra cita nueva desde el chat.";
+            ? "Primero clasifica el expediente histórico para utilizar el flujo V3."
+            : "";
     // El bloque heredado no controla las etapas. Se muestra al alcanzar documentos,
     // autorización o facturación; compra futura/lead perdido no implican esos pasos.
     const mostrarCreditoFacturacionV3 = expedienteV3ChatId && [
@@ -7420,148 +7419,148 @@ export default function DigitalesContacto() {
 
                                             {/* Los datos auxiliares de crédito/facturación aparecen después de documentos V3. */}
                                             {mostrarCreditoFacturacionV3 ? (
-                                            <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
-                                                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                                                    <div className="flex min-w-0 items-center gap-2.5">
-                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
-                                                            <CreditCard className="h-4 w-4" />
+                                                <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
+                                                    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                                                        <div className="flex min-w-0 items-center gap-2.5">
+                                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
+                                                                <CreditCard className="h-4 w-4" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-sm font-black text-[#131E5C]">Crédito y facturación</div>
+                                                                <div className="text-[11px] font-semibold text-slate-400">Cotización, solicitud de crédito y VIN facturado.</div>
+                                                            </div>
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-sm font-black text-[#131E5C]">Crédito y facturación</div>
-                                                            <div className="text-[11px] font-semibold text-slate-400">Cotización, solicitud de crédito y VIN facturado.</div>
-                                                        </div>
-                                                    </div>
-                                                    {creditoFacturacionPendientes > 0 ? (
-                                                        <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
-                                                            {creditoFacturacionPendientes} pendiente{creditoFacturacionPendientes === 1 ? "" : "s"}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
-                                                            <Check className="h-3 w-3" /> Completo
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                <div className="border-t border-slate-100 px-4 py-4">
-                                                    <div className="grid gap-3">
-                                                        <label className="block">
-                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">ID Cotización</span>
-                                                            <input
-                                                                value={quickEditDraft.id_cotizacion || ""}
-                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, id_cotizacion: e.target.value }))}
-                                                                placeholder="Ej. COT-10234"
-                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                            />
-                                                        </label>
-
-                                                        {tieneFinanciamiento ? (
-                                                            <>
-                                                        <label className="block">
-                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Folio solicitud de crédito</span>
-                                                            <input
-                                                                value={quickEditDraft.folio_solicitud_credito || ""}
-                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, folio_solicitud_credito: e.target.value }))}
-                                                                placeholder="Folio de la solicitud"
-                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                            />
-                                                        </label>
-
-                                                        <label className="block">
-                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado de la solicitud</span>
-                                                            <select
-                                                                value={quickEditDraft.solicitud_credito_estado || ""}
-                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, solicitud_credito_estado: e.target.value }))}
-                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                            >
-                                                                {SOLICITUD_CREDITO.map((i) => (
-                                                                    <option key={i.value} value={i.value}>{i.label}</option>
-                                                                ))}
-                                                            </select>
-                                                        </label>
-
-                                                            </>
+                                                        {creditoFacturacionPendientes > 0 ? (
+                                                            <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
+                                                                {creditoFacturacionPendientes} pendiente{creditoFacturacionPendientes === 1 ? "" : "s"}
+                                                            </span>
                                                         ) : (
-                                                            <p className="rounded-lg bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-900">
-                                                                {quickEditDraft.forma_pago === "contado"
-                                                                    ? "Venta de contado: no se solicitan folios ni autorizaciones de crédito."
-                                                                    : "Selecciona Crédito o Arrendamiento en Completar perfil para mostrar los datos de financiamiento."}
-                                                            </p>
+                                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+                                                                <Check className="h-3 w-3" /> Completo
+                                                            </span>
                                                         )}
+                                                    </div>
 
-                                                        <label className="block">
-                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
-                                                            <input
-                                                                value={quickEditDraft.vin_facturado || ""}
-                                                                onChange={(e) => setQuickEditDraft(p => {
-                                                                    const vinFacturado = e.target.value.toUpperCase();
-                                                                    return {
-                                                                        ...p,
-                                                                        vin_facturado: vinFacturado,
-                                                                        estado: estadoAutomaticoBandeja({
-                                                                            plazo: p.plazo_compra,
-                                                                            vinFacturado,
-                                                                            vinEstatus: p.vin_estatus_entrega,
-                                                                            folioSolicitudCredito: p.folio_solicitud_credito,
-                                                                            evidencias: prospecto?.evidencias,
-                                                                            calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                            citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                            engancheMonto: p.enganche_monto,
-                                                                            presupuestoMensual: p.presupuesto_mensual,
-                                                                            idCotizacion: p.id_cotizacion,
-                                                                            estadoBase: prospecto?.estado || "",
-                                                                        }),
-                                                                    };
-                                                                })}
-                                                                placeholder="17 caracteres VIN"
-                                                                maxLength={32}
-                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                            />
-                                                        </label>
+                                                    <div className="border-t border-slate-100 px-4 py-4">
+                                                        <div className="grid gap-3">
+                                                            <label className="block">
+                                                                <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">ID Cotización</span>
+                                                                <input
+                                                                    value={quickEditDraft.id_cotizacion || ""}
+                                                                    onChange={(e) => setQuickEditDraft(p => ({ ...p, id_cotizacion: e.target.value }))}
+                                                                    placeholder="Ej. COT-10234"
+                                                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                                />
+                                                            </label>
 
-                                                        <div className="block">
-                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN entregado</span>
-                                                            <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1">
-                                                                {[{ value: "entregado", label: "Entregado" }, { value: "cancelado", label: "Cancelado" }].map(opt => (
-                                                                    <button
-                                                                        key={opt.value}
-                                                                        type="button"
-                                                                        onClick={() => setQuickEditDraft(p => {
-                                                                            const vinEstatus = p.vin_estatus_entrega === opt.value ? "" : opt.value;
-                                                                            return {
-                                                                                ...p,
-                                                                                vin_estatus_entrega: vinEstatus,
-                                                                                estado: estadoAutomaticoBandeja({
-                                                                                    plazo: p.plazo_compra,
-                                                                                    vinFacturado: p.vin_facturado,
-                                                                                    vinEstatus,
-                                                                                    folioSolicitudCredito: p.folio_solicitud_credito,
-                                                                                    evidencias: prospecto?.evidencias,
-                                                                                    calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                                    citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                                    citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                                    engancheMonto: p.enganche_monto,
-                                                                                    presupuestoMensual: p.presupuesto_mensual,
-                                                                                    idCotizacion: p.id_cotizacion,
-                                                                                    estadoBase: prospecto?.estado || "",
-                                                                                }),
-                                                                            };
-                                                                        })}
-                                                                        className={cls(
-                                                                            "h-9 rounded-lg text-xs font-extrabold transition",
-                                                                            quickEditDraft.vin_estatus_entrega === opt.value
-                                                                                ? (opt.value === "entregado" ? "bg-emerald-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm")
-                                                                                : "bg-transparent text-slate-500 hover:bg-[#131E5C]/[0.06] hover:text-[#131E5C]"
-                                                                        )}
-                                                                    >
-                                                                        {opt.label}
-                                                                    </button>
-                                                                ))}
+                                                            {tieneFinanciamiento ? (
+                                                                <>
+                                                                    <label className="block">
+                                                                        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Folio solicitud de crédito</span>
+                                                                        <input
+                                                                            value={quickEditDraft.folio_solicitud_credito || ""}
+                                                                            onChange={(e) => setQuickEditDraft(p => ({ ...p, folio_solicitud_credito: e.target.value }))}
+                                                                            placeholder="Folio de la solicitud"
+                                                                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                                        />
+                                                                    </label>
+
+                                                                    <label className="block">
+                                                                        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado de la solicitud</span>
+                                                                        <select
+                                                                            value={quickEditDraft.solicitud_credito_estado || ""}
+                                                                            onChange={(e) => setQuickEditDraft(p => ({ ...p, solicitud_credito_estado: e.target.value }))}
+                                                                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                                        >
+                                                                            {SOLICITUD_CREDITO.map((i) => (
+                                                                                <option key={i.value} value={i.value}>{i.label}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </label>
+
+                                                                </>
+                                                            ) : (
+                                                                <p className="rounded-lg bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-900">
+                                                                    {quickEditDraft.forma_pago === "contado"
+                                                                        ? "Venta de contado: no se solicitan folios ni autorizaciones de crédito."
+                                                                        : "Selecciona Crédito o Arrendamiento en Completar perfil para mostrar los datos de financiamiento."}
+                                                                </p>
+                                                            )}
+
+                                                            <label className="block">
+                                                                <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
+                                                                <input
+                                                                    value={quickEditDraft.vin_facturado || ""}
+                                                                    onChange={(e) => setQuickEditDraft(p => {
+                                                                        const vinFacturado = e.target.value.toUpperCase();
+                                                                        return {
+                                                                            ...p,
+                                                                            vin_facturado: vinFacturado,
+                                                                            estado: estadoAutomaticoBandeja({
+                                                                                plazo: p.plazo_compra,
+                                                                                vinFacturado,
+                                                                                vinEstatus: p.vin_estatus_entrega,
+                                                                                folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                                evidencias: prospecto?.evidencias,
+                                                                                calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                                citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                                citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                engancheMonto: p.enganche_monto,
+                                                                                presupuestoMensual: p.presupuesto_mensual,
+                                                                                idCotizacion: p.id_cotizacion,
+                                                                                estadoBase: prospecto?.estado || "",
+                                                                            }),
+                                                                        };
+                                                                    })}
+                                                                    placeholder="17 caracteres VIN"
+                                                                    maxLength={32}
+                                                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                                />
+                                                            </label>
+
+                                                            <div className="block">
+                                                                <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN entregado</span>
+                                                                <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1">
+                                                                    {[{ value: "entregado", label: "Entregado" }, { value: "cancelado", label: "Cancelado" }].map(opt => (
+                                                                        <button
+                                                                            key={opt.value}
+                                                                            type="button"
+                                                                            onClick={() => setQuickEditDraft(p => {
+                                                                                const vinEstatus = p.vin_estatus_entrega === opt.value ? "" : opt.value;
+                                                                                return {
+                                                                                    ...p,
+                                                                                    vin_estatus_entrega: vinEstatus,
+                                                                                    estado: estadoAutomaticoBandeja({
+                                                                                        plazo: p.plazo_compra,
+                                                                                        vinFacturado: p.vin_facturado,
+                                                                                        vinEstatus,
+                                                                                        folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                                        evidencias: prospecto?.evidencias,
+                                                                                        calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                                        citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                                        citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                        engancheMonto: p.enganche_monto,
+                                                                                        presupuestoMensual: p.presupuesto_mensual,
+                                                                                        idCotizacion: p.id_cotizacion,
+                                                                                        estadoBase: prospecto?.estado || "",
+                                                                                    }),
+                                                                                };
+                                                                            })}
+                                                                            className={cls(
+                                                                                "h-9 rounded-lg text-xs font-extrabold transition",
+                                                                                quickEditDraft.vin_estatus_entrega === opt.value
+                                                                                    ? (opt.value === "entregado" ? "bg-emerald-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm")
+                                                                                    : "bg-transparent text-slate-500 hover:bg-[#131E5C]/[0.06] hover:text-[#131E5C]"
+                                                                            )}
+                                                                        >
+                                                                            {opt.label}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
                                             ) : null}
 
