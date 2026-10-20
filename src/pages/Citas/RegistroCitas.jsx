@@ -1123,17 +1123,24 @@ export default function RegistroCitas() {
         nombresAsesoresDigitales,
     } = useAsesoresGestionComercial();
 
-    const permisos = user?.permisos || [];
-    const rol = String(user?.rol || "").trim().toLowerCase();
+    const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
 
-    const isAdmin = useMemo(() => {
-        return (
-            rol === "administrador" ||
-            permisos.includes("ALL") ||
-            permisos.includes("USUARIOS_ADMIN") ||
-            permisos.includes("CRM_DIGITALES")
-        );
-    }, [rol, permisos]);
+    const rol = String(
+        typeof user?.rol === "string"
+            ? user.rol
+            : user?.rol?.nombre || user?.rol?.name || ""
+    ).trim().toLowerCase();
+
+    const isAdmin = (
+        ["admin", "administrador"].includes(rol) &&
+        permisos.some((permiso) =>
+            String(
+                typeof permiso === "string"
+                    ? permiso
+                    : permiso?.codigo || permiso?.nombre || ""
+            ).toUpperCase() === "ALL"
+        )
+    );
 
     const userAgencias = useMemo(() => {
         return String(user?.agencia || "")
