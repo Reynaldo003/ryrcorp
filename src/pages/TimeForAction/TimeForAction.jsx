@@ -7,7 +7,7 @@ import {
     Zap, Search, Calendar,
     LayoutGrid, Table2, GitBranch,
     ArrowUpDown, ChevronUp, Loader2, Save, UsersRound,
-    AlertTriangle, UserPlus, Mail, Check, EyeOff
+    AlertTriangle, UserPlus, Mail, Check
 } from "lucide-react";
 import { apiClickup } from "../../lib/apiClickup";
 import { API_ROOT } from "../../lib/apiClient";
@@ -242,7 +242,54 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, loading }) {
     );
 }
 
-function TeamsModal({ open, onClose, onCreated }) {
+function describeError(error, fallback) {
+    const status = Number(error?.status || 0);
+    const raw = String(error?.message || "").trim();
+    const avisoGenericoPermiso = /^(you do not have permission|no tienes permiso para realizar esta operaci[oó]n)/i.test(raw);
+
+    if (status === 403) {
+        if (raw && !avisoGenericoPermiso) return raw;
+        return "No eres el propietario ni el administrador de este equipo. Solo el propietario o un administrador pueden realizar esta acción.";
+    }
+    if (raw && !/^http\s?\d+$/i.test(raw)) return raw;
+    if (status === 401) return "Tu sesión expiró. Inicia sesión nuevamente.";
+    if (status === 404) return "La información solicitada no está disponible.";
+    if (status >= 500) return "Ocurrió un problema en el servidor. Comunícalo a soporte e inténtalo nuevamente.";
+    if (!status) return "No fue posible conectar con el servidor. Revisa tu conexión e inténtalo nuevamente.";
+    return fallback || "No se pudo completar la operación. Inténtalo nuevamente.";
+}
+
+function NoticeDialog({ open, type = "error", title, message, onClose }) {
+    if (!open) return null;
+    const isError = type !== "success";
+    return (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose}/>
+            <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
+                <div className="p-5">
+                    <div className="flex items-start gap-3 mb-3">
+                        <div className={cls("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", isError?"border-rose-200 bg-rose-50":"border-emerald-200 bg-emerald-50")}>
+                            {isError
+                                ? <AlertTriangle className="h-5 w-5 text-rose-600"/>
+                                : <CheckCircle2 className="h-5 w-5 text-emerald-600"/>}
+                        </div>
+                        <div className="min-w-0">
+                            <div className="text-sm font-black text-black">{title}</div>
+                            <div className="mt-0.5 text-xs text-black/50">{message}</div>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose}
+                        className="mt-4 w-full rounded-xl px-4 py-2 text-sm font-extrabold text-white hover:opacity-90"
+                        style={{backgroundColor:BRAND_BLUE}}>
+                        Entendido
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function TeamsModal({ open, onClose, onCreated, currentUser }) {
     const [teams,setTeams]=useState([]);
     const [loading,setLoading]=useState(false);
     const [creating,setCreating]=useState(false);
@@ -258,10 +305,21 @@ function TeamsModal({ open, onClose, onCreated }) {
     const [invitesByTeam,setInvitesByTeam]=useState({});
     const [membersByTeam,setMembersByTeam]=useState({});
     const [loadingInvites,setLoadingInvites]=useState({});
+    const [invitesError,setInvitesError]=useState({});
     const [sendingInvite,setSendingInvite]=useState(false);
     const [selectedUser,setSelectedUser]=useState(null);
-    const [hiddenInvites,setHiddenInvites]=useState({});
     const [acceptingInvite,setAcceptingInvite]=useState({});
+    const [myInvites,setMyInvites]=useState([]);
+    const [notice,setNotice]=useState(null);
+
+    const selectedTeamId = selectedTeam?.id ?? null;
+
+    function showError(error, titulo) {
+        setNotice({ type:"error", title: titulo || "No se pudo completar la acción", message: describeError(error) });
+    }
+    function showSuccess(titulo, message) {
+        setNotice({ type:"success", title: titulo, message });
+    }
 
     function extractArray(data) {
         if (!data) return [];
@@ -277,24 +335,17 @@ function TeamsModal({ open, onClose, onCreated }) {
         return [];
     }
 
-    function normalizeMember(m) {
-        const inner = m.usuario || m.user || m;
+    // apiClickup ya normaliza miembros e invitaciones; solo se adapta la vista.
+    function toInviteRow(inv) {
         return {
-            id:    m.id     || m.user_id   || m.usuario_id || inner.id || inner.id_usuario,
-            name:  inner.nombre_completo || inner.nombre || inner.name || m.nombre_completo || m.nombre || m.name || m.email || "—",
-            email: inner.correo || inner.email || m.correo || m.email || "—",
-            role:  m.role   || m.rol       || m.rol_nombre || inner.role || "MEMBER",
-        };
-    }
-
-    function normalizeInvite(inv) {
-        const inner = inv.invited_user || inv.usuario_invitado || {};
-        return {
-            id:     inv.id,
-            name:   inner.nombre_completo || inner.nombre || inner.name || inv.nombre || inv.email || "Usuario",
-            email:  inv.email || inv.correo || inner.email || inner.correo || "",
-            role:   inv.role  || inv.rol    || "MEMBER",
-            status: inv.status || inv.estado || "PENDING",
+            id: inv.id,
+            name: inv.invited_user?.name || inv.name || inv.email || "Usuario",
+            email: inv.email || inv.invited_user?.email || "",
+            role: inv.role || "MEMBER",
+            status: inv.status || "PENDING",
+            userId: inv.invited_user?.id ?? null,
+            teamId: inv.team,
+            teamName: inv.team_name || "",
         };
     }
 
@@ -304,9 +355,26 @@ function TeamsModal({ open, onClose, onCreated }) {
             const data = await apiClickup.listTeams();
             const arr = Array.isArray(data) ? data : [];
             setTeams(arr);
-            if (arr.length > 0 && !selectedTeam) setSelectedTeam(arr[0]);
+            setSelectedTeam(prev => {
+                if (!arr.length) return null;
+                if (prev) {
+                    const vigente = arr.find(t => Number(t.id) === Number(prev.id));
+                    if (vigente) return vigente;
+                }
+                return arr[0];
+            });
         } catch(e) { console.error(e); }
         finally { setLoading(false); }
+    }, []);
+
+    const fetchMyInvites = useCallback(async () => {
+        try {
+            const data = await apiClickup.listMyInvites();
+            setMyInvites((Array.isArray(data) ? data : []).map(toInviteRow));
+        } catch(e) {
+            console.error("[TeamsModal] fetchMyInvites error:", e);
+            setMyInvites([]);
+        }
     }, []);
 
     const loadTeamData = useCallback(async (teamId) => {
@@ -319,14 +387,22 @@ function TeamsModal({ open, onClose, onCreated }) {
                 apiClickup.listInvites(teamId),
             ]);
 
-            const membersRaw = membersResult.status === "fulfilled" ? membersResult.value : [];
-            const invitesRaw = invitesResult.status === "fulfilled" ? invitesResult.value : [];
+            const members = membersResult.status === "fulfilled"
+                ? extractArray(membersResult.value)
+                : [];
 
-            const normalizedMembers = extractArray(membersRaw).map(normalizeMember);
-            const normalizedInvites = extractArray(invitesRaw).map(normalizeInvite);
+            setMembersByTeam(p => ({ ...p, [teamId]: members }));
 
-            setMembersByTeam(p => ({ ...p, [teamId]: normalizedMembers }));
-            setInvitesByTeam(p => ({ ...p, [teamId]: normalizedInvites }));
+            if (invitesResult.status === "fulfilled") {
+                const invites = extractArray(invitesResult.value)
+                    .map(toInviteRow)
+                    .filter(inv => inv.status === "PENDING");
+                setInvitesByTeam(p => ({ ...p, [teamId]: invites }));
+                setInvitesError(p => { const next = { ...p }; delete next[teamId]; return next; });
+            } else {
+                setInvitesByTeam(p => ({ ...p, [teamId]: [] }));
+                setInvitesError(p => ({ ...p, [teamId]: describeError(invitesResult.reason) }));
+            }
         } catch(e) {
             console.error("[TeamsModal] loadTeamData error:", e);
             setMembersByTeam(p => ({ ...p, [teamId]: [] }));
@@ -336,8 +412,8 @@ function TeamsModal({ open, onClose, onCreated }) {
         }
     }, []);
 
-    useEffect(() => { if (open) fetchTeams(); }, [open, fetchTeams]);
-    useEffect(() => { if (selectedTeam?.id) loadTeamData(selectedTeam.id); }, [selectedTeam]);
+    useEffect(() => { if (open) { fetchTeams(); fetchMyInvites(); } }, [open, fetchTeams, fetchMyInvites]);
+    useEffect(() => { if (selectedTeamId) loadTeamData(selectedTeamId); }, [selectedTeamId, loadTeamData]);
 
     useEffect(() => {
         const timer = setTimeout(async () => {
@@ -357,7 +433,7 @@ function TeamsModal({ open, onClose, onCreated }) {
             await apiClickup.createTeam({ name: name.trim(), description: descripcion.trim() });
             setName(""); setDescripcion("");
             await fetchTeams(); onCreated?.();
-        } catch(e) { alert(e.message || "Error al crear equipo"); }
+        } catch(e) { showError(e, "No se pudo crear el equipo"); }
         finally { setCreating(false); }
     }
 
@@ -368,50 +444,58 @@ function TeamsModal({ open, onClose, onCreated }) {
             await apiClickup.deleteTeam(Number(confirmDelete.id));
             setConfirmDelete(null);
             await fetchTeams(); onCreated?.();
-        } catch(e) { alert(e.message || "Error al eliminar equipo"); }
+        } catch(e) { showError(e, "No se pudo eliminar el equipo"); }
         finally { setDeleting(false); }
     }
 
     async function sendInvite() {
-        if (!selectedTeam || !selectedUser) { alert("Selecciona un usuario primero"); return; }
+        if (!selectedTeam || !selectedUser) {
+            setNotice({ type:"error", title:"Falta información", message:"Selecciona un usuario para poder enviar la invitación." });
+            return;
+        }
         setSendingInvite(true);
         try {
             await apiClickup.invite(selectedTeam.id, { usuario_id: Number(selectedUser.id), rol: inviteRole });
+            const invitado = selectedUser;
             await loadTeamData(selectedTeam.id);
             setSelectedUser(null); setInviteSearch(""); setInviteResults([]); setInviteRole("MEMBER");
-            alert(`Invitación enviada a ${selectedUser.name}`);
-        } catch(e) { alert(e.message || "Error al enviar invitación"); }
+            showSuccess("Invitación enviada", `Se envió la invitación a ${invitado.name}. Permanecerá pendiente hasta que la acepte.`);
+        } catch(e) { showError(e, "No se pudo enviar la invitación"); }
         finally { setSendingInvite(false); }
     }
 
     async function acceptInvite(inv) {
-        if (!selectedTeam) return;
+        if (!inv?.id) return;
+        const teamId = Number(inv.teamId || selectedTeamId || 0);
+        let aceptada = false;
         setAcceptingInvite(p => ({ ...p, [inv.id]: true }));
         try {
-            await apiClickup.acceptInvite(selectedTeam.id, inv.id);
-            setHiddenInvites(p => ({ ...p, [inv.id]: true }));
-            await loadTeamData(selectedTeam.id);
-            onCreated?.();
+            await apiClickup.acceptInvite(teamId, inv.id);
+            aceptada = true;
+            showSuccess("Invitación aceptada", inv.teamName
+                ? `Ya formas parte del equipo "${inv.teamName}".`
+                : "Ya formas parte del equipo. Ya puedes ver sus proyectos y planes.");
         } catch(e) {
-            if (e.message?.includes("ACCEPTED") || e.status === 400) {
-                setHiddenInvites(p => ({ ...p, [inv.id]: true }));
-                await loadTeamData(selectedTeam.id);
-                onCreated?.();
+            const msg = String(e?.message || "");
+            if (e?.status === 400 && /ACCEPTED/i.test(msg)) {
+                aceptada = true;
+                showSuccess("Invitación aceptada", "Esta invitación ya había sido aceptada.");
             } else {
-                alert(e.message || "No se pudo aceptar la invitación");
+                showError(e, "No se pudo aceptar la invitación");
             }
         } finally {
             setAcceptingInvite(p => ({ ...p, [inv.id]: false }));
+            await fetchMyInvites();
+            if (selectedTeamId) await loadTeamData(selectedTeamId);
+            if (aceptada) { await fetchTeams(); onCreated?.(); }
         }
-    }
-
-    function hideInvite(invId) {
-        setHiddenInvites(p => ({ ...p, [invId]: true }));
     }
 
     if (!open) return null;
     const inputBase = "w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-[#131E5C]";
-    const visibleInvites = (invitesByTeam[selectedTeam?.id] || []).filter(inv => !hiddenInvites[inv.id]);
+    const teamInvites = invitesByTeam[selectedTeamId] || [];
+    const invitesErrorMsg = invitesError[selectedTeamId];
+    const esInvitacionMia = (inv) => !!currentUser && inv.userId != null && Number(inv.userId) === Number(currentUser.id);
 
     return (
         <>
@@ -455,7 +539,29 @@ function TeamsModal({ open, onClose, onCreated }) {
                                 ))}</div>
                         }
                     </div>
-                    <div className="w-3/5 p-5 overflow-y-auto">
+                    <div className="w-3/5 p-5 overflow-y-auto space-y-4">
+                        {/* Invitaciones recibidas por el usuario actual */}
+                        {myInvites.length > 0 && (
+                            <div>
+                                <div className="text-xs font-extrabold uppercase tracking-widest text-black/35 mb-2">Invitaciones recibidas</div>
+                                <div className="space-y-2">
+                                    {myInvites.map(inv => (
+                                        <div key={inv.id} className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm font-bold text-amber-800 truncate">{inv.teamName || "Equipo sin nombre"}</div>
+                                                <div className="text-xs text-amber-600 truncate">Rol: {inv.role}</div>
+                                                {inv.email && <div className="text-xs text-amber-600 truncate">{inv.email}</div>}
+                                            </div>
+                                            <button onClick={()=>acceptInvite(inv)} disabled={!!acceptingInvite[inv.id]}
+                                                className="ml-2 shrink-0 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50">
+                                                {acceptingInvite[inv.id]?<Loader2 className="h-3 w-3 animate-spin"/>:<Check className="h-3 w-3"/>}Aceptar
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {!selectedTeam ? (
                             <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center">
                                 <UsersRound className="h-12 w-12 text-black/20 mb-3"/>
@@ -531,31 +637,31 @@ function TeamsModal({ open, onClose, onCreated }) {
                                 <div>
                                     <div className="text-xs font-extrabold text-black/60 mb-2 flex items-center gap-2">
                                         <Mail className="h-3.5 w-3.5"/>
-                                        Invitaciones pendientes ({visibleInvites.length})
+                                        Invitaciones pendientes de aceptar invitación ({teamInvites.length})
                                     </div>
-                                    {visibleInvites.length === 0
-                                        ? <div className="rounded-xl border border-dashed border-black/10 p-4 text-center text-xs text-black/40">Sin invitaciones pendientes</div>
-                                        : <div className="space-y-2 max-h-36 overflow-y-auto">
-                                            {visibleInvites.map(inv => (
-                                                <div key={inv.id} className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="text-sm font-bold text-amber-800 truncate">{inv.name}</div>
-                                                        {inv.email && <div className="text-xs text-amber-600 truncate">{inv.email}</div>}
-                                                        <div className="text-xs text-amber-600">Rol: {inv.role}</div>
+                                    {invitesErrorMsg
+                                        ? <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-center text-xs text-amber-700">{invitesErrorMsg}</div>
+                                        : teamInvites.length === 0
+                                            ? <div className="rounded-xl border border-dashed border-black/10 p-4 text-center text-xs text-black/40">Sin invitaciones pendientes</div>
+                                            : <div className="space-y-2 max-h-36 overflow-y-auto">
+                                                {teamInvites.map(inv => (
+                                                    <div key={inv.id} className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="text-sm font-bold text-amber-800 truncate">{inv.name}</div>
+                                                            {inv.email && <div className="text-xs text-amber-600 truncate">{inv.email}</div>}
+                                                            <div className="text-xs text-amber-600">Rol: {inv.role}</div>
+                                                        </div>
+                                                        {esInvitacionMia(inv) ? (
+                                                            <button onClick={()=>acceptInvite(inv)} disabled={!!acceptingInvite[inv.id]}
+                                                                className="ml-2 shrink-0 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50">
+                                                                {acceptingInvite[inv.id]?<Loader2 className="h-3 w-3 animate-spin"/>:<Check className="h-3 w-3"/>}Aceptar
+                                                            </button>
+                                                        ) : (
+                                                            <span className="ml-2 shrink-0 text-[10px] font-extrabold uppercase tracking-wide text-amber-700">Esperando respuesta</span>
+                                                        )}
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                                                        <button onClick={()=>acceptInvite(inv)} disabled={!!acceptingInvite[inv.id]}
-                                                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50">
-                                                            {acceptingInvite[inv.id]?<Loader2 className="h-3 w-3 animate-spin"/>:<Check className="h-3 w-3"/>}Aceptar
-                                                        </button>
-                                                        <button onClick={()=>hideInvite(inv.id)} title="Ocultar notificación"
-                                                            className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-amber-700 hover:bg-amber-100">
-                                                            <EyeOff className="h-3 w-3"/>Ocultar
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                                ))}
+                                            </div>
                                     }
                                 </div>
                             </div>
@@ -568,6 +674,7 @@ function TeamsModal({ open, onClose, onCreated }) {
             </div>
         </div>
         <ConfirmDialog open={!!confirmDelete} title="Eliminar equipo" message={`¿Seguro que deseas eliminar "${confirmDelete?.name}"?`} onConfirm={deleteTeam} onCancel={()=>setConfirmDelete(null)} loading={deleting}/>
+        <NoticeDialog open={!!notice} type={notice?.type} title={notice?.title} message={notice?.message} onClose={()=>setNotice(null)}/>
         </>
     );
 }
@@ -2352,7 +2459,7 @@ export default function TimeForAction() {
                 teams={teams} projects={projects} teamId={teamId} projectId={projectId} currentUser={currentUser} allTasks={tasks}/>}
 
             <TaskModal open={modalOpen} onClose={()=>setModalOpen(false)} task={editingTask} lists={lists} teamId={teamId} onSaved={async()=>{notifyTasksChanged();await loadBoard();}}/>
-            <TeamsModal open={teamsModalOpen} onClose={()=>setTeamsModalOpen(false)} onCreated={async()=>{
+            <TeamsModal open={teamsModalOpen} onClose={()=>setTeamsModalOpen(false)} currentUser={currentUser} onCreated={async()=>{
                 await fetchTeams();
                 if(teamId){const data=await apiClickup.listProjects(teamId);const arr=Array.isArray(data)?data:[];setProjects(arr);if(!projectId&&arr[0])setProjectId(Number(arr[0].id));}
                 await loadBoard();

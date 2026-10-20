@@ -51,6 +51,7 @@ function normalizeInvite(item) {
   return {
     id: Number(item.id),
     team: Number(item.equipo),
+    team_name: item.equipo_nombre || "",
     email: item.correo || u.correo || "",
     role: item.rol,
     status: item.estado,
@@ -337,6 +338,11 @@ export const apiClickup = {
       method: "POST",
       body: JSON.stringify({ invitacion_id: Number(invitationId) }),
     });
+  },
+
+  async listMyInvites() {
+    const data = await http(`${API_BASE}/equipos/mis-invitaciones/`);
+    return Array.isArray(data) ? data.map(normalizeInvite) : [];
   },
 
   async listProjects(teamId) {
@@ -657,11 +663,7 @@ export const apiClickup = {
 
   async listUserInvites() {
     try {
-      const data = await http(`${API_BASE}/invitaciones/`);
-      if (!Array.isArray(data)) return [];
-      return data
-        .filter(inv => inv.estado === "PENDING")
-        .map(inv => normalizeInvite(inv));
+      return await this.listMyInvites();
     } catch (e) {
       console.error("Error listUserInvites:", e);
       return [];

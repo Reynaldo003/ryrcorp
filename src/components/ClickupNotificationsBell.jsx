@@ -25,6 +25,14 @@ function timeAgo(dateStr) {
     return `hace ${days} d`;
 }
 
+const ESTADOS_INVITACION = {
+    ACCEPTED: "Aceptada",
+    REJECTED: "Rechazada",
+    DISMISSED: "Resuelta",
+    EXPIRED: "Expirada",
+    READ: "Leída",
+};
+
 function NotificationCard({
     item,
     onAcceptInvite,
@@ -32,6 +40,7 @@ function NotificationCard({
     onDismiss,
 }) {
     const isInvite = item.type === "TEAM_INVITE";
+    const invitacionPendiente = isInvite && (item.status || "PENDING") === "PENDING";
 
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -68,7 +77,7 @@ function NotificationCard({
                         </div>
                     ) : null}
 
-                    {isInvite ? (
+                    {isInvite && invitacionPendiente ? (
                         <div className="mt-3 flex items-center gap-2">
                             <button
                                 onClick={() => onAcceptInvite?.(item)}
@@ -80,11 +89,17 @@ function NotificationCard({
 
                             <button
                                 onClick={() => onRejectInvite?.(item)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100"
+                                className="inline-flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100"
                             >
                                 <X className="h-4 w-4" />
                                 Rechazar
                             </button>
+                        </div>
+                    ) : isInvite ? (
+                        <div className="mt-3 flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                                {ESTADOS_INVITACION[item.status] || "No disponible"}
+                            </span>
                         </div>
                     ) : (
                         <div className="mt-3 flex items-center gap-2">
@@ -173,6 +188,11 @@ export default function ClickupNotificationsBell() {
     );
 
     async function handleAcceptInvite(item) {
+        if (!item?.invitation_id) {
+            await loadNotifications();
+            return;
+        }
+
         try {
             await apiClickup.acceptInvite(null, item.invitation_id);
             await loadNotifications();
@@ -183,6 +203,11 @@ export default function ClickupNotificationsBell() {
     }
 
     async function handleRejectInvite(item) {
+        if (!item?.invitation_id) {
+            await loadNotifications();
+            return;
+        }
+
         try {
             await apiClickup.rejectInvite(item.invitation_id);
             await loadNotifications();
