@@ -69,6 +69,7 @@ const TECNICOS_POR_DEALER = {
         "BLADIMIR CASTILLO",
         "VICTOR VAZQUEZ",
         "CARLOS GERMAN VIVAR LLANOS",
+        "Germán Vivar Llanos",
     ],
     "VW Orizaba": [
         "JOSE IGNACIO FIGUEROA",
