@@ -2615,7 +2615,7 @@ export default function Taller() {
 
     const [remoteRows, setRemoteRows] = useState([]);
     const [loadingList, setLoadingList] = useState(false);
-    const [tecnicosTuxtepec, setTecnicosTuxtepec] = useState([]);
+    const [catalogoTecnicos, setCatalogoTecnicos] = useState(null);
     const [vista, setVista] = useState("agenda");
     const [highlightType, setHighlightType] = useState(null);
     const [showFilters, setShowFilters] = useState(true);
@@ -2634,59 +2634,86 @@ export default function Taller() {
         "w-full rounded-lg border px-3 py-2 text-sm font-semibold text-[#001E50] outline-none transition";
     const inputOk =
         "border-black/10 bg-neutral-100 focus:border-[#001E50] focus:ring-2 focus:ring-[#001E50]/10";
-    const tecnicosPorDealer = useMemo(
-        () => ({
-            ...TECNICOS_POR_DEALER,
-            "VW Tuxtepec": tecnicosTuxtepec,
-        }),
-        [tecnicosTuxtepec],
-    );
+
+    const tecnicosPorDealer = useMemo(() => {
+        // Mientras se carga, conservamos temporalmente las listas anteriores.
+        if (catalogoTecnicos === null) {
+            return TECNICOS_POR_DEALER;
+        }
+
+        const agrupados = Object.fromEntries(
+            DEALERS.map((dealer) => [dealer, []])
+        );
+
+        catalogoTecnicos.forEach((tecnico) => {
+            const nombre = normalizeStr(tecnico?.nombre);
+            const agencia = normalizeStr(tecnico?.agencia);
+
+            if (!nombre || !agencia) return;
+
+            const dealer = DEALERS.find(
+                (item) => normalizeKey(item) === normalizeKey(agencia)
+            );
+
+            if (!dealer) return;
+
+            agrupados[dealer].push(nombre);
+        });
+
+        Object.keys(agrupados).forEach((dealer) => {
+            agrupados[dealer] = uniqueStrings(agrupados[dealer]);
+        });
+
+        return agrupados;
+    }, [catalogoTecnicos]);
 
     const todosTecnicosOficiales = useMemo(
         () =>
             uniqueStrings(
-                Object.values(tecnicosPorDealer).flat(),
+                Object.values(tecnicosPorDealer).flat()
             ),
-        [tecnicosPorDealer],
+        [tecnicosPorDealer]
     );
-    useEffect(() => {
-        let activo = true;
 
-        async function cargarTecnicosTuxtepec() {
+    useEffect(() => {
+        let montado = true;
+
+        async function cargarCatalogoTecnicos() {
             try {
                 const data = await http(
-                    "/digitales/tecnicos/?agencia=VW%20Tuxtepec&tipo_personal=Tecnico"
+                    "/digitales/tecnicos/?activo=true&tipo_personal=Tecnico"
                 );
 
-                if (!activo) return;
+                if (!montado) return;
 
-                const nombres = Array.isArray(data)
+                const lista = Array.isArray(data)
                     ? data
-                        .map((item) =>
-                            normalizeStr(item?.nombre)
-                        )
-                        .filter(Boolean)
-                    : [];
+                    : Array.isArray(data?.results)
+                        ? data.results
+                        : null;
 
-                setTecnicosTuxtepec(
-                    uniqueStrings(nombres)
-                );
+                if (!lista) {
+                    throw new Error("Respuesta inválida del catálogo de técnicos");
+                }
+
+                setCatalogoTecnicos(lista);
             } catch (error) {
                 console.error(
-                    "No se pudieron cargar los técnicos de VW Tuxtepec:",
+                    "No se pudo cargar el catálogo de técnicos:",
                     error
                 );
 
-                if (activo) {
-                    setTecnicosTuxtepec([]);
+                // Si falla la consulta, conservamos las listas anteriores.
+                if (montado) {
+                    setCatalogoTecnicos(null);
                 }
             }
         }
 
-        cargarTecnicosTuxtepec();
+        cargarCatalogoTecnicos();
 
         return () => {
-            activo = false;
+            montado = false;
         };
     }, []);
 
@@ -3049,21 +3076,28 @@ export default function Taller() {
                 ? filters.agencia
                 : "");
 
-        if (!draftDealer) {
-            return uniqueStrings(todosTecnicosOficiales);
-        }
-
-        return uniqueStrings(
-            getOfficialTechniciansByDealer(
+        const tecnicosDisponibles = draftDealer
+            ? getOfficialTechniciansByDealer(
                 draftDealer,
-                tecnicosPorDealer,
-            ),
-        );
+                tecnicosPorDealer
+            )
+            : todosTecnicosOficiales;
+
+        const tecnicoActual = editingOrden
+            ? normalizeStr(draft?.tecnico)
+            : "";
+
+        return uniqueStrings([
+            ...tecnicosDisponibles,
+            ...(tecnicoActual ? [tecnicoActual] : []),
+        ]);
     }, [
         draft?.agencia,
+        draft?.tecnico,
         filters.agencia,
         tecnicosPorDealer,
         todosTecnicosOficiales,
+        editingOrden,
     ]);
 
     async function unassignOrder(orderId) {
