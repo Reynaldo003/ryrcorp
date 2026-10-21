@@ -23,6 +23,9 @@ import {
     Table2,
     LayoutGrid,
     Clock3,
+    BrainCircuit,
+    Eye,
+    Download,
 } from "lucide-react";
 
 import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
@@ -554,6 +557,77 @@ export default function HojaRegistros() {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
     const [agenciaSeleccionada, setAgenciaSeleccionada] = useState("VW Cordoba");
     const [asesoresTuxtepec, setAsesoresTuxtepec] = useState([]);
+    const [analizandoIA, setAnalizandoIA] = useState(false);
+    const [progresoIA, setProgresoIA] = useState("");
+
+    async function analizarConIA() {
+        if (analizandoIA || saving) return;
+
+        if (!draft?.id) {
+            alert("Primero guarda la cita y sus evidencias.");
+            return;
+        }
+
+        if (draft.evidenciasNuevas?.length) {
+            alert("Primero guarda las evidencias nuevas y vuelve a abrir la cita.");
+            return;
+        }
+
+        const procesadas = new Set(
+            (draft.analisisIA || []).map((item) => item.evidencia_id)
+        );
+
+        const pendientes = (draft.evidencias || []).filter((evidencia) => {
+            const nombre = evidencia.nombre_original || "";
+            const esImagen =
+                evidencia.tipo_mime?.startsWith("image/") ||
+                /\.(jpe?g|png|webp)$/i.test(nombre);
+
+            return esImagen && !procesadas.has(evidencia.id);
+        });
+
+        if (!pendientes.length) {
+            alert("No hay fotografías nuevas por analizar.");
+            return;
+        }
+
+        setAnalizandoIA(true);
+
+        try {
+            for (let i = 0; i < pendientes.length; i += 1) {
+                const evidencia = pendientes[i];
+
+                setProgresoIA(
+                    `Analizando ${i + 1} de ${pendientes.length}: ${evidencia.nombre_original}`
+                );
+
+                const resultado = await apiHojaIngresos.analizarConIA(
+                    draft.id,
+                    evidencia.id
+                );
+
+                setDraft((prev) => {
+                    if (!prev || prev.id !== draft.id) return prev;
+
+                    const anteriores = (prev.analisisIA || []).filter(
+                        (item) => item.evidencia_id !== resultado.evidencia_id
+                    );
+
+                    return {
+                        ...prev,
+                        analisisIA: [resultado, ...anteriores],
+                    };
+                });
+            }
+        } catch (error) {
+            console.error("Error en Inspector IA:", error);
+            alert(`No se completaron todos los análisis: ${error?.message || "Error desconocido"}`);
+        } finally {
+            setAnalizandoIA(false);
+            setProgresoIA("");
+        }
+    }
+
 
     const changeDate = (days) => {
         const fecha = new Date(selectedDate);
@@ -826,11 +900,14 @@ export default function HojaRegistros() {
         abrirNuevo({ asesor: asesorNombre, agencia: agenciaSeleccionada, fecha_ingreso: fechaIso });
     }
 
+
     async function abrirEditar(row) {
-        if (!row?.id) return;
+        if (!row?.id || analizandoIA) return;
 
         setTouchedSave(false);
         setMode("edit");
+        setDraft(null);
+        setProgresoIA("");
         setOpenModal(true);
         setLoadingDetail(true);
 
@@ -838,7 +915,11 @@ export default function HojaRegistros() {
             const data = await apiHojaIngresos.get(row.id);
 
             if (!isAdmin && userAgencias.length > 0) {
-                if (!userAgencias.some((ua) => normalizeStr(ua) === normalizeStr(data.agencia))) {
+                const tienePermiso = userAgencias.some(
+                    (agencia) => normalizeStr(agencia) === normalizeStr(data.agencia)
+                );
+
+                if (!tienePermiso) {
                     alert("No tienes permisos para editar registros de otra agencia.");
                     setOpenModal(false);
                     return;
@@ -865,7 +946,9 @@ export default function HojaRegistros() {
                 cliente_nombre: nombreCliente === "—" ? "" : nombreCliente,
                 cliente_telefono: data.cliente_telefono || data.telefono || data?.cliente?.telefono || "",
                 cliente_correo_electronico: data.cliente_correo_electronico || data.correo || data.correo_electronico || data?.cliente?.correo || data?.cliente?.correo_electronico || "",
-                tipo_cita: data.tipo_cita ? String(data.tipo_cita).split(",").map((tipo) => tipo.trim()).filter(Boolean) : [],
+                tipo_cita: data.tipo_cita
+                    ? String(data.tipo_cita).split(",").map((tipo) => tipo.trim()).filter(Boolean)
+                    : [],
                 declaracion_textual_cliente: data.declaracion_textual_cliente || "",
                 comentarios: data.comentarios || "",
                 vin: data.vin || "",
@@ -873,15 +956,16 @@ export default function HojaRegistros() {
                 modelo: data.modelo || "",
                 medio_concertacion: data.medio_concertacion || "",
                 pauta_origen: data.pauta_origen || "",
-                long_drive: data.long_drive === null || data.long_drive === undefined ? null : boolFromAny(data.long_drive),
+                long_drive: data.long_drive == null ? null : boolFromAny(data.long_drive),
                 hora_promesa: toDTLocal(data.hora_promesa),
                 pre_picking_hecho: !!data.pre_picking_hecho,
                 pre_picking_notas: data.pre_picking_notas || "",
                 evidencias: Array.isArray(data.evidencias) ? data.evidencias : [],
                 evidenciasNuevas: [],
+                analisisIA: Array.isArray(data.analisis_ia) ? data.analisis_ia : [],
             });
         } catch (error) {
-            console.error(error);
+            console.error("Error cargando la cita:", error);
             alert("No se pudo abrir el registro.");
             setOpenModal(false);
         } finally {
@@ -890,9 +974,11 @@ export default function HojaRegistros() {
     }
 
     function cerrarModal() {
-        if (saving) return;
+        if (saving || analizandoIA) return;
+
         setOpenModal(false);
         setDraft(null);
+        setProgresoIA("");
     }
 
     function buildPayload() {
@@ -1483,7 +1569,7 @@ export default function HojaRegistros() {
                         <button
                             type="button"
                             onClick={cerrarModal}
-                            disabled={saving}
+                            disabled={saving || analizandoIA}
                             className="inline-flex items-center justify-center gap-1.5 rounded-2xl border px-4 py-2 text-[13px] font-semibold disabled:opacity-60"
                             style={{ borderColor: COLOR.line, color: COLOR.inkSoft }}
                         >
@@ -1492,7 +1578,7 @@ export default function HojaRegistros() {
                         <button
                             type="button"
                             onClick={guardar}
-                            disabled={saving || loadingDetail || !!telError}
+                            disabled={saving || loadingDetail || !!telError || analizandoIA}
                             className="inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-60"
                             style={{ background: COLOR.brand }}
                         >
@@ -1963,7 +2049,17 @@ export default function HojaRegistros() {
                                     )}
                             </Field>
                         </div>
-                        <div className="md:col-span-2">
+
+                        <PanelInspectorIA
+                            draft={draft}
+                            analizandoIA={analizandoIA}
+                            progresoIA={progresoIA}
+                            saving={saving}
+                            onAnalizar={analizarConIA}
+                        />
+
+
+                        <div className="md:col-span-3">
                             <Field label="Declaración textual del cliente">
                                 <textarea
                                     value={draft.declaracion_textual_cliente}
@@ -1986,8 +2082,306 @@ export default function HojaRegistros() {
                         </div>
 
                     </div>
+                )
+                }
+            </Modal >
+        </div >
+    );
+}
+
+function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar }) {
+    const evidencias = draft?.evidencias || [];
+    const resultados = draft?.analisisIA || [];
+    const archivosSinGuardar = (draft?.evidenciasNuevas || []).length;
+
+    const procesadas = new Set(
+        resultados.map((item) => String(item.evidencia_id))
+    );
+
+    const fotografias = evidencias.filter((evidencia) => {
+        const nombre = evidencia.nombre_original || "";
+        return evidencia.tipo_mime?.startsWith("image/") ||
+            /\.(jpe?g|png|webp)$/i.test(nombre);
+    });
+
+    const pendientes = fotografias.filter(
+        (evidencia) => !procesadas.has(String(evidencia.id))
+    );
+
+    const puedeAnalizar = !!draft?.id &&
+        !analizandoIA &&
+        !saving &&
+        archivosSinGuardar === 0 &&
+        pendientes.length > 0;
+
+    return (
+        <div className="md:col-span-3 space-y-4">
+            <div className="overflow-hidden rounded-2xl border border-[#131E5C]/15 bg-[#F8F9FD]">
+                <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#131E5C] text-white">
+                            <BrainCircuit className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-[14px] font-bold text-[#131E5C]">
+                                Inspector IA
+                            </h3>
+                            <p className="mt-1 text-[12px] leading-5 text-slate-500">
+                                Detecta daños exteriores y objetos ajenos al vehículo.
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-[#131E5C]">
+                                    {fotografias.length} fotografías
+                                </span>
+                                <span className="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-[#131E5C]">
+                                    {resultados.length} analizadas
+                                </span>
+                                {pendientes.length > 0 && (
+                                    <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
+                                        {pendientes.length} pendientes
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onAnalizar}
+                        disabled={!puedeAnalizar}
+                        className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-5 py-3 text-[12px] font-bold text-white transition hover:bg-[#202F7E] disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+                    >
+                        {analizandoIA ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <BrainCircuit className="h-4 w-4" />
+                        )}
+                        {analizandoIA
+                            ? "Analizando..."
+                            : pendientes.length
+                                ? `Analizar ${pendientes.length} fotografía${pendientes.length !== 1 ? "s" : ""}`
+                                : "Sin fotografías pendientes"
+                        }
+                    </button>
+                </div>
+
+                {analizandoIA && (
+                    <div className="border-t border-[#131E5C]/10 px-4 py-3" role="status">
+                        <div className="mb-2 flex items-center gap-2 text-[12px] font-medium text-[#131E5C]">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {progresoIA || "Procesando fotografías..."}
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-[#131E5C]/10">
+                            <div className="h-full w-1/3 animate-pulse rounded-full bg-[#131E5C]" />
+                        </div>
+                    </div>
                 )}
-            </Modal>
+
+                {archivosSinGuardar > 0 && !analizandoIA && (
+                    <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
+                        Tienes {archivosSinGuardar} archivo(s) pendiente(s) de guardar. Guarda los cambios antes de analizar.
+                    </div>
+                )}
+
+                {!draft?.id && (
+                    <div className="border-t border-[#131E5C]/10 px-4 py-3 text-[12px] text-slate-500">
+                        Primero guarda la cita y sus fotografías.
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 className="text-[14px] font-bold text-[#131E5C]">
+                            Resultados del análisis
+                        </h3>
+                        <p className="mt-0.5 text-[12px] text-slate-500">
+                            Inspecciones guardadas y vinculadas a esta cita.
+                        </p>
+                    </div>
+                    <span className="rounded-full border border-[#131E5C]/15 px-3 py-1 text-[11px] font-semibold text-[#131E5C]">
+                        {resultados.length} resultados
+                    </span>
+                </div>
+
+                {resultados.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#131E5C]/20 bg-slate-50 px-5 py-10 text-center">
+                        <BrainCircuit className="mb-3 h-8 w-8 text-[#131E5C]/40" />
+                        <p className="text-[13px] font-semibold text-[#131E5C]">
+                            Todavía no hay inspecciones
+                        </p>
+                        <p className="mt-1 max-w-sm text-[12px] leading-5 text-slate-500">
+                            Cuando analices las fotografías, aparecerán aquí las imágenes procesadas y los hallazgos identificados.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        {resultados.map((item) => {
+                            const reporte = item.reporte || {};
+                            const danos = Array.isArray(reporte.danos) ? reporte.danos : [];
+                            const objetos = Array.isArray(reporte.objetos_ajenos) ? reporte.objetos_ajenos : [];
+
+                            const evidencia = evidencias.find(
+                                (foto) => String(foto.id) === String(item.evidencia_id)
+                            );
+
+                            const nombreFoto = evidencia?.nombre_original ||
+                                `Evidencia #${item.evidencia_id}`;
+
+                            return (
+                                <article
+                                    key={item.id}
+                                    className="overflow-hidden rounded-2xl border border-[#131E5C]/15 bg-white shadow-sm"
+                                >
+                                    <div className="relative flex h-52 items-center justify-center bg-slate-100">
+                                        {item.imagen_url ? (
+                                            <a
+                                                href={item.imagen_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block h-full w-full"
+                                                title="Visualizar imagen completa"
+                                            >
+                                                <img
+                                                    src={item.imagen_url}
+                                                    alt={`Inspección IA de ${nombreFoto}`}
+                                                    className="h-full w-full object-contain"
+                                                    loading="lazy"
+                                                />
+                                            </a>
+                                        ) : (
+                                            <span className="text-[12px] text-slate-400">
+                                                Imagen no disponible
+                                            </span>
+                                        )}
+                                        <span className="absolute bottom-3 left-3 rounded-lg bg-[#131E5C] px-3 py-1.5 text-[10px] font-bold text-white shadow">
+                                            INSPECCIÓN IA
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-4 p-4">
+                                        <div>
+                                            <p className="truncate text-[13px] font-bold text-[#131E5C]">
+                                                {nombreFoto}
+                                            </p>
+                                            <p className="mt-1 text-[11px] text-slate-400">
+                                                {item.creado_en
+                                                    ? new Date(item.creado_en).toLocaleString("es-MX")
+                                                    : "Fecha no disponible"}
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="rounded-xl border border-red-100 bg-red-50 p-3">
+                                                <p className="text-[22px] font-bold text-red-600">
+                                                    {danos.length}
+                                                </p>
+                                                <p className="text-[11px] font-medium text-red-700">
+                                                    Daños exteriores
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
+                                                <p className="text-[22px] font-bold text-orange-600">
+                                                    {objetos.length}
+                                                </p>
+                                                <p className="text-[11px] font-medium text-orange-700">
+                                                    Objetos ajenos
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {(reporte.resumen || reporte.resumen_general) && (
+                                            <p className="text-[12px] leading-5 text-slate-600">
+                                                {reporte.resumen || reporte.resumen_general}
+                                            </p>
+                                        )}
+
+                                        {danos.length > 0 && (
+                                            <div className="space-y-2">
+                                                <h4 className="text-[12px] font-bold text-red-700">
+                                                    Daños identificados
+                                                </h4>
+                                                {danos.map((dano, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="rounded-lg border-l-2 border-red-500 bg-red-50/60 px-3 py-2"
+                                                    >
+                                                        <p className="text-[12px] font-semibold text-slate-800">
+                                                            {dano.pieza || dano.tipo || "Daño visible"}
+                                                        </p>
+                                                        {dano.ubicacion && (
+                                                            <p className="mt-0.5 text-[11px] text-red-700">
+                                                                {dano.ubicacion}
+                                                            </p>
+                                                        )}
+                                                        <p className="mt-1 text-[11px] leading-5 text-slate-600">
+                                                            {dano.descripcion}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {objetos.length > 0 && (
+                                            <div className="space-y-2">
+                                                <h4 className="text-[12px] font-bold text-orange-700">
+                                                    Objetos ajenos
+                                                </h4>
+                                                {objetos.map((objeto, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="rounded-lg border-l-2 border-orange-500 bg-orange-50/60 px-3 py-2"
+                                                    >
+                                                        <p className="text-[12px] font-semibold text-slate-800">
+                                                            {objeto.objeto || "Objeto detectado"}
+                                                        </p>
+                                                        {objeto.ubicacion && (
+                                                            <p className="mt-0.5 text-[11px] text-orange-700">
+                                                                {objeto.ubicacion}
+                                                            </p>
+                                                        )}
+                                                        <p className="mt-1 text-[11px] leading-5 text-slate-600">
+                                                            {objeto.descripcion}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {danos.length === 0 && objetos.length === 0 && (
+                                            <div className="rounded-xl bg-slate-50 px-3 py-3 text-[12px] text-slate-600">
+                                                No se identificaron incidencias visibles en esta fotografía.
+                                            </div>
+                                        )}
+
+                                        {item.imagen_url && (
+                                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                                                <a
+                                                    href={item.imagen_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#131E5C]/15 px-3 py-2.5 text-[12px] font-semibold text-[#131E5C] hover:bg-slate-50"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                    Visualizar
+                                                </a>
+                                                <a
+                                                    href={item.imagen_url}
+                                                    download={`inspeccion_${item.evidencia_id}.png`}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-3 py-2.5 text-[12px] font-semibold text-white hover:bg-[#202F7E]"
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                    Descargar
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

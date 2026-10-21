@@ -48,4 +48,13 @@ export const apiHojaIngresos = {
     http(`${BASE_URL}/${idIngreso}/evidencias/${idEvidencia}/`, {
       method: "DELETE",
     }),
+
+  analizarConIA: (idIngreso, idEvidencia) =>
+    http(`${BASE_URL}/${idIngreso}/analizar-ia/`, {
+      method: "POST",
+      body: {
+        evidencia_id: idEvidencia,
+      },
+      retryWithoutAuth: false,
+    }),
 };
