@@ -64,14 +64,10 @@ import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
 import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
 import {
-    ESTADOS_LABELS,
-    ESTADOS_PROSPECTO,
-    resolverEstado,
     estadoAutomaticoBandeja,
     tieneCalificacionRapida,
     citaEsNoAsistio,
     citaEsAsistida,
-    colorDeEstado,
 } from "./estadosProspecto";
 
 import {
@@ -82,7 +78,6 @@ import {
     useAsesoresGestionComercial,
 } from "../../hooks/useAsesoresGestionComercial";
 
-// Etiquetas de lectura para el resumen del chat. Los cambios de etapa solo los guarda V3.
 const ETAPAS_V3_NOMBRES_CHAT = Object.freeze({
     nuevo_prospecto: "Nuevo prospecto",
     en_seguimiento: "En seguimiento",
@@ -95,6 +90,26 @@ const ETAPAS_V3_NOMBRES_CHAT = Object.freeze({
     facturado: "Facturado",
     lead_perdido: "Lead perdido",
 });
+
+const ETAPAS_FILTRO_CONTACTO = [
+    { key: "nuevo_prospecto", label: "Nuevo prospecto", color: "#64748B" },
+    { key: "en_seguimiento", label: "En seguimiento", color: "#2563EB" },
+    { key: "cotizacion_enviada", label: "Cotización enviada", color: "#7C3AED" },
+    { key: "cita_agendada", label: "Cita agendada", color: "#0284C7" },
+    { key: "cita_asistida", label: "Cita asistida", color: "#16A34A" },
+    { key: "documentos_enviados", label: "Documentos recibidos", color: "#0D9488" },
+    { key: "autorizado_no_formalizado", label: "Autorizado no formalizado", color: "#9333EA" },
+    { key: "compra_futura", label: "Compra futura", color: "#D97706" },
+    { key: "facturado", label: "Facturado", color: "#15803D" },
+    { key: "lead_perdido", label: "Lead perdido", color: "#DC2626" },
+    { key: "pendiente_clasificacion", label: "Pendiente de clasificación", color: "#94A3B8" },
+];
+
+function etapaVisualChat(valor) {
+    const etapa = String(valor || "").trim();
+    return ETAPAS_FILTRO_CONTACTO.find((item) => item.key === etapa)
+        || ETAPAS_FILTRO_CONTACTO[ETAPAS_FILTRO_CONTACTO.length - 1];
+}
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -193,14 +208,12 @@ const PAUTAS_ORIGEN = [
 const CHAT_FILTERS = [
     { key: "todos", label: "Todos" },
     { key: "no_leidos", label: "No leídos" },
-    { key: "pendiente_cotizacion", label: "Pend. cotización", estados: ["pendiente de cotización", "pendiente de cotizacion", "pendiente cotización", "pendiente cotizacion"] },
-    { key: "seguimiento", label: "Seguimiento", estados: ["seguimiento"] },
-    { key: "calificado", label: "Calificado", estados: ["calificado"] },
+    { key: "etapa:cita_asistida", label: "Cita asistida" },
+    { key: "etapa:en_seguimiento", label: "En seguimiento" },
+    { key: "etapa:autorizado_no_formalizado", label: "Autorizado no formalizado" },
 ];
 
 //
-
-const ESTADOS_HEADER = ESTADOS_LABELS;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -243,13 +256,6 @@ function renderOptionsConValorActual(options, currentValue, placeholder = "Selec
             {(options || []).map((option) => <option key={option} value={option}>{option}</option>)}
         </>
     );
-}
-
-function getStatusDotColor(estado) {
-    const v = String(estado || "").toLowerCase();
-    if (v === "descalificado") return "#3B82F6";
-    if (v === "sin respuesta" || v === "sin_respuesta" || v === "") return "#EF4444";
-    return "#22C55E";
 }
 
 function getAsesorVisual(nombre, usuario = "") {
@@ -441,6 +447,7 @@ function normalizarResumenChat(chat, numeroLinea) {
         id: chat?.id || `${numeroLinea}-${telefono}`,
         numero_asesor: normalizaTelefonoMx(chat?.numero_asesor || chat?.numero_destino || chat?.phone_number || numeroLinea),
         telefono, nombre: chat?.nombre || "Prospecto", agencia: chat?.agencia || "", linea: chat?.linea || "", estado: chat?.estado || "",
+        etapa_comercial_v3: chat?.etapa_comercial_v3 ?? null,
         asesor_digital: chat?.asesor_digital || "", usuario_crm_asignado: chat?.usuario_crm_asignado || "", ia_estado: chat?.ia_estado || null,
         ia_pausada: Boolean(chat?.ia_pausada), ia_bloqueos: Array.isArray(chat?.ia_bloqueos) ? chat.ia_bloqueos : [], unread: Number(chat?.unread || 0),
         last: { text: chat?.last_text || "", time: chat?.last_time || "", timestamp: chat?.last_message_at || "" },
@@ -695,13 +702,11 @@ function ChatListSkeleton({ rows = 8 }) {
     );
 }
 
-function EstadoDropdown({ value, onChange }) {
+function EtapaDropdown({ value, onChange }) {
     const [open, setOpen] = useState(false);
     const containerRef = useRef(null);
 
-    const opciones = ESTADOS_PROSPECTO.filter(
-        (e) => e.key !== "sin_contactar" && !["pendiente_cotizacion", "seguimiento", "calificado"].includes(e.key)
-    );
+    const opciones = ETAPAS_FILTRO_CONTACTO;
 
     useEffect(() => {
         function handler(e) {
@@ -713,8 +718,8 @@ function EstadoDropdown({ value, onChange }) {
         return () => document.removeEventListener("mousedown", handler);
     }, []);
 
-    const seleccionado = value?.startsWith("estado:")
-        ? opciones.find((e) => `estado:${e.key}` === value) || null
+    const seleccionado = value?.startsWith("etapa:")
+        ? opciones.find((e) => `etapa:${e.key}` === value) || null
         : null;
 
     return (
@@ -735,7 +740,7 @@ function EstadoDropdown({ value, onChange }) {
                             <span className="truncate text-[#131E5C]">{seleccionado.label}</span>
                         </>
                     ) : (
-                        <span className="truncate text-slate-400 font-semibold">Selecciona un estatus…</span>
+                        <span className="truncate text-slate-400 font-semibold">Selecciona una etapa…</span>
                     )}
                 </span>
                 <ChevronDown className={cls("h-4 w-4 shrink-0 text-slate-400 transition", open && "rotate-180")} />
@@ -744,12 +749,12 @@ function EstadoDropdown({ value, onChange }) {
             {open ? (
                 <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
                     {opciones.map((e) => {
-                        const activo = value === `estado:${e.key}`;
+                        const activo = value === `etapa:${e.key}`;
                         return (
                             <button
                                 key={e.key}
                                 type="button"
-                                onClick={() => { onChange(`estado:${e.key}`); setOpen(false); }}
+                                onClick={() => { onChange(`etapa:${e.key}`); setOpen(false); }}
                                 className={cls(
                                     "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold transition",
                                     activo ? "bg-[#1746D1]/10 text-[#131E5C]" : "text-slate-600 hover:bg-slate-50"
@@ -2697,9 +2702,9 @@ export default function DigitalesContacto() {
     const [filterCounts, setFilterCounts] = useState({
         todos: 0,
         no_leidos: 0,
-        pendiente_cotizacion: 0,
-        seguimiento: 0,
-        calificado: 0,
+        "etapa:cita_asistida": 0,
+        "etapa:en_seguimiento": 0,
+        "etapa:autorizado_no_formalizado": 0,
     });
     const emojiRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -2728,7 +2733,7 @@ export default function DigitalesContacto() {
         if (!activeTel) return null;
         const fromList = chats.find(c => c.telefono === activeTel);
         if (fromList) return fromList;
-        return { id: activeTel, telefono: activeTel, nombre: prospecto?.nombre || "Prospecto", agencia: prospecto?.agencia || "", linea: prospecto?.business || "", estado: prospecto?.estado || "", unread: 0, last: { text: "", time: "" } };
+        return { id: activeTel, telefono: activeTel, nombre: prospecto?.nombre || "Prospecto", agencia: prospecto?.agencia || "", linea: prospecto?.business || "", estado: prospecto?.estado || "", etapa_comercial_v3: prospecto?.etapa_comercial_v3 ?? null, unread: 0, last: { text: "", time: "" } };
     }, [activeTel, chats, prospecto]);
 
     // Solo renderizar acciones V3 para el expediente efectivamente cargado en este chat.
@@ -2840,7 +2845,7 @@ export default function DigitalesContacto() {
     }, [prospecto, activeChat]);
 
     const filteredChats = useMemo(() => {
-        const filterKey = chatFilter?.startsWith("estado:") ? "estado" : chatFilter;
+        const filterKey = chatFilter?.startsWith("etapa:") ? "etapa" : chatFilter;
         const filterDef = CHAT_FILTERS.find(
             (item) => item.key === filterKey
         );
@@ -2857,10 +2862,12 @@ export default function DigitalesContacto() {
                 }
             }
 
-            if (chatFilter?.startsWith("estado:")) {
-                const estadoKey = chatFilter.slice("estado:".length);
-                const estadoKeyActual = resolverEstado(chat.estado).key;
-                if (estadoKeyActual !== estadoKey) {
+            if (chatFilter?.startsWith("etapa:")) {
+                const etapaSeleccionada = chatFilter.slice("etapa:".length);
+                const etapaActual = String(chat.etapa_comercial_v3 || "").trim();
+                if (etapaSeleccionada === "pendiente_clasificacion") {
+                    if (etapaActual) return false;
+                } else if (etapaActual !== etapaSeleccionada) {
                     return false;
                 }
             } else if (filterDef?.estados) {
@@ -2883,7 +2890,7 @@ export default function DigitalesContacto() {
                     chat.nombre,
                     chat.telefono,
                     chat.agencia,
-                    chat.estado,
+                    ETAPAS_V3_NOMBRES_CHAT[chat.etapa_comercial_v3] || "Pendiente de clasificación",
                     chat.asesor_digital,
                     chat.usuario_crm_asignado,
                     chat.last?.text,
@@ -3520,6 +3527,7 @@ export default function DigitalesContacto() {
                 ...chat,
                 unread: 0,
                 estado: nuevoEstado || chat.estado,
+                etapa_comercial_v3: data?.prospecto?.etapa_comercial_v3 ?? chat.etapa_comercial_v3,
                 last: {
                     text: ultimo?.text || chat.last?.text || "",
                     time: ultimo?.created_at || chat.last?.time || "",
@@ -5890,9 +5898,8 @@ export default function DigitalesContacto() {
                                         </div>
                                     )}
 
-                                    {/* Filtro por estatus (dropdown) arriba de los botones */}
                                     <div className="mt-2">
-                                        <EstadoDropdown
+                                        <EtapaDropdown
                                             value={chatFilter}
                                             onChange={setChatFilter}
                                         />
@@ -5946,6 +5953,7 @@ export default function DigitalesContacto() {
                                                 chat.asesor_digital,
                                                 chat.usuario_crm_asignado
                                             );
+                                            const etapaVisual = etapaVisualChat(chat.etapa_comercial_v3);
 
                                             return (
                                                 <button key={chat.id}
@@ -5964,8 +5972,8 @@ export default function DigitalesContacto() {
                                                             <Avatar name={chat.nombre} size="lg" />
                                                             <span
                                                                 className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white"
-                                                                style={{ backgroundColor: getStatusDotColor(chat.estado) }}
-                                                                title={chat.estado || "Sin respuesta"}
+                                                                style={{ backgroundColor: etapaVisual.color }}
+                                                                title={etapaVisual.label}
                                                             />
                                                         </div>
 
@@ -6012,12 +6020,12 @@ export default function DigitalesContacto() {
                                                                 <span
                                                                     className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-bold leading-tight"
                                                                     style={{
-                                                                        color: colorDeEstado(chat.estado),
-                                                                        borderColor: `${colorDeEstado(chat.estado)}66`,
+                                                                        color: etapaVisual.color,
+                                                                        borderColor: `${etapaVisual.color}66`,
                                                                     }}
                                                                 >
-                                                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: colorDeEstado(chat.estado) }} />
-                                                                    {chat.estado || "Sin estado"}
+                                                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: etapaVisual.color }} />
+                                                                    {etapaVisual.label}
                                                                 </span>
 
                                                                 {(chat.ia_estado || chat.ia_pausada || chat.ia_bloqueos?.length) ? (
@@ -7090,12 +7098,6 @@ export default function DigitalesContacto() {
                                                 </div>
 
                                                 <div className="space-y-3">
-                                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                                                        <div className="text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado histórico · solo lectura</div>
-                                                        <div className="mt-1 text-sm font-bold text-slate-700">{headerEstado || "Sin estado"}</div>
-                                                        <p className="mt-1 text-[10px] text-slate-500">Las etapas y el descarte se gestionan desde Etapas comerciales.</p>
-                                                    </div>
-
                                                     {String(headerEstado || "").trim().toLowerCase() === "cita programada" ? (
                                                         <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2.5">
                                                             <span className="block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">
