@@ -56,18 +56,20 @@ import {
 import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
-import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import {
     AGENCIAS_DIGITALES,
 } from "../../config/asesoresGestionComercial";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import NuevoProspectoModal from "./NuevoProspectoModal";
-import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
 import {
+    ESTADOS_LABELS,
+    ESTADOS_PROSPECTO,
+    resolverEstado,
     estadoAutomaticoBandeja,
     tieneCalificacionRapida,
     citaEsNoAsistio,
     citaEsAsistida,
+    colorDeEstado,
 } from "./estadosProspecto";
 
 import {
@@ -77,39 +79,6 @@ import {
 import {
     useAsesoresGestionComercial,
 } from "../../hooks/useAsesoresGestionComercial";
-
-const ETAPAS_V3_NOMBRES_CHAT = Object.freeze({
-    nuevo_prospecto: "Nuevo prospecto",
-    en_seguimiento: "En seguimiento",
-    cotizacion_enviada: "Cotización enviada",
-    cita_agendada: "Cita agendada",
-    cita_asistida: "Cita asistida",
-    documentos_enviados: "Documentos recibidos",
-    autorizado_no_formalizado: "Autorizado no formalizado",
-    compra_futura: "Compra futura",
-    facturado: "Facturado",
-    lead_perdido: "Lead perdido",
-});
-
-const ETAPAS_FILTRO_CONTACTO = [
-    { key: "nuevo_prospecto", label: "Nuevo prospecto", color: "#64748B" },
-    { key: "en_seguimiento", label: "En seguimiento", color: "#2563EB" },
-    { key: "cotizacion_enviada", label: "Cotización enviada", color: "#7C3AED" },
-    { key: "cita_agendada", label: "Cita agendada", color: "#0284C7" },
-    { key: "cita_asistida", label: "Cita asistida", color: "#16A34A" },
-    { key: "documentos_enviados", label: "Documentos recibidos", color: "#0D9488" },
-    { key: "autorizado_no_formalizado", label: "Autorizado no formalizado", color: "#9333EA" },
-    { key: "compra_futura", label: "Compra futura", color: "#D97706" },
-    { key: "facturado", label: "Facturado", color: "#15803D" },
-    { key: "lead_perdido", label: "Lead perdido", color: "#DC2626" },
-    { key: "pendiente_clasificacion", label: "Pendiente de clasificación", color: "#94A3B8" },
-];
-
-function etapaVisualChat(valor) {
-    const etapa = String(valor || "").trim();
-    return ETAPAS_FILTRO_CONTACTO.find((item) => item.key === etapa)
-        || ETAPAS_FILTRO_CONTACTO[ETAPAS_FILTRO_CONTACTO.length - 1];
-}
 
 const BRAND_BLUE = "#131E5C";
 const MANUAL_CHATS_KEY = "digitales_chats_manuales";
@@ -208,12 +177,14 @@ const PAUTAS_ORIGEN = [
 const CHAT_FILTERS = [
     { key: "todos", label: "Todos" },
     { key: "no_leidos", label: "No leídos" },
-    { key: "etapa:cita_asistida", label: "Cita asistida" },
-    { key: "etapa:en_seguimiento", label: "En seguimiento" },
-    { key: "etapa:autorizado_no_formalizado", label: "Autorizado no formalizado" },
+    { key: "pendiente_cotizacion", label: "Pend. cotización", estados: ["pendiente de cotización", "pendiente de cotizacion", "pendiente cotización", "pendiente cotizacion"] },
+    { key: "seguimiento", label: "Seguimiento", estados: ["seguimiento"] },
+    { key: "calificado", label: "Calificado", estados: ["calificado"] },
 ];
 
 //
+
+const ESTADOS_HEADER = ESTADOS_LABELS;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -256,6 +227,13 @@ function renderOptionsConValorActual(options, currentValue, placeholder = "Selec
             {(options || []).map((option) => <option key={option} value={option}>{option}</option>)}
         </>
     );
+}
+
+function getStatusDotColor(estado) {
+    const v = String(estado || "").toLowerCase();
+    if (v === "descalificado") return "#3B82F6";
+    if (v === "sin respuesta" || v === "sin_respuesta" || v === "") return "#EF4444";
+    return "#22C55E";
 }
 
 function getAsesorVisual(nombre, usuario = "") {
@@ -447,7 +425,6 @@ function normalizarResumenChat(chat, numeroLinea) {
         id: chat?.id || `${numeroLinea}-${telefono}`,
         numero_asesor: normalizaTelefonoMx(chat?.numero_asesor || chat?.numero_destino || chat?.phone_number || numeroLinea),
         telefono, nombre: chat?.nombre || "Prospecto", agencia: chat?.agencia || "", linea: chat?.linea || "", estado: chat?.estado || "",
-        etapa_comercial_v3: chat?.etapa_comercial_v3 ?? null,
         asesor_digital: chat?.asesor_digital || "", usuario_crm_asignado: chat?.usuario_crm_asignado || "", ia_estado: chat?.ia_estado || null,
         ia_pausada: Boolean(chat?.ia_pausada), ia_bloqueos: Array.isArray(chat?.ia_bloqueos) ? chat.ia_bloqueos : [], unread: Number(chat?.unread || 0),
         last: { text: chat?.last_text || "", time: chat?.last_time || "", timestamp: chat?.last_message_at || "" },
@@ -702,11 +679,13 @@ function ChatListSkeleton({ rows = 8 }) {
     );
 }
 
-function EtapaDropdown({ value, onChange }) {
+function EstadoDropdown({ value, onChange }) {
     const [open, setOpen] = useState(false);
     const containerRef = useRef(null);
 
-    const opciones = ETAPAS_FILTRO_CONTACTO;
+    const opciones = ESTADOS_PROSPECTO.filter(
+        (e) => e.key !== "sin_contactar" && !["pendiente_cotizacion", "seguimiento", "calificado"].includes(e.key)
+    );
 
     useEffect(() => {
         function handler(e) {
@@ -718,8 +697,8 @@ function EtapaDropdown({ value, onChange }) {
         return () => document.removeEventListener("mousedown", handler);
     }, []);
 
-    const seleccionado = value?.startsWith("etapa:")
-        ? opciones.find((e) => `etapa:${e.key}` === value) || null
+    const seleccionado = value?.startsWith("estado:")
+        ? opciones.find((e) => `estado:${e.key}` === value) || null
         : null;
 
     return (
@@ -740,7 +719,7 @@ function EtapaDropdown({ value, onChange }) {
                             <span className="truncate text-[#131E5C]">{seleccionado.label}</span>
                         </>
                     ) : (
-                        <span className="truncate text-slate-400 font-semibold">Selecciona una etapa…</span>
+                        <span className="truncate text-slate-400 font-semibold">Selecciona un estatus…</span>
                     )}
                 </span>
                 <ChevronDown className={cls("h-4 w-4 shrink-0 text-slate-400 transition", open && "rotate-180")} />
@@ -749,12 +728,12 @@ function EtapaDropdown({ value, onChange }) {
             {open ? (
                 <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
                     {opciones.map((e) => {
-                        const activo = value === `etapa:${e.key}`;
+                        const activo = value === `estado:${e.key}`;
                         return (
                             <button
                                 key={e.key}
                                 type="button"
-                                onClick={() => { onChange(`etapa:${e.key}`); setOpen(false); }}
+                                onClick={() => { onChange(`estado:${e.key}`); setOpen(false); }}
                                 className={cls(
                                     "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold transition",
                                     activo ? "bg-[#1746D1]/10 text-[#131E5C]" : "text-slate-600 hover:bg-slate-50"
@@ -1370,7 +1349,7 @@ function getDefaultValueForTemplateField(field, context = {}, template = null) {
         return context.dato || "";
     }
 
-    return context.nombre || "";
+    return "";
 }
 
 function hasTemplateFieldValue(field, value) {
@@ -2187,14 +2166,6 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
     function handleSubmit(e) {
         e.preventDefault();
         if (!fecha || !hora || saving) return;
-        if (!agencia || !AGENCIAS_DIGITALES.some((sucursal) => sucursal === agencia)) {
-            alert("Selecciona una agencia del catálogo.");
-            return;
-        }
-        if (!asesor || !asesores.some((nombre) => nombre === asesor)) {
-            alert("Selecciona del catálogo al asesor de piso que atenderá la cita.");
-            return;
-        }
         onGuardar({ fecha, hora, nota, agencia, asesor });
     }
 
@@ -2327,7 +2298,7 @@ function AgendarCitaModal({ open, onClose, nombreCliente, telefono, onGuardar, s
                             Cancelar
                         </button>
 
-                        <button type="submit" disabled={saving || !fecha || !hora || !agencia || !asesor} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
+                        <button type="submit" disabled={saving || !fecha || !hora} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "linear-gradient(135deg, #1746D1, #4F6EF2)" }}>
                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />}
                             {saving ? "Guardando..." : "Agendar cita"}
                         </button>
@@ -2398,11 +2369,7 @@ function BusquedaFiltrable({ opciones = [], value = "", onChange, disabled, plac
                 ref={inputRef}
                 type="text"
                 value={texto}
-                onChange={(e) => {
-                    setTexto(e.target.value);
-                    setAbierto(true);
-                    if (normaliza(e.target.value) !== normaliza(value)) onChange("");
-                }}
+                onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
                 onPointerDown={onInputPointerDown}
                 onClick={onInputClick}
                 onFocus={() => { if (!enfocadoAlClicRef.current && !cerradoFueraRef.current) setAbierto(true); }}
@@ -2604,7 +2571,6 @@ export default function DigitalesContacto() {
     const [pautasOptions, setPautasOptions] = useState(PAUTAS_ORIGEN);
     const [headerEstado, setHeaderEstado] = useState("");
     const [showProspectoPanel, setShowProspectoPanel] = useState(false);
-    const [showEtapasV3Chat, setShowEtapasV3Chat] = useState(false);
 
     // Edición del nombre del cliente desde el header del chat
     const [editingNombre, setEditingNombre] = useState(false);
@@ -2615,9 +2581,6 @@ export default function DigitalesContacto() {
     // Modal de agendar cita
     const [showCitaModal, setShowCitaModal] = useState(false);
     const [savingCita, setSavingCita] = useState(false);
-    const [revisionCitaV3, setRevisionCitaV3] = useState(0);
-    // Misma clave para reintentos de red; cambia si cambia el formulario.
-    const citaIntentoRef = useRef(null);
     const [showNuevoProspectoModal, setShowNuevoProspectoModal] = useState(false);
 
     // Asesor asignado en la tarjeta (persiste aunque el refresh borre asesor_ventas)
@@ -2702,9 +2665,9 @@ export default function DigitalesContacto() {
     const [filterCounts, setFilterCounts] = useState({
         todos: 0,
         no_leidos: 0,
-        "etapa:cita_asistida": 0,
-        "etapa:en_seguimiento": 0,
-        "etapa:autorizado_no_formalizado": 0,
+        pendiente_cotizacion: 0,
+        seguimiento: 0,
+        calificado: 0,
     });
     const emojiRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -2733,56 +2696,8 @@ export default function DigitalesContacto() {
         if (!activeTel) return null;
         const fromList = chats.find(c => c.telefono === activeTel);
         if (fromList) return fromList;
-        return { id: activeTel, telefono: activeTel, nombre: prospecto?.nombre || "Prospecto", agencia: prospecto?.agencia || "", linea: prospecto?.business || "", estado: prospecto?.estado || "", etapa_comercial_v3: prospecto?.etapa_comercial_v3 ?? null, unread: 0, last: { text: "", time: "" } };
+        return { id: activeTel, telefono: activeTel, nombre: prospecto?.nombre || "Prospecto", agencia: prospecto?.agencia || "", linea: prospecto?.business || "", estado: prospecto?.estado || "", unread: 0, last: { text: "", time: "" } };
     }, [activeTel, chats, prospecto]);
-
-    // Solo renderizar acciones V3 para el expediente efectivamente cargado en este chat.
-    // El ID de la lista de conversaciones NO es necesariamente el ID del expediente.
-    const expedienteV3ChatId = (() => {
-        const id = Number(prospecto?.id);
-        // En GET, ProspectoSerializer expone telefono_out; telefono es write_only.
-        const telefonoExpediente = prospecto?.telefono_out || prospecto?.telefono;
-        if (!Number.isSafeInteger(id) || id <= 0 || !activeTel || !telefonoExpediente) return null;
-        return normalizaTelefonoMx(telefonoExpediente) === normalizaTelefonoMx(activeTel) ? id : null;
-    })();
-    // El componente V3 espera nombres de escritura; el GET devuelve *_out.
-    // useMemo mantiene la referencia estable y evita recargas en cada render.
-    const prospectoV3Chat = useMemo(() => {
-        if (!prospecto || !expedienteV3ChatId) return null;
-        return {
-            ...prospecto,
-            nombre: prospecto.nombre_out || prospecto.nombre || "",
-            telefono: prospecto.telefono_out || prospecto.telefono || "",
-            correo: prospecto.correo_out || prospecto.correo || "",
-        };
-    }, [prospecto, expedienteV3ChatId]);
-
-    const etapaV3Chat = expedienteV3ChatId
-        ? prospecto?.etapa_comercial_v3
-        : null;
-
-    const puedeAgendarChatV3 = Boolean(
-        expedienteV3ChatId && etapaV3Chat
-    );
-
-    const citaChatBloqueo = !expedienteV3ChatId
-        ? "Primero identifica el expediente comercial de este chat."
-        : !etapaV3Chat
-            ? "Primero clasifica el expediente histórico para utilizar el flujo V3."
-            : "";
-    // El bloque heredado no controla las etapas. Se muestra al alcanzar documentos,
-    // autorización o facturación; compra futura/lead perdido no implican esos pasos.
-    const mostrarCreditoFacturacionV3 = expedienteV3ChatId && [
-        "documentos_enviados", "autorizado_no_formalizado", "facturado",
-    ].includes(etapaV3Chat);
-    const tieneFinanciamiento = ["credito", "arrendamiento"].includes(
-        String(quickEditDraft.forma_pago || prospecto?.forma_pago || "").toLowerCase()
-    );
-    useEffect(() => {
-        setShowEtapasV3Chat(false);
-        setShowCitaModal(false);
-        citaIntentoRef.current = null;
-    }, [activeTel]);
 
     const pautaOrigenMarker = useMemo(() => {
         const mensajesOrdenados = applyReactionEvents(mensajes);
@@ -2845,7 +2760,7 @@ export default function DigitalesContacto() {
     }, [prospecto, activeChat]);
 
     const filteredChats = useMemo(() => {
-        const filterKey = chatFilter?.startsWith("etapa:") ? "etapa" : chatFilter;
+        const filterKey = chatFilter?.startsWith("estado:") ? "estado" : chatFilter;
         const filterDef = CHAT_FILTERS.find(
             (item) => item.key === filterKey
         );
@@ -2862,12 +2777,10 @@ export default function DigitalesContacto() {
                 }
             }
 
-            if (chatFilter?.startsWith("etapa:")) {
-                const etapaSeleccionada = chatFilter.slice("etapa:".length);
-                const etapaActual = String(chat.etapa_comercial_v3 || "").trim();
-                if (etapaSeleccionada === "pendiente_clasificacion") {
-                    if (etapaActual) return false;
-                } else if (etapaActual !== etapaSeleccionada) {
+            if (chatFilter?.startsWith("estado:")) {
+                const estadoKey = chatFilter.slice("estado:".length);
+                const estadoKeyActual = resolverEstado(chat.estado).key;
+                if (estadoKeyActual !== estadoKey) {
                     return false;
                 }
             } else if (filterDef?.estados) {
@@ -2890,7 +2803,7 @@ export default function DigitalesContacto() {
                     chat.nombre,
                     chat.telefono,
                     chat.agencia,
-                    ETAPAS_V3_NOMBRES_CHAT[chat.etapa_comercial_v3] || "Pendiente de clasificación",
+                    chat.estado,
                     chat.asesor_digital,
                     chat.usuario_crm_asignado,
                     chat.last?.text,
@@ -3527,7 +3440,6 @@ export default function DigitalesContacto() {
                 ...chat,
                 unread: 0,
                 estado: nuevoEstado || chat.estado,
-                etapa_comercial_v3: data?.prospecto?.etapa_comercial_v3 ?? chat.etapa_comercial_v3,
                 last: {
                     text: ultimo?.text || chat.last?.text || "",
                     time: ultimo?.created_at || chat.last?.time || "",
@@ -4118,24 +4030,6 @@ export default function DigitalesContacto() {
                     canalActual.toLowerCase()
             ) || "";
 
-        const asesorAuto = String(
-            prospecto?.asesor_digital ||
-            prospecto?.asesor_ventas ||
-            activeChat?.asesor_digital ||
-            obtenerNombreAsesorSesion(numeroAsesorActivo, user) ||
-            ""
-        ).trim();
-
-        const context = {
-            nombre: String(prospecto?.nombre_out || nombreProspecto).trim(),
-            agencia: bestDealer || currentAgencia,
-            modelo: String(prospecto?.auto_interes || prospecto?.cliente_interes || "").trim(),
-            canal: bestCanal || canalActual,
-            asesor: asesorAuto,
-            tema: prospecto?.auto_interes ? "auto de interés" : "cita",
-            dato: "",
-        };
-
         const values = {};
 
         for (const field of normalizedTemplate.fields || []) {
@@ -4182,11 +4076,7 @@ export default function DigitalesContacto() {
                 values[field.key] = "";
                 continue;
             }
-            values[field.key] = getDefaultValueForTemplateField(
-                field,
-                context,
-                normalizedTemplate
-            );
+            values[field.key] = nombreProspecto;
         }
 
         setTplDraft(values);
@@ -4860,50 +4750,108 @@ export default function DigitalesContacto() {
         if (e.key === "Escape") { e.preventDefault(); cancelarEdicionNombre(); }
     }
 
-    // ── Cita + actividad V3 en una única transacción del backend ──────────
+    // ── Agendar cita desde el chat ────────────────────────────────────────────
+    async function llamarCrearCita(payload) {
+        if (typeof apiCitas?.create === "function") return apiCitas.create(payload);
+        if (typeof api.digitalesCrearCita === "function") return api.digitalesCrearCita(payload);
+        if (typeof api.crearCita === "function") return api.crearCita(payload);
+        if (typeof api.post === "function") return api.post("/citas/crear/", payload);
+        throw new Error("Falta agregar api.digitalesCrearCita en src/lib/apiPruebas.js");
+    }
+
     async function guardarCita({ fecha, hora, nota, agencia, asesor }) {
         if (!activeTel || savingCita) return;
-        if (!puedeAgendarChatV3 || !expedienteV3ChatId) {
-            alert(citaChatBloqueo || "Este expediente no permite agendar cita.");
-            return;
-        }
-        const agenciaFinal = String(agencia || "").trim();
-        const asesorPiso = String(asesor || "").trim();
-        if (!fecha || !hora || !agenciaFinal || !asesorPiso) {
-            alert("Selecciona fecha, hora, agencia y asesor de piso que atenderá la cita.");
-            return;
-        }
-        const fechaHoraCita = `${fecha}T${hora}:00`;
-        const firma = JSON.stringify([expedienteV3ChatId, fechaHoraCita, agenciaFinal, asesorPiso, nota || ""]);
-        if (!citaIntentoRef.current || citaIntentoRef.current.firma !== firma) {
-            citaIntentoRef.current = { firma, clave: `cita-chat-v3-${crypto.randomUUID()}` };
-        }
-        const expedienteAlGuardar = expedienteV3ChatId;
-        const telefonoAlGuardar = activeTel;
+
         setSavingCita(true);
+
         try {
-            await apiEtapasV3.agendarCitaChat({
-                expedienteId: expedienteAlGuardar,
-                fechaHoraCita,
-                agencia: agenciaFinal,
-                asesorPiso,
-                comentarios: nota || "",
-                claveIdempotencia: citaIntentoRef.current.clave,
-            });
-            citaIntentoRef.current = null;
-            setShowCitaModal(false);
-            if (activeTelRef.current === telefonoAlGuardar) {
-                setRevisionCitaV3((n) => n + 1);
-                setAsesorAsignado(asesorPiso);
-                await refreshActiveChat(telefonoAlGuardar).catch((error) => {
-                    console.error("Cita guardada en V3; falló la recarga del chat:", error);
-                });
+            if (!fecha || !hora) {
+                throw new Error("Selecciona fecha y hora de la cita.");
             }
-            alert(`Cita agendada y vinculada al expediente para ${formatearFechaConDia(`${fecha}T00:00:00`)} a las ${hora}.`);
+
+            const agenciaFinal = String(agencia || prospecto?.agencia || activeChat?.agencia || "").trim();
+            const asesorPiso = String(asesor || asesorAsignado || prospecto?.asesor_ventas || "").trim();
+            const asesorDigital = String(
+                prospecto?.asesor_digital ||
+                activeChat?.asesor_digital ||
+                obtenerNombreAsesorSesion(numeroAsesorActivo, user) ||
+                ""
+            ).trim();
+
+            if (!asesorDigital) {
+                throw new Error("La cita debe tener un asesor digital.");
+            }
+
+            const fechaHoraCita = `${fecha}T${hora}:00`;
+            const nombre = activeChat?.nombre || prospecto?.nombre || "Prospecto";
+
+            await apiCitas.create({
+                ...(prospecto?.cliente_id ? { cliente_id: prospecto.cliente_id } : {}),
+                nombre,
+                telefono: activeTel,
+                correo: prospecto?.correo || "",
+                auto_interes: prospecto?.auto_interes || "",
+                agencia: agenciaFinal,
+                fecha_hora_cita: fechaHoraCita,
+                asistencia: false,
+                tipo_cita: "Digital",
+                motivo_cita: "Digital",
+                tipo_venta: "",
+                fuente_prospeccion: prospecto?.pauta || prospecto?.pauta_origen || prospecto?.canal_contacto || "",
+                asesor_digital: asesorDigital,
+                asesor_piso: asesorPiso,
+                comentarios: nota || "",
+            });
+
+            if (prospecto?.id) {
+                try {
+                    await api.digitalesPatchProspecto(prospecto.id, {
+                        estado: "Cita Programada",
+                        agencia: agenciaFinal,
+                        asesor_digital: asesorDigital,
+                        asesor_ventas: asesorPiso,
+                        numero_asesor: numeroAsesorActivo || "",
+                    });
+                } catch (errorPatch) {
+                    console.error("La cita se creó, pero no se pudo actualizar el prospecto:", errorPatch);
+                }
+            }
+
+            setProspecto((prev) => prev ? {
+                ...prev,
+                estado: "Cita Programada",
+                agencia: agenciaFinal || prev.agencia || "",
+                asesor_digital: asesorDigital || prev.asesor_digital || "",
+                asesor_ventas: asesorPiso || prev.asesor_ventas || "",
+                asesor_piso: asesorPiso || prev.asesor_piso || "",
+                ultima_cita_agendada: fechaHoraCita,
+            } : prev);
+
+            setAsesorAsignado(asesorPiso);
+
+            setChats((prev) => prev.map((chat) =>
+                chat.telefono === activeTel
+                    ? {
+                        ...chat,
+                        estado: "Cita Programada",
+                        agencia: agenciaFinal || chat.agencia || "",
+                        asesor_digital: asesorDigital || chat.asesor_digital || "",
+                    }
+                    : chat
+            ));
+
+            mensajesCacheRef.current.delete(activeTel);
+
+            await refreshActiveChat(activeTel).catch(() => { });
+
+            setShowCitaModal(false);
+
+            alert(
+                `Cita agendada para ${formatearFechaConDia(`${fecha}T00:00:00`)} a las ${hora}.`
+            );
         } catch (error) {
-            console.error("No se pudo agendar y vincular la cita V3:", error);
-            const detalle = error?.response?.data?.detalle || error?.data?.detalle || error?.message;
-            alert(`No se guardó la cita: ${detalle || "Verifica los datos y vuelve a intentar."}`);
+            console.error("Error creando cita digital:", error);
+            alert(`No se pudo agendar la cita: ${error?.message || "Error desconocido."}`);
         } finally {
             setSavingCita(false);
         }
@@ -5074,10 +5022,39 @@ export default function DigitalesContacto() {
     }
 
     async function saveQuickEdit() {
-        if (!expedienteV3ChatId || !activeTel) {
-            alert("El expediente de este chat todavía no se ha identificado. Selecciona de nuevo la conversación.");
+        if (!prospecto?.id || !activeTel) return;
+
+        const estadoOriginal = String(quickEditDraft.estado || "").trim();
+        const estadoNormalizado = normalizeText(estadoOriginal);
+        const motivoDescalificacion = String(
+            quickEditDraft.motivo_descalificacion || ""
+        ).trim();
+
+        if (
+            estadoNormalizado === "descalificado" &&
+            !motivoDescalificacion
+        ) {
             return;
         }
+
+        // Reglas automáticas de bandeja:
+        // - VIN facturado + estatus "entregado" -> Entregado (prioridad).
+        // - Cita con estatus "No asistió" + contactado + Calificación Rápida llena -> No asistió (No Show).
+        // - Plazo de 3 a 6 meses o más -> Seguimiento.
+        const estado = estadoAutomaticoBandeja({
+            plazo: quickEditDraft.plazo_compra,
+            vinFacturado: quickEditDraft.vin_facturado,
+            vinEstatus: quickEditDraft.vin_estatus_entrega,
+            folioSolicitudCredito: quickEditDraft.folio_solicitud_credito,
+            evidencias: prospecto?.evidencias,
+            calificacionRapidaLlena: tieneCalificacionRapida(quickEditDraft),
+            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+            citaAsistio: citaEsAsistida(prospecto?.cita),
+            engancheMonto: quickEditDraft.enganche_monto,
+            presupuestoMensual: quickEditDraft.presupuesto_mensual,
+            idCotizacion: quickEditDraft.id_cotizacion,
+            estadoBase: estadoOriginal,
+        });
 
         setSavingQuickEdit(true);
 
@@ -5085,6 +5062,13 @@ export default function DigitalesContacto() {
             const payload = {
                 nombre: quickEditDraft.nombre || "",
                 auto_interes: quickEditDraft.auto_interes || "",
+                estado,
+
+                motivo_descalificacion:
+                    estado.toLowerCase() === "descalificado"
+                        ? motivoDescalificacion
+                        : "",
+
                 canal_contacto: quickEditDraft.canal_contacto || "",
                 comentarios: quickEditDraft.comentarios || "",
 
@@ -5110,22 +5094,20 @@ export default function DigitalesContacto() {
                 comprobacion_ingresos:
                     quickEditDraft.comprobacion_ingresos || "",
 
-                // Los campos antiguos de crédito/facturación no se guardan antes
-                // de documentos; tampoco se borran accidentalmente al guardar perfil.
+                id_cotizacion: quickEditDraft.id_cotizacion || "",
+                folio_solicitud_credito:
+                    quickEditDraft.folio_solicitud_credito || "",
+                solicitud_credito_estado:
+                    quickEditDraft.solicitud_credito_estado || "",
+                vin_facturado: String(
+                    quickEditDraft.vin_facturado || ""
+                )
+                    .trim()
+                    .toUpperCase(),
+                vin_estatus_entrega:
+                    quickEditDraft.vin_estatus_entrega || "",
                 numero_asesor: numeroAsesorActivo || "",
             };
-
-            if (mostrarCreditoFacturacionV3) {
-                Object.assign(payload, {
-                    id_cotizacion: quickEditDraft.id_cotizacion || "",
-                    ...(tieneFinanciamiento ? {
-                        folio_solicitud_credito: quickEditDraft.folio_solicitud_credito || "",
-                        solicitud_credito_estado: quickEditDraft.solicitud_credito_estado || "",
-                    } : {}),
-                    vin_facturado: String(quickEditDraft.vin_facturado || "").trim().toUpperCase(),
-                    vin_estatus_entrega: quickEditDraft.vin_estatus_entrega || "",
-                });
-            }
 
             const pautaLimpia = String(
                 quickEditDraft.pauta || ""
@@ -5136,7 +5118,7 @@ export default function DigitalesContacto() {
             }
 
             await api.digitalesPatchProspecto(
-                expedienteV3ChatId,
+                prospecto.id,
                 payload
             );
 
@@ -5144,7 +5126,7 @@ export default function DigitalesContacto() {
         } catch (error) {
             const mensaje =
                 error?.status === 404
-                    ? "El expediente ya no está disponible para edición en esta sesión o línea. Comprueba la asignación y actualiza el chat."
+                    ? "No se encontró el expediente digital relacionado. Actualiza la página o selecciona nuevamente el registro."
                     : error?.message || "No se pudo guardar la información.";
             alert(mensaje);
 
@@ -5759,14 +5741,12 @@ export default function DigitalesContacto() {
         window.open(`https://wa.me/${activeTel}`, "_blank");
     };
 
-    // El perfil es un formulario auxiliar; ni etapas V3 ni crédito/facturación
-    // se consideran requisitos para su porcentaje de completitud.
     const perfilProspectoCampos = [
         quickEditDraft.auto_interes,
+        quickEditDraft.estado,
         quickEditDraft.canal_contacto,
-        ...(quickEditDraft.forma_pago === "credito" || quickEditDraft.forma_pago === "arrendamiento"
-            ? [quickEditDraft.enganche_monto, quickEditDraft.presupuesto_mensual]
-            : []),
+        quickEditDraft.enganche_monto,
+        quickEditDraft.presupuesto_mensual,
         quickEditDraft.buro_estado,
         quickEditDraft.forma_pago,
         quickEditDraft.tipo_cliente,
@@ -5774,6 +5754,11 @@ export default function DigitalesContacto() {
         quickEditDraft.uso_vehiculo,
         quickEditDraft.comprobacion_ingresos,
         quickEditDraft.comentarios,
+        quickEditDraft.id_cotizacion,
+        quickEditDraft.folio_solicitud_credito,
+        quickEditDraft.solicitud_credito_estado,
+        quickEditDraft.vin_facturado,
+        quickEditDraft.vin_estatus_entrega,
     ];
 
     const perfilProspectoCompletados = perfilProspectoCampos.filter(
@@ -5797,7 +5782,8 @@ export default function DigitalesContacto() {
 
     const creditoFacturacionPendientes = [
         quickEditDraft.id_cotizacion,
-        ...(tieneFinanciamiento ? [quickEditDraft.folio_solicitud_credito, quickEditDraft.solicitud_credito_estado] : []),
+        quickEditDraft.folio_solicitud_credito,
+        quickEditDraft.solicitud_credito_estado,
         quickEditDraft.vin_facturado,
         quickEditDraft.vin_estatus_entrega,
     ].filter((value) => String(value ?? "").trim() === "").length;
@@ -5898,8 +5884,9 @@ export default function DigitalesContacto() {
                                         </div>
                                     )}
 
+                                    {/* Filtro por estatus (dropdown) arriba de los botones */}
                                     <div className="mt-2">
-                                        <EtapaDropdown
+                                        <EstadoDropdown
                                             value={chatFilter}
                                             onChange={setChatFilter}
                                         />
@@ -5953,7 +5940,6 @@ export default function DigitalesContacto() {
                                                 chat.asesor_digital,
                                                 chat.usuario_crm_asignado
                                             );
-                                            const etapaVisual = etapaVisualChat(chat.etapa_comercial_v3);
 
                                             return (
                                                 <button key={chat.id}
@@ -5972,8 +5958,8 @@ export default function DigitalesContacto() {
                                                             <Avatar name={chat.nombre} size="lg" />
                                                             <span
                                                                 className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white"
-                                                                style={{ backgroundColor: etapaVisual.color }}
-                                                                title={etapaVisual.label}
+                                                                style={{ backgroundColor: getStatusDotColor(chat.estado) }}
+                                                                title={chat.estado || "Sin respuesta"}
                                                             />
                                                         </div>
 
@@ -6020,12 +6006,12 @@ export default function DigitalesContacto() {
                                                                 <span
                                                                     className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-bold leading-tight"
                                                                     style={{
-                                                                        color: etapaVisual.color,
-                                                                        borderColor: `${etapaVisual.color}66`,
+                                                                        color: colorDeEstado(chat.estado),
+                                                                        borderColor: `${colorDeEstado(chat.estado)}66`,
                                                                     }}
                                                                 >
-                                                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: etapaVisual.color }} />
-                                                                    {etapaVisual.label}
+                                                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: colorDeEstado(chat.estado) }} />
+                                                                    {chat.estado || "Sin estado"}
                                                                 </span>
 
                                                                 {(chat.ia_estado || chat.ia_pausada || chat.ia_bloqueos?.length) ? (
@@ -6164,11 +6150,26 @@ export default function DigitalesContacto() {
                                                 </button>
                                             )}
                                         </span>
-                                        {/* Motivos históricos, sin editor paralelo de estado V3. */}
-                                        {activeTel && String(headerEstado || "").toLowerCase() === "descalificado" && quickEditDraft.motivo_descalificacion ? (
-                                            <span className="max-w-[150px] truncate text-[10px] font-semibold text-red-600" title={quickEditDraft.motivo_descalificacion}>
-                                                {quickEditDraft.motivo_descalificacion}
-                                            </span>
+                                        {/* Estado prospecto */}
+                                        {activeTel &&
+                                            String(headerEstado || "").toLowerCase() === "descalificado" ? (
+                                            <select
+                                                value={
+                                                    quickEditDraft.motivo_descalificacion || ""
+                                                }
+                                                onChange={(e) =>
+                                                    saveHeaderMotivo(e.target.value)
+                                                }
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="h-6 min-w-0 max-w-[180px] rounded-md border border-red-200 bg-red-50 px-1.5 text-[11px] font-semibold text-red-700 outline-none focus:border-red-400"
+                                                title="Motivo de descalificación"
+                                            >
+                                                {renderOptionsConValorActual(
+                                                    MOTIVOS_DESCALIFICACION,
+                                                    quickEditDraft.motivo_descalificacion,
+                                                    "Selecciona el motivo…"
+                                                )}
+                                            </select>
                                         ) : null}
 
                                         {/* Botón de acción: agendar cita */}
@@ -6185,9 +6186,9 @@ export default function DigitalesContacto() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={(e) => { e.stopPropagation(); if (puedeAgendarChatV3) setShowCitaModal(true); }}
-                                                disabled={!puedeAgendarChatV3}
-                                                title={puedeAgendarChatV3 ? "Agendar cita con asesor de piso" : citaChatBloqueo}
+                                                onClick={(e) => { e.stopPropagation(); setShowCitaModal(true); }}
+                                                disabled={!activeTel}
+                                                title="Agendar cita"
                                                 aria-label="Agendar cita"
                                                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#DBE7FF] text-[#1746D1] shadow-sm transition hover:bg-[#c9dcff] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                                             >
@@ -6994,62 +6995,6 @@ export default function DigitalesContacto() {
                                     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
                                         <div className="space-y-4">
 
-                                            {/* Etapas V3 dentro del chat: misma API, validaciones y auditoría.
-                                                El formulario antiguo de perfil permanece intacto en esta fase. */}
-                                            <div className="min-w-0 overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowEtapasV3Chat((abierto) => !abierto)}
-                                                    aria-expanded={showEtapasV3Chat}
-                                                    aria-controls="etapas-v3-panel-chat"
-                                                    className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-[#131E5C]/[0.03]"
-                                                >
-                                                    <div className="flex min-w-0 items-center gap-2.5">
-                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
-                                                            <Activity className="h-4 w-4" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-sm font-black text-[#131E5C]">Etapas comerciales</div>
-                                                            <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
-                                                                {expedienteV3ChatId
-                                                                    ? ETAPAS_V3_NOMBRES_CHAT[etapaV3Chat] || "Pendiente de clasificación"
-                                                                    : loadingChat ? "Cargando prospecto…" : "Sin expediente identificado"}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#131E5C]/10 bg-[#131E5C]/[0.05] px-2 py-1.5 text-[11px] font-extrabold text-[#131E5C]">
-                                                        {showEtapasV3Chat ? "Ocultar" : "Gestionar"}
-                                                        <ChevronDown className={cls("h-3.5 w-3.5 transition-transform", showEtapasV3Chat && "rotate-180")} />
-                                                    </span>
-                                                </button>
-                                                {showEtapasV3Chat ? (
-                                                    <div id="etapas-v3-panel-chat" className="min-w-0 border-t border-slate-100 px-3 py-3">
-                                                        {expedienteV3ChatId ? (
-                                                            <EtapasComercialesV3Panel
-                                                                key={`${expedienteV3ChatId}:${revisionCitaV3}`}
-                                                                expedienteId={expedienteV3ChatId}
-                                                                prospecto={prospectoV3Chat}
-                                                                enChat
-                                                                onAgendarCitaChat={() => {
-                                                                    if (puedeAgendarChatV3) setShowCitaModal(true);
-                                                                    else alert(citaChatBloqueo);
-                                                                }}
-                                                                onActualizado={() => {
-                                                                    // Refrescar solo los datos del chat abierto; V3 mantiene su propia consulta.
-                                                                    refreshActiveChat(activeTel).catch((error) => {
-                                                                        console.error("No se pudo refrescar el prospecto tras actualizar V3:", error);
-                                                                    });
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            <p className="rounded-lg bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-800">
-                                                                Este chat aún no tiene un expediente cargado que coincida con su teléfono. Identifica el expediente para continuar.
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ) : null}
-                                            </div>
-
                                             {/* Tarjeta del cliente: movida desde la zona de conversaciones */}
                                             <div className="rounded-2xl border border-[#131E5C]/10 bg-white p-4 shadow-sm">
                                                 <div className="mb-4 flex items-center gap-3">
@@ -7098,6 +7043,19 @@ export default function DigitalesContacto() {
                                                 </div>
 
                                                 <div className="space-y-3">
+                                                    <label className="block">
+                                                        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">
+                                                            Estado
+                                                        </span>
+                                                        <select
+                                                            value={headerEstado}
+                                                            onChange={(e) => saveHeaderEstado(e.target.value)}
+                                                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                        >
+                                                            {renderOptionsConValorActual(ESTADOS_HEADER, headerEstado, "Sin estado")}
+                                                        </select>
+                                                    </label>
+
                                                     {String(headerEstado || "").trim().toLowerCase() === "cita programada" ? (
                                                         <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2.5">
                                                             <span className="block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">
@@ -7110,6 +7068,19 @@ export default function DigitalesContacto() {
                                                                     : "Sin fecha registrada"}
                                                             </div>
                                                         </div>
+                                                    ) : null}
+
+                                                    {String(headerEstado || "").toLowerCase() === "descalificado" ? (
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-red-600">
+                                                                Motivo de descalificación
+                                                            </span>
+                                                            <MotivoDescalificacionPicker
+                                                                value={quickEditDraft.motivo_descalificacion || ""}
+                                                                onChange={(motivo) => saveHeaderMotivo(motivo)}
+                                                                invalid={!quickEditDraft.motivo_descalificacion}
+                                                            />
+                                                        </label>
                                                     ) : null}
 
                                                     <label className="block">
@@ -7146,19 +7117,13 @@ export default function DigitalesContacto() {
 
                                                 <button
                                                     type="button"
-                                                    onClick={() => { if (puedeAgendarChatV3) setShowCitaModal(true); }}
-                                                    disabled={!puedeAgendarChatV3}
-                                                    title={puedeAgendarChatV3 ? "Agendar cita con asesor de piso" : citaChatBloqueo}
+                                                    onClick={() => setShowCitaModal(true)}
+                                                    disabled={!activeTel}
                                                     className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#0f184d] disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     <CalendarPlus className="h-4 w-4" />
                                                     Agendar cita
                                                 </button>
-                                                {!puedeAgendarChatV3 ? (
-                                                    <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600">
-                                                        {citaChatBloqueo}
-                                                    </p>
-                                                ) : null}
 
                                                 <div className="mt-3 grid grid-cols-4 gap-2">
                                                     {!isDirectChatMode ? (
@@ -7419,152 +7384,138 @@ export default function DigitalesContacto() {
                                                 </div>
                                             </div>
 
-                                            {/* Los datos auxiliares de crédito/facturación aparecen después de documentos V3. */}
-                                            {mostrarCreditoFacturacionV3 ? (
-                                                <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
-                                                    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                                                        <div className="flex min-w-0 items-center gap-2.5">
-                                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
-                                                                <CreditCard className="h-4 w-4" />
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <div className="text-sm font-black text-[#131E5C]">Crédito y facturación</div>
-                                                                <div className="text-[11px] font-semibold text-slate-400">Cotización, solicitud de crédito y VIN facturado.</div>
-                                                            </div>
+                                            {/* Crédito y facturación: mismos campos que "Perfil comercial y financiero" en editar prospecto */}
+                                            <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">
+                                                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1746D1]/10 text-[#1746D1]">
+                                                            <CreditCard className="h-4 w-4" />
                                                         </div>
-                                                        {creditoFacturacionPendientes > 0 ? (
-                                                            <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
-                                                                {creditoFacturacionPendientes} pendiente{creditoFacturacionPendientes === 1 ? "" : "s"}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
-                                                                <Check className="h-3 w-3" /> Completo
-                                                            </span>
-                                                        )}
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-black text-[#131E5C]">Crédito y facturación</div>
+                                                            <div className="text-[11px] font-semibold text-slate-400">Cotización, solicitud de crédito y VIN facturado.</div>
+                                                        </div>
                                                     </div>
+                                                    {creditoFacturacionPendientes > 0 ? (
+                                                        <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
+                                                            {creditoFacturacionPendientes} pendiente{creditoFacturacionPendientes === 1 ? "" : "s"}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+                                                            <Check className="h-3 w-3" /> Completo
+                                                        </span>
+                                                    )}
+                                                </div>
 
-                                                    <div className="border-t border-slate-100 px-4 py-4">
-                                                        <div className="grid gap-3">
-                                                            <label className="block">
-                                                                <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">ID Cotización</span>
-                                                                <input
-                                                                    value={quickEditDraft.id_cotizacion || ""}
-                                                                    onChange={(e) => setQuickEditDraft(p => ({ ...p, id_cotizacion: e.target.value }))}
-                                                                    placeholder="Ej. COT-10234"
-                                                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                                />
-                                                            </label>
+                                                <div className="border-t border-slate-100 px-4 py-4">
+                                                    <div className="grid gap-3">
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">ID Cotización</span>
+                                                            <input
+                                                                value={quickEditDraft.id_cotizacion || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, id_cotizacion: e.target.value }))}
+                                                                placeholder="Ej. COT-10234"
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            />
+                                                        </label>
 
-                                                            {tieneFinanciamiento ? (
-                                                                <>
-                                                                    <label className="block">
-                                                                        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Folio solicitud de crédito</span>
-                                                                        <input
-                                                                            value={quickEditDraft.folio_solicitud_credito || ""}
-                                                                            onChange={(e) => setQuickEditDraft(p => ({ ...p, folio_solicitud_credito: e.target.value }))}
-                                                                            placeholder="Folio de la solicitud"
-                                                                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                                        />
-                                                                    </label>
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Folio solicitud de crédito</span>
+                                                            <input
+                                                                value={quickEditDraft.folio_solicitud_credito || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, folio_solicitud_credito: e.target.value }))}
+                                                                placeholder="Folio de la solicitud"
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            />
+                                                        </label>
 
-                                                                    <label className="block">
-                                                                        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado de la solicitud</span>
-                                                                        <select
-                                                                            value={quickEditDraft.solicitud_credito_estado || ""}
-                                                                            onChange={(e) => setQuickEditDraft(p => ({ ...p, solicitud_credito_estado: e.target.value }))}
-                                                                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                                        >
-                                                                            {SOLICITUD_CREDITO.map((i) => (
-                                                                                <option key={i.value} value={i.value}>{i.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </label>
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">Estado de la solicitud</span>
+                                                            <select
+                                                                value={quickEditDraft.solicitud_credito_estado || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => ({ ...p, solicitud_credito_estado: e.target.value }))}
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            >
+                                                                {SOLICITUD_CREDITO.map((i) => (
+                                                                    <option key={i.value} value={i.value}>{i.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </label>
 
-                                                                </>
-                                                            ) : (
-                                                                <p className="rounded-lg bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-900">
-                                                                    {quickEditDraft.forma_pago === "contado"
-                                                                        ? "Venta de contado: no se solicitan folios ni autorizaciones de crédito."
-                                                                        : "Selecciona Crédito o Arrendamiento en Completar perfil para mostrar los datos de financiamiento."}
-                                                                </p>
-                                                            )}
+                                                        <label className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
+                                                            <input
+                                                                value={quickEditDraft.vin_facturado || ""}
+                                                                onChange={(e) => setQuickEditDraft(p => {
+                                                                    const vinFacturado = e.target.value.toUpperCase();
+                                                                    return {
+                                                                        ...p,
+                                                                        vin_facturado: vinFacturado,
+                                                                        estado: estadoAutomaticoBandeja({
+                                                                            plazo: p.plazo_compra,
+                                                                            vinFacturado,
+                                                                            vinEstatus: p.vin_estatus_entrega,
+                                                                            folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                            evidencias: prospecto?.evidencias,
+                                                                            calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                            citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                            citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                            engancheMonto: p.enganche_monto,
+                                                                            presupuestoMensual: p.presupuesto_mensual,
+                                                                            idCotizacion: p.id_cotizacion,
+                                                                            estadoBase: prospecto?.estado || "",
+                                                                        }),
+                                                                    };
+                                                                })}
+                                                                placeholder="17 caracteres VIN"
+                                                                maxLength={32}
+                                                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
+                                                            />
+                                                        </label>
 
-                                                            <label className="block">
-                                                                <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN facturado</span>
-                                                                <input
-                                                                    value={quickEditDraft.vin_facturado || ""}
-                                                                    onChange={(e) => setQuickEditDraft(p => {
-                                                                        const vinFacturado = e.target.value.toUpperCase();
-                                                                        return {
-                                                                            ...p,
-                                                                            vin_facturado: vinFacturado,
-                                                                            estado: estadoAutomaticoBandeja({
-                                                                                plazo: p.plazo_compra,
-                                                                                vinFacturado,
-                                                                                vinEstatus: p.vin_estatus_entrega,
-                                                                                folioSolicitudCredito: p.folio_solicitud_credito,
-                                                                                evidencias: prospecto?.evidencias,
-                                                                                calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                                citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                                citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                                engancheMonto: p.enganche_monto,
-                                                                                presupuestoMensual: p.presupuesto_mensual,
-                                                                                idCotizacion: p.id_cotizacion,
-                                                                                estadoBase: prospecto?.estado || "",
-                                                                            }),
-                                                                        };
-                                                                    })}
-                                                                    placeholder="17 caracteres VIN"
-                                                                    maxLength={32}
-                                                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#131E5C] outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#1746D1]/50 focus:ring-2 focus:ring-[#1746D1]/10"
-                                                                />
-                                                            </label>
-
-                                                            <div className="block">
-                                                                <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN entregado</span>
-                                                                <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1">
-                                                                    {[{ value: "entregado", label: "Entregado" }, { value: "cancelado", label: "Cancelado" }].map(opt => (
-                                                                        <button
-                                                                            key={opt.value}
-                                                                            type="button"
-                                                                            onClick={() => setQuickEditDraft(p => {
-                                                                                const vinEstatus = p.vin_estatus_entrega === opt.value ? "" : opt.value;
-                                                                                return {
-                                                                                    ...p,
-                                                                                    vin_estatus_entrega: vinEstatus,
-                                                                                    estado: estadoAutomaticoBandeja({
-                                                                                        plazo: p.plazo_compra,
-                                                                                        vinFacturado: p.vin_facturado,
-                                                                                        vinEstatus,
-                                                                                        folioSolicitudCredito: p.folio_solicitud_credito,
-                                                                                        evidencias: prospecto?.evidencias,
-                                                                                        calificacionRapidaLlena: tieneCalificacionRapida(p),
-                                                                                        citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
-                                                                                        citaAsistio: citaEsAsistida(prospecto?.cita),
-                                                                                        engancheMonto: p.enganche_monto,
-                                                                                        presupuestoMensual: p.presupuesto_mensual,
-                                                                                        idCotizacion: p.id_cotizacion,
-                                                                                        estadoBase: prospecto?.estado || "",
-                                                                                    }),
-                                                                                };
-                                                                            })}
-                                                                            className={cls(
-                                                                                "h-9 rounded-lg text-xs font-extrabold transition",
-                                                                                quickEditDraft.vin_estatus_entrega === opt.value
-                                                                                    ? (opt.value === "entregado" ? "bg-emerald-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm")
-                                                                                    : "bg-transparent text-slate-500 hover:bg-[#131E5C]/[0.06] hover:text-[#131E5C]"
-                                                                            )}
-                                                                        >
-                                                                            {opt.label}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
+                                                        <div className="block">
+                                                            <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide text-[#131E5C]/60">VIN entregado</span>
+                                                            <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1">
+                                                                {[{ value: "entregado", label: "Entregado" }, { value: "cancelado", label: "Cancelado" }].map(opt => (
+                                                                    <button
+                                                                        key={opt.value}
+                                                                        type="button"
+                                                                        onClick={() => setQuickEditDraft(p => {
+                                                                            const vinEstatus = p.vin_estatus_entrega === opt.value ? "" : opt.value;
+                                                                            return {
+                                                                                ...p,
+                                                                                vin_estatus_entrega: vinEstatus,
+                                                                                estado: estadoAutomaticoBandeja({
+                                                                                    plazo: p.plazo_compra,
+                                                                                    vinFacturado: p.vin_facturado,
+                                                                                    vinEstatus,
+                                                                                    folioSolicitudCredito: p.folio_solicitud_credito,
+                                                                                    evidencias: prospecto?.evidencias,
+                                                                                    calificacionRapidaLlena: tieneCalificacionRapida(p),
+                                                                                    citaNoAsistio: citaEsNoAsistio(prospecto?.cita),
+                                                                                    citaAsistio: citaEsAsistida(prospecto?.cita),
+                                                                                    engancheMonto: p.enganche_monto,
+                                                                                    presupuestoMensual: p.presupuesto_mensual,
+                                                                                    idCotizacion: p.id_cotizacion,
+                                                                                    estadoBase: prospecto?.estado || "",
+                                                                                }),
+                                                                            };
+                                                                        })}
+                                                                        className={cls(
+                                                                            "h-9 rounded-lg text-xs font-extrabold transition",
+                                                                            quickEditDraft.vin_estatus_entrega === opt.value
+                                                                                ? (opt.value === "entregado" ? "bg-emerald-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm")
+                                                                                : "bg-transparent text-slate-500 hover:bg-[#131E5C]/[0.06] hover:text-[#131E5C]"
+                                                                        )}
+                                                                    >
+                                                                        {opt.label}
+                                                                    </button>
+                                                                ))}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-
-                                            ) : null}
+                                            </div>
 
                                             {/* Información complementaria: existe, pero no abruma */}
                                             <div className="overflow-hidden rounded-2xl border border-[#131E5C]/10 bg-white shadow-sm">

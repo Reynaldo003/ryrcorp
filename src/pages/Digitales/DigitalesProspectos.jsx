@@ -1,4 +1,4 @@
-//volkswagen
+﻿//volkswagen
 //src/pages/Digitales/DigitalesProspectos.jsx
 import { lazy, Suspense, useMemo, useState, useRef, useEffect, useDeferredValue, useCallback } from "react";
 import { Plus, Search, X, Save, User, Van, CarFront, CalendarDays, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MessageSquareShare, Building2, FileText, FileDown, Car, Trash2, Loader2, CalendarPlus, CalendarCheck, Phone, LayoutList, UserStar, ClipboardCheck, BrainCircuit, CalendarRange, Table2, BarChart3, Clock3, AlertCircle, TrendingUp, Activity, Target, Paperclip, UploadCloud, Users, Bot, UserCheck, HandCoins, Gauge, LayoutTemplate, Check, Eye } from "lucide-react";
@@ -10,7 +10,6 @@ import { api } from "../../lib/apiPruebas";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { apiCitas } from "../../lib/apiCitas";
-import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { useAuth } from "../../auth/AuthContext";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -18,14 +17,6 @@ import {
 } from "recharts";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 import { ETIQUETAS_ESTADO } from "./estadosProspecto";
-
-const ETAPAS_V3_NOMBRES = Object.freeze({
-    nuevo_prospecto: "Nuevo prospecto", en_seguimiento: "En seguimiento",
-    cotizacion_enviada: "Cotización enviada", cita_agendada: "Cita agendada",
-    cita_asistida: "Cita asistida", documentos_enviados: "Documentos recibidos",
-    autorizado_no_formalizado: "Autorizado no formalizado", compra_futura: "Compra futura",
-    facturado: "Facturado", lead_perdido: "Lead perdido",
-});
 
 import {
     canonicalAsesorDigital,
@@ -41,9 +32,7 @@ import {
     obtenerNombreAsesorSesion,
 } from "../../config/lineasWhatsApp";
 
-import { submoduloVisible } from "../../config/interfaces";
-
-// Los m�dulos costosos se descargan �nicamente al abrir su pantalla/modal.
+// Los módulos costosos se descargan únicamente al abrir su pantalla/modal.
 const NuevoProspectoModal = lazy(() => import("./NuevoProspectoModal"));
 const ResultadosIA = lazy(() => import("./ResultadosIA"));
 const DashboardEjecutivoBDC = lazy(() => import("./DashboardEjecutivoBDC"));
@@ -662,7 +651,6 @@ function normalizeProspecto(p) {
         origen: p.canal_contacto || "",
         pauta: p.pauta || "",
         estado: p.estado || "",
-        etapa_comercial_v3: p.etapa_comercial_v3 || null,
         motivo_descalificacion: p.motivo_descalificacion || "",
         comentarios: p.comentarios || "",
         resumen: p.resumen || "",
@@ -1660,18 +1648,10 @@ export default function DigitalesProspectos() {
 
     const isCoordinador = useMemo(() => {
         const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
-
-        // Un asesor no debe asumir la interfaz de coordinador
-        // únicamente por tener un permiso heredado.
-        const esRolAsesor = ["asesor digital", "asesor general"].includes(rolUsuario);
-
-        return !isAdmin && !esRolAsesor && (
-            ["coordinador digital", "coordinador_digital"].includes(rolUsuario) ||
-            permisos.includes("CRM_COORDINADOR_DIGITAL")
-        );
+        return !isAdmin && (["coordinador digital", "coordinador_digital"].includes(rolUsuario) || permisos.includes("CRM_COORDINADOR_DIGITAL"));
     }, [isAdmin, rolUsuario, user?.permisos]);
 
-    const puedeExportarReportes = submoduloVisible(user, "comercial", "prospectos", true);
+    const puedeExportarReportes = isAdmin || isCoordinador;
 
     const userAgencias = useMemo(() => String(user?.agencia || "").split("|").map((a) => a.trim()).filter(Boolean), [user?.agencia]);
 
@@ -1732,8 +1712,6 @@ export default function DigitalesProspectos() {
     const reporteProspectosRef = useRef(null);
     const [openAgendaModal, setOpenAgendaModal] = useState(false);
     const [agendaInfo, setAgendaInfo] = useState(null);
-    // Se conserva entre reintentos identicos; una edicion del formulario cambia la firma.
-    const citaTablaIntentoRef = useRef(null);
     const [drafter, setDrafter] = useState({ agencia: "", fecha_cita: "", asesor_digital: "", asesor_solicita: "", tipo_cita: "Digital" });
     const [savingo, setSavingo] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
@@ -2362,17 +2340,11 @@ export default function DigitalesProspectos() {
                     throw new Error("El coordinador no tiene líneas autorizadas.");
                 }
                 filasRaw = await listarProspectosDigitalesCompletos(crearParams(numero, todos));
+            } else {
+                throw new Error("No tienes permisos para generar reportes.");
+            }
 
-                } else {
-                    // Los asesores solo solicitan su cartera autorizada.
-                    // La validación definitiva la realiza Django.
-                    const numeroPropio = normalizaTelefonoMx(numeroUsuarioSesion);
-
-                    filasRaw = await listarProspectosDigitalesCompletos(
-                        crearParams(numeroPropio, false)
-                    );
-                }
-                const filasExportar = getListItems(filasRaw).map(normalizeProspecto);
+            const filasExportar = getListItems(filasRaw).map(normalizeProspecto);
             if (!filasExportar.length) {
                 throw new Error("No hay registros para exportar con los filtros configurados.");
             }
@@ -2653,8 +2625,6 @@ export default function DigitalesProspectos() {
         cargarTelefonosConChat().catch((error) => console.error("No se pudieron refrescar los chats después de enviar la plantilla:", error));
     };
     const closeAgendaModal = () => {
-        if (savingo) return;
-        citaTablaIntentoRef.current = null;
         setOpenAgendaModal(false);
         setAgendaInfo(null);
     };
@@ -2669,21 +2639,10 @@ export default function DigitalesProspectos() {
         setOpenSummaryModal(true);
     };
     const abrirAgendaCita = (row) => {
-        if (!row) return;
-        if (row.etapa_comercial_v3 && row.etapa_comercial_v3 !== "cotizacion_enviada") {
-            openEdit(row);
+        if (!row)
             return;
-        }
-        citaTablaIntentoRef.current = null;
         const nombre = `${row.cliente_nombre || ""} ${row.cliente_apellidos || ""}`.trim();
-        setAgendaInfo({
-            id_exp: row.id_exp, cliente_id: row.cliente_id, nombre,
-            telefono: row.telefono || "", correo: row.correo || "",
-            auto_interes: row.cliente_interes || "", agencia: row.agencia || "",
-            fuente_prospeccion: row.origen || "", fecha_cita: "",
-            asesor_digital: row.asesor_digital, asesor_solicita: row.asesor_solicita,
-            tipo_cita: "Digital", etapa_comercial_v3: row.etapa_comercial_v3 || null,
-        });
+        setAgendaInfo({ id_exp: row.id_exp, cliente_id: row.cliente_id, nombre, telefono: row.telefono || "", correo: row.correo || "", auto_interes: row.cliente_interes || "", agencia: row.agencia || "", fuente_prospeccion: row.origen || "", fecha_cita: "", asesor_digital: row.asesor_digital, asesor_solicita: row.asesor_solicita, tipo_cita: "Digital" });
         setOpenAgendaModal(true);
     };
     const openEdit = (row, estadoInicial = "") => {
@@ -2722,42 +2681,6 @@ export default function DigitalesProspectos() {
                 throw new Error(
                     "La cita debe tener un asesor digital."
                 );
-            }
-
-            if (agendaInfo.etapa_comercial_v3 === "cotizacion_enviada") {
-                const asesorPiso = String(drafter.asesor_solicita || "").trim();
-                if (!asesorPiso) {
-                    throw new Error("Selecciona el asesor de piso que atenderá la cita.");
-                }
-                const fechaHoraCita = drafter.fecha_cita.length === 16
-                    ? `${drafter.fecha_cita}:00`
-                    : drafter.fecha_cita;
-                const agenciaCita = String(agendaInfo.agencia || drafter.agencia || "").trim();
-                const firma = JSON.stringify([
-                    agendaInfo.id_exp, fechaHoraCita, agenciaCita, asesorPiso, ""
-                ]);
-                if (!citaTablaIntentoRef.current || citaTablaIntentoRef.current.firma !== firma) {
-                    citaTablaIntentoRef.current = {
-                        firma, clave: `cita-tabla-v3-${crypto.randomUUID()}`,
-                    };
-                }
-                await apiEtapasV3.agendarCitaChat({
-                    expedienteId: agendaInfo.id_exp,
-                    fechaHoraCita,
-                    agencia: agenciaCita,
-                    asesorPiso,
-                    comentarios: "",
-                    claveIdempotencia: citaTablaIntentoRef.current.clave,
-                });
-                citaTablaIntentoRef.current = null;
-                setVersionOperativaBDC((version) => version + 1);
-                // El guardado fue exitoso incluso si falla la recarga de la tabla.
-                setOpenAgendaModal(false);
-                setAgendaInfo(null);
-                await refreshList().catch((error) => {
-                    console.error("Cita registrada; no se pudo actualizar la tabla:", error);
-                });
-                return;
             }
 
             await apiCitas.create({
@@ -3193,13 +3116,8 @@ export default function DigitalesProspectos() {
                                                 <span className={cls("inline-flex text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap", prioridad.cls)}>{prioridad.label}</span>
                                             </td>),
                                             estado: (<td className="px-3 py-2.5">
-                                                {ETAPAS_V3_NOMBRES[row.etapa_comercial_v3] ? (
-                                                    <div className="mb-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]" title="Etapa comercial independiente del estado histórico">
-                                                        {ETAPAS_V3_NOMBRES[row.etapa_comercial_v3]}
-                                                    </div>
-                                                ) : null}
                                                 <div className="relative inline-flex items-center">
-                                                    <select value={row.estado || "Contactado"} disabled={isUpdating || Boolean(row.etapa_comercial_v3)} onClick={(e) => e.stopPropagation()} onChange={(e) => {
+                                                    <select value={row.estado || "Contactado"} disabled={isUpdating} onClick={(e) => e.stopPropagation()} onChange={(e) => {
                                                         e.stopPropagation();
                                                         updateEstadoInline(row, e.target.value);
                                                     }} className={cls("appearance-none rounded-full border bg-transparent px-2.5 py-0.5 pr-7 text-[11px] font-semibold outline-none", badgeCls(row.estado), isUpdating ? "cursor-not-allowed opacity-70" : "cursor-pointer")}>
@@ -3404,7 +3322,7 @@ export default function DigitalesProspectos() {
         </Modal>
         {/* Modal Agenda */}
         <Modal open={openAgendaModal} title="Agendar cita" onClose={closeAgendaModal} footer={<>
-            <button onClick={closeAgendaModal} disabled={savingo} className="inline-flex items-center gap-2 rounded-2xl bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
+            <button onClick={closeAgendaModal} className="inline-flex items-center gap-2 rounded-2xl bg-red-400 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
                 <X className="h-4 w-4" /> Cerrar
             </button>
             <button onClick={handleAgendar} disabled={!agendaInfo || savingo} className="inline-flex items-center gap-2 rounded-2xl bg-[#131E5C]/85 px-4 py-2 text-sm font-bold text-white hover:bg-[#131E5C] disabled:opacity-60">
