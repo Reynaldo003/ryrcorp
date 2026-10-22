@@ -972,6 +972,35 @@ export default function HojaRegistros() {
             setLoadingDetail(false);
         }
     }
+        async function descargarEvidencia(evidencia) {
+            if (!evidencia?.url) return;
+
+            try {
+                const respuesta = await fetch(evidencia.url, {
+                    credentials: "include",
+                });
+
+                if (!respuesta.ok) {
+                    throw new Error(`HTTP ${respuesta.status}`);
+                }
+
+                const archivo = await respuesta.blob();
+                const urlTemporal = URL.createObjectURL(archivo);
+
+                const enlace = document.createElement("a");
+                enlace.href = urlTemporal;
+                enlace.download = evidencia.nombre_original || "evidencia";
+                document.body.appendChild(enlace);
+                enlace.click();
+                enlace.remove();
+
+                setTimeout(() => URL.revokeObjectURL(urlTemporal), 1000);
+            } catch (error) {
+                console.error("Error descargando evidencia:", error);
+                alert("No fue posible descargar la evidencia.");
+            }
+        }
+
 
     function cerrarModal() {
         if (saving || analizandoIA) return;
@@ -1931,26 +1960,51 @@ export default function HojaRegistros() {
                                                         PDF
                                                     </div>
                                                 )}
-                                                    <div className="min-w-0 flex-1">
+                                                <div className="min-w-0 flex-1">
+                                                    <a
+                                                        href={evidencia.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="block truncate text-[12px] font-semibold hover:underline"
+                                                        style={{ color: COLOR.ink }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {evidencia.nombre_original || "Archivo"}
+                                                    </a>
+
+                                                    <div
+                                                        className="text-[11px]"
+                                                        style={{ color: COLOR.inkFaint }}
+                                                    >
+                                                        {Math.round((evidencia.tamanio || 0) / 1024)} KB
+                                                    </div>
+
+                                                    {/* Botones de acciones de la evidencia */}
+                                                    <div className="mt-2 flex flex-wrap gap-2">
                                                         <a
                                                             href={evidencia.url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="block truncate text-[12px] font-semibold hover:underline"
-                                                            style={{ color: COLOR.ink }}
                                                             onClick={(e) => e.stopPropagation()}
+                                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#131E5C]/20 px-3 py-1.5 text-[11px] font-semibold text-[#131E5C] transition hover:bg-slate-50"
                                                         >
-                                                            {evidencia.nombre_original || "Archivo"}
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                            Visualizar
                                                         </a>
 
-                                                        <div
-                                                            className="text-[11px]"
-                                                            style={{ color: COLOR.inkFaint }}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                descargarEvidencia(evidencia);
+                                                            }}
+                                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#131E5C] px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-[#202F7E]"
                                                         >
-                                                            {Math.round((evidencia.tamanio || 0) / 1024)} KB
-                                                        </div>
+                                                            <Download className="h-3.5 w-3.5" />
+                                                            Descargar
+                                                        </button>
                                                     </div>
-
+                                                </div>
                                                     <button
                                                         type="button"
                                                         title="Eliminar evidencia"
