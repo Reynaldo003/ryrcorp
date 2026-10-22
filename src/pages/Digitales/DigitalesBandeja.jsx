@@ -15,20 +15,9 @@ import {
 } from "lucide-react";import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
-import { apiEtapasV3 } from "../../lib/apiEtapasV3";
 import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
 import { encontrarCategoriaDeMotivo, MOTIVOS_DESCALIFICACION_POR_CATEGORIA } from "./motivosDescalificacion";
 import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
-import EtapasComercialesV3Panel from "./EtapasComercialesV3Panel";
-import NuevoProspectoModal from "./NuevoProspectoModal";
-
-const ETAPAS_COMERCIALES_V3_NOMBRES = Object.freeze({
-    nuevo_prospecto: "Nuevo prospecto", en_seguimiento: "En seguimiento",
-    cotizacion_enviada: "Cotización enviada", cita_agendada: "Cita agendada",
-    cita_asistida: "Cita asistida", documentos_enviados: "Documentos recibidos",
-    autorizado_no_formalizado: "Autorizado no formalizado", compra_futura: "Compra futura",
-    facturado: "Facturado", lead_perdido: "Lead perdido",
-});
 
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
@@ -50,27 +39,30 @@ const DEALERS = [
 
 const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
 
-// V3 solo modifica la presentación de la bandeja. El historial operativo permanece intacto.
-const ESTADOS_LEGACY_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
-const ESTADOS_BANDEJA = [
-    { key: "nuevo_prospecto", label: "Nuevo prospecto", color: "#64748B" },
-    { key: "en_seguimiento", label: "En seguimiento", color: "#2563EB" },
-    { key: "cotizacion_enviada", label: "Cotización enviada", color: "#8B5CF6" },
-    { key: "cita_agendada", label: "Cita agendada", color: "#0E7490" },
-    { key: "cita_asistida", label: "Cita asistida", color: "#059669" },
-    { key: "documentos_enviados", label: "Documentos recibidos", color: "#0D9488" },
-    { key: "autorizado_no_formalizado", label: "Autorizado no formalizado", color: "#CA8A04" },
-    { key: "compra_futura", label: "Compra futura", color: "#F97316" },
-    { key: "facturado", label: "Facturado", color: "#0284C7" },
-    { key: "lead_perdido", label: "Lead perdido", color: "#DC2626" },
-    { key: "sin_iniciar_v3", label: "Pendiente de clasificación", color: "#94A3B8" },
+const ESTADOS_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
+
+// Estados que ya no se muestran como columnas propias en la bandeja.
+// Sus prospectos se agrupan en la columna "Contactado" conservando su estado real.
+const ESTADOS_SIN_COLUMNA = [
+    "cotizacion",
+    "requiere_atencion",
+    "seguimiento",
+    "autorizado_no_formalizado",
+    "financiamiento",
 ];
-const ETAPAS_V3_KEYS = new Set(ESTADOS_BANDEJA.map((e) => e.key));
-function getColumnaBandeja(chat, modoV3) {
-    // Sin acceso verificable a la API V3, conservar la clasificación anterior.
-    if (!modoV3) return getEstadoBandeja(chat?.estado).key;
-    const etapa = chat?.etapa_comercial_v3;
-    return ETAPAS_V3_KEYS.has(etapa) && etapa !== "sin_iniciar_v3" ? etapa : "sin_iniciar_v3";
+
+// Columnas visibles del tablero (Kanban) de la bandeja.
+const COLUMNAS_BANDEJA = ESTADOS_BANDEJA.filter(
+    (estado) => !ESTADOS_SIN_COLUMNA.includes(estado.key)
+);
+
+// Resuelve en qué columna del tablero debe aparecer un prospecto.
+// Los estados de ESTADOS_SIN_COLUMNA se agrupan en "contactado".
+function getColumnaBandeja(estado) {
+    const resuelto = resolverEstado(estado);
+    if (ESTADOS_SIN_COLUMNA.includes(resuelto.key)) return "contactado";
+    if (COLUMNAS_BANDEJA.some((c) => c.key === resuelto.key)) return resuelto.key;
+    return ESTADOS_BANDEJA[0].key;
 }
 
 // Tamaño de cada página que se pide al backend (chunk pequeño para no penalizar la carga).
@@ -130,7 +122,7 @@ function getEstadoBandeja(estado) {
     // bandeja visible; los estados retirados (p. ej. "Cierre de la Venta",
     // "Requiere Asesor") caen a la primera bandeja en vez de desaparecer.
     const resuelto = resolverEstado(estado);
-    return ESTADOS_LEGACY_BANDEJA.find((b) => b.key === resuelto.key) || ESTADOS_LEGACY_BANDEJA[0];
+    return ESTADOS_BANDEJA.find((b) => b.key === resuelto.key) || ESTADOS_BANDEJA[0];
 }
 
 // Identifica si un prospecto es "nuevo": dado de alta hace menos de 24 horas.
@@ -237,8 +229,6 @@ function PulseRing({ value = 0, label, color = BRAND_BLUE, size = 60, stroke = 6
 
 
 function PipelineSidebar({
-    columnas,
-    modoV3,
     conteoPorEstado,
     total,
     nuevosHoy,
@@ -250,7 +240,7 @@ function PipelineSidebar({
 }) {
     const maxEstado = Math.max(
         1,
-        ...columnas.map((estado) => conteoPorEstado.get(estado.key) || 0)
+        ...ESTADOS_BANDEJA.map((estado) => conteoPorEstado.get(estado.key) || 0)
     );
 
     return (
@@ -272,15 +262,11 @@ function PipelineSidebar({
                     </span>
                 </div>
 
-                {modoV3 ? (
-                    <div className="grid min-w-0 grid-cols-3 gap-1">
-                        <PulseRing value={tasaAtencion} label="Atención" color="#3B82F6" size={54} stroke={5} />
-                        <PulseRing value={tasaConversion} label="Conversión" color="#F97316" size={54} stroke={5} />
-                        <PulseRing value={tasaLectura} label="Lectura" color="#8B5CF6" size={54} stroke={5} />
-                    </div>
-                ) : (
-                    <p className="text-[11px] text-slate-500">V3 no disponible para este usuario. Se muestran los estados anteriores, sin calcular indicadores V3.</p>
-                )}
+                <div className="grid min-w-0 grid-cols-3 gap-1">
+                    <PulseRing value={tasaAtencion} label="Atención" color="#3B82F6" size={54} stroke={5} />
+                    <PulseRing value={tasaConversion} label="Conversión" color="#F97316" size={54} stroke={5} />
+                    <PulseRing value={tasaLectura} label="Lectura" color="#8B5CF6" size={54} stroke={5} />
+                </div>
             </section>
 
             {/* PIPELINE */}
@@ -292,7 +278,7 @@ function PipelineSidebar({
                                 Estado de prospectos
                             </h2>
                             <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
-                                {modoV3 ? "Etapas comerciales V3" : "Estados del CRM anterior"}
+                                Etapas del proceso comercial
                             </p>
                         </div>
 
@@ -347,7 +333,7 @@ function PipelineSidebar({
                     </div>
 
                     <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-1">
-                        {columnas.map((estado) => {
+                        {ESTADOS_BANDEJA.map((estado) => {
                             const cantidad = conteoPorEstado.get(estado.key) || 0;
                             const porcentaje = Math.min(100, (cantidad / maxEstado) * 100);
                             const activo = filtroActivo === estado.key;
@@ -406,9 +392,8 @@ function PipelineSidebar({
     );
 }
 
-function ChatCard({ chat, onOpen, onChangeEtapa, modoV3, selected = false }) {
+function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
     const estado = getEstadoBandeja(chat.estado);
-    const etapaV3 = modoV3 && chat.etapa_comercial_v3 && ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3];
     const ultimoMensaje = String(chat?.last?.text || "").trim() || "Sin mensajes recientes";
     const hora = formatHoraCorta(chat?.last?.timestamp) || chat?.last?.time || "—";
     const quiereSeminuevos = normalizeText(chat?.autoInteres).includes("seminuevos");
@@ -421,9 +406,6 @@ function ChatCard({ chat, onOpen, onChangeEtapa, modoV3, selected = false }) {
     const [savingEtapa, setSavingEtapa] = useState(false);
     const [descModalOpen, setDescModalOpen] = useState(false);
     const [descMotivo, setDescMotivo] = useState("");
-    const columnaActualKey = getColumnaBandeja(chat, modoV3);
-    const columnas = modoV3 ? ESTADOS_BANDEJA : ESTADOS_LEGACY_BANDEJA;
-    const columnaActual = columnas.find((e) => e.key === columnaActualKey) || columnas[0];
 
     async function handleEtapaChange(label) {
         if (savingEtapa) return;
@@ -466,7 +448,7 @@ function ChatCard({ chat, onOpen, onChangeEtapa, modoV3, selected = false }) {
                 "group relative w-full min-w-0 cursor-pointer select-none rounded-xl border border-black/10 px-3 py-2.5 shadow-sm transition hover:border-[#131E5C]/30 hover:shadow-md",
                 selected ? "border-[#7AA7FF] bg-[#F5F8FF] ring-1 ring-[#7AA7FF]" : ""
             )}
-            style={selected ? undefined : { backgroundColor: mutedColor(columnaActual.color, 0.94), borderLeftColor: columnaActual.color, borderLeftWidth: "3px" }}
+            style={selected ? undefined : { backgroundColor: mutedColor(estado.color, 0.94), borderLeftColor: estado.color, borderLeftWidth: "3px" }}
             title="Haz clic para abrir la conversación"
         >
             {chat.esNuevo ? (
@@ -529,13 +511,6 @@ function ChatCard({ chat, onOpen, onChangeEtapa, modoV3, selected = false }) {
                         </div>
                     ) : null}
 
-                    {etapaV3 ? (
-                        <div className="mt-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-[#131E5C]"
-                             title="Etapa comercial (solo lectura en esta bandeja)">
-                            {etapaV3}
-                        </div>
-                    ) : null}
-
                     {esDescalificado && motivoDesc ? (
                         <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2 py-1">
                             <Ban className="h-3 w-3 shrink-0 text-red-500" />
@@ -550,19 +525,15 @@ function ChatCard({ chat, onOpen, onChangeEtapa, modoV3, selected = false }) {
                         </div>
                     ) : null}
 
-                    <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
-                        {!etapaV3 ? (
-                            <span
-                                className="truncate rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600"
-                                title={`Estado histórico: ${chat.estado || "Sin estado"}`}
-                            >
-                                Anterior: {chat.estado || "Sin estado"}
-                            </span>
-                        ) : (
-                            <span className="truncate text-[10px] font-semibold text-slate-400">
-                                {ultimoMensaje}
-                            </span>
-                        )}
+                    <div className="mt-2 flex min-w-0 items-center gap-2">
+                        
+                        <div className="shrink-0 max-w-[60%]" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                            <EtapaSelect
+                                estado={estado}
+                                saving={savingEtapa}
+                                onChange={handleEtapaChange}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -620,14 +591,14 @@ function EtapaSelect({ estado, onChange, saving = false }) {
                 value={estado.key}
                 disabled={saving}
                 onChange={(event) => {
-                    const opcion = ESTADOS_LEGACY_BANDEJA.find((b) => b.key === event.target.value);
+                    const opcion = ESTADOS_BANDEJA.find((b) => b.key === event.target.value);
                     if (opcion) onChange?.(opcion.label);
                 }}
                 title={`Etapa: ${estado.label}`}
                 className="max-w-full cursor-pointer appearance-none rounded-full border border-transparent py-1 pl-2 pr-6 text-xs font-extrabold outline-none transition hover:border-black/10 focus:border-black/25 disabled:cursor-wait disabled:opacity-60"
                 style={{ color: estado.color, backgroundColor: mutedColor(estado.color, 0.90) }}
             >
-                {ESTADOS_LEGACY_BANDEJA.map((b) => (
+                {ESTADOS_BANDEJA.map((b) => (
                     <option key={b.key} value={b.key} className="bg-white text-slate-700">
                         {b.label}
                     </option>
@@ -2618,7 +2589,7 @@ function InfoRow({ label, value, className }) {
     );
 }
 
-function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaActualizada, onAbrirEdicion, modoV3 }) {
+function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat }) {
     const telefono = String(prospecto?.telefono || "");
     const cita = prospecto?.cita || null;
     const estadoCita = estadoCitaDe(cita);
@@ -2629,9 +2600,6 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
     const interes = firstNonEmpty(prospecto?.auto_interes, prospecto?.interes, prospecto?.vehiculo, prospecto?.modelo) || "Por confirmar";
     const asignadoA = String(prospecto?.asignadoA || "").trim() || "Sin asignar";
     const estado = getEstadoBandeja(prospecto?.estado);
-    const etapaOficial = modoV3
-        ? (ESTADOS_BANDEJA.find((e) => e.key === getColumnaBandeja(prospecto, true)) || ESTADOS_BANDEJA[ESTADOS_BANDEJA.length - 1])
-        : estado;
     const esDescalificado = safeLower(estado?.key) === "descalificado";
     const motivoDesc = String(prospecto?.motivo_descalificacion || "").trim();
     const categoriaMotivo = esDescalificado && motivoDesc ? encontrarCategoriaDeMotivo(motivoDesc) : null;
@@ -2702,9 +2670,9 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
                                 <div className="text-[10px] font-bold text-slate-400">Etapa actual</div>
                                 <div className="mt-1">
                                     <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold"
-                                        style={{ color: etapaOficial.color, backgroundColor: `${etapaOficial.color}14`, borderColor: `${etapaOficial.color}40` }}>
-                                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: etapaOficial.color }} />
-                                        <span className="truncate">{etapaOficial.label}</span>
+                                        style={{ color: estado.color, backgroundColor: `${estado.color}14`, borderColor: `${estado.color}40` }}>
+                                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: estado.color }} />
+                                        <span className="truncate">{estado.label}</span>
                                     </span>
                                 </div>
                             </div>
@@ -2717,32 +2685,6 @@ function ProspectoDrawer({ open, prospecto = null, onClose, onOpenChat, onEtapaA
                             </div>
                         </div>
                     </div>
-
-                    {modoV3 && prospecto?.estado ? (
-                        <p className="mt-2 text-[11px] text-slate-500">Estado histórico (solo referencia): {prospecto.estado}</p>
-                    ) : null}
-
-                    {Number.isSafeInteger(Number(prospecto?.prospectoId)) && Number(prospecto?.prospectoId) > 0 ? (
-                        modoV3 ? (
-                        <div className="mt-3">
-                            <EtapasComercialesV3Panel
-                                expedienteId={Number(prospecto.prospectoId)}
-                                prospecto={prospecto}
-                                onActualizado={onEtapaActualizada}
-                                compact
-                                onAbrirEdicion={() => onAbrirEdicion?.(Number(prospecto.prospectoId))}
-                            />
-                        </div>
-                        ) : (
-                            <button type="button"
-                                onClick={() => onAbrirEdicion?.(Number(prospecto.prospectoId))}
-                                className="mt-3 w-full rounded-lg bg-[#131E5C] px-3 py-2 text-xs font-bold text-white">
-                                Editar prospecto
-                            </button>
-                        )
-                    ) : (
-                        <p className="mt-3 text-xs text-amber-700">Esta conversación no tiene expediente comercial asociado. Registra un prospecto para gestionar sus etapas.</p>
-                    )}
 
                     {esDescalificado && motivoDesc ? (
                         <div className="mt-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 shadow-sm">
@@ -2909,15 +2851,10 @@ export default function DigitalesBandeja() {
     const [prospectosIndex, setProspectosIndex] = useState([]);
     const [citasIndex, setCitasIndex] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [errorCarga, setErrorCarga] = useState("");
     const [q, setQ] = useState("");
     const [drawerTel, setDrawerTel] = useState("");
     const [prospectoSeleccionado, setProspectoSeleccionado] = useState(null);
-    const [expedienteEnEdicion, setExpedienteEnEdicion] = useState(null);
     const [filtroActivo, setFiltroActivo] = useState("todos");
-    const [modoV3, setModoV3] = useState(false);
-    const columnasBandeja = modoV3 ? ESTADOS_BANDEJA : ESTADOS_LEGACY_BANDEJA;
-    const columnasKeys = useMemo(() => new Set(columnasBandeja.map((e) => e.key)), [columnasBandeja]);
     const [periodo, setPeriodo] = useState("recientes");
     const [orden, setOrden] = useState("reciente");
 
@@ -2925,14 +2862,11 @@ export default function DigitalesBandeja() {
     const kanbanScrollRef = useRef(null);
     const kanbanColumnRefs = useRef(new Map());
 
-    // Al alternar entre los pipelines, descartar filtros de columnas inexistentes.
-    useEffect(() => { setFiltroActivo("todos"); }, [modoV3]);
-
     useEffect(() => {
         if (["todos", "no_leidos", "nuevos", "mios"].includes(filtroActivo)) {
             return;
         }
-        const columnaDestino = filtroActivo;
+        const columnaDestino = ESTADOS_SIN_COLUMNA.includes(filtroActivo) ? "contactado" : filtroActivo;
         const column = kanbanColumnRefs.current.get(columnaDestino);
         const container = kanbanScrollRef.current;
         if (column && container) {
@@ -2965,128 +2899,93 @@ export default function DigitalesBandeja() {
 
     async function cargarTodo() {
         const numeroLinea = normalizaTelefonoMx(numeroAsesorActivo);
+        if (!numeroLinea) return;
+
         const requestId = requestRef.current + 1;
         requestRef.current = requestId;
         setLoading(true);
-        setErrorCarga("");
+
         try {
-            // El expediente autorizado es la fuente principal. WhatsApp es complementario.
-            // No se oculta un fallo del endpoint como si fuera una lista vacía.
-            const respuesta = await api.digitalesListProspectos({
-                ...(numeroLinea ? { numero_asesor: numeroLinea } : {}),
-                ligero: 1,
-            });
-            if (requestId !== requestRef.current) return;
-            const listaProspectos = Array.isArray(respuesta)
-                ? respuesta
-                : Array.isArray(respuesta?.results) ? respuesta.results : null;
-            if (!listaProspectos) throw new Error("El servidor devolvió un formato desconocido al listar prospectos.");
-            if (!Array.isArray(respuesta) && respuesta?.next) {
-                throw new Error("El listado está paginado. Antes de mostrar cifras completas debemos recorrer sus páginas.");
-            }
+            const dias = PERIODO_DIAS[periodo] ?? 30;
+            const incluirHistorico = periodo === "todo";
 
-            // Un GET autenticado y de solo lectura confirma V3 para el usuario.
-            // No depende de los primeros expedientes del listado ni de sus dueños.
-            // En error se conserva temporalmente la bandeja histórica.
-            const disponibilidadV3 = await apiEtapasV3.disponibilidad()
-                .catch(() => null);
-            if (requestId !== requestRef.current) return;
-            setModoV3(disponibilidadV3?.habilitada === true);
-
-            const citasResp = await apiCitas.list().catch((err) => {
-                console.warn("No se pudieron cargar citas complementarias:", err);
-                return [];
-            });
-            if (requestId !== requestRef.current) return;
-
-            // Las conversaciones siguen respetando la línea y su ámbito de permisos.
+            // Carga paginada en chunks pequeños: así se ven todas las conversaciones
+            // del periodo (p. ej. mensual) sin una sola petición pesada.
             let acumulados = [];
-            if (numeroLinea) {
-                try {
-                    const dias = PERIODO_DIAS[periodo] ?? 30;
-                    const incluirHistorico = periodo === "todo";
-                    let scope = "recientes", before = "", before_id = 0, before_prioridad = 0;
-                    for (let pagina = 0; pagina < 40; pagina += 1) {
-                        const resp = await api.digitalesChats({
-                            numero_asesor: numeroLinea, scope, dias,
-                            limit: CHAT_BANDEJA_PAGE_SIZE, paginado: 1,
-                            before, before_id, before_prioridad,
-                        });
-                        if (requestId !== requestRef.current) return;
-                        const resultados = Array.isArray(resp)
-                            ? resp : Array.isArray(resp?.results) ? resp.results : [];
-                        acumulados.push(...resultados);
-                        const pag = resp?.paginacion || {};
-                        if (!pag.has_more || (pag.next_scope === "historico" && !incluirHistorico)) break;
-                        before = pag.before || "";
-                        before_id = pag.before_id || 0;
-                        before_prioridad = pag.before_prioridad || 0;
-                        scope = pag.next_scope || scope;
-                    }
-                } catch (err) {
-                    console.warn("Conversaciones WhatsApp no disponibles; los prospectos permanecen visibles:", err);
-                }
-            }
+            let scope = "recientes";
+            let before = "";
+            let before_id = 0;
+            let before_prioridad = 0;
+            const MAX_PAGINAS = 40;
 
-            const chatsNormalizados = acumulados.map((chat) => ({
-                id: chat?.id || `${numeroLinea}-${chat?.telefono}`,
-                telefono: normalizaTelefonoMx(chat?.telefono || ""),
-                nombre: chat?.nombre || "Prospecto",
-                agencia: chat?.agencia || "",
-                estado: chat?.estado || "",
-                unread: Number(chat?.unread || 0),
-                asignadoA: firstNonEmpty(chat?.asesor_digital, chat?.asesor_ventas, chat?.responsable, chat?.asignado_a, chat?.asesor, chat?.assigned_to),
-                esMio: Boolean(chat?.es_mio || chat?.is_mine || chat?.mine),
-                last: { text: chat?.last_text || "", time: chat?.last_time || "", timestamp: chat?.last_message_at || "" },
-            })).filter((chat) => chat.telefono);
-
-            // No mezclar expedientes de distintas agencias ni duplicados con el mismo teléfono.
-            const porTelefono = new Map();
-            for (const prospecto of listaProspectos) {
-                const tel = normalizaTelefonoMx(prospecto?.telefono || "");
-                if (!tel) continue;
-                porTelefono.set(tel, [...(porTelefono.get(tel) || []), prospecto]);
-            }
-            const chatsPorTelefono = new Map();
-            for (const chat of chatsNormalizados) {
-                chatsPorTelefono.set(chat.telefono, [...(chatsPorTelefono.get(chat.telefono) || []), chat]);
-            }
-            const usados = new Set();
-            const expedientes = listaProspectos
-                .filter((p) => Number.isSafeInteger(Number(p?.id)) && Number(p.id) > 0)
-                .map((p) => {
-                    const tel = normalizaTelefonoMx(p?.telefono || "");
-                    const candidatos = chatsPorTelefono.get(tel) || [];
-                    const esTelUnico = tel && (porTelefono.get(tel) || []).length === 1;
-                    const chat = esTelUnico && candidatos.length === 1 &&
-                        (!candidatos[0].agencia || normalizeText(candidatos[0].agencia) === normalizeText(p.agencia))
-                        ? candidatos[0] : null;
-                    if (chat) usados.add(chat.id);
-                    return {
-                        ...(chat || {}), id: `exp-${p.id}`, prospectoId: p.id,
-                        telefono: tel, nombre: p.nombre || p.nombre_out || chat?.nombre || "Prospecto",
-                        agencia: p.agencia || "", estado: p.estado || "",
-                        etapa_comercial_v3: p.etapa_comercial_v3 || null,
-                        usuario_crm_asignado: p.usuario_crm_asignado || "",
-                        asignadoA: firstNonEmpty(p.usuario_crm_asignado, p.asesor_digital, p.asesor_ventas, chat?.asignadoA),
-                        unread: Number(chat?.unread || 0), esMio: Boolean(chat?.esMio),
-                        last: chat?.last || { text: "Sin mensajes de WhatsApp", time: "", timestamp: p.actualizado || p.creado || "" },
-                    };
+            for (let pagina = 0; pagina < MAX_PAGINAS; pagina += 1) {
+                const resp = await api.digitalesChats({
+                    numero_asesor: numeroLinea,
+                    scope,
+                    dias,
+                    limit: CHAT_BANDEJA_PAGE_SIZE,
+                    paginado: 1,
+                    before,
+                    before_id,
+                    before_prioridad,
                 });
-            // Chats sin expediente también se muestran, sin autorizar cambios comerciales ficticios.
-            const huerfanos = chatsNormalizados.filter((c) => !usados.has(c.id) && !(porTelefono.get(c.telefono) || []).length);
+                if (requestId !== requestRef.current) return;
+
+                const resultados = Array.isArray(resp)
+                    ? resp
+                    : Array.isArray(resp?.results)
+                        ? resp.results
+                        : [];
+                acumulados = acumulados.concat(resultados);
+
+                const pag = resp?.paginacion || {};
+                if (!pag.has_more) break;
+                // Para "3 días" y "Mensual" nos quedamos solo en el periodo reciente.
+                if (pag.next_scope === "historico" && !incluirHistorico) break;
+                before = pag.before || "";
+                before_id = pag.before_id || 0;
+                before_prioridad = pag.before_prioridad || 0;
+                scope = pag.next_scope || scope;
+            }
+
             if (requestId !== requestRef.current) return;
-            setChats([...expedientes, ...huerfanos]);
-            setProspectosIndex(listaProspectos);
-            setCitasIndex(Array.isArray(citasResp) ? citasResp : Array.isArray(citasResp?.results) ? citasResp.results : []);
-            setProspectoSeleccionado((actual) => {
-                if (!actual?.prospectoId) return actual;
-                const fresco = listaProspectos.find((p) => Number(p.id) === Number(actual.prospectoId));
-                return fresco ? { ...actual, ...fresco, prospectoId: fresco.id, telefono: normalizaTelefonoMx(fresco.telefono || "") } : actual;
-            });
+
+            const [prospectosResp, citasResp] = await Promise.all([
+                api.digitalesListProspectos({ numero_asesor: numeroLinea }).catch(() => []),
+                apiCitas.list().catch(() => []),
+            ]);
+            if (requestId !== requestRef.current) return;
+
+            const normalized = acumulados
+                .map((chat) => ({
+                    id: chat?.id || `${numeroLinea}-${chat?.telefono}`,
+                    telefono: normalizaTelefonoMx(chat?.telefono || ""),
+                    nombre: chat?.nombre || "Prospecto",
+                    agencia: chat?.agencia || "",
+                    estado: chat?.estado || "",
+                    unread: Number(chat?.unread || 0),
+                    asignadoA: firstNonEmpty(
+                        chat?.asesor_digital,
+                        chat?.asesor_ventas,
+                        chat?.responsable,
+                        chat?.asignado_a,
+                        chat?.asesor,
+                        chat?.assigned_to
+                    ),
+                    esMio: Boolean(chat?.es_mio || chat?.is_mine || chat?.mine),
+                    last: {
+                        text: chat?.last_text || "",
+                        time: chat?.last_time || "",
+                        timestamp: chat?.last_message_at || "",
+                    },
+                }))
+                .filter((chat) => chat.telefono);
+
+            setChats(normalized);
+            setProspectosIndex(Array.isArray(prospectosResp) ? prospectosResp : []);
+            setCitasIndex(Array.isArray(citasResp) ? citasResp : []);
         } catch (error) {
-            console.error("Error cargando bandeja comercial V3:", error);
-            if (requestId === requestRef.current) setErrorCarga(error?.message || "No fue posible consultar los prospectos autorizados.");
+            console.error("Error cargando bandeja de chats:", error);
         } finally {
             if (requestId === requestRef.current) setLoading(false);
         }
@@ -3098,7 +2997,7 @@ export default function DigitalesBandeja() {
 
     useEffect(() => {
         function handleVisibility() {
-            if (document.visibilityState === "visible") {
+            if (document.visibilityState === "visible" && numeroAsesorActivo) {
                 cargarTodo();
             }
         }
@@ -3106,19 +3005,14 @@ export default function DigitalesBandeja() {
         return () => document.removeEventListener("visibilitychange", handleVisibility);
     }, [numeroAsesorActivo]);
 
-    const prospectoPorId = useMemo(() => {
-        return new Map(prospectosIndex.filter((p) => p?.id != null).map((p) => [Number(p.id), p]));
-    }, [prospectosIndex]);
-
     const prospectoPorTel = useMemo(() => {
-        const map = new Map(), ambiguos = new Set();
+        const map = new Map();
+
         for (const prospecto of prospectosIndex) {
             const tel = normalizaTelefonoMx(prospecto?.telefono || "");
-            if (!tel) continue;
-            if (map.has(tel)) ambiguos.add(tel);
-            else map.set(tel, prospecto);
+            if (tel) map.set(tel, prospecto);
         }
-        for (const tel of ambiguos) map.delete(tel);
+
         return map;
     }, [prospectosIndex]);
 
@@ -3149,10 +3043,8 @@ export default function DigitalesBandeja() {
 
     const chatsEnriquecidos = useMemo(() => {
         return chats.map((chat) => {
-            const prospecto = (chat.prospectoId ? prospectoPorId.get(Number(chat.prospectoId)) : prospectoPorTel.get(chat.telefono)) || {};
+            const prospecto = prospectoPorTel.get(chat.telefono) || {};
             const asignadoA = firstNonEmpty(
-                prospecto?.usuario_crm_asignado,
-                chat?.usuario_crm_asignado,
                 chat?.asignadoA,
                 prospecto?.asesor_digital,
                 prospecto?.asesor_ventas,
@@ -3176,14 +3068,9 @@ export default function DigitalesBandeja() {
             return {
                 ...chat,
                 estado: prospecto?.estado || chat.estado,
-                etapa_comercial_v3: prospecto?.etapa_comercial_v3 || null,
                 asignadoA,
-                esMio: Boolean(
-                    (prospecto?.usuario_crm_asignado || chat?.usuario_crm_asignado)
-                        ? userAliases.some((alias) => alias === normalizeText(prospecto?.usuario_crm_asignado || chat?.usuario_crm_asignado))
-                        : chat.esMio || coincideUsuario
-                ),
-                prospectoId: prospecto?.id || chat?.prospectoId || "",
+                esMio: Boolean(chat.esMio || coincideUsuario),
+                prospectoId: prospecto?.id || "",
                 autoInteres: firstNonEmpty(
                     prospecto?.auto_interes,
                     prospecto?.interes,
@@ -3202,7 +3089,7 @@ export default function DigitalesBandeja() {
                 ),
             };
         });
-    }, [chats, prospectoPorId, prospectoPorTel, userAliases]);
+    }, [chats, prospectoPorTel, userAliases]);
 
     const filteredChats = useMemo(() => {
         const query = normalizeText(q);
@@ -3214,11 +3101,10 @@ export default function DigitalesBandeja() {
             normalizaTelefonoMx(chat.telefono).includes(normalizaTelefonoMx(q) || query) ||
             normalizeText(chat.agencia).includes(query) ||
             normalizeText(chat.estado).includes(query) ||
-            (modoV3 && normalizeText(ETAPAS_COMERCIALES_V3_NOMBRES[chat.etapa_comercial_v3] || "Pendiente de clasificación").includes(query)) ||
             normalizeText(chat.last?.text).includes(query) ||
             normalizeText(chat.asignadoA).includes(query)
         );
-    }, [chatsEnriquecidos, q, modoV3]);
+    }, [chatsEnriquecidos, q]);
 
 
     const chatsNuevosHoy = useMemo(() => {
@@ -3245,24 +3131,24 @@ export default function DigitalesBandeja() {
     const statsGenerales = useMemo(() => {
         const total = chatsEnriquecidos.length;
         const conteoPorEstado = new Map(
-            columnasBandeja.map((estado) => [estado.key, 0])
+            ESTADOS_BANDEJA.map((estado) => [estado.key, 0])
         );
 
         let totalUnread = 0;
 
         for (const chat of chatsEnriquecidos) {
-            const etapa = getColumnaBandeja(chat, modoV3);
+            const estado = getEstadoBandeja(chat.estado);
             conteoPorEstado.set(
-                etapa,
-                (conteoPorEstado.get(etapa) || 0) + 1
+                estado.key,
+                (conteoPorEstado.get(estado.key) || 0) + 1
             );
             totalUnread += Number(chat.unread || 0);
         }
 
-        const cierres = modoV3 ? (conteoPorEstado.get("facturado") || 0) : 0;
-        const sinAtender = modoV3
-            ? (conteoPorEstado.get("nuevo_prospecto") || 0) + (conteoPorEstado.get("sin_iniciar_v3") || 0)
-            : 0;
+        const cierres = chatsEnriquecidos.filter(
+            (chat) => resolverEstado(chat.estado).key === "cierre_venta"
+        ).length;
+        const sinAtender = conteoPorEstado.get(ESTADOS_BANDEJA[0].key) || 0;
         const chatsConUnread = chatsEnriquecidos.filter(
             (chat) => Number(chat.unread || 0) > 0
         ).length;
@@ -3281,7 +3167,7 @@ export default function DigitalesBandeja() {
                 ? Math.round(((total - chatsConUnread) / total) * 100)
                 : 100,
         };
-    }, [chatsEnriquecidos, columnasBandeja, modoV3]);
+    }, [chatsEnriquecidos]);
 
     const nuevosHoySet = useMemo(
         () => new Set(chatsNuevosHoy.map((chat) => chat.telefono)),
@@ -3297,8 +3183,9 @@ export default function DigitalesBandeja() {
             items = items.filter((chat) => Number(chat.unread || 0) > 0);
         } else if (filtroActivo === "mios") {
             items = items.filter((chat) => Boolean(chat.esMio));
-        } else if (columnasKeys.has(filtroActivo)) {
-            items = items.filter((chat) => getColumnaBandeja(chat, modoV3) === filtroActivo);
+        } else if (ESTADOS_SIN_COLUMNA.includes(filtroActivo)) {
+            // Estos estados viven en la columna "Contactado"; filtramos por el estado real.
+            items = items.filter((chat) => getEstadoBandeja(chat.estado).key === filtroActivo);
         }
 
         return items.sort((a, b) => {
@@ -3314,16 +3201,16 @@ export default function DigitalesBandeja() {
             if (orden === "antiguo") return ta - tb;
             return tb - ta;
         });
-    }, [filteredChats, filtroActivo, nuevosHoySet, orden, columnasKeys, modoV3]);
+    }, [filteredChats, filtroActivo, nuevosHoySet, orden]);
 
     const chatsPorColumna = useMemo(() => {
-        const map = new Map(columnasBandeja.map((estado) => [estado.key, []]));
+        const map = new Map(ESTADOS_BANDEJA.map((estado) => [estado.key, []]));
         for (const chat of chatsVisibles) {
-            const columna = getColumnaBandeja(chat, modoV3);
+            const columna = getColumnaBandeja(chat.estado);
             map.get(columna)?.push(chat);
         }
         return map;
-    }, [chatsVisibles, columnasBandeja, modoV3]);
+    }, [chatsVisibles]);
 
     const noLeidosCount = useMemo(
         () => chatsEnriquecidos.filter((chat) => Number(chat.unread || 0) > 0).length,
@@ -3361,7 +3248,7 @@ export default function DigitalesBandeja() {
             };
         }
 
-        const estado = columnasBandeja.find(
+        const estado = ESTADOS_BANDEJA.find(
             (item) => item.key === filtroActivo
         );
 
@@ -3370,7 +3257,7 @@ export default function DigitalesBandeja() {
             color: estado?.color || BRAND_BLUE,
             description: "Prospectos en esta etapa comercial",
         };
-    }, [filtroActivo, columnasBandeja]);
+    }, [filtroActivo]);
 
     function cambiarLinea(numero) {
         const normalized = normalizaTelefonoMx(numero);
@@ -3387,13 +3274,8 @@ export default function DigitalesBandeja() {
     }
 
     function abrirProspecto(chat) {
-        const prospecto = (chat.prospectoId ? prospectoPorId.get(Number(chat.prospectoId)) : prospectoPorTel.get(chat.telefono));
-        const citasCompatibles = citasIndex.filter((cita) =>
-            Number(cita?.cliente?.id_cliente || cita?.cliente_id || 0) === Number(prospecto?.cliente_id || -1) &&
-            normalizeText(cita?.agencia) === normalizeText(prospecto?.agencia));
-        const cita = prospecto
-            ? citasCompatibles.reduce((elegida, elemento) => seleccionarCitaRelevante(elegida, elemento), null)
-            : citaPorTel.get(chat.telefono);
+        const prospecto = prospectoPorTel.get(chat.telefono);
+        const cita = citaPorTel.get(chat.telefono);
         setProspectoSeleccionado({ ...chat, ...prospecto, cita, estado: prospecto?.estado || chat.estado });
     }
 
@@ -3508,17 +3390,10 @@ export default function DigitalesBandeja() {
 
                 {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#131E5C]/50" /> : null}
             </div>
-            {errorCarga ? (
-                <div role="alert" className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
-                    No se pudo cargar el listado autorizado: {errorCarga}
-                </div>
-            ) : null}
 
             <div className="grid min-w-0 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
                 <div className="min-w-0 max-w-full overflow-hidden xl:h-[calc(100dvh-150px)] xl:min-h-[620px]">
                     <PipelineSidebar
-                        columnas={columnasBandeja}
-                        modoV3={modoV3}
                         conteoPorEstado={statsGenerales.conteoPorEstado}
                         total={statsGenerales.total}
                         nuevosHoy={chatsNuevosHoy.length}
@@ -3616,9 +3491,12 @@ export default function DigitalesBandeja() {
                             </div>
                         ) : (
                             <div ref={kanbanScrollRef} className="flex h-full min-w-0 items-stretch gap-3 overflow-x-auto overflow-y-hidden px-3 py-3">
-                                {columnasBandeja.map((estado) => {
+                                {COLUMNAS_BANDEJA.map((estado) => {
                                     const items = chatsPorColumna.get(estado.key) || [];
-                                    const activo = filtroActivo === estado.key;
+                                    const activo =
+                                        filtroActivo === estado.key ||
+                                        (estado.key === "contactado" &&
+                                            ESTADOS_SIN_COLUMNA.includes(filtroActivo));
                                     return (
                                         <div
                                             key={estado.key}
@@ -3662,10 +3540,9 @@ export default function DigitalesBandeja() {
                                                         <ChatCard
                                                             key={chat.id}
                                                             chat={chat}
-                                                            modoV3={modoV3}
                                                             onOpen={abrirProspecto}
                                                             onChangeEtapa={guardarEtapa}
-                                                            selected={prospectoSeleccionado?.prospectoId ? Number(prospectoSeleccionado.prospectoId) === Number(chat.prospectoId) : prospectoSeleccionado?.id === chat.id}
+                                                            selected={prospectoSeleccionado?.telefono === chat.telefono}
                                                         />
                                                     ))
                                                 )}
@@ -3698,26 +3575,8 @@ export default function DigitalesBandeja() {
                 key={prospectoSeleccionado?.telefono || "ninguno"}
                 open={Boolean(prospectoSeleccionado)}
                 prospecto={prospectoSeleccionado}
-                modoV3={modoV3}
                 onClose={() => setProspectoSeleccionado(null)}
                 onOpenChat={(telefono) => setDrawerTel(telefono)}
-                onEtapaActualizada={() => { void cargarTodo(); }}
-                onAbrirEdicion={(id) => {
-                    if (Number.isSafeInteger(id) && id > 0) setExpedienteEnEdicion(id);
-                }}
-            />
-
-            <NuevoProspectoModal
-                open={expedienteEnEdicion !== null}
-                mode="edit"
-                prospectoId={expedienteEnEdicion}
-                onClose={() => setExpedienteEnEdicion(null)}
-                onActualizado={() => { void cargarTodo(); }}
-                numeroAsesor={numeroAsesorActivo}
-                user={user}
-                isAdmin={isAdmin}
-                requestContext={{ numero_asesor: numeroAsesorActivo }}
-                tieneChatInicial={Boolean(prospectoSeleccionado?.telefono)}
             />
 
             <ChatDrawer

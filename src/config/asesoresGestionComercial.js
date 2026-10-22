@@ -12,7 +12,7 @@ export const NOMBRES_ASESORES_DIGITALES = Object.freeze({
   JULIO_RAMIREZ_LOPEZ: "Julio Ramirez Lopez",
   EDGAR_OMAR_NOGUERA_SOLIS: "Edgar Omar Noguera Solis",
   DULCE_ABIGAIL_GARCIA_OLIVARES: "Dulce Abigail Garcia Olivares",
-  BIANCA_CHAVEZ_ALARCON: "Bianca Chavez Alarcon",
+  LUIS_ANGEL_BONILLA_QUEZADA: "Luis Angel Bonilla Quezada",
   CANDY_DENISSE_MARQUEZ: "Candy Denisse Marquez",
   EQUIPO_DIGITAL_TUXTEPEC: "Equipo Digital Tuxtepec",
 });
@@ -24,7 +24,7 @@ export const ASESORES_DIGITALES = [
   NOMBRES_ASESORES_DIGITALES.IA_VAGEN,
   NOMBRES_ASESORES_DIGITALES.EDGAR_OMAR_NOGUERA_SOLIS,
   NOMBRES_ASESORES_DIGITALES.DULCE_ABIGAIL_GARCIA_OLIVARES,
-  NOMBRES_ASESORES_DIGITALES.BIANCA_CHAVEZ_ALARCON,
+  NOMBRES_ASESORES_DIGITALES.LUIS_ANGEL_BONILLA_QUEZADA,
   NOMBRES_ASESORES_DIGITALES.CANDY_DENISSE_MARQUEZ,
   NOMBRES_ASESORES_DIGITALES.JULIO_RAMIREZ_LOPEZ,
 ];
@@ -91,6 +91,7 @@ export const ASESORES_PISO = [
   "Luis Manuel Alvarez Martinez",
   "Luis Manuel Hernández Espejo",
   "Luis Manuel Palomares Olayo",
+  "Luis Angel Bonilla Quezada",
   "Mara Erubey Soto Villegas",
   "Marcos Raul Diaz Ramos",
   "Marelly Tenorio Salinas",
@@ -156,13 +157,9 @@ const ASESOR_DIGITAL_CANONICO = new Map([
   ["ia vagen", "IA Vagen"],
   ["edgar omar noguera solis", "Edgar Omar Noguera Solis"],
   ["dulce abigail garcia olivares", "Dulce Abigail Garcia Olivares"],
-
-  ["bianca chavez alarcon", "Bianca Chavez Alarcon"],
-  ["bianca isabel chavez alarcon", "Bianca Chavez Alarcon"],
-
+  ["luis angel bonilla quezada", "Luis Angel Bonilla Quezada"],
   ["candy denisse marquez", "Candy Denisse Marquez"],
   ["candy denisse marquez cortes", "Candy Denisse Marquez"],
-
   ["julio ramirez lopez", "Julio Ramirez Lopez"],
 ]);
 
@@ -173,10 +170,7 @@ export function canonicalAsesorDigital(value) {
     return "";
   }
 
-  return (
-    ASESOR_DIGITAL_CANONICO.get(normalized) ||
-    String(value || "").trim()
-  );
+  return ASESOR_DIGITAL_CANONICO.get(normalized) || String(value || "").trim();
 }
 
 // ---------------------------------------------------------
