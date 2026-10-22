@@ -1901,16 +1901,36 @@ export default function HojaRegistros() {
                                                     className="flex items-center gap-2 rounded-xl border px-3 py-2"
                                                     style={{ borderColor: COLOR.line }}
                                                 >
+                                                {(
+                                                    evidencia.tipo_mime?.toLowerCase().startsWith("image/") ||
+                                                    /\.(jpg|jpeg|png|webp)$/i.test(evidencia.nombre_original || "")
+                                                ) && evidencia.url ? (
+                                                    <a
+                                                        href={evidencia.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title="Ver fotografía completa"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="h-24 w-28 shrink-0 overflow-hidden rounded-xl border border-[#131E5C]/15 bg-slate-100"
+                                                    >
+                                                        <img
+                                                            src={evidencia.url}
+                                                            alt={evidencia.nombre_original || "Evidencia fotográfica"}
+                                                            loading="lazy"
+                                                            className="h-full w-full object-cover"
+                                                        />
+                                                    </a>
+                                                ) : (
                                                     <div
-                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold"
+                                                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
                                                         style={{
                                                             background: COLOR.brandSoft,
                                                             color: COLOR.brand,
                                                         }}
                                                     >
-                                                        {evidencia.tipo_mime?.includes("pdf") ? "PDF" : "IMG"}
+                                                        PDF
                                                     </div>
-
+                                                )}
                                                     <div className="min-w-0 flex-1">
                                                         <a
                                                             href={evidencia.url}
