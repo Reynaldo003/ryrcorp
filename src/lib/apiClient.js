@@ -138,3 +138,39 @@ export function buildQuery(params = {}) {
 
   return text ? `?${text}` : "";
 }
+
+export async function descargarArchivoCRM(path, nombreArchivo) {
+  const token = getAccessToken();
+
+  if (!token) {
+    throw new Error("Tu sesión no está disponible. Inicia sesión nuevamente.");
+  }
+
+  const url = `${API_ROOT.replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
+
+  const respuesta = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!respuesta.ok) {
+    throw new Error(`No se pudo descargar el archivo (HTTP ${respuesta.status}).`);
+  }
+
+  const archivo = await respuesta.blob();
+
+  const urlTemporal = URL.createObjectURL(archivo);
+  const enlace = document.createElement("a");
+
+  enlace.href = urlTemporal;
+  enlace.download = nombreArchivo || "archivo";
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(urlTemporal);
+  }, 1000);
+}

@@ -32,6 +32,7 @@ import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
 import { http } from "../../lib/apiClient";
 import { useAuth } from "../../auth/AuthContext";
 import AgendaView from "./AgendaView";
+import { descargarArchivoCRM } from "../../lib/apiClient";
 
 const COLOR = {
     brand: "#131E5C",
@@ -545,6 +546,7 @@ export default function HojaRegistros() {
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
+    const [imagenVisualizada, setImagenVisualizada] = useState(null);
 
     const [ctxMenu, setCtxMenu] = useState({ open: false, x: 0, y: 0, row: null });
     const [updatingInline, setUpdatingInline] = useState({});
@@ -972,35 +974,18 @@ export default function HojaRegistros() {
             setLoadingDetail(false);
         }
     }
-        async function descargarEvidencia(evidencia) {
-            if (!evidencia?.url) return;
 
-            try {
-                const respuesta = await fetch(evidencia.url, {
-                    credentials: "include",
-                });
-
-                if (!respuesta.ok) {
-                    throw new Error(`HTTP ${respuesta.status}`);
-                }
-
-                const archivo = await respuesta.blob();
-                const urlTemporal = URL.createObjectURL(archivo);
-
-                const enlace = document.createElement("a");
-                enlace.href = urlTemporal;
-                enlace.download = evidencia.nombre_original || "evidencia";
-                document.body.appendChild(enlace);
-                enlace.click();
-                enlace.remove();
-
-                setTimeout(() => URL.revokeObjectURL(urlTemporal), 1000);
-            } catch (error) {
-                console.error("Error descargando evidencia:", error);
-                alert("No fue posible descargar la evidencia.");
-            }
+    async function descargarEvidencia(evidencia) {
+        try {
+            await descargarArchivoCRM(
+                `/hojaingresos/api/hoja-ingresos/${draft.id}/descargar-evidencia/${evidencia.id}/`,
+                evidencia.nombre_original || "evidencia"
+            );
+        } catch (error) {
+            console.error("Error descargando evidencia:", error);
+            alert(error.message || "No fue posible descargar la evidencia.");
         }
-
+    }
 
     function cerrarModal() {
         if (saving || analizandoIA) return;
@@ -1934,12 +1919,13 @@ export default function HojaRegistros() {
                                                     evidencia.tipo_mime?.toLowerCase().startsWith("image/") ||
                                                     /\.(jpg|jpeg|png|webp)$/i.test(evidencia.nombre_original || "")
                                                 ) && evidencia.url ? (
-                                                    <a
-                                                        href={evidencia.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        title="Ver fotografía completa"
-                                                        onClick={(e) => e.stopPropagation()}
+                                                    <button
+                                                        type="button"
+                                                        title="Visualizar fotografía"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setImagenVisualizada(evidencia);
+                                                        }}
                                                         className="h-24 w-28 shrink-0 overflow-hidden rounded-xl border border-[#131E5C]/15 bg-slate-100"
                                                     >
                                                         <img
@@ -1948,7 +1934,7 @@ export default function HojaRegistros() {
                                                             loading="lazy"
                                                             className="h-full w-full object-cover"
                                                         />
-                                                    </a>
+                                                    </button>
                                                 ) : (
                                                     <div
                                                         className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
@@ -1981,28 +1967,30 @@ export default function HojaRegistros() {
 
                                                     {/* Botones de acciones de la evidencia */}
                                                     <div className="mt-2 flex flex-wrap gap-2">
-                                                        <a
-                                                            href={evidencia.url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#131E5C]/20 px-3 py-1.5 text-[11px] font-semibold text-[#131E5C] transition hover:bg-slate-50"
-                                                        >
-                                                            <Eye className="h-3.5 w-3.5" />
-                                                            Visualizar
-                                                        </a>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                descargarEvidencia(evidencia);
-                                                            }}
-                                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#131E5C] px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-[#202F7E]"
-                                                        >
-                                                            <Download className="h-3.5 w-3.5" />
-                                                            Descargar
-                                                        </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setImagenVisualizada(evidencia);
+                                                                }}
+                                                                disabled={!evidencia.url}
+                                                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#131E5C]/20 px-3 py-1.5 text-[11px] font-semibold text-[#131E5C] transition hover:bg-slate-50 disabled:opacity-50"
+                                                            >
+                                                                <Eye className="h-3.5 w-3.5" />
+                                                                Visualizar
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    descargarEvidencia(evidencia);
+                                                                }}
+                                                                disabled={!draft?.id || !evidencia?.id}
+                                                                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#131E5C] px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-[#202F7E] disabled:opacity-50"
+                                                            >
+                                                                <Download className="h-3.5 w-3.5" />
+                                                                Descargar
+                                                            </button>
                                                     </div>
                                                 </div>
                                                     <button
@@ -2154,20 +2142,87 @@ export default function HojaRegistros() {
                                 />
                             </Field>
                         </div>
-
                     </div>
                 )
                 }
             </Modal >
+            {/* Visor de evidencias dentro del CRM */}
+            {imagenVisualizada && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
+                    onClick={() => setImagenVisualizada(null)}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Visualizar evidencia"
+                        className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
+                            <span className="truncate text-sm font-semibold text-[#131E5C]">
+                                {imagenVisualizada.nombre_original || "Evidencia"}
+                            </span>
+
+                            <button
+                                type="button"
+                                onClick={() => setImagenVisualizada(null)}
+                                aria-label="Cerrar visor"
+                                className="rounded-lg p-2 text-[#131E5C] hover:bg-slate-100"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-900 p-4">
+                            {(
+                                imagenVisualizada.tipo_mime?.toLowerCase().startsWith("image/") ||
+                                /\.(jpg|jpeg|png|webp)$/i.test(imagenVisualizada.nombre_original || "")
+                            ) ? (
+                                <img
+                                    src={imagenVisualizada.url}
+                                    alt={imagenVisualizada.nombre_original || "Fotografía"}
+                                    className="max-h-[78vh] max-w-full object-contain"
+                                />
+                            ) : (
+                                <iframe
+                                    src={imagenVisualizada.url}
+                                    title={imagenVisualizada.nombre_original || "Documento PDF"}
+                                    className="h-[75vh] w-full bg-white"
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div >
     );
-}
-
+    }
 function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar }) {
     const evidencias = draft?.evidencias || [];
     const resultados = draft?.analisisIA || [];
     const archivosSinGuardar = (draft?.evidenciasNuevas || []).length;
 
+    async function descargarImagenIA(item) {
+        if (!draft?.id || !item?.id) {
+            alert("No se encontró el análisis para descargar.");
+            return;
+        }
+
+        try {
+            await descargarArchivoCRM(
+                `/hojaingresos/api/hoja-ingresos/${draft.id}/descargar-analisis/${item.id}/`,
+                `inspeccion_${item.evidencia_id}.png`
+            );
+        } catch (error) {
+            console.error("Error descargando imagen IA:", error);
+            alert(
+                error.message ||
+                "No fue posible descargar la imagen analizada."
+            );
+        }
+    }
     const procesadas = new Set(
         resultados.map((item) => String(item.evidencia_id))
     );
@@ -2439,14 +2494,15 @@ function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar 
                                                     <Eye className="h-4 w-4" />
                                                     Visualizar
                                                 </a>
-                                                <a
-                                                    href={item.imagen_url}
-                                                    download={`inspeccion_${item.evidencia_id}.png`}
-                                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-3 py-2.5 text-[12px] font-semibold text-white hover:bg-[#202F7E]"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => descargarImagenIA(item)}
+                                                    disabled={!draft?.id || !item?.id}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#131E5C] px-3 py-2.5 text-[12px] font-semibold text-white hover:bg-[#202F7E] disabled:opacity-50"
                                                 >
                                                     <Download className="h-4 w-4" />
                                                     Descargar
-                                                </a>
+                                                </button>
                                             </div>
                                         )}
                                     </div>
