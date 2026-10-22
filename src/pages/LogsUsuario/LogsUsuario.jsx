@@ -9,7 +9,9 @@ import {
     Loader2,
     Radio,
     RefreshCw,
+    RotateCcw,
     Search,
+    Undo2,
     UserRound,
     WifiOff,
 } from "lucide-react";
@@ -69,6 +71,7 @@ export default function LogsUsuario() {
     const [catalogo, setCatalogo] = useState(null);
     const [resumen, setResumen] = useState(null);
     const [cargando, setCargando] = useState(false);
+    const [cargado, setCargado] = useState(false);
     const [error, setError] = useState("");
 
     const [filtrosUsuario, setFiltrosUsuario] = useState("");
@@ -84,8 +87,12 @@ export default function LogsUsuario() {
     const [vivo, setVivo] = useState(true);
     const [ultimaSincronizacion, setUltimaSincronizacion] = useState(null);
     const [filaExpandida, setFilaExpandida] = useState(null);
+    const [restaurandoId, setRestaurandoId] = useState(null);
+    const [avisoRestauracion, setAvisoRestauracion] = useState(null);
     const ultimoIdRef = useRef(0);
     const colaRef = useRef(-1);
+    const firmaFiltrosRef = useRef(null);
+    const inicioRef = useRef(false);
 
     const cargarLogs = useCallback(
         async (paginaTarget = 1, opciones = {}) => {
@@ -113,14 +120,41 @@ export default function LogsUsuario() {
                     previous: Boolean(data.previous),
                 });
                 setPagina(paginaTarget);
+                return true;
             } catch (e) {
                 if (!silencioso) setError(e.message || "No se pudieron cargar los logs.");
+                return false;
             } finally {
-                if (!silencioso) setCargando(false);
+                if (!silencioso) {
+                    setCargando(false);
+                    setCargado(true);
+                }
             }
         },
         [filtrosUsuario, filtroModulo, filtroTipo, filtroDesde, filtroHasta, filtroBuscar],
     );
+
+    // Los filtros se aplican solos (con debounce) sin dar clic en "Aplicar".
+    useEffect(() => {
+        const firma = [
+            filtrosUsuario,
+            filtroModulo,
+            filtroTipo,
+            filtroDesde,
+            filtroHasta,
+            filtroBuscar,
+        ].join("|");
+        if (firmaFiltrosRef.current === null) {
+            // Montaje: la carga inicial ya la hace el efecto de arranque.
+            firmaFiltrosRef.current = firma;
+            return undefined;
+        }
+        if (firmaFiltrosRef.current === firma) return undefined;
+        firmaFiltrosRef.current = firma;
+
+        const timer = setTimeout(() => cargarLogs(1), 350);
+        return () => clearTimeout(timer);
+    }, [cargarLogs, filtrosUsuario, filtroModulo, filtroTipo, filtroDesde, filtroHasta, filtroBuscar]);
 
     const sincronizarRefs = useCallback(async () => {
         try {
@@ -135,12 +169,24 @@ export default function LogsUsuario() {
     }, []);
 
     useEffect(() => {
-        const inicial = async () => {
+        if (inicioRef.current) return undefined;
+        inicioRef.current = true;
+
+        // La lista se pide de inmediato: no depende de /catalogo, /resumen
+        // ni /estado (si alguno falla o tarda, la tabla igual carga).
+        (async () => {
+            const ok = await cargarLogs(1);
+            if (ok) return;
+            // Reintento único para no tener que dar clic en "Refrescar".
+            await new Promise((resolver) => setTimeout(resolver, 2000));
+            await cargarLogs(1);
+        })();
+
+        (async () => {
             try {
-                const cat = await apiLogs.catalogo();
-                setCatalogo(cat);
+                setCatalogo(await apiLogs.catalogo());
             } catch (e) {
-                setError(e.message || "No se pudo cargar el catálogo.");
+                console.warn("No se pudo cargar el catálogo:", e.message);
             }
             try {
                 setResumen(await apiLogs.resumen());
@@ -148,16 +194,11 @@ export default function LogsUsuario() {
                 console.warn("No se pudo cargar el resumen:", e.message);
             }
             await sincronizarRefs();
-            cargarLogs(1);
-        };
-        inicial();
+        })();
+
+        return undefined;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const aplicarFiltros = () => {
-        cargarLogs(1);
-        recargarResumen();
-    };
 
     const limpiarFiltros = () => {
         setFiltrosUsuario("");
@@ -166,7 +207,6 @@ export default function LogsUsuario() {
         setFiltroDesde("");
         setFiltroHasta("");
         setFiltroBuscar("");
-        cargarLogs(1);
     };
 
     const recargarResumen = useCallback(async () => {
@@ -202,6 +242,30 @@ export default function LogsUsuario() {
 
         return () => clearInterval(timer);
     }, [vivo, cargarLogs, pagina, recargarResumen]);
+
+    const restaurarLog = useCallback(async (log) => {
+        const etiqueta = log.entidad || `log #${log.id}`;
+        const confirmar = window.confirm(
+            `¿Restaurar "${etiqueta}"?\n\nEsto recreará el registro eliminado (y sus registros hijos) tal como estaba antes del borrado.`,
+        );
+        if (!confirmar) return;
+
+        setRestaurandoId(log.id);
+        setAvisoRestauracion(null);
+        try {
+            const res = await apiLogs.restaurar(log.id);
+            const mensajes = (res.mensajes || []).join(" ");
+            setAvisoRestauracion({
+                tipo: res.ok ? "ok" : "error",
+                texto: mensajes || (res.ok ? "Registro restaurado." : "No se pudo restaurar."),
+            });
+        } catch (e) {
+            const detalle = e?.data?.mensajes?.join?.(" ") || e.message || "No se pudo restaurar.";
+            setAvisoRestauracion({ tipo: "error", texto: detalle });
+        } finally {
+            setRestaurandoId(null);
+        }
+    }, []);
 
     const metadata = useMemo(() => {
         if (!catalogo || !resumen) return { totalDia: "—" };
@@ -340,17 +404,11 @@ export default function LogsUsuario() {
                     </label>
                     <div className="col-span-2 flex items-end gap-2 lg:col-span-1">
                         <button
-                            onClick={aplicarFiltros}
-                            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#131E5C] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1b2a75]"
-                        >
-                            <Search className="h-4 w-4" /> Aplicar
-                        </button>
-                        <button
                             onClick={limpiarFiltros}
                             title="Limpiar filtros"
-                            className="flex items-center justify-center rounded-lg border border-black/15 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+                            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-black/15 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
                         >
-                            <FilterX className="h-4 w-4" />
+                            <FilterX className="h-4 w-4" /> Limpiar
                         </button>
                     </div>
                 </div>
@@ -358,6 +416,27 @@ export default function LogsUsuario() {
 
             {error ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+            ) : null}
+
+            {avisoRestauracion ? (
+                <div
+                    className={`flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
+                        avisoRestauracion.tipo === "ok"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : "border-red-200 bg-red-50 text-red-700"
+                    }`}
+                >
+                    <span className="flex items-start gap-2">
+                        <Undo2 className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>{avisoRestauracion.texto}</span>
+                    </span>
+                    <button
+                        onClick={() => setAvisoRestauracion(null)}
+                        className="shrink-0 text-xs font-semibold underline opacity-70 hover:opacity-100"
+                    >
+                        Cerrar
+                    </button>
+                </div>
             ) : null}
 
             <div className="overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
@@ -421,12 +500,31 @@ export default function LogsUsuario() {
                                                     Acción completa
                                                 </div>
                                                 <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{log.cambio}</p>
+                                            {log.restaurable ? (
+                                                <div className="mt-3">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            restaurarLog(log);
+                                                        }}
+                                                        disabled={restaurandoId === log.id}
+                                                        className="inline-flex items-center gap-2 rounded-lg bg-[#131E5C] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#1b2a75] disabled:opacity-60"
+                                                    >
+                                                        {restaurandoId === log.id ? (
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <RotateCcw className="h-3.5 w-3.5" />
+                                                        )}
+                                                        {restaurandoId === log.id ? "Restaurando..." : "Restaurar registro"}
+                                                    </button>
+                                                </div>
+                                            ) : null}
                                             </td>
                                         </tr>
                                     ) : null}
                                 </Fragment>
                             ))}
-                            {!cargando && logs.length === 0 ? (
+                            {!cargando && cargado && !error && logs.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                                         No hay registros que coincidan con los filtros.

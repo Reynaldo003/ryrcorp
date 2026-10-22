@@ -1471,7 +1471,7 @@ export default function Documentacion() {
         try {
             await apiDocumentacion.removeDocumento(documento.id_documento);
             await refrescarExpediente(idExpediente);
-            mostrarMensaje("success", "Documento eliminado. Ya puedes cargar uno nuevo.");
+            mostrarMensaje("success", "Documento eliminado. Podrás recuperarlo desde Logs durante 15 días.");
         } catch (error) {
             console.error("Error eliminando documento:", error);
             mostrarMensaje("error", error?.message || "No fue posible eliminar el documento.");

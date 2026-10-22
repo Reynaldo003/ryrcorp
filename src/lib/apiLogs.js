@@ -9,4 +9,6 @@ export const apiLogs = {
   resumen: () => http("/logs/api/logs/resumen/"),
 
   estado: () => http("/logs/api/logs/estado/"),
+
+  restaurar: (logId) => http(`/logs/api/logs/${logId}/restaurar/`, { method: "POST" }),
 };
