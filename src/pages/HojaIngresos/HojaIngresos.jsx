@@ -1,5 +1,5 @@
 // src/pages/HojaIngresos/HojaIngresos.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
     ArrowUpDown,
@@ -26,6 +26,9 @@ import {
     BrainCircuit,
     Eye,
     Download,
+    Camera,
+    FolderOpen,
+    CloudUpload,
 } from "lucide-react";
 
 import { apiHojaIngresos } from "../../lib/apiHojaIngresos";
@@ -547,7 +550,44 @@ export default function HojaRegistros() {
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
     const [imagenVisualizada, setImagenVisualizada] = useState(null);
+    const inputEvidenciasRef = useRef(null);
+    const inputCamaraRef = useRef(null);
+    const [arrastrandoEvidencias, setArrastrandoEvidencias] = useState(false);
 
+    function agregarArchivosEvidencia(archivos) {
+        const seleccionados = Array.from(archivos || []);
+
+        if (!seleccionados.length) return;
+
+        const permitidos = seleccionados.filter((archivo) => {
+            const nombreValido = /\.(jpe?g|png|webp|pdf)$/i.test(archivo.name);
+            const tipoValido = [
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "application/pdf",
+                "",
+            ].includes(archivo.type);
+
+            const tamanoValido = archivo.size <= 10 * 1024 * 1024;
+
+            return nombreValido && tipoValido && tamanoValido;
+        });
+
+        if (permitidos.length !== seleccionados.length) {
+            alert("Solo se permiten archivos JPG, PNG, WEBP o PDF de hasta 10 MB.");
+        }
+
+        if (permitidos.length) {
+            setDraft((prev) => ({
+                ...prev,
+                evidenciasNuevas: [
+                    ...(prev.evidenciasNuevas || []),
+                    ...permitidos,
+                ],
+            }));
+        }
+    }
     const [ctxMenu, setCtxMenu] = useState({ open: false, x: 0, y: 0, row: null });
     const [updatingInline, setUpdatingInline] = useState({});
 
@@ -1865,40 +1905,130 @@ export default function HojaRegistros() {
                         <SectionHeading icon={Save}>Evidencias</SectionHeading>
 
                         <div className="md:col-span-3">
-                            <Field label="Anexar evidencias (mín. consulta de campaña en ELSA) — Fotos y PDF">
-                                <label
-                                    className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-4 py-5 text-center transition hover:bg-[#131E5C]/5"
-                                    style={{ borderColor: COLOR.line }}
-                                >
-                                    <div className="text-[13px] font-semibold" style={{ color: COLOR.brand }}>
-                                        Haz clic para seleccionar archivos
+                            <Field label="">
+                                {/* NUEVA CARGA DE EVIDENCIAS */}
+                                <div className="overflow-hidden rounded-2xl border border-[#D9E2F2] bg-white shadow-sm">
+                                    {/* Encabezado */}
+                                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#D9E2F2] bg-white px-5 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="rounded-xl bg-[#EFF4FB] p-2 text-[#131E5C]">
+                                                <FolderOpen className="h-5 w-5" />
+                                            </div>
+
+                                            <div>
+                                                <h3 className="text-sm font-bold text-[#131E5C]">
+                                                    Carga de evidencias
+                                                </h3>
+                                                <p className="text-[11px] text-slate-500">
+                                                    Arrastra o selecciona fotografías y documentos del vehículo.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <span className="rounded-full bg-[#EFF4FB] px-3 py-1 text-xs font-semibold text-[#131E5C]">
+                                            {(draft.evidencias?.length || 0) +
+                                            (draft.evidenciasNuevas?.length || 0)} archivos
+                                        </span>
+                                    </div>
+                                    {/* Área para arrastrar archivos */}
+                                    <div className="bg-[#F7FAFD] p-4">
+                                        <div
+                                            onDragEnter={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setArrastrandoEvidencias(true);
+                                            }}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.dataTransfer.dropEffect = "copy";
+                                                setArrastrandoEvidencias(true);
+                                            }}
+                                            onDragLeave={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (!e.currentTarget.contains(e.relatedTarget)) {
+                                                    setArrastrandoEvidencias(false);
+                                                }
+                                            }}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setArrastrandoEvidencias(false);
+                                                agregarArchivosEvidencia(e.dataTransfer.files);
+                                            }}
+                                            className={[
+                                                "flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-5 py-8 text-center transition",
+                                                arrastrandoEvidencias
+                                                    ? "border-[#0956AB] bg-[#EAF2FF]"
+                                                    : "border-[#D0DFF3] bg-white",
+                                            ].join(" ")}
+                                        >
+                                            <div className="rounded-xl bg-[#131E5C] p-3 text-white shadow-md">
+                                                <CloudUpload className="h-7 w-7" />
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-bold text-[#131E5C]">
+                                                    Arrastra tus evidencias aquí
+                                                </p>
+                                                <p className="mt-1 text-xs text-slate-500">
+                                                    O selecciónalas desde tu dispositivo
+                                                </p>
+                                            </div>
+                                            {/* Botones */}
+                                            <div className="flex flex-wrap items-center justify-center gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => inputEvidenciasRef.current?.click()}
+                                                    className="inline-flex items-center gap-2 rounded-xl bg-[#131E5C] px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#202F7E]"
+                                                >
+                                                    <FolderOpen className="h-4 w-4" />
+                                                    Seleccionar archivos
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => inputCamaraRef.current?.click()}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-[#D9E2F2] bg-white px-5 py-2.5 text-xs font-semibold text-[#131E5C] transition hover:bg-[#F1F5FA]"
+                                                >
+                                                    <Camera className="h-4 w-4" />
+                                                    Tomar foto
+                                                </button>
+                                            </div>
+
+                                            <p className="text-[11px] text-slate-400">
+                                                JPG · PNG · WEBP · PDF — Máximo 10 MB por archivo
+                                            </p>
+                                        </div>
                                     </div>
 
-                                    <div className="text-[11px]" style={{ color: COLOR.inkFaint }}>
-                                        JPG, PNG, WEBP o PDF · Máximo 10 MB por archivo
-                                    </div>
-
+                                    {/* Selector de archivos */}
                                     <input
+                                        ref={inputEvidenciasRef}
                                         type="file"
                                         multiple
-                                        accept="image/*,.pdf"
-                                        style={{ display: "none" }}
+                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                        className="hidden"
                                         onChange={(e) => {
-                                            const files = Array.from(e.target.files || []);
-
-                                            setDraft((prev) => ({
-                                                ...prev,
-                                                evidenciasNuevas: [
-                                                    ...(prev.evidenciasNuevas || []),
-                                                    ...files,
-                                                ],
-                                            }));
-
+                                            agregarArchivosEvidencia(e.target.files);
                                             e.target.value = "";
                                         }}
                                     />
-                                </label>
 
+                                    {/* Captura de fotografía */}
+                                    <input
+                                        ref={inputCamaraRef}
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            agregarArchivosEvidencia(e.target.files);
+                                            e.target.value = "";
+                                        }}
+                                    />
+                                </div>
                                 {(draft.evidencias || []).length > 0 && (
                                     <div className="mt-4">
                                         <div
@@ -2111,16 +2241,14 @@ export default function HojaRegistros() {
                                     )}
                             </Field>
                         </div>
-
                         <PanelInspectorIA
                             draft={draft}
                             analizandoIA={analizandoIA}
                             progresoIA={progresoIA}
                             saving={saving}
                             onAnalizar={analizarConIA}
+                            onVisualizar={setImagenVisualizada}
                         />
-
-
                         <div className="md:col-span-3">
                             <Field label="Declaración textual del cliente">
                                 <textarea
@@ -2159,8 +2287,8 @@ export default function HojaRegistros() {
                         className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
-                            <span className="truncate text-sm font-semibold text-[#131E5C]">
+                        <div className="flex items-center justify-between gap-3 border-b border-[#131E5C] bg-[#131E5C] px-5 py-4">
+                            <span className="truncate text-sm font-semibold text-white">
                                 {imagenVisualizada.nombre_original || "Evidencia"}
                             </span>
 
@@ -2168,13 +2296,12 @@ export default function HojaRegistros() {
                                 type="button"
                                 onClick={() => setImagenVisualizada(null)}
                                 aria-label="Cerrar visor"
-                                className="rounded-lg p-2 text-[#131E5C] hover:bg-slate-100"
+                                className="rounded-lg p-2 text-white transition hover:bg-white/15"
                             >
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
-
-                        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-900 p-4">
+                            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-white p-4">
                             {(
                                 imagenVisualizada.tipo_mime?.toLowerCase().startsWith("image/") ||
                                 /\.(jpg|jpeg|png|webp)$/i.test(imagenVisualizada.nombre_original || "")
@@ -2199,7 +2326,7 @@ export default function HojaRegistros() {
         </div >
     );
     }
-function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar }) {
+function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar, onVisualizar }) {
     const evidencias = draft?.evidencias || [];
     const resultados = draft?.analisisIA || [];
     const archivosSinGuardar = (draft?.evidenciasNuevas || []).length;
@@ -2364,11 +2491,14 @@ function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar 
                                 >
                                     <div className="relative flex h-52 items-center justify-center bg-slate-100">
                                         {item.imagen_url ? (
-                                            <a
-                                                href={item.imagen_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="block h-full w-full"
+                                            <button
+                                                type="button"
+                                                onClick={() => onVisualizar({
+                                                    url: item.imagen_url,
+                                                    nombre_original: `Inspección IA - ${nombreFoto}`,
+                                                    tipo_mime: "image/png",
+                                                })}
+                                                className="block h-full w-full cursor-zoom-in"
                                                 title="Visualizar imagen completa"
                                             >
                                                 <img
@@ -2377,7 +2507,7 @@ function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar 
                                                     className="h-full w-full object-contain"
                                                     loading="lazy"
                                                 />
-                                            </a>
+                                            </button>
                                         ) : (
                                             <span className="text-[12px] text-slate-400">
                                                 Imagen no disponible
@@ -2485,15 +2615,18 @@ function PanelInspectorIA({ draft, analizandoIA, progresoIA, saving, onAnalizar 
 
                                         {item.imagen_url && (
                                             <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
-                                                <a
-                                                    href={item.imagen_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onVisualizar({
+                                                        url: item.imagen_url,
+                                                        nombre_original: `Inspección IA - ${nombreFoto}`,
+                                                        tipo_mime: "image/png",
+                                                    })}
                                                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#131E5C]/15 px-3 py-2.5 text-[12px] font-semibold text-[#131E5C] hover:bg-slate-50"
                                                 >
                                                     <Eye className="h-4 w-4" />
                                                     Visualizar
-                                                </a>
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => descargarImagenIA(item)}
