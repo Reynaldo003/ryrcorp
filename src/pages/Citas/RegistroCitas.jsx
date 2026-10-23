@@ -1397,6 +1397,8 @@ export default function RegistroCitas() {
         () => new Date().getMonth() + 1
     );
     
+    const [periodoRapido, setPeriodoRapido] = useState(null);
+
     const seleccionarPeriodo = (anio, mes) => {
         const mesActual = new Date().getMonth() + 1;
 
@@ -1421,6 +1423,7 @@ export default function RegistroCitas() {
         setAnioSeleccionado(anio);
         setMesSeleccionado(nuevoMes);
         setPage(1);
+        setPeriodoRapido(null);
 
         setFilters((prev) => ({
             ...prev,
@@ -1894,6 +1897,7 @@ export default function RegistroCitas() {
 
     const resetFilters = () => {
         setPage(1);
+        setPeriodoRapido(null);
 
         // Restablecer los controles de año y mes
         setAnioSeleccionado(new Date().getFullYear());
@@ -1914,32 +1918,43 @@ export default function RegistroCitas() {
             ),
         });
     };
-
-    const toggleRangoFechas = (desde, hasta) => {
+    const toggleRangoFechas = (desde, hasta, periodo = null) => {
         setPage(1);
 
-        // Desmarcar el periodo seleccionado en los botones nuevos
-        setMesSeleccionado(null);
+        const desactivar = periodoRapido === periodo;
 
-        // Sincronizar el selector de año
+        if (desactivar) {
+            const hoy = new Date();
+            const anio = hoy.getFullYear();
+            const mes = hoy.getMonth() + 1;
+
+            setPeriodoRapido(null);
+            setAnioSeleccionado(anio);
+            setMesSeleccionado(mes);
+
+            setFilters((prev) => ({
+                ...prev,
+                rangoDesde: `${anio}-${String(mes).padStart(2, "0")}-01`,
+                rangoHasta: toYMDLocal(new Date(anio, mes, 0)),
+            }));
+
+            return;
+        }
+
+        setPeriodoRapido(periodo);
+        setMesSeleccionado(null);
         setAnioSeleccionado(new Date().getFullYear());
 
-        setFilters((prev) => {
-            const mismoRango =
-                prev.rangoDesde === desde &&
-                prev.rangoHasta === hasta;
-
-            return {
-                ...prev,
-                rangoDesde: mismoRango ? "" : desde,
-                rangoHasta: mismoRango ? "" : hasta,
-            };
-        });
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: desde,
+            rangoHasta: hasta,
+        }));
     };
 
     const setHoy = () => {
         const hoy = toYMDLocal(new Date());
-        toggleRangoFechas(hoy, hoy);
+        toggleRangoFechas(hoy, hoy, "hoy");
     };
 
     const setAyer = () => {
@@ -1948,7 +1963,7 @@ export default function RegistroCitas() {
 
         const ymd = toYMDLocal(ayer);
 
-        toggleRangoFechas(ymd, ymd);
+        toggleRangoFechas(ymd, ymd, "ayer");
     };
 
     const setSemana = () => {
@@ -1965,7 +1980,8 @@ export default function RegistroCitas() {
 
         toggleRangoFechas(
             toYMDLocal(lunes),
-            toYMDLocal(domingo)
+            toYMDLocal(domingo),
+            "semana"
         );
     };
 
@@ -1977,7 +1993,8 @@ export default function RegistroCitas() {
 
         toggleRangoFechas(
             toYMDLocal(desde),
-            toYMDLocal(hasta)
+            toYMDLocal(hasta),
+            "7dias"
         );
     };
 
@@ -1989,7 +2006,8 @@ export default function RegistroCitas() {
 
         toggleRangoFechas(
             toYMDLocal(desde),
-            toYMDLocal(hasta)
+            toYMDLocal(hasta),
+            "30dias"
         );
     };
 
@@ -2010,7 +2028,8 @@ export default function RegistroCitas() {
 
         toggleRangoFechas(
             toYMDLocal(primero),
-            toYMDLocal(ultimo)
+            toYMDLocal(ultimo),
+            "mes"
         );
     };
 
@@ -2317,7 +2336,108 @@ export default function RegistroCitas() {
                         </div>
                     </div>
                 </div>
-            </div>              
+            </div>
+                {/* FILTROS RÁPIDOS Y RANGO DE FECHAS */}
+                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-3 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+
+                    {/* Periodos rápidos */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="mr-1 text-xs font-bold text-[#131E5C]">
+                            FECHAS:
+                        </span>
+
+                        {[
+                            { id: "hoy", label: "Hoy", action: setHoy },
+                            { id: "ayer", label: "Ayer", action: setAyer },
+                            { id: "semana", label: "Semana", action: setSemana },
+                            { id: "7dias", label: "7 días", action: setUltimos7Dias },
+                            { id: "30dias", label: "30 días", action: setUltimos30Dias },
+                            { id: "mes", label: "Este mes", action: setEsteMes },
+                        ].map(({ id, label, action }) => {
+                            const activo = periodoRapido === id;
+
+                            return (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    onClick={action}
+                                    className={[
+                                        "rounded-full border px-4 py-2 text-xs font-bold transition-all duration-200",
+                                        activo
+                                            ? "border-[#131E5C] bg-[#131E5C] text-white shadow-md"
+                                            : "border-[#D9E2F2] bg-[#F1F5FA] text-[#131E5C] hover:border-[#131E5C] hover:bg-[#E5ECF7]",
+                                    ].join(" ")}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Rango personalizado */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-[#131E5C]">
+                            RANGO:
+                        </span>
+
+                        <input
+                            type="date"
+                            aria-label="Fecha desde"
+                            value={filters.rangoDesde}
+                            max={filters.rangoHasta || undefined}
+                            onChange={(e) => {
+                                setPeriodoRapido(null);
+                                setMesSeleccionado(null);
+                                setPage(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    rangoDesde: e.target.value,
+                                }));
+                            }}
+                            className="rounded-xl border border-[#D9E2F2] bg-[#F8FAFF] px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none focus:border-[#131E5C]"
+                        />
+
+                        <span className="text-sm font-bold text-slate-400">
+                            →
+                        </span>
+
+                        <input
+                            type="date"
+                            aria-label="Fecha hasta"
+                            value={filters.rangoHasta}
+                            min={filters.rangoDesde || undefined}
+                            onChange={(e) => {
+                                setPeriodoRapido(null);
+                                setMesSeleccionado(null);
+                                setPage(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    rangoHasta: e.target.value,
+                                }));
+                            }}
+                            className="rounded-xl border border-[#D9E2F2] bg-[#F8FAFF] px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none focus:border-[#131E5C]"
+                        />
+
+                        <button
+                            type="button"
+                            title="Limpiar filtro de fechas"
+                            aria-label="Limpiar filtro de fechas"
+                            onClick={() => {
+                                setPeriodoRapido(null);
+                                setMesSeleccionado(null);
+                                setPage(1);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    rangoDesde: "",
+                                    rangoHasta: "",
+                                }));
+                            }}
+                            className="rounded-xl border border-[#D9E2F2] bg-white p-2 text-[#131E5C] transition hover:bg-[#F1F5FA]"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
             {/* FILTROS DE BÚSQUEDA, AÑO Y MES */}
             <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
 
@@ -2362,10 +2482,12 @@ export default function RegistroCitas() {
                         value={anioSeleccionado}
                         onChange={(e) => {
                             const anio = Number(e.target.value);
-                            const mes = mesSeleccionado;
+                            const mes = mesSeleccionado ?? 0;
 
                             setAnioSeleccionado(anio);
+                            setMesSeleccionado(mes);
                             setPage(1);
+                            setPeriodoRapido(null);
 
                             setFilters((prev) => ({
                                 ...prev,
@@ -2410,8 +2532,8 @@ export default function RegistroCitas() {
                                 "NOVIEMBRE",
                                 "DICIEMBRE",
                             ].map((nombre, indice) => {
-                                const activo = mesSeleccionado === indice;
-
+                                const activo =
+                                    periodoRapido === null && mesSeleccionado === indice;
                                 return (
                                     <button
                                         key={nombre}

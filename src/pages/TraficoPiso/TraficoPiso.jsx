@@ -732,6 +732,17 @@ export default function TraficoPiso() {
     const [mesSeleccionado, setMesSeleccionado] = useState(
         () => new Date().getMonth() + 1
     );
+
+    const [periodoRapido, setPeriodoRapido] = useState(null);
+
+    const opcionesPeriodo = [
+        { id: "hoy", label: "Hoy" },
+        { id: "ayer", label: "Ayer" },
+        { id: "semana", label: "Semana" },
+        { id: "7dias", label: "7 días" },
+        { id: "30dias", label: "30 días" },
+        { id: "mes", label: "Este mes" },
+    ];
     const [sort, setSort] = useState({ key: "creado_en", dir: "desc" });
     const [ctxMenu, setCtxMenu] = useState({ open: false, x: 0, y: 0, row: null });
     const [openModal, setOpenModal] = useState(false);
@@ -1268,6 +1279,8 @@ export default function TraficoPiso() {
 
         setPagina(1);
 
+        setPeriodoRapido(null);
+
         setFilters((prev) => ({
             ...prev,
             rangoDesde: desde,
@@ -1296,25 +1309,23 @@ export default function TraficoPiso() {
 
     function resetFilters() { setFilters({ q: "", agencia: "Todos", tipoPersona: "Todos", tiempoCompra: "Todos", rangoDesde: "", rangoHasta: "" }); }
 
-    function toggleRangoFechas(desde, hasta) {
+    function toggleRangoFechas(desde, hasta, periodo = null) {
         setPagina(1);
 
-        setFilters((prev) => {
-            const mismoRango =
-                prev.rangoDesde === desde &&
-                prev.rangoHasta === hasta;
+        const desactivar = periodoRapido === periodo;
 
-            return {
-                ...prev,
-                rangoDesde: mismoRango ? "" : desde,
-                rangoHasta: mismoRango ? "" : hasta,
-            };
-        });
+        setPeriodoRapido(desactivar ? null : periodo);
+
+        setFilters((prev) => ({
+            ...prev,
+            rangoDesde: desactivar ? "" : desde,
+            rangoHasta: desactivar ? "" : hasta,
+        }));
     }
 
     function setHoy() {
         const hoy = toYMDLocal(new Date());
-        toggleRangoFechas(hoy, hoy);
+        toggleRangoFechas(hoy, hoy, "hoy");
     }
 
     function setAyer() {
@@ -1322,7 +1333,7 @@ export default function TraficoPiso() {
         ayer.setDate(ayer.getDate() - 1);
 
         const ymd = toYMDLocal(ayer);
-        toggleRangoFechas(ymd, ymd);
+        toggleRangoFechas(ymd, ymd, "ayer");
     }
 
     function setSemana() {
@@ -1340,7 +1351,8 @@ export default function TraficoPiso() {
 
         toggleRangoFechas(
             toYMDLocal(lunes),
-            toYMDLocal(domingo)
+            toYMDLocal(domingo),
+            "semana"
         );
     }
 
@@ -1352,7 +1364,8 @@ export default function TraficoPiso() {
 
         toggleRangoFechas(
             toYMDLocal(desde),
-            toYMDLocal(hasta)
+            toYMDLocal(hasta),
+            "7dias"
         );
     }
 
@@ -1364,7 +1377,8 @@ export default function TraficoPiso() {
 
         toggleRangoFechas(
             toYMDLocal(desde),
-            toYMDLocal(hasta)
+            toYMDLocal(hasta),
+            "30dias"
         );
     }
 
@@ -1385,7 +1399,8 @@ export default function TraficoPiso() {
 
         toggleRangoFechas(
             toYMDLocal(primero),
-            toYMDLocal(ultimo)
+            toYMDLocal(ultimo),
+            "mes"
         );
     }
 
@@ -1700,6 +1715,103 @@ export default function TraficoPiso() {
             </div>
         </div>
         </div>
+        {/* FILTROS RÁPIDOS Y RANGO DE FECHAS */}
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-3 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+
+            {/* Botones de periodos rápidos */}
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-xs font-bold text-[#131E5C]">
+                    FECHAS:
+                </span>
+
+                {[
+                    { id: "hoy", label: "Hoy", action: setHoy },
+                    { id: "ayer", label: "Ayer", action: setAyer },
+                    { id: "semana", label: "Semana", action: setSemana },
+                    { id: "7dias", label: "7 días", action: setUltimos7Dias },
+                    { id: "30dias", label: "30 días", action: setUltimos30Dias },
+                    { id: "mes", label: "Este mes", action: setEsteMes },
+                ].map(({ id, label, action }) => {
+                    const activo = periodoRapido === id;
+
+                    return (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={action}
+                            className={[
+                                "rounded-full border px-4 py-2 text-xs font-bold transition-all duration-200",
+                                activo
+                                    ? "border-[#131E5C] bg-[#131E5C] text-white shadow-md"
+                                    : "border-[#D9E2F2] bg-[#F1F5FA] text-[#131E5C] hover:border-[#131E5C] hover:bg-[#E5ECF7]",
+                            ].join(" ")}
+                        >
+                            {label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Rango personalizado */}
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-[#131E5C]">
+                    RANGO:
+                </span>
+
+                <input
+                    type="date"
+                    aria-label="Fecha desde"
+                    value={filters.rangoDesde}
+                    max={filters.rangoHasta || undefined}
+                    onChange={(e) => {
+                        setPeriodoRapido(null);
+                        setPagina(1);
+                        setFilters((prev) => ({
+                            ...prev,
+                            rangoDesde: e.target.value,
+                        }));
+                    }}
+                    className="rounded-xl border border-[#D9E2F2] bg-[#F8FAFF] px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none focus:border-[#131E5C]"
+                />
+
+                <span className="text-sm font-bold text-slate-400">
+                    →
+                </span>
+
+                <input
+                    type="date"
+                    aria-label="Fecha hasta"
+                    value={filters.rangoHasta}
+                    min={filters.rangoDesde || undefined}
+                    onChange={(e) => {
+                        setPeriodoRapido(null);
+                        setPagina(1);
+                        setFilters((prev) => ({
+                            ...prev,
+                            rangoHasta: e.target.value,
+                        }));
+                    }}
+                    className="rounded-xl border border-[#D9E2F2] bg-[#F8FAFF] px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none focus:border-[#131E5C]"
+                />
+
+                <button
+                    type="button"
+                    title="Limpiar filtro de fechas"
+                    onClick={() => {
+                        setPeriodoRapido(null);
+                        setPagina(1);
+                        setFilters((prev) => ({
+                            ...prev,
+                            rangoDesde: "",
+                            rangoHasta: "",
+                        }));
+                    }}
+                    className="rounded-xl border border-[#D9E2F2] bg-white p-2 text-[#131E5C] transition hover:bg-[#F1F5FA]"
+                >
+                    <X className="h-4 w-4" />
+                </button>
+            </div>
+        </div>
 {/* FILTRO DE AÑO Y MESES */}
 <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
 
@@ -1740,9 +1852,9 @@ export default function TraficoPiso() {
                 { label: "OCTUBRE", value: 10 },
                 { label: "NOVIEMBRE", value: 11 },
                 { label: "DICIEMBRE", value: 12 },
-            ].map((mes) => {
-                const activo = mesSeleccionado === mes.value;
-
+                ].map((mes) => {
+                    const activo =
+                        periodoRapido === null && mesSeleccionado === mes.value;
                 return (
                     <button
                         key={mes.value}
