@@ -1,12 +1,11 @@
 // src/pages/GestionNegocio/Valuaciones.jsx
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
     CheckCircle2,
     Plus,
     Check,
     ChevronDown,
     FileDown,
-    FileSpreadsheet,
     UserCheck,
     ChevronRight,
     CalendarDays,
@@ -27,12 +26,7 @@ import {
 } from "lucide-react";
 
 import { Pie } from "@ant-design/plots";
-import ExcelJS from "exceljs";
-import html2canvas from "html2canvas-pro";
-import { jsPDF } from "jspdf";
-import { autoTable } from "jspdf-autotable";
 import { apiAvaluos } from "../../lib/apiAvaluos";
-import { useAuth } from "../../auth/AuthContext";
 
 // RECURSOS VISUALES E IMÁGENES DEDICADAS A VALUACIONES / AVALÚOS
 const IMAGEN_VALUACIONES = "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80";
@@ -57,60 +51,6 @@ const PALETA_VW = [
     "#F59E0B", // Amber
     "#10B981"  // Emerald
 ];
-
-function descargarBlob(blob, nombreArchivo) {
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement("a");
-    enlace.href = url;
-    enlace.download = nombreArchivo;
-    document.body.appendChild(enlace);
-    enlace.click();
-    enlace.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function esperarRenderCompleto() {
-    if (document.fonts?.ready) await document.fonts.ready;
-
-    await new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(resolve));
-    });
-
-    // Permite que las gráficas terminen de medir y pintar.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-}
-
-function agregarCanvasPaginadoPdf(doc, canvas) {
-    const margen = 8;
-    const anchoPagina = doc.internal.pageSize.getWidth();
-    const altoPagina = doc.internal.pageSize.getHeight();
-    const anchoUtil = anchoPagina - margen * 2;
-    const altoUtil = altoPagina - margen * 2;
-    const pixelesPorMm = canvas.width / anchoUtil;
-    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
-
-    let posicionY = 0;
-    let primeraPagina = true;
-
-    while (posicionY < canvas.height) {
-        if (!primeraPagina) doc.addPage("a4", "landscape");
-        primeraPagina = false;
-
-        const altoActualPx = Math.min(altoCortePx, canvas.height - posicionY);
-        const corte = document.createElement("canvas");
-        corte.width = canvas.width;
-        corte.height = altoActualPx;
-        const contexto = corte.getContext("2d");
-        if (!contexto) throw new Error("No fue posible preparar una página del PDF.");
-        contexto.fillStyle = "#ffffff";
-        contexto.fillRect(0, 0, corte.width, corte.height);
-        contexto.drawImage(canvas, 0, posicionY, canvas.width, altoActualPx, 0, 0, canvas.width, altoActualPx);
-
-        const altoImagenMm = altoActualPx / pixelesPorMm;
-        doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoImagenMm, undefined, "FAST");
-        posicionY += altoActualPx;
-    }
-}
 
 function formatearNombreCorto(str) {
     if (!str || str === "—") return "—";
@@ -148,12 +88,6 @@ function normalizarAvaluos(lista) {
             agenciaFinal = "VW Cordoba";
         } else if (lowerAgencia.includes("orizaba")) {
             agenciaFinal = "VW Orizaba";
-        } else if (lowerAgencia.includes("poza")) {
-            agenciaFinal = "VW Poza Rica";
-        } else if (lowerAgencia.includes("tuxpan")) {
-            agenciaFinal = "VW Tuxpan";
-        } else if (lowerAgencia.includes("tuxtepec")) {
-            agenciaFinal = "VW Tuxtepec";
         }
 
         const fechaRaw = extraerValor(item, "fecha_hora_cita", "fecha", "creado_en", "fecha_creacion", "fecha_avaluo");
@@ -190,49 +124,11 @@ export default function Valuaciones({ rows: initialRows }) {
     const mesActual = hoy.getMonth();
     const años = useMemo(() => Array.from({ length: 5 }, (_, i) => añoActual - i), [añoActual]);
 
-    // RESTRICCIÓN POR AGENCIA: los usuarios con agencia asignada solo ven datos de su(s) agencia(s).
-    const { user, hasAnyPermission } = useAuth();
-    const isAdmin = hasAnyPermission(["USUARIOS_ADMIN"]);
-
-    const userAgencias = useMemo(() => {
-        return String(user?.agencia || "")
-            .split("|")
-            .map((a) => a.trim().toLowerCase())
-            .filter(Boolean);
-    }, [user?.agencia]);
-
-    const agenciasVisibles = useMemo(() => {
-        if (isAdmin || userAgencias.length === 0) return AGENCIAS;
-
-        const coincidencias = AGENCIAS.filter((agencia) => {
-            const ag = agencia.toLowerCase();
-            return userAgencias.some((ua) => ag.includes(ua) || ua.includes(ag));
-        });
-
-        return coincidencias.length > 0 ? coincidencias : AGENCIAS;
-    }, [isAdmin, userAgencias]);
-
-    const soloMisAgencias = !isAdmin && userAgencias.length > 0 && agenciasVisibles.length < AGENCIAS.length;
-
     // FILTROS
     const [añoSel, setAñoSel] = useState(añoActual);
     const [mesSel, setMesSel] = useState(mesActual);
     const [agenciaSel, setAgenciaSel] = useState(null);
     const [tipoVentaSel, setTipoVentaSel] = useState("Todos");
-
-    // Si el usuario está restringido a sus agencias, fija el filtro por defecto en su agencia.
-    useEffect(() => {
-        if (isAdmin) {
-            if (agenciaSel && !AGENCIAS.includes(agenciaSel)) setAgenciaSel(null);
-            return;
-        }
-
-        if (agenciasVisibles.length === 1) {
-            if (agenciaSel !== agenciasVisibles[0]) setAgenciaSel(agenciasVisibles[0]);
-        } else if (agenciasVisibles.length > 1) {
-            if (agenciaSel && !agenciasVisibles.includes(agenciaSel)) setAgenciaSel(agenciasVisibles[0]);
-        }
-    }, [isAdmin, agenciasVisibles, agenciaSel]);
 
     // DESPLEGABLE ASESOR
     const [asesorExpandido, setAsesorExpandido] = useState(null);
@@ -240,8 +136,6 @@ export default function Valuaciones({ rows: initialRows }) {
     const [avaluosData, setAvaluosData] = useState(() => normalizarAvaluos(initialRows ?? []));
     const [loading, setLoading] = useState(!initialRows);
     const [error, setError] = useState("");
-
-    const reporteRef = useRef(null);
 
     useEffect(() => {
         setAsesorExpandido(null);
@@ -293,6 +187,41 @@ export default function Valuaciones({ rows: initialRows }) {
             return true;
         });
     }, [avaluosData, añoSel, mesSel, agenciaSel, tipoVentaSel]);
+
+    const exportarAExcel = () => {
+        if (!avaluosFiltrados || avaluosFiltrados.length === 0) return;
+
+        const headers = [
+            "Fecha / Hora Cita", "Agencia", "Prospecto", "Teléfono",
+            "Tipo Venta", "Asesor de Ventas", "Etapa de Proceso", "Tipo de Toma",
+            "Marca / Auto", "Oferta Económica", "Valuación en Sí", "Comentarios"
+        ];
+
+        const filas = avaluosFiltrados.map((row) => [
+            row.fecha_hora_cita ? new Date(row.fecha_hora_cita).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—",
+            row.agencia || "—",
+            formatearNombreCorto(row?.nombre),
+            row.telefono || "—",
+            row.tipo_venta || "—",
+            row.asesor_ventas || "—",
+            row.etapa_proceso || "—",
+            row.tipo_toma || "—",
+            row.modelo_interes || "—",
+            row.oferta_economica ? `$${Number(row.oferta_economica).toLocaleString()}` : "—",
+            row.valuacion_monto ? `$${Number(row.valuacion_monto).toLocaleString()}` : "—",
+            (row.comentarios || "—").replace(/"/g, '""')
+        ]);
+
+        const csvContent = "\uFEFF" + [headers.join(","), ...filas.map(e => e.map(val => `"${val}"`).join(","))].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Reporte_Valuaciones_${agenciaSel || "Todas"}_${tipoVentaSel}_${añoSel}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     // CÁLCULO DE MÉTRICAS
     const métricas = useMemo(() => {
@@ -398,377 +327,39 @@ export default function Valuaciones({ rows: initialRows }) {
         });
     }, [avaluosFiltrados, asesorExpandido]);
 
-    const exportarAExcel = () => {
-        if (!avaluosFiltrados || avaluosFiltrados.length === 0) return;
-
-        const headers = [
-            "Fecha / Hora Cita", "Agencia", "Prospecto", "Teléfono",
-            "Tipo Venta", "Asesor de Ventas", "Etapa de Proceso", "Tipo de Toma",
-            "Marca / Auto", "Oferta Económica", "Valuación en Sí", "Comentarios"
-        ];
-
-        const filas = avaluosFiltrados.map((row) => [
-            row.fecha_hora_cita ? new Date(row.fecha_hora_cita).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—",
-            row.agencia || "—",
-            formatearNombreCorto(row?.nombre),
-            row.telefono || "—",
-            row.tipo_venta || "—",
-            row.asesor_ventas || "—",
-            row.etapa_proceso || "—",
-            row.tipo_toma || "—",
-            row.modelo_interes || "—",
-            row.oferta_economica ? `$${Number(row.oferta_economica).toLocaleString()}` : "—",
-            row.valuacion_monto ? `$${Number(row.valuacion_monto).toLocaleString()}` : "—",
-            (row.comentarios || "—").replace(/"/g, '""')
-        ]);
-
-        const csvContent = "\uFEFF" + [headers.join(","), ...filas.map(e => e.map(val => `"${val}"`).join(","))].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Reporte_Valuaciones_${agenciaSel || "Todas"}_${tipoVentaSel}_${añoSel}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const fileStamp = () => {
-        const d = new Date();
-        const pad = (n) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
-    };
-
-    const filasValuacionesExport = () =>
-        (avaluosFiltrados || []).map((row) => ({
-            "Fecha / Hora Cita": row.fecha_hora_cita ? new Date(row.fecha_hora_cita).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—",
-            "Agencia": row.agencia || "—",
-            "Prospecto": formatearNombreCorto(row?.nombre),
-            "Teléfono": row.telefono || "—",
-            "Tipo Venta": row.tipo_venta || "—",
-            "Asesor de Ventas": row.asesor_ventas || "—",
-            "Etapa de Proceso": row.etapa_proceso || "—",
-            "Tipo de Toma": row.tipo_toma || "—",
-            "Marca / Auto": row.modelo_interes || "—",
-            "Oferta Económica": row.oferta_economica ? `$${Number(row.oferta_economica).toLocaleString()}` : "—",
-            "Valuación en Sí": row.valuacion_monto ? `$${Number(row.valuacion_monto).toLocaleString()}` : "—",
-            "Comentarios": row.comentarios || "—",
-        }));
-
-    const nombreBaseArchivo = () =>
-        `Reporte_Valuaciones_${agenciaSel || "Todas"}_${tipoVentaSel}_${añoSel}_${fileStamp()}`;
-
-    const capturarReporteVisual = async () => {
-        if (!reporteRef.current) throw new Error("No se encontró el contenido visual del reporte.");
-
-        await esperarRenderCompleto();
-
-        const canvas = await html2canvas(reporteRef.current, {
-            scale: 1.5,
-            useCORS: true,
-            allowTaint: false,
-            backgroundColor: "#ffffff",
-            logging: false,
-            windowWidth: 1440,
-            scrollX: 0,
-            scrollY: 0,
-            onclone: (documentoClonado) => {
-                const clon = documentoClonado.getElementById("reporte-valuaciones-exportacion");
-                if (clon) {
-                    clon.style.position = "absolute";
-                    clon.style.left = "0";
-                    clon.style.top = "0";
-                    clon.style.zIndex = "0";
-                }
-            },
-        });
-
-        if (!canvas.width || !canvas.height) throw new Error("No fue posible capturar las gráficas.");
-        return canvas;
-    };
-
-    const exportarExcelValuaciones = async () => {
-        if (!avaluosFiltrados || avaluosFiltrados.length === 0) {
-            alert("No hay registros para exportar con los filtros actuales.");
-            return;
-        }
-
-        try {
-            let canvas = null;
-            try {
-                canvas = await capturarReporteVisual();
-            } catch (errCaptura) {
-                console.warn("No se pudo capturar el contenido visual:", errCaptura);
-            }
-
-            const workbook = new ExcelJS.Workbook();
-            workbook.creator = "CRM Grupo Automotriz R&R";
-            workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
-            workbook.created = new Date();
-            workbook.modified = new Date();
-            workbook.subject = "Reporte de Valuaciones - Autos Usados";
-            workbook.title = `Reporte de Valuaciones - ${añoSel}`;
-
-            // ── Hoja Resumen ──
-            const hojaResumen = workbook.addWorksheet("Resumen", {
-                views: [{ showGridLines: false }],
-                pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
-            });
-            hojaResumen.columns = [{ width: 26 }, { width: 34 }, { width: 4 }, { width: 26 }, { width: 34 }];
-
-            hojaResumen.mergeCells("A1:E2");
-            const cTitulo = hojaResumen.getCell("A1");
-            cTitulo.value = "Reporte de Valuaciones - Autos Usados";
-            cTitulo.font = { name: "Arial", size: 20, bold: true, color: { argb: "FFFFFFFF" } };
-            cTitulo.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001E50" } };
-            cTitulo.alignment = { vertical: "middle", horizontal: "left" };
-            hojaResumen.getRow(1).height = 24;
-            hojaResumen.getRow(2).height = 16;
-
-            hojaResumen.mergeCells("A3:E3");
-            hojaResumen.getCell("A3").value = `Generado: ${new Date().toLocaleString("es-MX")}`;
-            hojaResumen.getCell("A3").font = { italic: true, color: { argb: "FF6B7280" } };
-
-            hojaResumen.getCell("A5").value = "Filtros aplicados";
-            hojaResumen.getCell("A5").font = { bold: true, size: 13, color: { argb: "FF001E50" } };
-
-            const filtros = [
-                ["Año", añoSel],
-                ["Mes", mesSel !== null ? MESES[mesSel] : "Todo el año"],
-                ["Agencia", agenciaSel || "Todas las agencias"],
-                ["Tipo de venta", tipoVentaSel],
-            ];
-            filtros.forEach(([etiqueta, valor], indice) => {
-                const fila = 6 + indice;
-                hojaResumen.getCell(`A${fila}`).value = etiqueta;
-                hojaResumen.getCell(`A${fila}`).font = { bold: true, color: { argb: "FF374151" } };
-                hojaResumen.getCell(`B${fila}`).value = valor;
-                hojaResumen.mergeCells(`B${fila}:E${fila}`);
-                hojaResumen.getCell(`B${fila}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
-                hojaResumen.getCell(`B${fila}`).alignment = { vertical: "middle" };
-            });
-
-            hojaResumen.getCell("A11").value = "Indicadores";
-            hojaResumen.getCell("A11").font = { bold: true, size: 13, color: { argb: "FF001E50" } };
-
-            const kpis = [
-                ["Total Valuaciones", métricas.totalAvaluos],
-                ["Promedio Diario", métricas.promedioDiario],
-                ["Cerradas", métricas.conteoCerrados],
-                ["Asesores", métricas.asesoresList.length],
-            ];
-            kpis.forEach(([etiqueta, valor], indice) => {
-                const fila = 12 + indice;
-                hojaResumen.getCell(`A${fila}`).value = etiqueta;
-                hojaResumen.getCell(`A${fila}`).font = { bold: true, color: { argb: "FF374151" } };
-                hojaResumen.getCell(`B${fila}`).value = valor;
-                hojaResumen.mergeCells(`B${fila}:E${fila}`);
-                hojaResumen.getCell(`B${fila}`).font = { bold: true, color: { argb: "FF001E50" } };
-                hojaResumen.getCell(`B${fila}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
-            });
-
-            // ── Hoja Datos (todo el contenido, sin paginación) ──
-            const hojaDatos = workbook.addWorksheet("Datos", {
-                views: [{ state: "frozen", ySplit: 1 }],
-                pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-            });
-            const registros = filasValuacionesExport();
-            const claves = Object.keys(registros[0] || {});
-            hojaDatos.columns = claves.map((clave) => ({ key: clave, width: Math.min(45, Math.max(14, clave.length + 6)) }));
-            registros.forEach((registro) => hojaDatos.addRow(registro));
-            hojaDatos.getRow(1).eachCell((celda) => {
-                celda.font = { bold: true, color: { argb: "FFFFFFFF" } };
-                celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001E50" } };
-                celda.alignment = { horizontal: "center" };
-            });
-            hojaDatos.headerFooter.oddHeader = `&L&16&BReporte de Valuaciones - ${añoSel}&R&D`;
-            hojaDatos.headerFooter.oddFooter = "&LCRM Grupo Automotriz R&R&RPágina &P de &N";
-
-            // ── Hoja Gráficas (captura visual) ──
-            if (canvas) {
-                const hojaGraficas = workbook.addWorksheet("Gráficas", {
-                    views: [{ showGridLines: false, zoomScale: 70 }],
-                    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-                });
-                const base64 = canvas.toDataURL("image/png");
-                const imageId = workbook.addImage({ base64, extension: "png" });
-                const ancho = 1200;
-                const alto = Math.round((canvas.height / canvas.width) * ancho);
-                hojaGraficas.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: ancho, height: alto } });
-                for (let i = 1; i <= 18; i += 1) hojaGraficas.getColumn(i).width = 11;
-            }
-
-            const buffer = await workbook.xlsx.writeBuffer();
-            const archivo = new Blob([buffer], {
-                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            });
-            descargarBlob(archivo, `${nombreBaseArchivo()}.xlsx`);
-        } catch (error) {
-            console.error("Error exportando valuaciones a Excel:", error);
-            alert("No se pudo generar el Excel. Revisa la consola.");
-        }
-    };
-
-    const exportarPdfValuaciones = async () => {
-        if (!avaluosFiltrados || avaluosFiltrados.length === 0) {
-            alert("No hay registros para exportar con los filtros actuales.");
-            return;
-        }
-
-        try {
-            let canvas = null;
-            try {
-                canvas = await capturarReporteVisual();
-            } catch (errCaptura) {
-                console.warn("No se pudo capturar el contenido visual:", errCaptura);
-            }
-
-            const doc = new jsPDF({
-                orientation: "landscape",
-                unit: "mm",
-                format: "a4",
-                compress: true,
-            });
-            doc.setProperties({
-                title: `Reporte de Valuaciones - ${añoSel}`,
-                subject: "Reporte de valuaciones con gráficas y detalle completo",
-                author: "CRM Grupo Automotriz R&R",
-                creator: "CRM Grupo Automotriz R&R",
-            });
-
-            if (canvas) {
-                agregarCanvasPaginadoPdf(doc, canvas);
-            }
-
-            const headers = [
-                "Fecha / Hora Cita", "Agencia", "Prospecto", "Teléfono",
-                "Tipo Venta", "Asesor de Ventas", "Etapa de Proceso", "Tipo de Toma",
-                "Marca / Auto", "Oferta Económica", "Valuación en Sí", "Comentarios"
-            ];
-
-            const body = avaluosFiltrados.map((row) => [
-                row.fecha_hora_cita ? new Date(row.fecha_hora_cita).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—",
-                row.agencia || "—",
-                formatearNombreCorto(row?.nombre),
-                row.telefono || "—",
-                row.tipo_venta || "—",
-                row.asesor_ventas || "—",
-                row.etapa_proceso || "—",
-                row.tipo_toma || "—",
-                row.modelo_interes || "—",
-                row.oferta_economica ? `$${Number(row.oferta_economica).toLocaleString()}` : "—",
-                row.valuacion_monto ? `$${Number(row.valuacion_monto).toLocaleString()}` : "—",
-                String(row.comentarios || "—")
-            ]);
-
-            doc.addPage("a4", "landscape");
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(13);
-            doc.setTextColor(19, 30, 92);
-            doc.text(
-                `Detalle completo (${avaluosFiltrados.length} valuaciones) · ${añoSel} · ${mesSel !== null ? MESES[mesSel] : "Todo el año"} · ${agenciaSel || "Todas las agencias"}`,
-                10,
-                12
-            );
-
-            autoTable(doc, {
-                startY: 17,
-                head: [headers],
-                body,
-                theme: "grid",
-                styles: {
-                    font: "helvetica",
-                    fontSize: 6,
-                    cellPadding: 1.2,
-                    overflow: "linebreak",
-                    valign: "middle",
-                    textColor: [55, 65, 81],
-                    lineColor: [229, 231, 235],
-                    lineWidth: 0.15,
-                },
-                headStyles: {
-                    fillColor: [19, 30, 92],
-                    textColor: [255, 255, 255],
-                    fontStyle: "bold",
-                    halign: "center",
-                },
-                alternateRowStyles: { fillColor: [249, 250, 251] },
-                margin: { left: 8, right: 8, bottom: 10 },
-                didDrawPage: () => {
-                    const ancho = doc.internal.pageSize.getWidth();
-                    const alto = doc.internal.pageSize.getHeight();
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(7);
-                    doc.setTextColor(107, 114, 128);
-                    doc.text(`Página ${doc.getNumberOfPages()}`, ancho - 22, alto - 4);
-                },
-            });
-
-            doc.save(`${nombreBaseArchivo()}.pdf`);
-        } catch (error) {
-            console.error("Error exportando valuaciones a PDF:", error);
-            alert("No se pudo generar el PDF. Revisa la consola.");
-        }
-    };
-
     return (
-        <div ref={reporteRef} id="reporte-valuaciones-exportacion" className="w-full bg-white text-[#1E293B] font-vw-text font-light p-3 md:p-5 space-y-5">
+        <div className="w-full bg-white text-[#1E293B] font-vw-text font-light p-3 md:p-5 space-y-5">
 
             {/* FILTROS DE AGENCIA */}
             <div className="w-full py-0.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        {!soloMisAgencias && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setAgenciaSel(null)}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
+                            ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
+                            : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
+                            }`}
+                    >
+                        <span>Todas las agencias</span>
+                    </button>
+
+                    {AGENCIAS.map((agencia) => {
+                        const active = agenciaSel === agencia;
+                        return (
                             <button
+                                key={agencia}
                                 type="button"
-                                onClick={() => setAgenciaSel(null)}
-                                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${!agenciaSel
+                                onClick={() => setAgenciaSel(active ? null : agencia)}
+                                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${active
                                     ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
                                     : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
                                     }`}
                             >
-                                <span>Todas las agencias</span>
+                                <span>{agencia}</span>
                             </button>
-                        )}
-
-                        {agenciasVisibles.map((agencia) => {
-                            const active = agenciaSel === agencia;
-                            return (
-                                <button
-                                    key={agencia}
-                                    type="button"
-                                    onClick={() => setAgenciaSel(active ? null : agencia)}
-                                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-vw-head font-bold transition-all duration-150 cursor-pointer ${active
-                                        ? "bg-[#001E50] text-white ring-2 ring-[#001E50]"
-                                        : "bg-white text-[#001E50] border border-slate-200 hover:bg-slate-50"
-                                        }`}
-                                >
-                                    <span>{agencia}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* BOTONES EXPORTAR EXCEL / PDF */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={exportarExcelValuaciones}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#16A34A] bg-[#16A34A] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#16A34A]"
-                        >
-                            <FileSpreadsheet className="h-4 w-4" />
-                            <span>Exportar Excel</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={exportarPdfValuaciones}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#DC2626] bg-[#DC2626] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-white hover:text-[#DC2626]"
-                        >
-                            <FileText className="h-4 w-4" />
-                            <span>Exportar PDF</span>
-                        </button>
-                    </div>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -872,7 +463,7 @@ export default function Valuaciones({ rows: initialRows }) {
 
                 {/* CONSOLIDADO GENERAL CON GRÁFICA DE PASTEL (ETAPA DE PROCESO): col-span-5 */}
                 <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between shadow-sm p-3.5 space-y-3">
-                    
+
                     {/* ENCABEZADO CON MARCO Y BADGE "CERRADO" */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                         <div className="flex items-center gap-2">
