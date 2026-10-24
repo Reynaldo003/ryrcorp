@@ -12,7 +12,7 @@ import {
     Play, Pause, FileText, Check, CheckCheck, Clock, AlertCircle,
     LayoutTemplate, Zap, ChevronLeft, ChevronDown, Smile, Paperclip, Mic, Square, Pencil, MessageCircle,
     UserRound, Activity, CalendarClock, CheckCircle2, XCircle, Tag, Ban, CreditCard,
-} from "lucide-react";import EmojiPicker from "emoji-picker-react";
+} from "lucide-react"; import EmojiPicker from "emoji-picker-react";
 import { api } from "../../lib/apiPruebas";
 import { apiCitas } from "../../lib/apiCitas";
 import { ESTADOS_OPCIONES_BANDEJA, resolverEstado } from "./estadosProspecto";
@@ -22,6 +22,29 @@ import MotivoDescalificacionPicker from "./MotivoDescalificacionPicker";
 const BRAND_BLUE = "#131E5C";
 const DRAWER_POLL_MS = 2000;
 const MAX_RECORDING_SECONDS = 300;
+const TEMPLATE_MEDIA_RULES = {
+    image: {
+        accept: "image/jpeg,image/png",
+        mime: ["image/jpeg", "image/png"],
+        maxBytes: 5 * 1024 * 1024,
+        maxLabel: "5 MB",
+        label: "imagen",
+    },
+    video: {
+        accept: "video/mp4",
+        mime: ["video/mp4"],
+        maxBytes: 16 * 1024 * 1024,
+        maxLabel: "16 MB",
+        label: "video",
+    },
+    document: {
+        accept: "application/pdf",
+        mime: ["application/pdf"],
+        maxBytes: 100 * 1024 * 1024,
+        maxLabel: "100 MB",
+        label: "documento PDF",
+    },
+};
 
 function fmtMoney(v) {
     const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
@@ -526,7 +549,7 @@ function ChatCard({ chat, onOpen, onChangeEtapa, selected = false }) {
                     ) : null}
 
                     <div className="mt-2 flex min-w-0 items-center gap-2">
-                        
+
                         <div className="shrink-0 max-w-[60%]" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                             <EtapaSelect
                                 estado={estado}
@@ -853,23 +876,91 @@ function getTemplateFieldNumber(field) {
 }
 
 function getFriendlyTemplateFieldLabel(field) {
-    const component = String(field?.component || "body").toLowerCase();
-    const index = getTemplateFieldNumber(field);
-    if (component === "header") return `Dato del encabezado ${index}`;
-    if (component === "button") return `Dato del botón ${index}`;
-    return `Dato variable ${index}`;
+    if (String(field?.type || "").toLowerCase() === "media") {
+        const tipo = String(field?.media_type || "").toLowerCase();
+
+        if (tipo === "image") return "Imagen del encabezado";
+        if (tipo === "video") return "Video del encabezado";
+        if (tipo === "document") return "Documento del encabezado";
+
+        return "Archivo del encabezado";
+    }
+
+    const componente = String(field?.component || "body").toLowerCase();
+    const indice = getTemplateFieldNumber(field);
+
+    if (componente === "header") return `Dato del encabezado ${indice}`;
+    if (componente === "button") return `Dato del botón ${indice}`;
+
+    return `Dato variable ${indice}`;
+}
+
+function getTemplateComponents(template = {}) {
+    if (Array.isArray(template.components_meta)) return template.components_meta;
+    if (Array.isArray(template.components)) return template.components;
+    return [];
+}
+
+function getTemplateMediaHeaderField(template = {}) {
+    const encabezado = getTemplateComponents(template).find(
+        (componente) => String(componente?.type || "").toUpperCase() === "HEADER"
+    );
+
+    const formato = String(encabezado?.format || "").toUpperCase();
+
+    if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(formato)) return null;
+
+    return {
+        key: "header_media",
+        type: "media",
+        component: "header",
+        index: 0,
+        media_type: formato.toLowerCase(),
+        required: true,
+        friendlyLabel: formato === "IMAGE"
+            ? "Imagen del encabezado"
+            : formato === "VIDEO"
+                ? "Video del encabezado"
+                : "Documento del encabezado",
+    };
 }
 
 function normalizeTemplateFromApi(template) {
+    const campoMultimedia = getTemplateMediaHeaderField(template);
+
+    const fields = (Array.isArray(template?.fields) ? template.fields : []).map((field) => {
+        const nuevo = { ...field, required: true };
+
+        if (
+            String(nuevo.component || "").toLowerCase() === "header" &&
+            String(nuevo.type || "").toLowerCase() === "media" &&
+            !nuevo.media_type
+        ) {
+            nuevo.media_type = campoMultimedia?.media_type || "";
+        }
+
+        nuevo.friendlyLabel = nuevo.friendlyLabel || getFriendlyTemplateFieldLabel(nuevo);
+        return nuevo;
+    });
+
+    if (campoMultimedia && !fields.some((field) =>
+        String(field.component || "").toLowerCase() === "header" &&
+        String(field.type || "").toLowerCase() === "media"
+    )) {
+        fields.unshift(campoMultimedia);
+    }
+
     return {
         ...template,
         key: template?.key || template?.name || "",
         name: template?.name || template?.key || "",
-        title: template?.title || String(template?.name || template?.key || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        title: template?.title || String(template?.name || template?.key || "")
+            .replaceAll("_", " ")
+            .replace(/\b\w/g, (letra) => letra.toUpperCase()),
         idioma: template?.idioma || template?.language || "es_MX",
         language: template?.language || template?.idioma || "es_MX",
         status: String(template?.status || "APPROVED").toUpperCase(),
-        fields: Array.isArray(template?.fields) ? template.fields.map((field) => ({ ...field, required: true, friendlyLabel: getFriendlyTemplateFieldLabel(field) })) : [],
+        fields,
     };
 }
 
@@ -895,13 +986,62 @@ function getDefaultValueForTemplateField(field, context) {
 
 function buildDynamicTemplateComponents(template, draft) {
     const fields = Array.isArray(template?.fields) ? template.fields : [];
-    const grouped = fields.reduce((acc, f) => { const c = String(f.component || "body").toLowerCase(); if (!acc[c]) acc[c] = []; acc[c].push(f); return acc; }, {});
-    return Object.entries(grouped).map(([type, items]) => ({
-        type,
-        parameters: items.sort((a, b) => Number(a.index || 0) - Number(b.index || 0)).map(f => ({ type: "text", text: String(draft?.[f.key] || "").trim() })),
-    })).filter(c => c.parameters.length > 0);
-}
+    const components = [];
 
+    const campoMultimedia = fields.find((field) =>
+        String(field.component || "").toLowerCase() === "header" &&
+        String(field.type || "").toLowerCase() === "media"
+    );
+
+    if (campoMultimedia) {
+        const valor = draft?.[campoMultimedia.key];
+        const tipo = String(campoMultimedia.media_type || "").toLowerCase();
+
+        if (hasTemplateFieldValue(campoMultimedia, valor)) {
+            const archivo = valor.id
+                ? { id: String(valor.id).trim() }
+                : { link: String(valor.link).trim() };
+
+            if (tipo === "document") {
+                archivo.filename = valor.filename || valor.name || "documento.pdf";
+            }
+
+            components.push({
+                type: "header",
+                parameters: [{
+                    type: tipo,
+                    [tipo]: archivo,
+                }],
+            });
+        }
+    }
+
+    const agrupados = {};
+
+    for (const field of fields) {
+        if (String(field.type || "text").toLowerCase() === "media") continue;
+
+        const componente = String(field.component || "body").toLowerCase();
+
+        if (!agrupados[componente]) agrupados[componente] = [];
+        agrupados[componente].push(field);
+    }
+
+    for (const [tipo, campos] of Object.entries(agrupados)) {
+        const parameters = campos
+            .sort((a, b) => Number(a.index || 0) - Number(b.index || 0))
+            .map((field) => ({
+                type: "text",
+                text: String(draft?.[field.key] || "").trim(),
+            }));
+
+        if (parameters.length) {
+            components.push({ type: tipo, parameters });
+        }
+    }
+
+    return components;
+}
 
 function parseWhatsAppFormat(texto) {
     let r = String(texto || "");
@@ -1205,7 +1345,14 @@ function isNearBottomDrawer(el, threshold = 150) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
 }
 
+function hasTemplateFieldValue(field, value) {
+    if (String(field?.type || "").toLowerCase() === "media") {
+        if (!value || typeof value !== "object") return false;
+        return Boolean(String(value.id || "").trim() || String(value.link || "").trim());
+    }
 
+    return Boolean(String(value || "").trim());
+}
 
 export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteRetencion = null, onTelefonoChange, }) {
     const [loading, setLoading] = useState(false);
@@ -1213,6 +1360,7 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     const [mensajes, setMensajes] = useState([]);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+    const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
     const [templatesDisponibles, setTemplatesDisponibles] = useState([]);
 
 
@@ -1258,17 +1406,17 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     const tel = normalizaTelefonoMx(telefono);
 
     const telefonosRetencion = useMemo(() => {
-    if (!clienteRetencion) return [];
+        if (!clienteRetencion) return [];
 
-    return [
-        clienteRetencion?.telefono_cliente,
-        clienteRetencion?.telefono_cliente2,
-        clienteRetencion?.telefono_cliente3,
-    ]
-        .map((telefono) => normalizaTelefonoMx(telefono))
-        .filter(Boolean)
-        .filter((telefono, index, lista) => lista.indexOf(telefono) === index);
-}, [clienteRetencion]);
+        return [
+            clienteRetencion?.telefono_cliente,
+            clienteRetencion?.telefono_cliente2,
+            clienteRetencion?.telefono_cliente3,
+        ]
+            .map((telefono) => normalizaTelefonoMx(telefono))
+            .filter(Boolean)
+            .filter((telefono, index, lista) => lista.indexOf(telefono) === index);
+    }, [clienteRetencion]);
 
     const templateMap = useMemo(() => {
         const map = new Map();
@@ -1285,7 +1433,10 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
 
     const incompleteTemplateFields = useMemo(() => {
         const fields = Array.isArray(tplSelected?.fields) ? tplSelected.fields : [];
-        return fields.filter((field) => !String(tplDraft?.[field.key] || "").trim());
+
+        return fields.filter((field) =>
+            !hasTemplateFieldValue(field, tplDraft?.[field.key])
+        );
     }, [tplSelected, tplDraft]);
 
     const messagesById = useMemo(() => {
@@ -1426,8 +1577,8 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
             stickBottomRef.current = true;
         });
 
-            return () => cancelAnimationFrame(frame);
-        }, [open, loading, tel]);
+        return () => cancelAnimationFrame(frame);
+    }, [open, loading, tel]);
 
     useEffect(() => {
         function onKeyDown(e) { if (e.key === "Escape") onClose?.(); }
@@ -1630,93 +1781,93 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     }
 
 
-                    async function enviar() {
-                        if (isRecording) {
-                            setRecordingError("Detén la grabación antes de enviar el mensaje.");
-                            return;
-                        }
+    async function enviar() {
+        if (isRecording) {
+            setRecordingError("Detén la grabación antes de enviar el mensaje.");
+            return;
+        }
 
-                        const text = draft.trim();
-                        const hasAttachments = attachments.length > 0;
+        const text = draft.trim();
+        const hasAttachments = attachments.length > 0;
 
-                        if ((!text && !hasAttachments) || !tel || sending) return;
+        if ((!text && !hasAttachments) || !tel || sending) return;
 
-                        const optimisticId = crypto.randomUUID();
-                        const currentAttachments = attachments;
+        const optimisticId = crypto.randomUUID();
+        const currentAttachments = attachments;
 
-                        const optimisticAttachments = currentAttachments.map((a) => ({
-                            id: a.id,
-                            kind: a.kind,
-                            previewUrl: a.previewUrl,
-                            url: a.previewUrl,
-                            name: a.name,
-                            size: a.size,
-                            mime: a.mime,
-                        }));
+        const optimisticAttachments = currentAttachments.map((a) => ({
+            id: a.id,
+            kind: a.kind,
+            previewUrl: a.previewUrl,
+            url: a.previewUrl,
+            name: a.name,
+            size: a.size,
+            mime: a.mime,
+        }));
 
-                        setSending(true);
-                        setDraft("");
-                        setAttachments([]);
-                        stickBottomRef.current = true;
+        setSending(true);
+        setDraft("");
+        setAttachments([]);
+        stickBottomRef.current = true;
 
-                        setMensajes((prev) => [
-                            ...prev,
-                            {
-                                id: optimisticId,
-                                mine: true,
-                                text: text || "Adjunto",
-                                attachments: optimisticAttachments,
-                                local_created_at: new Date().toISOString(),
-                                status: "sent",
-                                local_pending: true,
-                            },
-                        ]);
+        setMensajes((prev) => [
+            ...prev,
+            {
+                id: optimisticId,
+                mine: true,
+                text: text || "Adjunto",
+                attachments: optimisticAttachments,
+                local_created_at: new Date().toISOString(),
+                status: "sent",
+                local_pending: true,
+            },
+        ]);
 
-                        try {
-                            if (hasAttachments) {
-                                await api.digitalesEnviarMedia({
-                                    to: tel,
-                                    text,
-                                    files: currentAttachments
-                                        .map((a) => a.file)
-                                        .filter(Boolean),
-                                    numero_asesor: numeroAsesor,
-                                });
-                            } else {
-                                await api.digitalesEnviarMensaje({
-                                    to: tel,
-                                    text,
-                                    numero_asesor: numeroAsesor,
-                                });
-                            }
+        try {
+            if (hasAttachments) {
+                await api.digitalesEnviarMedia({
+                    to: tel,
+                    text,
+                    files: currentAttachments
+                        .map((a) => a.file)
+                        .filter(Boolean),
+                    numero_asesor: numeroAsesor,
+                });
+            } else {
+                await api.digitalesEnviarMensaje({
+                    to: tel,
+                    text,
+                    numero_asesor: numeroAsesor,
+                });
+            }
 
-                            // Ya fue aceptado el envío: permitimos escribir otro inmediatamente
-                            setSending(false);
+            // Ya fue aceptado el envío: permitimos escribir otro inmediatamente
+            setSending(false);
 
-                            // Quitamos el mensaje temporal
-                            setMensajes((prev) =>
-                                prev.filter((mensaje) => mensaje.id !== optimisticId)
-                            );
+            // Quitamos el mensaje temporal
+            setMensajes((prev) =>
+                prev.filter((mensaje) => mensaje.id !== optimisticId)
+            );
 
-                            // Traemos el mensaje real sin bloquear el compositor
-                            cargar({ markRead: false }).catch((error) => {
-                                console.error("No se pudo refrescar el chat:", error);
-                            });
+            // Traemos el mensaje real sin bloquear el compositor
+            cargar({ markRead: false }).catch((error) => {
+                console.error("No se pudo refrescar el chat:", error);
+            });
 
-                        } catch (error) {
-                            setMensajes((prev) =>
-                                prev.filter((mensaje) => mensaje.id !== optimisticId)
-                            );
+        } catch (error) {
+            setMensajes((prev) =>
+                prev.filter((mensaje) => mensaje.id !== optimisticId)
+            );
 
-                            setSending(false);
+            setSending(false);
 
-                            alert(`Falló el envío: ${error.message}`);
+            alert(`Falló el envío: ${error.message}`);
 
-                            cargar({ markRead: false }).catch(() => {});
-                        } finally {
-                            cleanupPreviews(optimisticAttachments);
-                        }
-                    }
+            cargar({ markRead: false }).catch(() => { });
+        } finally {
+            cleanupPreviews(optimisticAttachments);
+        }
+    }
 
     function onKeyDownComposer(e) {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); }
@@ -1821,172 +1972,189 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
     }
 
     function pickTemplate(template) {
-        const normalizedTemplate = normalizeTemplateFromApi(template);
-        setTplSelected(normalizedTemplate);
+        const plantilla = normalizeTemplateFromApi(template);
+        setTplSelected(plantilla);
         setTemplatesError("");
 
-        const currentAgencia = String(prospecto?.agencia || "").trim();
-        const bestDealer =
-            DEALERS.find((dealer) => dealer.toLowerCase() === currentAgencia.toLowerCase()) ||
-            DEALERS.find((dealer) => currentAgencia.toLowerCase().includes(dealer.toLowerCase())) ||
-            "";
+        const agenciaActual = String(
+            prospecto?.agencia || clienteRetencion?.agencia || ""
+        ).trim();
+
+        const agencia = DEALERS.find(
+            (dealer) => dealer.toLowerCase() === agenciaActual.toLowerCase()
+        ) || DEALERS.find(
+            (dealer) => agenciaActual.toLowerCase().includes(dealer.toLowerCase())
+        ) || "";
 
         const canalActual = String(prospecto?.canal_contacto || "").trim();
-        const bestCanal = CANALES.find((canal) => canal.toLowerCase() === canalActual.toLowerCase()) || "";
+        const canal = CANALES.find(
+            (item) => item.toLowerCase() === canalActual.toLowerCase()
+        ) || "";
 
-        const asesorAuto = String(prospecto?.asesor_digital || prospecto?.asesor_ventas || prospecto?.responsable || "").trim();
-
-        const context = {
-            nombre: String(prospecto?.nombre || "").trim(),
-            agencia: bestDealer,
-            modelo: String(prospecto?.auto_interes || "").trim(),
-            canal: bestCanal,
-            asesor: asesorAuto,
+        const contexto = {
+            nombre: String(prospecto?.nombre || clienteRetencion?.nombre_cliente || "").trim(),
+            agencia,
+            modelo: String(prospecto?.auto_interes || clienteRetencion?.modelo_nombre || "").trim(),
+            canal,
+            asesor: String(prospecto?.asesor_digital || prospecto?.asesor_ventas || prospecto?.responsable || "").trim(),
             tema: prospecto?.auto_interes ? "auto de interés" : "cita",
             dato: "",
         };
 
-        const values = {};
-        for (const field of normalizedTemplate.fields) {
-            values[field.key] = getDefaultValueForTemplateField(field, context);
+        const valores = {};
+
+        for (const field of plantilla.fields) {
+            if (String(field.type || "").toLowerCase() === "media") {
+                valores[field.key] = null;
+            } else {
+                valores[field.key] = getDefaultValueForTemplateField(field, contexto);
+            }
         }
-        setTplDraft(values);
+
+        setTplDraft(valores);
     }
 
+    async function handleTemplateMediaFile(field, file) {
+        if (!file || uploadingTemplateMedia) return;
 
-            async function enviarPlantilla() {
-                if (!tel || !tplSelected || sendingTemplate) return;
+        const tipo = String(field?.media_type || "").toLowerCase();
+        const regla = TEMPLATE_MEDIA_RULES[tipo];
 
-                const fields = Array.isArray(tplSelected.fields) ? tplSelected.fields : [];
-                const incompleteField = fields.find(
-                    (field) => !String(tplDraft?.[field.key] || "").trim()
-                );
+        if (!regla) {
+            setTemplatesError("El tipo multimedia de esta plantilla no es compatible.");
+            return;
+        }
 
-                if (incompleteField) {
-                    setTemplatesError(
-                        `Completa el campo obligatorio: ${
-                            incompleteField.friendlyLabel ||
-                            getFriendlyTemplateFieldLabel(incompleteField)
-                        }.`
-                    );
-                    return;
-                }
+        const mime = String(file.type || "").toLowerCase();
 
-                const idioma =
-                    tplSelected.idioma ||
-                    tplSelected.language ||
-                    "es_MX";
+        if (!regla.mime.includes(mime)) {
+            setTemplatesError(`Formato no permitido. Para ${regla.label} se acepta: ${regla.mime.join(", ")}.`);
+            return;
+        }
 
-                const templateName =
-                    tplSelected.key ||
-                    tplSelected.name;
+        if (file.size > regla.maxBytes) {
+            setTemplatesError(`El archivo supera el límite permitido de ${regla.maxLabel}.`);
+            return;
+        }
 
-                if (!templateName) {
-                    setTemplatesError(
-                        "La plantilla seleccionada no tiene un nombre válido."
-                    );
-                    return;
-                }
+        setUploadingTemplateMedia(true);
+        setTemplatesError("");
 
-                const textoPreview =
-                    buildTemplatePreviewText(tplSelected, tplDraft);
+        try {
+            const respuesta = await api.digitalesSubirMediaPlantilla({
+                file,
+                media_type: tipo,
+                numero_asesor: numeroAsesor,
+            });
 
-                const components =
-                    buildDynamicTemplateComponents(tplSelected, tplDraft);
+            const mediaId = String(respuesta?.media_id || respuesta?.id || "").trim();
 
-                const optimisticId = crypto.randomUUID();
-
-                setTemplatesError("");
-                setSendingTemplate(true);
-                stickBottomRef.current = true;
-
-                // Mensaje temporal mientras Meta confirma el envío
-                setMensajes((prev) => [
-                    ...prev,
-                    {
-                        id: optimisticId,
-                        local_pending: true,
-                        local_created_at: new Date().toISOString(),
-                        mine: true,
-                        text: textoPreview || `Plantilla: ${templateName}`,
-                        status: "sent",
-                        attachments: [],
-                    },
-                ]);
-
-                try {
-                    await api.digitalesEnviarPlantilla({
-                        to: tel,
-                        template_name: templateName,
-                        idioma,
-                        components:
-                            components.length > 0
-                                ? components
-                                : undefined,
-                        params:
-                            components.length > 0
-                                ? undefined
-                                : [],
-                        numero_asesor: numeroAsesor,
-                    });
-
-                    // Cerramos el selector de plantillas
-                    setShowTemplatesDropdown(false);
-                    setTplSelected(null);
-                    setTplDraft({});
-                    setTemplatesError("");
-
-                    // El envío ya fue aceptado
-                    setSendingTemplate(false);
-
-                    // Quitamos el mensaje temporal ANTES de traer el real
-                    setMensajes((prev) =>
-                        prev.filter(
-                            (mensaje) => mensaje.id !== optimisticId
-                        )
-                    );
-
-                    // Traemos el mensaje real desde backend
-                    cargar({ markRead: false }).catch((error) => {
-                        console.error(
-                            "No se pudo refrescar el chat después de enviar la plantilla:",
-                            error
-                        );
-                    });
-
-                } catch (error) {
-                    console.error(
-                        "Error enviando plantilla desde drawer:",
-                        error
-                    );
-
-                    setTemplatesError(
-                        error?.message ||
-                        "No se pudo enviar la plantilla."
-                    );
-
-                    // Si falló, quitamos igualmente el mensaje temporal
-                    setMensajes((prev) =>
-                        prev.filter(
-                            (mensaje) => mensaje.id !== optimisticId
-                        )
-                    );
-
-                    setSendingTemplate(false);
-
-                    cargar({ markRead: false }).catch(() => {});
-
-                }
+            if (!mediaId) {
+                throw new Error("Meta no devolvió el identificador del archivo.");
             }
 
+            setTplDraft((actual) => ({
+                ...actual,
+                [field.key]: {
+                    id: mediaId,
+                    filename: file.name,
+                    name: file.name,
+                    mime,
+                    size: file.size,
+                },
+            }));
+        } catch (error) {
+            console.error("Error subiendo archivo de plantilla:", error);
+            setTemplatesError(error?.message || "No se pudo subir el archivo a Meta.");
+        } finally {
+            setUploadingTemplateMedia(false);
+        }
+    }
 
+    async function enviarPlantilla() {
+        if (!tel || !tplSelected || sendingTemplate || uploadingTemplateMedia) return;
+
+        const fields = Array.isArray(tplSelected.fields) ? tplSelected.fields : [];
+        const incompleto = fields.find((field) =>
+            !hasTemplateFieldValue(field, tplDraft?.[field.key])
+        );
+
+        if (incompleto) {
+            setTemplatesError(
+                `Completa el campo obligatorio: ${incompleto.friendlyLabel || getFriendlyTemplateFieldLabel(incompleto)}.`
+            );
+            return;
+        }
+
+        const idioma = tplSelected.idioma || tplSelected.language || "es_MX";
+        const templateName = tplSelected.key || tplSelected.name;
+
+        if (!templateName) {
+            setTemplatesError("La plantilla seleccionada no tiene un nombre válido.");
+            return;
+        }
+
+        const textoPreview = buildTemplatePreviewText(tplSelected, tplDraft);
+        const components = buildDynamicTemplateComponents(tplSelected, tplDraft);
+        const optimisticId = crypto.randomUUID();
+
+        setTemplatesError("");
+        setSendingTemplate(true);
+        stickBottomRef.current = true;
+
+        setMensajes((actuales) => [
+            ...actuales,
+            {
+                id: optimisticId,
+                local_pending: true,
+                local_created_at: new Date().toISOString(),
+                mine: true,
+                text: textoPreview || `Plantilla: ${templateName}`,
+                status: "sent",
+                attachments: [],
+            },
+        ]);
+
+        try {
+            await api.digitalesEnviarPlantilla({
+                to: tel,
+                template_name: templateName,
+                idioma,
+                components: components.length ? components : undefined,
+                params: components.length ? undefined : [],
+                numero_asesor: numeroAsesor,
+            });
+
+            setShowTemplatesDropdown(false);
+            setTplSelected(null);
+            setTplDraft({});
+            setTemplatesError("");
+
+            setMensajes((actuales) =>
+                actuales.filter((mensaje) => mensaje.id !== optimisticId)
+            );
+
+            await cargar({ markRead: false });
+        } catch (error) {
+            console.error("Error enviando plantilla desde Retención:", error);
+            setTemplatesError(error?.message || "No se pudo enviar la plantilla.");
+
+            setMensajes((actuales) =>
+                actuales.filter((mensaje) => mensaje.id !== optimisticId)
+            );
+
+            await cargar({ markRead: false });
+        } finally {
+            setSendingTemplate(false);
+        }
+    }
 
     if (!open) return null;
 
     const groupedMessages = groupMessagesByDate(applyReactionEvents(mensajes));
     const composerDisabled = !tel;
     const enviarDisabled = sending || isRecording || (!draft.trim() && attachments.length === 0);
-   
+
     const nombreMostrar =
         prospecto?.nombre ||
         clienteRetencion?.nombre_cliente ||
@@ -2014,7 +2182,7 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
                     <Avatar name={nombreMostrar} />
                     <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-extrabold text-[#131E5C]">{nombreMostrar} </div>
-                       
+
                         {telefonosRetencion.length > 1 ? (
                             <select
                                 value={tel}
@@ -2308,43 +2476,104 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
                                                 </div>
 
                                                 {(tplSelected.fields || []).map((field) => {
-                                                    const options = getFieldOptions(field);
+                                                    const opciones = getFieldOptions(field);
+                                                    const esArchivo = String(field.type || "").toLowerCase() === "media";
+                                                    const tipo = String(field.media_type || "").toLowerCase();
+                                                    const regla = TEMPLATE_MEDIA_RULES[tipo];
+                                                    const valor = tplDraft?.[field.key];
+                                                    const completo = hasTemplateFieldValue(field, valor);
+
                                                     return (
                                                         <div key={field.key}>
                                                             <div className="mb-1 flex items-center justify-between gap-2">
-                                                                <div className="text-[11px] font-extrabold text-[#131E5C]">
+                                                                <span className="text-[11px] font-extrabold text-[#131E5C]">
                                                                     {field.friendlyLabel || getFriendlyTemplateFieldLabel(field)}
                                                                     <span className="ml-1 text-red-600">*</span>
-                                                                </div>
-                                                                <span className="text-[10px] font-semibold text-slate-400">Obligatorio</span>
+                                                                </span>
+                                                                <span className="text-[10px] font-semibold text-slate-400">
+                                                                    Obligatorio
+                                                                </span>
                                                             </div>
-                                                            {options.length ? (
-                                                                <select
-                                                                    value={tplDraft[field.key] || ""}
-                                                                    onChange={(event) => { setTplDraft((current) => ({ ...current, [field.key]: event.target.value })); setTemplatesError(""); }}
-                                                                    className={cls(
-                                                                        "w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none transition",
-                                                                        !String(tplDraft[field.key] || "").trim() ? "border-red-200 focus:border-red-400" : "border-black/10 focus:border-[#131E5C]/40"
+
+                                                            {esArchivo ? (
+                                                                <div className="space-y-2">
+                                                                    <label className={`flex items-center gap-3 rounded-xl border-2 border-dashed p-3 transition ${completo
+                                                                        ? "border-emerald-200 bg-emerald-50"
+                                                                        : "border-slate-200 bg-slate-50 hover:border-blue-300"
+                                                                        } ${uploadingTemplateMedia ? "cursor-wait opacity-60" : "cursor-pointer"}`}>
+                                                                        {uploadingTemplateMedia ? (
+                                                                            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#131E5C]" />
+                                                                        ) : (
+                                                                            <Paperclip className="h-5 w-5 shrink-0 text-[#131E5C]" />
+                                                                        )}
+
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="truncate text-xs font-bold text-[#131E5C]">
+                                                                                {uploadingTemplateMedia
+                                                                                    ? "Subiendo archivo a Meta..."
+                                                                                    : valor?.filename || `Seleccionar ${regla?.label || "archivo"}`}
+                                                                            </div>
+                                                                            <div className="mt-1 text-[10px] text-slate-400">
+                                                                                {regla ? `Tamaño máximo: ${regla.maxLabel}` : "Archivo requerido"}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <input
+                                                                            type="file"
+                                                                            hidden
+                                                                            accept={regla?.accept || ""}
+                                                                            disabled={uploadingTemplateMedia || sendingTemplate}
+                                                                            onChange={(event) => {
+                                                                                const archivo = event.target.files?.[0];
+                                                                                if (archivo) handleTemplateMediaFile(field, archivo);
+                                                                                event.target.value = "";
+                                                                            }}
+                                                                        />
+                                                                    </label>
+
+                                                                    {completo && (
+                                                                        <p className="text-[11px] font-semibold text-emerald-700">
+                                                                            Archivo preparado correctamente para enviar.
+                                                                        </p>
                                                                     )}
+                                                                </div>
+                                                            ) : opciones.length ? (
+                                                                <select
+                                                                    value={valor || ""}
+                                                                    onChange={(event) => {
+                                                                        setTplDraft((actual) => ({
+                                                                            ...actual,
+                                                                            [field.key]: event.target.value,
+                                                                        }));
+                                                                        setTemplatesError("");
+                                                                    }}
+                                                                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none ${completo ? "border-slate-200" : "border-red-200"
+                                                                        }`}
                                                                 >
-                                                                    <option value="" disabled>Selecciona un valor…</option>
-                                                                    {options.map((option) => <option key={option} value={option}>{option}</option>)}
+                                                                    <option value="" disabled>Selecciona un valor...</option>
+                                                                    {opciones.map((opcion) => (
+                                                                        <option key={opcion} value={opcion}>{opcion}</option>
+                                                                    ))}
                                                                 </select>
                                                             ) : (
                                                                 <input
-                                                                    value={tplDraft[field.key] || ""}
-                                                                    onChange={(event) => { setTplDraft((current) => ({ ...current, [field.key]: event.target.value })); setTemplatesError(""); }}
+                                                                    type="text"
+                                                                    value={valor || ""}
+                                                                    onChange={(event) => {
+                                                                        setTplDraft((actual) => ({
+                                                                            ...actual,
+                                                                            [field.key]: event.target.value,
+                                                                        }));
+                                                                        setTemplatesError("");
+                                                                    }}
                                                                     placeholder="Escribe el dato que se enviará"
-                                                                    className={cls(
-                                                                        "w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none transition",
-                                                                        !String(tplDraft[field.key] || "").trim() ? "border-red-200 focus:border-red-400 focus:ring-2 focus:ring-red-100" : "border-black/10 focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10"
-                                                                    )}
+                                                                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-[#131E5C] outline-none ${completo ? "border-slate-200" : "border-red-200"
+                                                                        }`}
                                                                 />
                                                             )}
                                                         </div>
                                                     );
                                                 })}
-
                                                 {!(tplSelected.fields || []).length ? (
                                                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Esta plantilla no requiere parámetros.</div>
                                                 ) : null}
@@ -2352,15 +2581,17 @@ export function ChatDrawer({ open, telefono, numeroAsesor, onClose, clienteReten
                                                 <button
                                                     type="button"
                                                     onClick={enviarPlantilla}
-                                                    disabled={sendingTemplate || incompleteTemplateFields.length > 0}
+                                                    disabled={sendingTemplate || uploadingTemplateMedia || incompleteTemplateFields.length > 0}
                                                     className="w-full rounded-xl py-2.5 text-xs font-extrabold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                                     style={{ backgroundColor: BRAND_BLUE }}
                                                 >
-                                                    {sendingTemplate
-                                                        ? "Enviando plantilla..."
-                                                        : incompleteTemplateFields.length > 0
-                                                            ? `Completa ${incompleteTemplateFields.length} dato${incompleteTemplateFields.length === 1 ? "" : "s"}`
-                                                            : "Enviar plantilla"}
+                                                    {uploadingTemplateMedia
+                                                        ? "Subiendo archivo..."
+                                                        : sendingTemplate
+                                                            ? "Enviando plantilla..."
+                                                            : incompleteTemplateFields.length > 0
+                                                                ? `Completa ${incompleteTemplateFields.length} campo(s)`
+                                                                : "Enviar plantilla"}
                                                 </button>
                                             </div>
                                         )}
@@ -3460,7 +3691,7 @@ export default function DigitalesBandeja() {
                                 <option value="nombre">Ordenar: Nombre A-Z</option>
                             </select>
                         </div>
-                        
+
                         {!["todos", "no_leidos", "mios"].includes(filtroActivo) ? (
                             <div className="mt-2 flex min-w-0 items-center gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5">
                                 <span
