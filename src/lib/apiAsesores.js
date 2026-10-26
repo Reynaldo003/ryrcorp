@@ -1,3 +1,4 @@
+//src/lib/apiAsesores.js
 import { http } from "./apiClient";
 
 const TTL_ASESORES_MS = 5 * 60 * 1000;

@@ -12,6 +12,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bouncy } from "ldrs/react";
 import "ldrs/react/Bouncy.css";
+import ModalErrorLogin from "./ModalErrorLogin";
 
 import vwWhite from "../../assets/vw_white.png";
 import ryrBlue from "../../assets/ryr_blue.png";
@@ -103,6 +104,7 @@ function TextInput({
 export default function LoginRegistro() {
     const [showLoginPassword, setShowLoginPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [errorLogin, setErrorLogin] = useState(null);
 
     const navigate = useNavigate();
     const location = useLocation();
@@ -129,6 +131,7 @@ export default function LoginRegistro() {
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        setErrorLogin(null);
         setIsLoading(true);
 
         try {
@@ -149,23 +152,21 @@ export default function LoginRegistro() {
             const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                console.error("Error login:", data);
-                alert(data?.detail || data?.error || "Credenciales inválidas.");
+                setErrorLogin({
+                    titulo: res.status === 4003 ? "Cuenta desactivada" : "No se pudo iniciar sesion",
+                    mensaje: data?.detail || data?.error || "Verifica tus credenciales e intentalo nuevamente.",
+                });
                 return;
             }
-
-            console.log("Respuesta login:", data);
-
-            const access = data.access || data.access_token || "";
+            const access = data.access || data.access_token || data.token || "";
             const refresh = data.refresh || data.refresh_token || "";
-
             const legacyToken = data.token || access;
 
             if (!access) {
-                console.error("El backend no devolvió access JWT:", data);
-                alert(
-                    "El login fue exitoso, pero el backend no devolvió access JWT. Hay que corregir el endpoint de login."
-                );
+                setErrorLogin({
+                    titulo: "Error de autenticación",
+                    mensaje: "El servidor no pudo autenticarte por token invalido."
+                })
                 return;
             }
 
@@ -213,8 +214,10 @@ export default function LoginRegistro() {
 
             navigate(from, { replace: true });
         } catch (error) {
-            console.error(error);
-            alert("No se pudo iniciar sesión.");
+            setErrorLogin({
+                titulo: error,
+                mensaje: "No se pudo iniciar sesión."
+            })
         } finally {
             setIsLoading(false);
         }
@@ -482,6 +485,10 @@ export default function LoginRegistro() {
                 <img src={fondo3} alt="preload fondo 3" />
                 <img src={fondo4} alt="preload fondo 4" />
             </div>
+            <ModalErrorLogin
+                error={errorLogin}
+                onCerrar={() => setErrorLogin(null)}
+            />
         </div>
     );
 }

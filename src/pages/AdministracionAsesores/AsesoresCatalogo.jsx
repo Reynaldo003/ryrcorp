@@ -20,6 +20,7 @@ import {
 
 const FORM_INICIAL = {
     nombre: "",
+    nombre_salesforce: "",
     telefono: "",
     tipo_asesor: "",
     area: "",
@@ -224,6 +225,7 @@ export default function AsesoresCatalogo() {
 
         setForm({
             nombre: asesor.nombre || "",
+            nombre_salesforce: asesor.nombre_salesforce || "",
             telefono: asesor.telefono || "",
             tipo_asesor: asesor.tipo_asesor || "",
             area: asesor.area || "",
@@ -266,6 +268,7 @@ export default function AsesoresCatalogo() {
         setError("");
         const payload = {
             nombre,
+            nombre_salesforce: texto(form.nombre_salesforce),
             telefono: texto(form.telefono),
             tipo_asesor: texto(form.tipo_asesor),
             area: texto(form.area),
@@ -555,6 +558,9 @@ export default function AsesoresCatalogo() {
                                             Nombre
                                         </th>
                                         <th className="px-4 py-3.5 font-bold text-white">
+                                            Nombre SalesForce
+                                        </th>
+                                        <th className="px-4 py-3.5 font-bold text-white">
                                             Teléfono
                                         </th>
                                         <th className="px-4 py-3.5 font-bold text-white">
@@ -606,7 +612,9 @@ export default function AsesoresCatalogo() {
                                                     <td className="px-4 py-3.5 font-semibold text-[#131E5C]">
                                                         {asesor.nombre}
                                                     </td>
-
+                                                    <td className="px-4 py-3.5 font-semibold text-[#131E5C]">
+                                                        {asesor.nombre_salesforce}
+                                                    </td>
                                                     <td className="px-4 py-3.5 text-slate-600">
                                                         {asesor.telefono || "—"}
                                                     </td>
@@ -742,6 +750,20 @@ export default function AsesoresCatalogo() {
                                     />
                                 </label>
 
+                                <label className="md:col-span-2">
+                                    <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                                        Nombre en Salesforce
+                                    </span>
+                                    <input
+                                        type="text"
+                                        name="nombre_salesforce"
+                                        value={form.nombre_salesforce}
+                                        onChange={actualizarCampo}
+                                        maxLength={200}
+                                        placeholder="Nombre registrado en Salesforce"
+                                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                                    />
+                                </label>
 
                                 <label>
                                     <span className="mb-1.5 block text-sm font-medium text-slate-700">
