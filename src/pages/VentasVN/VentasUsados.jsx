@@ -94,6 +94,18 @@ const CONCESIONARIOS_VENTAS = [
 function normalizarNombreAgencia(valor) {
     return String(valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
 }
+
+// Normaliza el VIN para permitir búsquedas pegadas con espacios o guiones.
+function normalizarBusquedaVIN(valor) {
+    return String(valor || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+}
+
+function esVINCompleto(valor) {
+    return /^[A-HJ-NPR-Z0-9]{17}$/.test(normalizarBusquedaVIN(valor));
+}
 const TOOLTIP_STYLE = { border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 12px 30px rgba(19,30,92,.12)", fontSize: 12 };
 const inputClass = "h-10 w-full rounded-xl border border-[#E4E7F0] bg-white px-3 text-sm text-[#1A1F3C] outline-none transition placeholder:text-[#C8CEDF] focus:border-[#131E5C]/40 focus:ring-2 focus:ring-[#131E5C]/10";
 
@@ -206,7 +218,10 @@ export default function VentasUsados() {
     const [qBuscado, setQBuscado] = useState("");
 
     useEffect(() => {
-        const t = setTimeout(() => setQBuscado(filtros.q), 400);
+        const t = setTimeout(() => {
+            setPagina(1);
+            setQBuscado(filtros.q);
+        }, 400);
         return () => clearTimeout(t);
     }, [filtros.q]);
 
@@ -270,17 +285,25 @@ export default function VentasUsados() {
         setError("");
 
         try {
+            const textoBusqueda = String(qBuscado || "").trim();
+            const buscarVIN = esVINCompleto(textoBusqueda);
+            const busqueda = buscarVIN
+                ? normalizarBusquedaVIN(textoBusqueda)
+                : textoBusqueda;
+
             const query = buildQuery({
                 cond_uso: CONDICION_USO.USADO,
                 page: pagina,
                 page_size: pageSize,
-                q: qBuscado,
+                q: busqueda,
                 agencia: filtros.agencia,
                 asesor: filtros.asesor,
                 familia: filtros.familia,
                 condicion_pago: filtros.condicion_pago,
-                fecha_desde: filtros.fecha_desde,
-                fecha_hasta: filtros.fecha_hasta,
+                // Solo un VIN completo ignora el rango de fechas.
+                // Las búsquedas de texto y las consultas normales respetan el periodo.
+                fecha_desde: buscarVIN ? "" : filtros.fecha_desde,
+                fecha_hasta: buscarVIN ? "" : filtros.fecha_hasta,
                 venta_digital: filtros.venta_digital,
             });
 
