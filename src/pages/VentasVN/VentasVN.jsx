@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   ArrowDown, ArrowUp, BarChart3, CalendarDays, Car, CreditCard, Eraser,
-  CircleDollarSign, Database, ImageDown, LoaderCircle, RefreshCw, RotateCcw,
+  CircleDollarSign, Database, Download, ImageDown, LoaderCircle, RefreshCw, RotateCcw,
   Search, SlidersHorizontal, Tags, User, Users, CheckCircle2, Globe,
   Table2, TrendingUp, WalletCards, X, Check, Plus, ChevronDown, Calendar,
   Percent, Landmark, Layers, ChevronUp, PieChart as PieIcon,
@@ -13,6 +13,16 @@ import {
 } from "recharts";
 import html2canvas from "html2canvas-pro";
 import { CONDICION_USO, getVentasVNDashboard, getVentasVNDetalle } from "../../lib/apiVentasVN";
+import ExportReportModal from "../../components/ExportReportModal";
+import {
+  COLUMNAS_REPORTE_VENTAS,
+  COLUMNAS_REPORTE_VENTAS_DEFAULT,
+  SECCIONES_REPORTE_VENTAS,
+  GRAFICAS_REPORTE_VENTAS,
+  crearFiltrosReporteVentas,
+  generarReporteVentas,
+} from "./reporteVentas";
+import ReportePreviewVentas from "./ReportePreviewVentas";
 import InteractiveTable from "../VentasVN/InteractiveTable";
 const C = {
   navy: "#001E50", navyDark: "#0A1340", navyLight: "#1677FF",
@@ -398,6 +408,35 @@ export default function VentasVN() {
 
   const chartRefs = useRef({});
   const [exportandoKey, setExportandoKey] = useState(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [reporteVentasExportacion, setReporteVentasExportacion] = useState(null);
+  const reporteVentasRef = useRef(null);
+  const filtrosConfiguradorReporte = useMemo(
+    () => crearFiltrosReporteVentas(dashboard.opciones),
+    [dashboard.opciones],
+  );
+
+  function exportarReporte() {
+    setExportModalOpen(true);
+  }
+
+  async function generarReporte(config = {}, options = {}) {
+    try {
+      await generarReporteVentas(config, {
+        ...options,
+        filtros,
+        condicionUso: CONDICION_USO.NUEVO,
+        moduleLabel: "Ventas de Autos Nuevos",
+        defaultTitle: "Reporte de Ventas de Autos Nuevos",
+        defaultFileName: "reporte_autos_nuevos",
+        filterDefinitions: filtrosConfiguradorReporte,
+        onPreviewChange: setReporteVentasExportacion,
+      });
+      setExportModalOpen(false);
+    } finally {
+      setReporteVentasExportacion(null);
+    }
+  }
   async function exportarGrafica(key, nombre) {
     const nodo = chartRefs.current[key];
     if (!nodo) return;
@@ -446,6 +485,14 @@ export default function VentasVN() {
                 <BarChart3 className="h-3.5 w-3.5" />Gráficos
               </button>
             </div>
+            <button
+              type="button"
+              onClick={exportarReporte}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[#001E50]/20 bg-white px-3.5 text-xs font-bold text-[#001E50] shadow-sm transition hover:bg-slate-100"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Reporte
+            </button>
             <button
               type="button"
               onClick={() => { if (vistaActiva === "detalle") cargarDatos(); cargarDashboard(); }}
@@ -910,6 +957,30 @@ export default function VentasVN() {
           </div>
         )}
       </main>
+
+      {exportModalOpen && (
+        <ExportReportModal
+          isOpen={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+          moduleName="Ventas de Autos Nuevos"
+          storageKey="ventas-autos-nuevos"
+          currentFilters={{ ...filtros }}
+          filterDefinitions={filtrosConfiguradorReporte}
+          currentColumns={COLUMNAS_REPORTE_VENTAS_DEFAULT}
+          availableColumns={COLUMNAS_REPORTE_VENTAS}
+          totalRecords={total}
+          formats={["excel", "pdf"]}
+          sectionOptions={SECCIONES_REPORTE_VENTAS}
+          chartOptions={GRAFICAS_REPORTE_VENTAS}
+          onGenerate={generarReporte}
+        />
+      )}
+
+      <ReportePreviewVentas
+        reporte={reporteVentasExportacion}
+        innerRef={reporteVentasRef}
+        moduleLabel="Ventas de Autos Nuevos"
+      />
     </div>
   );
 }
