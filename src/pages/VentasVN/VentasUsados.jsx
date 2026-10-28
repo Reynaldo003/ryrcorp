@@ -1,8 +1,8 @@
 // src/pages/VentasVN/VentasUsados.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ArrowDown, ArrowUp, BarChart3, CalendarDays, Car, CreditCard, Eraser,
-    CircleDollarSign, Database, ImageDown, LoaderCircle, RefreshCw, RotateCcw,
+    CircleDollarSign, Database, Download, ImageDown, LoaderCircle, RefreshCw, RotateCcw,
     Search, SlidersHorizontal, Tags, User, Users, CheckCircle2, Globe,
     Table2, TrendingUp, WalletCards, X, Check, Plus, ChevronDown,
 } from "lucide-react";
@@ -13,6 +13,7 @@ import {
 import html2canvas from "html2canvas-pro";
 import { http, buildQuery } from "../../lib/apiClient";
 import { CONDICION_USO, getVentasVNDashboard, } from "../../lib/apiVentasVN";
+import ExportReportModal from "../../components/ExportReportModal";
 import InteractiveTable from "../VentasVN/InteractiveTable";
 
 const C = {
@@ -57,12 +58,49 @@ const COLUMNAS = [
     { key: "tipo_venta", label: "Tipo de Venta" },
 ];
 
+const COLUMNAS_REPORTE_USADOS = COLUMNAS;
+
+// Selección inicial equilibrada: identificación, operación y finanzas.
+const COLUMNAS_REPORTE_USADOS_DEFAULT = [
+    "serie", "nr_nota", "producto_servicio", "fecha_emision", "situacion",
+    "nombre_marca", "nombre_familia", "asesor", "agencia", "condicion_uso",
+    "nombre_condicion_pago", "valor_factura", "valor_compra", "tipo_venta",
+];
+
+const CAMPOS_MONEDA_REPORTE_USADOS = new Set([
+    "precio_unitario", "valor_bruto_item", "valor_descuento_item", "valor_factura",
+    "valor_factura_sin_iva", "valor_compra", "isan", "iva", "valor_total_productos",
+]);
+const CAMPOS_FECHA_REPORTE_USADOS = new Set(["fecha_emision", "fecha_ultima_venta"]);
+
+const SECCIONES_REPORTE_USADOS = [
+    { key: "summary", label: "Resumen ejecutivo", description: "KPIs, totales y filtros aplicados al reporte.", defaultSelected: true },
+    { key: "charts", label: "Análisis gráfico", description: "Visualizaciones de ventas, margen y distribución.", defaultSelected: true },
+    { key: "table", label: "Detalle de operaciones", description: "Tabla configurable con las columnas elegidas.", defaultSelected: true },
+];
+
+const GRAFICAS_REPORTE_USADOS = [
+    { key: "mes", label: "Tendencia por mes", description: "Unidades vendidas e ingresos por mes dentro del periodo.", type: "line", category: "Tendencia", metric: "Unidades", defaultSelected: true, recommended: true },
+    { key: "asesor", label: "Rendimiento por asesor", description: "Top de asesores por unidades vendidas.", type: "bar", category: "Operación", metric: "Unidades", defaultSelected: true, recommended: true },
+    { key: "familia", label: "Modelos con mayor movimiento", description: "Top de familias y modelos por unidades vendidas.", type: "bar", category: "Producto", metric: "Unidades", defaultSelected: true, recommended: true },
+    { key: "agencia", label: "Ventas por agencia", description: "Distribución de unidades vendidas entre agencias.", type: "bar", category: "Distribución", metric: "Unidades", defaultSelected: true, recommended: true },
+    { key: "condicion_pago", label: "Condición de pago", description: "Composición de las ventas por condición de pago.", type: "donut", category: "Comercial", metric: "Unidades", defaultSelected: true, recommended: true },
+    { key: "tipo_venta", label: "Canal de venta", description: "Comparativo entre venta digital y venta tradicional.", type: "donut", category: "Canal", metric: "Unidades", defaultSelected: true, recommended: true },
+    { key: "marca", label: "Distribución por marca", description: "Participación de unidades vendidas por marca.", type: "donut", category: "Producto", metric: "Unidades", defaultSelected: false, recommended: false },
+];
+
+const COLORES_REPORTE_USADOS = ["#131E5C", "#2445A2", "#378ADD", "#1D9E75", "#D85A30", "#7F77DD", "#D4537E", "#F0A500"];
+const TOOLTIP_REPORTE_USADOS = { fontSize: 11, borderRadius: 10, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,.08)" };
+
 const FILTROS_INICIALES = {
     q: "",
     agencia: "",
     asesor: "",
     familia: "",
     condicion_pago: "",
+    serie: "",
+    nr_nota: "",
+    producto_servicio: "",
     fecha_desde: "",
     fecha_hasta: "",
     venta_digital: "",
@@ -178,6 +216,224 @@ function formatoRango(desde, hasta) {
 }
 function porcentaje(value, total) { return total ? Math.round((numero(value) / total) * 100) : 0; }
 
+function agruparReporteUsados(rows, getter, limit = null) {
+    const map = new Map();
+    rows.forEach((row) => {
+        const raw = typeof getter === "function" ? getter(row) : row?.[getter];
+        const key = String(raw ?? "").trim() || "Sin dato";
+        map.set(key, (map.get(key) || 0) + 1);
+    });
+    const data = Array.from(map.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+    return limit ? data.slice(0, limit) : data;
+}
+
+function valorReporteUsados(row, key) {
+    if (!row) return "";
+    if (CAMPOS_MONEDA_REPORTE_USADOS.has(key)) return money(row[key]);
+    if (CAMPOS_FECHA_REPORTE_USADOS.has(key)) {
+        const raw = row[key];
+        if (!raw) return "—";
+        const [y, m, d] = String(raw).split("-");
+        return y && m && d ? `${d}/${m}/${y}` : String(raw);
+    }
+    if (key === "tipo_venta") return row.tipo_venta || (row.es_venta_digital ? "Venta digital" : "Tradicional");
+    return row[key] ?? "";
+}
+
+function nombreReporteUsados(config, extension) {
+    const ahora = new Date();
+    const sello = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}_${String(ahora.getHours()).padStart(2, "0")}-${String(ahora.getMinutes()).padStart(2, "0")}`;
+    const base = String(config?.fileName || "").trim().replace(/\.(xlsx|pdf)$/i, "").replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, "_").replace(/^_+|_+$/g, "");
+    return `${base || `reporte_autos_usados_${sello}`}.${extension}`;
+}
+
+function descargarBlobReporteUsados(blob, nombreArchivo) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nombreArchivo;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function agregarCanvasPdfUsados(doc, canvas) {
+    const margen = 8;
+    const anchoPagina = doc.internal.pageSize.getWidth();
+    const altoPagina = doc.internal.pageSize.getHeight();
+    const anchoUtil = anchoPagina - margen * 2;
+    const altoUtil = altoPagina - margen * 2;
+    const pixelesPorMm = canvas.width / anchoUtil;
+    const altoCortePx = Math.max(1, Math.floor(altoUtil * pixelesPorMm));
+    let y = 0;
+    let primera = true;
+
+    while (y < canvas.height) {
+        if (!primera) doc.addPage();
+        primera = false;
+        const altoActual = Math.min(altoCortePx, canvas.height - y);
+        const corte = document.createElement("canvas");
+        corte.width = canvas.width;
+        corte.height = altoActual;
+        const ctx = corte.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, corte.width, corte.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, altoActual, 0, 0, canvas.width, altoActual);
+        doc.addImage(corte.toDataURL("image/png"), "PNG", margen, margen, anchoUtil, altoActual / pixelesPorMm, undefined, "FAST");
+        y += altoActual;
+    }
+}
+
+async function esperarRenderReporteUsados() {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 240));
+}
+
+function esperarPintadoProgreso() {
+    // Deja que el navegador pinte el mensaje antes de un bloque de trabajo pesado.
+    return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
+
+function ReporteCardUsados({ title, subtitle, children, wide = false }) {
+    return (
+        <div className={cn("rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", wide && "xl:col-span-2")}>
+            <h4 className="text-base font-black text-[#131E5C]">{title}</h4>
+            <p className="mb-4 mt-1 text-xs text-slate-400">{subtitle}</p>
+            {children}
+        </div>
+    );
+}
+
+function ReporteBarrasUsados({ data, color = "#131E5C", horizontal = false }) {
+    if (!data.length) return <div className="flex h-[270px] items-center justify-center text-xs font-semibold text-slate-400">Sin datos en el periodo</div>;
+
+    if (horizontal) {
+        return (
+            <ResponsiveContainer width="100%" height={270}>
+                <BarChart data={data} layout="vertical" margin={{ top: 4, right: 38, left: 18, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                    <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 10, fill: "#64748b" }} />
+                    <Tooltip contentStyle={TOOLTIP_REPORTE_USADOS} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
+                    <Bar dataKey="value" fill={color} radius={[0, 6, 6, 0]} barSize={18} isAnimationActive={false} />
+                </BarChart>
+            </ResponsiveContainer>
+        );
+    }
+
+    return (
+        <ResponsiveContainer width="100%" height={270}>
+            <BarChart data={data} margin={{ top: 8, right: 10, left: -20, bottom: 55 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                <XAxis dataKey="name" interval={0} angle={-28} textAnchor="end" tick={{ fontSize: 9, fill: "#64748b" }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                <Tooltip contentStyle={TOOLTIP_REPORTE_USADOS} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
+                <Bar dataKey="value" fill={color} radius={[5, 5, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+        </ResponsiveContainer>
+    );
+}
+
+function ReporteDonaUsados({ data }) {
+    if (!data.length) return <div className="flex h-[250px] items-center justify-center text-xs font-semibold text-slate-400">Sin datos en el periodo</div>;
+    return (
+        <div className="grid items-center gap-3 md:grid-cols-[1fr_180px]">
+            <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                    <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={90} isAnimationActive={false}>
+                        {data.map((item, index) => <Cell key={item.name} fill={COLORES_REPORTE_USADOS[index % COLORES_REPORTE_USADOS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_REPORTE_USADOS} formatter={(value) => [`${formatoNumero(value)} unidades`, "Ventas"]} />
+                </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-2">
+                {data.slice(0, 8).map((item, index) => (
+                    <div key={item.name} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="flex min-w-0 items-center gap-2 text-slate-500">
+                            <i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COLORES_REPORTE_USADOS[index % COLORES_REPORTE_USADOS.length] }} />
+                            <span className="truncate">{item.name}</span>
+                        </span>
+                        <strong className="text-slate-700">{formatoNumero(item.value)}</strong>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function ReporteGraficasUsados({ rows = [], charts = [] }) {
+    const activos = useMemo(() => new Set(charts), [charts]);
+    const vendidas = useMemo(
+        () => rows.filter((row) => String(row.situacion || "").toUpperCase() === "E"),
+        [rows],
+    );
+    const base = vendidas.length ? vendidas : rows;
+
+    const porMes = useMemo(() => {
+        const map = new Map();
+        base.forEach((row) => {
+            const periodo = String(row.fecha_emision || "").slice(0, 7);
+            if (!/^\d{4}-\d{2}$/.test(periodo)) return;
+            const actual = map.get(periodo) || {
+                name: etiquetaMes({ mes: Number(periodo.slice(5, 7)), anio: periodo.slice(0, 4) }),
+                value: 0,
+                ingresos: 0,
+            };
+            actual.value += 1;
+            actual.ingresos += numero(row.valor_factura_sin_iva) - numero(row.isan);
+            map.set(periodo, actual);
+        });
+        return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, item]) => item);
+    }, [base]);
+    const porAgencia = useMemo(() => agruparReporteUsados(base, "agencia", 10), [base]);
+    const porAsesor = useMemo(() => agruparReporteUsados(base, (row) => row.asesor || "Sin asesor", 10), [base]);
+    const porFamilia = useMemo(() => agruparReporteUsados(base, (row) => row.nombre_familia || "Sin familia", 10), [base]);
+    const porMarca = useMemo(() => agruparReporteUsados(base, (row) => row.nombre_marca || "Sin marca", 8), [base]);
+    const porCondicionPago = useMemo(() => agruparReporteUsados(base, (row) => row.nombre_condicion_pago || "Sin condición", 8), [base]);
+    const porTipoVenta = useMemo(
+        () => agruparReporteUsados(base, (row) => (row.tipo_venta || (row.es_venta_digital ? "Venta digital" : "Tradicional"))),
+        [base],
+    );
+
+    return (
+        <div className="grid gap-4 xl:grid-cols-2">
+            {activos.has("mes") && (
+                <ReporteCardUsados title="Tendencia por mes" subtitle="Unidades vendidas e ingresos del periodo" wide>
+                    {porMes.length === 0 ? <div className="flex h-[280px] items-center justify-center text-xs font-semibold text-slate-400">Sin datos en el periodo</div> : (
+                        <>
+                            <ResponsiveContainer width="100%" height={280}>
+                                <ComposedChart data={porMes} margin={{ top: 10, right: 18, left: -8, bottom: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} />
+                                    <YAxis yAxisId="unidades" allowDecimals={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                                    <YAxis yAxisId="ingresos" orientation="right" tickFormatter={formatoCompacto} tick={{ fontSize: 10, fill: "#64748b" }} width={60} />
+                                    <Tooltip contentStyle={TOOLTIP_REPORTE_USADOS} formatter={(value, name) => [name === "Ingresos" ? money(value) : `${formatoNumero(value)} unidades`, name]} />
+                                    <Bar yAxisId="unidades" dataKey="value" name="Unidades" fill="#131E5C" radius={[5, 5, 0, 0]} barSize={26} isAnimationActive={false} />
+                                    <Line yAxisId="ingresos" type="monotone" dataKey="ingresos" name="Ingresos" stroke="#1D9E75" strokeWidth={3} dot={{ r: 3 }} isAnimationActive={false} />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                            <div className="mt-2 flex flex-wrap items-center justify-end gap-4 text-[11px] font-semibold text-slate-500">
+                                <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-[#131E5C]" /> Unidades</span>
+                                <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#1D9E75]" /> Ingresos</span>
+                            </div>
+                        </>
+                    )}
+                </ReporteCardUsados>
+            )}
+            {activos.has("asesor") && <ReporteCardUsados title="Rendimiento por asesor" subtitle="Top asesores por unidades vendidas"><ReporteBarrasUsados data={porAsesor} horizontal /></ReporteCardUsados>}
+            {activos.has("familia") && <ReporteCardUsados title="Modelos con mayor movimiento" subtitle="Top familias por unidades vendidas"><ReporteBarrasUsados data={porFamilia} color="#2445A2" horizontal /></ReporteCardUsados>}
+            {activos.has("agencia") && <ReporteCardUsados title="Ventas por agencia" subtitle="Unidades vendidas por agencia"><ReporteBarrasUsados data={porAgencia} color="#378ADD" /></ReporteCardUsados>}
+            {activos.has("condicion_pago") && <ReporteCardUsados title="Condición de pago" subtitle="Composición de unidades vendidas"><ReporteDonaUsados data={porCondicionPago} /></ReporteCardUsados>}
+            {activos.has("tipo_venta") && <ReporteCardUsados title="Canal de venta" subtitle="Venta digital vs. venta tradicional"><ReporteDonaUsados data={porTipoVenta} /></ReporteCardUsados>}
+            {activos.has("marca") && <ReporteCardUsados title="Distribución por marca" subtitle="Unidades vendidas por marca"><ReporteDonaUsados data={porMarca} /></ReporteCardUsados>}
+        </div>
+    );
+}
+
 export default function VentasUsados() {
     const [dashboard, setDashboard] = useState({
         totales: {
@@ -199,8 +455,8 @@ export default function VentasUsados() {
         [anioActual]
     );
 
-    const [anioSel, setAnioSel] = useState(anioActual);
-    const [mesSel, setMesSel] = useState(mesActual);
+    const [anioSel, setAnioSel] = useState("todos");
+    const [mesSel, setMesSel] = useState("sin_filtro");
 
     const [loadingDashboard, setLoadingDashboard] = useState(false);
     const [errorDashboard, setErrorDashboard] = useState("");
@@ -211,10 +467,14 @@ export default function VentasUsados() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [vistaActiva, setVistaActiva] = useState("detalle");
+    const [exportModalOpen, setExportModalOpen] = useState(false);
+    const [reporteUsadosExportacion, setReporteUsadosExportacion] = useState(null);
     const [filtros, setFiltros] = useState(() => ({
         ...FILTROS_INICIALES,
-        ...obtenerRangoMes(mesActual + 1, anioActual),
     }));
+    const filtrosRef = useRef(filtros);
+    filtrosRef.current = filtros;
+    const [filtrosColumnas, setFiltrosColumnas] = useState({});
     const [qBuscado, setQBuscado] = useState("");
 
     useEffect(() => {
@@ -238,6 +498,9 @@ export default function VentasUsados() {
                 asesor: filtros.asesor,
                 familia: filtros.familia,
                 condicion_pago: filtros.condicion_pago,
+                serie: filtros.serie,
+                nr_nota: filtros.nr_nota,
+                producto_servicio: filtros.producto_servicio,
                 venta_digital: filtros.venta_digital,
             });
 
@@ -300,6 +563,9 @@ export default function VentasUsados() {
                 asesor: filtros.asesor,
                 familia: filtros.familia,
                 condicion_pago: filtros.condicion_pago,
+                serie: filtros.serie,
+                nr_nota: filtros.nr_nota,
+                producto_servicio: filtros.producto_servicio,
                 // Solo un VIN completo ignora el rango de fechas.
                 // Las búsquedas de texto y las consultas normales respetan el periodo.
                 fecha_desde: buscarVIN ? "" : filtros.fecha_desde,
@@ -341,6 +607,9 @@ export default function VentasUsados() {
         filtros.asesor,
         filtros.familia,
         filtros.condicion_pago,
+        filtros.serie,
+        filtros.nr_nota,
+        filtros.producto_servicio,
         filtros.fecha_desde,
         filtros.fecha_hasta,
         filtros.venta_digital,
@@ -352,6 +621,9 @@ export default function VentasUsados() {
         filtros.asesor,
         filtros.familia,
         filtros.condicion_pago,
+        filtros.serie,
+        filtros.nr_nota,
+        filtros.producto_servicio,
         filtros.fecha_desde,
         filtros.fecha_hasta,
         filtros.venta_digital,
@@ -369,6 +641,39 @@ export default function VentasUsados() {
             return { ...pill, valor: encontrada || pill.label };
         });
     }, [dashboard.opciones.agencias]);
+    const filtrosConfiguradorReporte = useMemo(() => {
+        const opciones = (lista, etiquetaVacio) => [
+            { value: "", label: etiquetaVacio },
+            ...(lista || []).map((item) => ({ value: item, label: item })),
+        ];
+
+        return [
+            { key: "q", label: "Búsqueda", type: "text", placeholder: "Serie, cliente o asesor..." },
+            { key: "agencia", label: "Agencia", type: "select", options: opciones(dashboard.opciones.agencias, "Todas las agencias") },
+            { key: "asesor", label: "Asesor", type: "select", options: opciones(dashboard.opciones.asesores, "Todos los asesores") },
+            { key: "familia", label: "Familia / Modelo", type: "select", options: opciones(dashboard.opciones.familias, "Todos los modelos") },
+            { key: "condicion_pago", label: "Condición de pago", type: "select", options: opciones(dashboard.opciones.condiciones_pago, "Todas las condiciones") },
+            {
+                key: "venta_digital",
+                label: "Canal de venta",
+                type: "select",
+                options: [
+                    { value: "", label: "Todas las ventas" },
+                    { value: "1", label: "Solo ventas digitales" },
+                ],
+            },
+            { key: "serie", label: "Serie / VIN", type: "text", placeholder: "Buscar por serie o VIN" },
+            { key: "nr_nota", label: "Número de nota", type: "text", placeholder: "Nota o movimiento" },
+            { key: "fecha_desde", label: "Fecha desde", type: "date" },
+            { key: "fecha_hasta", label: "Fecha hasta", type: "date" },
+        ];
+    }, [
+        dashboard.opciones.agencias,
+        dashboard.opciones.asesores,
+        dashboard.opciones.familias,
+        dashboard.opciones.condiciones_pago,
+    ]);
+
     const presetFechaActivo = useMemo(() => {
         const match = PRESETS_FECHA.find((preset) => {
             const rango = obtenerRangoPreset(preset.id);
@@ -405,11 +710,38 @@ export default function VentasUsados() {
         setPagina(1);
         setFiltros((prev) => ({ ...prev, [campo]: value }));
     }
+
+    const aplicarFiltroColumna = useCallback((filtrosActivos) => {
+        setPagina(1);
+        setFiltrosColumnas(filtrosActivos);
+
+        const next = { ...filtrosRef.current };
+        // Mapear columnas de la tabla a parámetros del backend.
+        const mapeo = {
+            serie: "serie",
+            nr_nota: "nr_nota",
+            producto_servicio: "producto_servicio",
+            agencia: "agencia",
+            asesor: "asesor",
+            familia: "familia",
+            condicion_pago: "condicion_pago",
+        };
+        Object.entries(mapeo).forEach(([colKey, paramKey]) => {
+            const vals = filtrosActivos[colKey];
+            if (Array.isArray(vals) && vals.length > 0) {
+                next[paramKey] = vals[0];
+            } else {
+                next[paramKey] = "";
+            }
+        });
+        setFiltros(next);
+    }, []);
     function limpiarFiltros() {
         setPagina(1);
 
-        setAnioSel(anioActual);
+        setAnioSel("todos");
         setMesSel("sin_filtro");
+        setFiltrosColumnas({});
 
         setFiltros({
             ...FILTROS_INICIALES,
@@ -435,8 +767,17 @@ export default function VentasUsados() {
     function aplicarMes(mesIndex) {
         setPagina(1);
 
+        let anioParaAplicar = anioSel;
+
+        if (anioSel === "todos") {
+            anioParaAplicar = anioActual;
+            setAnioSel(anioActual);
+        }
+
+        const anioBase = anioParaAplicar === "todos" ? anioActual : Number(anioParaAplicar);
+
         // Si vuelve a presionar el mismo mes, quitar el filtro de fecha
-        if (mesSel === mesIndex) {
+        if (mesSel === mesIndex && anioSel !== "todos") {
             setMesSel("sin_filtro");
 
             setFiltros((prev) => ({
@@ -454,14 +795,14 @@ export default function VentasUsados() {
         if (mesIndex === null) {
             setFiltros((prev) => ({
                 ...prev,
-                fecha_desde: `${anioSel}-01-01`,
-                fecha_hasta: `${anioSel}-12-31`,
+                fecha_desde: `${anioBase}-01-01`,
+                fecha_hasta: `${anioBase}-12-31`,
             }));
 
             return;
         }
 
-        const rango = obtenerRangoMes(mesIndex + 1, anioSel);
+        const rango = obtenerRangoMes(mesIndex + 1, anioBase);
 
         setFiltros((prev) => ({
             ...prev,
@@ -470,12 +811,29 @@ export default function VentasUsados() {
     }
 
     function aplicarAnio(anio) {
+        setPagina(1);
+
+        if (anio === "todos") {
+            setAnioSel("todos");
+            setMesSel("sin_filtro");
+            setFiltros((prev) => ({
+                ...prev,
+                fecha_desde: "",
+                fecha_hasta: "",
+            }));
+            return;
+        }
+
         const nuevoAnio = Number(anio);
 
         setAnioSel(nuevoAnio);
-        setPagina(1);
 
         if (mesSel === "sin_filtro") {
+            setFiltros((prev) => ({
+                ...prev,
+                fecha_desde: "",
+                fecha_hasta: "",
+            }));
             return;
         }
 
@@ -497,7 +855,10 @@ export default function VentasUsados() {
     }
     function actualizarTodo() { cargarDatos(); cargarDashboard(); }
 
+    function exportarReporte() { setExportModalOpen(true); }
+
     const chartRefs = useRef({});
+    const reporteUsadosRef = useRef(null);
     const [exportandoKey, setExportandoKey] = useState(null);
 
     function alternarFiltro(campo, valor) {
@@ -542,6 +903,303 @@ export default function VentasUsados() {
             console.error("Error exportando gráfica:", err);
         } finally {
             setExportandoKey(null);
+        }
+    }
+
+    async function generarReporteUsados(config = {}, { onProgress } = {}) {
+        const progreso = (mensaje) => {
+            try {
+                onProgress?.(mensaje);
+            } catch {
+                // El aviso de progreso es informativo; no debe interrumpir la exportación.
+            }
+        };
+
+        progreso("Leyendo filtros y parámetros del reporte...");
+        const reportFilters = { ...filtros, ...(config.filters || {}) };
+        const busqueda = String(reportFilters.q || "").trim();
+        const buscarVIN = esVINCompleto(busqueda);
+
+        const paramsBase = {
+            cond_uso: CONDICION_USO.USADO,
+            q: buscarVIN ? normalizarBusquedaVIN(busqueda) : busqueda,
+            agencia: reportFilters.agencia,
+            asesor: reportFilters.asesor,
+            familia: reportFilters.familia,
+            condicion_pago: reportFilters.condicion_pago,
+            serie: reportFilters.serie,
+            nr_nota: reportFilters.nr_nota,
+            producto_servicio: reportFilters.producto_servicio,
+            venta_digital: reportFilters.venta_digital,
+            fecha_desde: buscarVIN ? "" : reportFilters.fecha_desde,
+            fecha_hasta: buscarVIN ? "" : reportFilters.fecha_hasta,
+        };
+
+        try {
+            progreso("Extrayendo datos de ventas...");
+            const primera = await http(`/ventas-vn/api/${buildQuery({ ...paramsBase, page: 1, page_size: 100 })}`);
+            const totalRegistros = Number(primera?.count || 0);
+            const filasExportar = Array.isArray(primera?.results) ? [...primera.results] : [];
+            const paginasReporte = Math.ceil(totalRegistros / 100);
+
+            for (let page = 2; page <= paginasReporte; page += 1) {
+                progreso(`Leyendo registros... página ${page} de ${paginasReporte}`);
+                const response = await http(`/ventas-vn/api/${buildQuery({ ...paramsBase, page, page_size: 100 })}`);
+                if (Array.isArray(response?.results)) filasExportar.push(...response.results);
+            }
+
+            if (!filasExportar.length) {
+                throw new Error("No hay registros para exportar con los filtros configurados.");
+            }
+
+            progreso("Organizando la información obtenida...");
+            const columnasSolicitadas = Array.isArray(config.columns) && config.columns.length
+                ? config.columns
+                : COLUMNAS_REPORTE_USADOS_DEFAULT;
+            const columnasSeleccionadas = COLUMNAS_REPORTE_USADOS.filter((columna) => columnasSolicitadas.includes(columna.key));
+
+            const incluyeResumen = config.sections?.includes("summary") ?? true;
+            const incluyeGraficas = config.sections?.includes("charts") && Array.isArray(config.charts) && config.charts.length > 0;
+            const incluyeTabla = config.sections?.includes("table") ?? true;
+
+            progreso("Calculando totales y resumen ejecutivo...");
+            const filasVendidas = filasExportar.filter((row) => String(row.situacion || "").toUpperCase() === "E");
+            const baseTotales = filasVendidas.length ? filasVendidas : filasExportar;
+            const ingresos = filasExportar.reduce((acc, row) => acc + numero(row.valor_factura_sin_iva) - numero(row.isan), 0);
+            const costo = filasExportar.reduce((acc, row) => acc + numero(row.valor_compra), 0);
+            const utilidad = ingresos - costo;
+            const margen = ingresos ? (utilidad / ingresos) * 100 : 0;
+            const digitales = filasExportar.filter((row) => row.es_venta_digital || row.tipo_venta === "Venta digital").length;
+
+            const resumen = {
+                unidades: baseTotales.length,
+                operaciones: filasExportar.length,
+                ingresos,
+                costo,
+                utilidad,
+                margen,
+                digitales,
+            };
+
+            const filtrosLegibles = filtrosConfiguradorReporte
+                .map((definicion) => {
+                    const raw = reportFilters[definicion.key];
+                    if (raw === undefined || raw === null || raw === "" || raw === "Todos" || raw === "Todas") return null;
+                    let value = raw;
+                    if (definicion.type === "select" && Array.isArray(definicion.options)) {
+                        const encontrado = definicion.options.find((opcion) => String(opcion.value) === String(raw));
+                        if (encontrado) value = encontrado.label;
+                    }
+                    return { label: definicion.label, value };
+                })
+                .filter(Boolean);
+
+            const tituloReporte = config.title || "Reporte de Ventas de Autos Usados";
+            let canvas = null;
+
+            if (incluyeResumen || incluyeGraficas) {
+                progreso("Preparando el resumen y las gráficas del reporte...");
+                setReporteUsadosExportacion({
+                    title: tituloReporte,
+                    rows: filasExportar,
+                    filters: filtrosLegibles,
+                    charts: incluyeGraficas ? config.charts : [],
+                    includeSummary: incluyeResumen,
+                    includeCharts: incluyeGraficas,
+                    summary: resumen,
+                });
+                await esperarRenderReporteUsados();
+
+                if (!reporteUsadosRef.current) {
+                    throw new Error("No se pudo preparar la vista visual del reporte.");
+                }
+
+                progreso("Generando imágenes de las gráficas...");
+                canvas = await html2canvas(reporteUsadosRef.current, {
+                    scale: 1.35,
+                    useCORS: true,
+                    allowTaint: false,
+                    backgroundColor: "#ffffff",
+                    logging: false,
+                    windowWidth: 1280,
+                    scrollX: 0,
+                    scrollY: 0,
+                });
+            }
+
+            if (config.format === "pdf") {
+                progreso("Creando documento PDF...");
+                await esperarPintadoProgreso();
+                const orientation = config.orientation === "portrait" ? "portrait" : "landscape";
+                const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+                const doc = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
+                doc.setProperties({
+                    title: tituloReporte,
+                    subject: "Reporte configurable de ventas de autos usados",
+                    author: "CRM Grupo Automotriz R&R",
+                    creator: "CRM Grupo Automotriz R&R",
+                });
+
+                let tieneContenido = false;
+                if (canvas) {
+                    agregarCanvasPdfUsados(doc, canvas);
+                    tieneContenido = true;
+                }
+
+                if (incluyeTabla) {
+                    if (tieneContenido) doc.addPage();
+                    const columnasPorPagina = orientation === "portrait" ? 4 : 7;
+                    const grupos = [];
+                    for (let i = 0; i < columnasSeleccionadas.length; i += columnasPorPagina) {
+                        grupos.push(columnasSeleccionadas.slice(i, i + columnasPorPagina));
+                    }
+
+                    grupos.forEach((grupo, indice) => {
+                        if (indice > 0) doc.addPage();
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(12);
+                        doc.setTextColor(19, 30, 92);
+                        doc.text(`${tituloReporte} · Detalle ${indice + 1}/${grupos.length}`, 8, 10);
+
+                        autoTable(doc, {
+                            startY: 14,
+                            head: [grupo.map((columna) => columna.label)],
+                            body: filasExportar.map((row) => grupo.map((columna) => String(valorReporteUsados(row, columna.key) ?? ""))),
+                            theme: "grid",
+                            styles: {
+                                font: "helvetica",
+                                fontSize: 6.2,
+                                cellPadding: 1.4,
+                                overflow: "linebreak",
+                                valign: "middle",
+                                textColor: [55, 65, 81],
+                                lineColor: [226, 232, 240],
+                                lineWidth: 0.12,
+                            },
+                            headStyles: {
+                                fillColor: [19, 30, 92],
+                                textColor: [255, 255, 255],
+                                fontStyle: "bold",
+                                halign: "center",
+                            },
+                            alternateRowStyles: { fillColor: [248, 250, 252] },
+                            margin: { left: 7, right: 7, bottom: 9 },
+                        });
+                    });
+                    tieneContenido = true;
+                }
+
+                if (!tieneContenido) {
+                    throw new Error("El reporte no tiene contenido seleccionado.");
+                }
+
+                progreso("Descargando archivo...");
+                await esperarPintadoProgreso();
+                doc.save(nombreReporteUsados(config, "pdf"));
+            } else {
+                progreso("Creando archivo Excel...");
+                await esperarPintadoProgreso();
+                const { default: ExcelJS } = await import("exceljs");
+                const workbook = new ExcelJS.Workbook();
+                workbook.creator = "CRM Grupo Automotriz R&R";
+                workbook.lastModifiedBy = "CRM Grupo Automotriz R&R";
+                workbook.created = new Date();
+                workbook.modified = new Date();
+                workbook.title = tituloReporte;
+
+                if (incluyeResumen) {
+                    const hoja = workbook.addWorksheet("Resumen", { views: [{ showGridLines: false }] });
+                    hoja.columns = [{ width: 30 }, { width: 48 }];
+                    hoja.mergeCells("A1:B2");
+                    hoja.getCell("A1").value = tituloReporte;
+                    hoja.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
+                    hoja.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+                    hoja.getCell("A1").alignment = { vertical: "middle" };
+
+                    const filasResumen = [
+                        ["Generado", new Date().toLocaleString("es-MX")],
+                        ["Unidades vendidas", resumen.unidades],
+                        ["Operaciones", resumen.operaciones],
+                        ["Ingresos", money(resumen.ingresos)],
+                        ["Costo", money(resumen.costo)],
+                        ["Utilidad estimada", money(resumen.utilidad)],
+                        ["Margen", `${resumen.margen.toFixed(1)}%`],
+                        ["Ventas digitales", resumen.digitales],
+                    ];
+                    filasResumen.forEach(([etiqueta, valor], index) => {
+                        const fila = 4 + index;
+                        hoja.getCell(`A${fila}`).value = etiqueta;
+                        hoja.getCell(`A${fila}`).font = { bold: true };
+                        hoja.getCell(`B${fila}`).value = valor;
+                    });
+
+                    const filaFiltros = 4 + filasResumen.length + 1;
+                    hoja.getCell(`A${filaFiltros}`).value = "Filtros configurados";
+                    hoja.getCell(`A${filaFiltros}`).font = { bold: true, color: { argb: "FF131E5C" } };
+                    if (filtrosLegibles.length) {
+                        filtrosLegibles.forEach((filtro, index) => {
+                            const fila = filaFiltros + 1 + index;
+                            hoja.getCell(`A${fila}`).value = filtro.label;
+                            hoja.getCell(`A${fila}`).font = { bold: true };
+                            hoja.getCell(`B${fila}`).value = String(filtro.value);
+                        });
+                    } else {
+                        hoja.getCell(`B${filaFiltros}`).value = "Sin filtros (todo el historial)";
+                    }
+                }
+
+                if (incluyeTabla) {
+                    const hoja = workbook.addWorksheet("Detalle", {
+                        views: [{ state: "frozen", ySplit: 1 }],
+                    });
+                    hoja.columns = columnasSeleccionadas.map((columna) => ({
+                        header: columna.label,
+                        key: columna.key,
+                        width: ["producto_servicio", "razon_social"].includes(columna.key) ? 34 : 20,
+                    }));
+                    filasExportar.forEach((row) => {
+                        const registro = {};
+                        columnasSeleccionadas.forEach((columna) => {
+                            registro[columna.key] = valorReporteUsados(row, columna.key);
+                        });
+                        hoja.addRow(registro);
+                    });
+                    hoja.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+                    hoja.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF131E5C" } };
+                    hoja.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+                    hoja.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: Math.max(1, columnasSeleccionadas.length) } };
+                }
+
+                if (incluyeGraficas && canvas) {
+                    const hoja = workbook.addWorksheet("Gráficas", { views: [{ showGridLines: false, zoomScale: 70 }] });
+                    hoja.getCell("A1").value = tituloReporte;
+                    hoja.getCell("A1").font = { bold: true, size: 16, color: { argb: "FF131E5C" } };
+                    const imageId = workbook.addImage({ base64: canvas.toDataURL("image/png"), extension: "png" });
+                    const ancho = 1200;
+                    const alto = Math.round((canvas.height / canvas.width) * ancho);
+                    hoja.addImage(imageId, { tl: { col: 0, row: 2 }, ext: { width: ancho, height: alto } });
+                    for (let i = 1; i <= 18; i += 1) hoja.getColumn(i).width = 11;
+                }
+
+                if (!workbook.worksheets.length) {
+                    throw new Error("El reporte no tiene contenido seleccionado.");
+                }
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                progreso("Descargando archivo...");
+                await esperarPintadoProgreso();
+                descargarBlobReporteUsados(
+                    new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                    nombreReporteUsados(config, "xlsx"),
+                );
+            }
+
+            setExportModalOpen(false);
+        } catch (error) {
+            console.error("Error generando reporte de autos usados:", error);
+            throw error;
+        } finally {
+            setReporteUsadosExportacion(null);
         }
     }
 
@@ -731,257 +1389,6 @@ export default function VentasUsados() {
                         })}
                     </div>
                 </div>
-                {/* FILTROS */}
-                <div className="space-y-3">
-                    {/* FILTROS COMPLEMENTARIOS */}
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-vw-head font-bold text-white">
-                                <SlidersHorizontal className="h-3.5 w-3.5" />
-                                <span>Filtros de Autos Usados</span>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={limpiarFiltros}
-                                disabled={!hayFiltros}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[10px] font-vw-head font-bold text-[#001E50] shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                <Eraser className="h-3 w-3" />
-                                Limpiar filtros
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-
-                            {/* BUSCAR */}
-                            <div>
-                                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                                    Buscar
-                                </label>
-
-                                <div className="relative">
-                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-
-                                    <input
-                                        type="text"
-                                        value={filtros.q}
-                                        onChange={(e) => cambiarFiltro("q", e.target.value)}
-                                        placeholder="Serie, cliente, modelo..."
-                                        className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs font-vw-text text-[#001E50] outline-none transition placeholder:text-slate-300 focus:border-[#1677FF]"
-                                    />
-
-                                    {filtros.q ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => cambiarFiltro("q", "")}
-                                            className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    ) : null}
-                                </div>
-                            </div>
-
-                            {/* FAMILIA / MODELO */}
-                            <div>
-                                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                                    Familia / Modelo
-                                </label>
-
-                                <select
-                                    value={filtros.familia}
-                                    onChange={(e) => cambiarFiltro("familia", e.target.value)}
-                                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                                >
-                                    <option value="">Todas las familias</option>
-                                    {dashboard.opciones.familias.map((familia) => (
-                                        <option key={familia} value={familia}>
-                                            {familia}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* CONDICIÓN DE PAGO */}
-                            <div>
-                                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                                    Condición de Pago
-                                </label>
-
-                                <select
-                                    value={filtros.condicion_pago}
-                                    onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)}
-                                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                                >
-                                    <option value="">Todas las condiciones</option>
-                                    {dashboard.opciones.condiciones_pago.map((condicion) => (
-                                        <option key={condicion} value={condicion}>
-                                            {condicion}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* ASESOR */}
-                            <div>
-                                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                                    Asesor
-                                </label>
-
-                                <select
-                                    value={filtros.asesor}
-                                    onChange={(e) => cambiarFiltro("asesor", e.target.value)}
-                                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                                >
-                                    <option value="">Todos los asesores</option>
-                                    {dashboard.opciones.asesores.map((asesor) => (
-                                        <option key={asesor} value={asesor}>
-                                            {asesor}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* TIPO DE VENTA */}
-                            <div>
-                                <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                                    Tipo de Venta
-                                </label>
-
-                                <select
-                                    value={filtros.venta_digital}
-                                    onChange={(e) => cambiarFiltro("venta_digital", e.target.value)}
-                                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
-                                >
-                                    <option value="">Todas las ventas</option>
-                                    <option value="1">Venta digital</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {(filtros.asesor ||
-                            filtros.familia ||
-                            filtros.condicion_pago ||
-                            filtros.venta_digital) && (
-                                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 pt-2">
-                                    <span className="mr-1 text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
-                                        Aplicados:
-                                    </span>
-
-                                    {filtros.asesor && (
-                                        <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
-                                            {filtros.asesor}
-                                        </span>
-                                    )}
-
-                                    {filtros.familia && (
-                                        <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
-                                            {filtros.familia}
-                                        </span>
-                                    )}
-
-                                    {filtros.condicion_pago && (
-                                        <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">
-                                            {filtros.condicion_pago}
-                                        </span>
-                                    )}
-
-                                    {filtros.venta_digital === "1" && (
-                                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#1677FF]">
-                                            Venta digital
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                    </div>
-
-                    {/* AÑO + MESES */}
-                    <div className="bg-white rounded-xl p-2.5 border border-slate-200 flex items-center gap-3">
-                        <div className="relative inline-block shrink-0">
-                            <select
-                                value={anioSel}
-                                onChange={(e) => aplicarAnio(e.target.value)}
-                                className="appearance-none bg-white border border-slate-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-vw-head font-bold text-[#001E50] focus:outline-none cursor-pointer"
-                            >
-                                {anios.map((anio) => (
-                                    <option key={anio} value={anio}>
-                                        {anio}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <ChevronDown className="h-3.5 w-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        </div>
-
-                        <div className="flex gap-1.5 overflow-x-auto w-full pb-1 scrollbar-thin">
-
-                            {/* TODO EL AÑO */}
-                            <button
-                                type="button"
-                                onClick={() => aplicarMes(null)}
-                                className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-3 py-1.5 text-xs transition-all ${mesSel === null
-                                    ? "bg-[#001E50] text-white font-vw-head font-bold"
-                                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
-                                    }`}
-                            >
-                                {mesSel === null ? (
-                                    <Check className="h-3 w-3 text-white" />
-                                ) : (
-                                    <Plus className="h-3 w-3 text-slate-400" />
-                                )}
-
-                                <span>Todo el año</span>
-                            </button>
-
-                            {/* MESES */}
-                            {MESES.map((mes, index) => {
-                                const futuro =
-                                    anioSel === anioActual && index > mesActual;
-
-                                const activo = mesSel === index;
-
-                                return (
-                                    <button
-                                        key={mes}
-                                        type="button"
-                                        disabled={futuro}
-                                        onClick={() => aplicarMes(index)}
-                                        className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-xs transition-all ${activo
-                                            ? "bg-[#001E50] text-white font-vw-head font-bold"
-                                            : futuro
-                                                ? "border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed font-vw-head font-bold"
-                                                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"
-                                            }`}
-                                    >
-                                        {activo ? (
-                                            <Check className="h-3 w-3 text-white" />
-                                        ) : (
-                                            <Plus className="h-3 w-3 text-slate-400" />
-                                        )}
-
-                                        <span>{mes.toLowerCase()}</span>
-                                    </button>
-                                );
-                            })}
-
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={actualizarTodo}
-                            disabled={loading || loadingDashboard}
-                            title="Recargar"
-                            className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 text-[#001E50] transition shrink-0"
-                        >
-                            <RefreshCw
-                                className={`h-4 w-4 ${loading || loadingDashboard ? "animate-spin" : ""
-                                    }`}
-                            />
-                        </button>
-                    </div>
-                </div>
-
                 {/* DESGLOSE POR ASESOR */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
                     <section className="lg:col-span-12 bg-[#F8FAFC] rounded-2xl border border-slate-200 p-3.5 md:p-4 space-y-3 flex flex-col shadow-sm">
@@ -1256,6 +1663,300 @@ export default function VentasUsados() {
                 {vistaActiva === "detalle" && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                         <h3 className="mb-3 text-sm font-extrabold text-[#001E50]">Detalle Individual de Ventas (Autos Usados)</h3>
+
+                        {/* BUSCAR (arriba de la tabla) */}
+                        <div className="mb-3 relative">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                value={filtros.q}
+                                onChange={(e) => cambiarFiltro("q", e.target.value)}
+                                placeholder="Buscar VIN, serie, nota, cliente, modelo..."
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs font-vw-text text-[#001E50] outline-none transition placeholder:text-slate-300 focus:border-[#1677FF]"
+                            />
+                            {filtros.q ? (
+                                <button
+                                    type="button"
+                                    onClick={() => cambiarFiltro("q", "")}
+                                    className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            ) : null}
+                        </div>
+
+                        {/* FILTROS DE AUTOS USADOS */}
+                        <div className="space-y-4">
+                            {/* FILTROS COMPLEMENTARIOS */}
+                            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-vw-head font-bold text-white">
+                                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                                        <span>Filtros de Autos Usados</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={exportarReporte}
+                                            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-bold text-[#131E5C] hover:bg-[#131E5C]/5 transition"
+                                        >
+                                            <Download className="h-3.5 w-3.5" />
+                                            Reporte
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={limpiarFiltros}
+                                            disabled={!hayFiltros}
+                                            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[10px] font-vw-head font-bold text-[#001E50] shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            <Eraser className="h-3 w-3" />
+                                            Limpiar filtros
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-5">
+                                    {/* FAMILIA / MODELO */}
+                                    <div>
+                                        <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                                            Familia / Modelo
+                                        </label>
+                                        <select
+                                            value={filtros.familia}
+                                            onChange={(e) => cambiarFiltro("familia", e.target.value)}
+                                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                                        >
+                                            <option value="">Todas las familias</option>
+                                            {dashboard.opciones.familias.map((familia) => (
+                                                <option key={familia} value={familia}>{familia}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {/* CONDICIÓN DE PAGO */}
+                                    <div>
+                                        <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                                            Condición de Pago
+                                        </label>
+                                        <select
+                                            value={filtros.condicion_pago}
+                                            onChange={(e) => cambiarFiltro("condicion_pago", e.target.value)}
+                                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                                        >
+                                            <option value="">Todas las condiciones</option>
+                                            {dashboard.opciones.condiciones_pago.map((condicion) => (
+                                                <option key={condicion} value={condicion}>{condicion}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {/* ASESOR */}
+                                    <div>
+                                        <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                                            Asesor
+                                        </label>
+                                        <select
+                                            value={filtros.asesor}
+                                            onChange={(e) => cambiarFiltro("asesor", e.target.value)}
+                                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                                        >
+                                            <option value="">Todos los asesores</option>
+                                            {dashboard.opciones.asesores.map((asesor) => (
+                                                <option key={asesor} value={asesor}>{asesor}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {/* TIPO DE VENTA */}
+                                    <div>
+                                        <label className="mb-1.5 block text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+                                            Tipo de Venta
+                                        </label>
+                                        <select
+                                            value={filtros.venta_digital}
+                                            onChange={(e) => cambiarFiltro("venta_digital", e.target.value)}
+                                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-vw-text text-[#001E50] outline-none focus:border-[#1677FF]"
+                                        >
+                                            <option value="">Todas las ventas</option>
+                                            <option value="1">Venta digital</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                {(filtros.asesor || filtros.familia || filtros.condicion_pago || filtros.venta_digital) && (
+                                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 pt-2">
+                                        <span className="mr-1 text-[9px] font-vw-head font-bold uppercase tracking-wider text-slate-400">Aplicados:</span>
+                                        {filtros.asesor && (
+                                            <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">{filtros.asesor}</span>
+                                        )}
+                                        {filtros.familia && (
+                                            <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">{filtros.familia}</span>
+                                        )}
+                                        {filtros.condicion_pago && (
+                                            <span className="rounded-full bg-[#001E50]/[0.07] px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#001E50]">{filtros.condicion_pago}</span>
+                                        )}
+                                        {filtros.venta_digital === "1" && (
+                                            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-vw-head font-bold text-[#1677FF]">Venta digital</span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {/* AÑO + MESES */}
+                            <div className="bg-white rounded-xl p-2.5 border border-slate-200 flex items-center gap-3">
+                                <div className="relative inline-block shrink-0">
+                                    <select
+                                        value={anioSel}
+                                        onChange={(e) => aplicarAnio(e.target.value)}
+                                        className="appearance-none bg-white border border-slate-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-vw-head font-bold text-[#001E50] focus:outline-none cursor-pointer"
+                                    >
+                                        <option value="todos">Todos los años</option>
+                                        {anios.map((anio) => (
+                                            <option key={anio} value={anio}>{anio}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="h-3.5 w-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                </div>
+                                <div className="flex gap-1.5 overflow-x-auto w-full pb-1 scrollbar-thin">
+                                    {/* TODO EL AÑO */}
+                                    <button
+                                        type="button"
+                                        onClick={() => aplicarMes(null)}
+                                        className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-3 py-1.5 text-xs transition-all ${mesSel === null && anioSel !== "todos" ? "bg-[#001E50] text-white font-vw-head font-bold" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"}`}
+                                    >
+                                        {mesSel === null && anioSel !== "todos" ? (
+                                            <Check className="h-3 w-3 text-white" />
+                                        ) : (
+                                            <Plus className="h-3 w-3 text-slate-400" />
+                                        )}
+                                        <span>Todo el año</span>
+                                    </button>
+                                    {/* MESES */}
+                                    {MESES.map((mes, index) => {
+                                        const futuro = anioSel !== "todos" && Number(anioSel) === anioActual && index > mesActual;
+                                        const activo = mesSel === index && anioSel !== "todos";
+                                        const deshabilitado = futuro;
+                                        return (
+                                            <button
+                                                key={mes}
+                                                type="button"
+                                                disabled={deshabilitado}
+                                                onClick={() => aplicarMes(index)}
+                                                className={`inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-xs transition-all ${activo ? "bg-[#001E50] text-white font-vw-head font-bold" : deshabilitado ? "border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed font-vw-head font-bold" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-vw-head font-bold"}`}
+                                            >
+                                                {activo ? (
+                                                    <Check className="h-3 w-3 text-white" />
+                                                ) : (
+                                                    <Plus className="h-3 w-3 text-slate-400" />
+                                                )}
+                                                <span>{mes.toLowerCase()}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={actualizarTodo}
+                                    disabled={loading || loadingDashboard}
+                                    title="Recargar"
+                                    className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 text-[#001E50] transition shrink-0"
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${loading || loadingDashboard ? "animate-spin" : ""}`} />
+                                </button>
+                            </div>
+                        </div>
+                        {/* EXPORTAR REPORTE MODAL */}
+                        {exportModalOpen && (
+                            <ExportReportModal
+                                isOpen={exportModalOpen}
+                                onClose={() => setExportModalOpen(false)}
+                                moduleName="Ventas de Autos Usados"
+                                storageKey="ventas-usados"
+                                currentFilters={{ ...filtros }}
+                                filterDefinitions={filtrosConfiguradorReporte}
+                                currentColumns={COLUMNAS_REPORTE_USADOS_DEFAULT}
+                                availableColumns={COLUMNAS_REPORTE_USADOS}
+                                totalRecords={total}
+                                formats={["excel", "pdf"]}
+                                sectionOptions={SECCIONES_REPORTE_USADOS}
+                                chartOptions={GRAFICAS_REPORTE_USADOS}
+                                onGenerate={generarReporteUsados}
+                            />
+                        )}
+
+                        {reporteUsadosExportacion && (
+                            <div
+                                ref={reporteUsadosRef}
+                                aria-hidden="true"
+                                style={{
+                                    position: "fixed",
+                                    left: "-20000px",
+                                    top: 0,
+                                    width: "1200px",
+                                    padding: "32px",
+                                    backgroundColor: "#ffffff",
+                                    zIndex: -1,
+                                    pointerEvents: "none",
+                                }}
+                            >
+                                <div className="mb-6 border-b border-slate-200 pb-5">
+                                    <h1 className="text-3xl font-black text-[#131E5C]">{reporteUsadosExportacion.title}</h1>
+                                    <p className="mt-1 text-sm text-slate-500">Reporte configurable de Ventas de Autos Usados</p>
+                                    <p className="mt-1 text-xs text-slate-400">Generado: {new Date().toLocaleString("es-MX")}</p>
+                                </div>
+
+                                {reporteUsadosExportacion.includeSummary && (
+                                    <>
+                                        <div className="mb-4 grid grid-cols-4 gap-3">
+                                            <div className="rounded-xl bg-[#131E5C] p-4 text-white">
+                                                <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Unidades vendidas</p>
+                                                <p className="mt-2 text-4xl font-black">{formatoNumero(reporteUsadosExportacion.summary.unidades)}</p>
+                                                <p className="mt-1 text-[11px] font-bold text-emerald-300">Margen {reporteUsadosExportacion.summary.margen.toFixed(1)}%</p>
+                                            </div>
+                                            <div className="col-span-3 grid grid-cols-3 gap-3">
+                                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Operaciones</p>
+                                                    <p className="mt-1 text-lg font-black text-slate-700">{formatoNumero(reporteUsadosExportacion.summary.operaciones)}</p>
+                                                </div>
+                                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Ingresos</p>
+                                                    <p className="mt-1 text-lg font-black text-slate-700">{money(reporteUsadosExportacion.summary.ingresos)}</p>
+                                                </div>
+                                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Costo</p>
+                                                    <p className="mt-1 text-lg font-black text-slate-700">{money(reporteUsadosExportacion.summary.costo)}</p>
+                                                </div>
+                                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Utilidad estimada</p>
+                                                    <p className={cn("mt-1 text-lg font-black", reporteUsadosExportacion.summary.utilidad >= 0 ? "text-emerald-700" : "text-red-600")}>{money(reporteUsadosExportacion.summary.utilidad)}</p>
+                                                </div>
+                                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Ventas digitales</p>
+                                                    <p className="mt-1 text-lg font-black text-slate-700">{formatoNumero(reporteUsadosExportacion.summary.digitales)}</p>
+                                                </div>
+                                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Registros</p>
+                                                    <p className="mt-1 text-lg font-black text-slate-700">{formatoNumero(reporteUsadosExportacion.rows.length)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Filtros aplicados:</span>
+                                            {reporteUsadosExportacion.filters.length ? reporteUsadosExportacion.filters.map((filtro) => (
+                                                <span key={filtro.label} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                                                    {filtro.label}: <strong className="text-[#131E5C]">{String(filtro.value)}</strong>
+                                                </span>
+                                            )) : (
+                                                <span className="text-[11px] font-semibold text-slate-500">Sin filtros (todo el historial)</span>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+
+                                {reporteUsadosExportacion.includeCharts && (
+                                    <ReporteGraficasUsados
+                                        rows={reporteUsadosExportacion.rows}
+                                        charts={reporteUsadosExportacion.charts}
+                                    />
+                                )}
+                            </div>
+                        )}
                         <InteractiveTable
                             rows={registros}
                             columns={COLUMNAS}
@@ -1268,6 +1969,7 @@ export default function VentasUsados() {
                             totalPages={totalPaginas}
                             onPrev={() => setPagina((prev) => Math.max(1, prev - 1))}
                             onNext={() => setPagina((prev) => Math.min(totalPaginas, prev + 1))}
+                            onColumnFilterChange={aplicarFiltroColumna}
                         />
                     </div>
                 )}

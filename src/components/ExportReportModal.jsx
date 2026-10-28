@@ -241,6 +241,7 @@ export default function ExportReportModal({
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(false);
     const [generatingFormat, setGeneratingFormat] = useState("");
+    const [progressMessage, setProgressMessage] = useState("");
     const [error, setError] = useState("");
     const [columnSearch, setColumnSearch] = useState("");
     const [activeStep, setActiveStep] = useState("filters");
@@ -283,6 +284,7 @@ export default function ExportReportModal({
         setError("");
         setColumnSearch("");
         setActiveStep("filters");
+        setProgressMessage("");
     }, [isOpen, cacheKey]);
 
     useEffect(() => {
@@ -417,6 +419,7 @@ export default function ExportReportModal({
         try {
             setConfig(configGeneracion);
             setGeneratingFormat(format);
+            setProgressMessage("Leyendo la configuración del reporte...");
             setLoading(true);
             await onGenerate?.({
                 ...configGeneracion,
@@ -426,6 +429,8 @@ export default function ExportReportModal({
                 columns: [...configGeneracion.columns],
                 sections: [...configGeneracion.sections],
                 charts: [...configGeneracion.charts],
+            }, {
+                onProgress: (message) => setProgressMessage(message),
             });
         } catch (err) {
             console.error("Error generando reporte:", err);
@@ -433,6 +438,7 @@ export default function ExportReportModal({
         } finally {
             setLoading(false);
             setGeneratingFormat("");
+            setProgressMessage("");
         }
     }
 
@@ -726,6 +732,16 @@ export default function ExportReportModal({
                             {error && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
                         </main>
                     </div>
+
+                    {loading && (
+                        <div className="flex shrink-0 items-center gap-3 border-t border-blue-100 bg-blue-50 px-4 py-2.5 text-xs font-bold text-[#131E5C] sm:px-6">
+                            <RefreshCcw className="h-4 w-4 shrink-0 animate-spin" />
+                            <span className="min-w-0 flex-1 truncate">{progressMessage || "Preparando el reporte..."}</span>
+                            <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#131E5C]/50 sm:block">
+                                No cierres esta ventana
+                            </span>
+                        </div>
+                    )}
 
                     <footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                         <button type="button" onClick={resetConfig} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">

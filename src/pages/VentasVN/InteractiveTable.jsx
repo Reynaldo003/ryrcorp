@@ -347,6 +347,7 @@ export default function InteractiveTable({
   rowKey = "nr_mov",
   exportName = "Autos Nuevos",
   exportFile = `venta_autos_nuevos_${new Date().toISOString().slice(0, 10)}`,
+  onColumnFilterChange,
 }) {
   const tableRows = data || rows || [];
   const keyColumnas = `${storageKey}_${STORAGE_COLUMNAS}`;
@@ -463,6 +464,17 @@ export default function InteractiveTable({
     setColFilters({});
     setOpenFilter(null);
   }
+
+  // Notifica al padre cuando cambian los filtros de columna para que los envíe al backend.
+  useEffect(() => {
+    if (onColumnFilterChange) {
+      const activos = {};
+      Object.entries(colFilters).forEach(([k, v]) => {
+        if (Array.isArray(v) && v.length > 0) activos[k] = v;
+      });
+      onColumnFilterChange(activos);
+    }
+  }, [colFilters, onColumnFilterChange]);
 
   const hayFiltrosColumna = Object.values(colFilters).some((v) => Array.isArray(v) && v.length > 0);
 
