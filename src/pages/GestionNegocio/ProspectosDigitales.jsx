@@ -6,7 +6,8 @@ import {
   Loader2, XCircle, User, Phone, FileCheck, Calendar, Share2,
   Tag, CreditCard, KeyRound, Building2, ShieldCheck, Clock,
   BadgeCheck, PackageCheck, AlertCircle, UserCheck, Globe,
-  MessageSquare, Shield
+  MessageSquare, Shield, Mail, MessageCircle, Trophy,
+  FacebookIcon
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis
@@ -76,6 +77,127 @@ function entero(value) { return numero(value).toLocaleString("es-MX", { maximumF
 function moneda(value) {
   return `$${numero(value).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
+
+/* ============================================================
+    CANALES DE CONTACTO
+============================================================ */
+const CANALES_CONTACTO_CONFIG = {
+  whatsapp: { etiqueta: "WhatsApp", color: "#08cc50", icono: MessageSquare},
+  facebook: { etiqueta: "Facebook", color: "#1877F2", icono: FacebookIcon },
+  llamada: { etiqueta: "Llamada", color: "#F97316", icono: Phone },
+  correo: { etiqueta: "Correo electrónico", color: "#8B5CF6", icono: Mail },
+  vw: { etiqueta: "VW Consesionario", color: "#001E50", icono: Building2 },
+  sin_clasificar: { etiqueta: "Sin clasificar", color: "#94A3B8", icono: Globe }
+};
+
+const PALETA_CANALES_CONTACTO = ["#F59E0B", "#14B8A6", "#EC4899", "#6366F1", "#EF4444"];
+
+function clasificarCanalContacto(valor) {
+  const texto = normalizaTexto(valor);
+
+  if (
+    !texto ||
+    ["null", "undefined", "ninguno", "sin canal", "sin clasificar", "s/c"].includes(texto)
+  ) {
+    return "sin_clasificar";
+  }
+
+  if (texto.includes("whats") || texto === "wa" || texto.includes("wsp")) return "whatsapp";
+  if (texto.includes("llamada") || texto.includes("telefono") || texto.startsWith("tel")) return "llamada";
+  if (texto.includes("correo") || texto.includes("email") || texto.includes("mail")) return "correo";
+  if (texto.includes("facebook") || texto.includes("meta")) return "facebook";
+
+  if (
+    ["instagram", "redes", "social", "tiktok", "twitter", "linkedin", "youtube"]
+      .some((clave) => texto.includes(clave))
+  ) {
+    return "redes";
+  }
+
+  if (texto.includes("vw") || texto.includes("concesionaria") || texto.includes("direct")) return "vw";
+
+  return `otro:${texto}`;
+}
+
+function etiquetaCanalContacto(clave, valorOriginal) {
+  if (CANALES_CONTACTO_CONFIG[clave]) return CANALES_CONTACTO_CONFIG[clave].etiqueta;
+
+  const texto = String(valorOriginal || "").trim();
+  if (!texto) return "Sin clasificar";
+
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function construirCanalesContacto(prospectos = [], respaldo = []) {
+  const mapa = new Map();
+  let conCanal = 0;
+
+  (prospectos || []).forEach((prospecto) => {
+    const raw =
+      prospecto?.canal_contacto ??
+      prospecto?.cliente?.canal_contacto ??
+      prospecto?.medio_contacto ??
+      "";
+
+    const limpio = String(raw ?? "").trim();
+    if (limpio) conCanal += 1;
+
+    const clave = clasificarCanalContacto(limpio);
+
+    if (!mapa.has(clave)) {
+      mapa.set(clave, {
+        id: clave,
+        nombre: etiquetaCanalContacto(clave, limpio),
+        total: 0
+      });
+    }
+
+    mapa.get(clave).total += 1;
+  });
+
+  /*
+   * Si la cohorte no trae el canal registrado, usamos
+   * la agregación que ya calcula el backend.
+   */
+  if (conCanal === 0 && Array.isArray(respaldo) && respaldo.length) {
+    mapa.clear();
+
+    respaldo.forEach((canal) => {
+      const total = numero(canal?.prospectos ?? canal?.total);
+      if (total <= 0) return;
+
+      const clave = clasificarCanalContacto(canal?.nombre || canal?.canal);
+
+      if (!mapa.has(clave)) {
+        mapa.set(clave, {
+          id: clave,
+          nombre: etiquetaCanalContacto(clave, canal?.nombre || canal?.canal),
+          total: 0
+        });
+      }
+
+      mapa.get(clave).total += total;
+    });
+  }
+
+  const lista = Array.from(mapa.values())
+    .filter((canal) => canal.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const totalCanales = lista.reduce((total, canal) => total + canal.total, 0);
+
+  return lista.map((canal, index) => {
+    const meta = CANALES_CONTACTO_CONFIG[canal.id] || {};
+
+    return {
+      ...canal,
+      pct: totalCanales > 0 ? (canal.total / totalCanales) * 100 : 0,
+      color: meta.color || PALETA_CANALES_CONTACTO[index % PALETA_CANALES_CONTACTO.length],
+      icono: meta.icono || Share2
+    };
+  });
+}
+
 
 function normalizaTelefonoMx(tel) {
   const digits = String(tel || "").replace(/\D/g, "");
@@ -1470,6 +1592,150 @@ function EmbudoComercial({ etapas = [], canales = [], pautas = [], loading }) {
   );
 }
 
+/* ============================================================
+    SUBCOMPONENTE: CANALES DE CONTACTO (BARRAS HORIZONTALES)
+============================================================ */
+function CanalesContacto({ canales = [], loading = false }) {
+  const total = useMemo(
+    () => canales.reduce((acumulado, canal) => acumulado + numero(canal.total), 0),
+    [canales]
+  );
+
+  const lider = useMemo(
+    () => canales.find((canal) => canal.id !== "sin_clasificar") || null,
+    [canales]
+  );
+
+  return (
+    <Tarjeta>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#001E50] px-3.5 py-1 text-xs font-vw-head font-bold text-white">
+            <Share2 className="h-3.5 w-3.5" />
+            <span>Canales de contacto</span>
+          </div>
+          <p className="mt-2 text-[11px] font-vw-text text-slate-500">
+            Prospectos agrupados por el medio con el que se contactaron.
+          </p>
+        </div>
+
+        {!loading && (
+          <div className="shrink-0 text-right">
+            <div className="text-[10px] font-vw-head font-bold uppercase tracking-wider text-slate-400">
+              Total
+            </div>
+            <div className="text-xl font-vw-head font-extrabold leading-none text-[#001E50] tabular-nums">
+              {entero(total)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="mt-5 space-y-4">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <Skeleton className="h-2.5 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : canales.length === 0 ? (
+        <div className="mt-4">
+          <Vacio texto="Sin canales de contacto registrados" compact />
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2.5">
+          {canales.map((canal) => {
+            const Icono = canal.icono;
+            const esLider = lider?.id === canal.id;
+            const ancho = Math.max(3, Math.min(100, numero(canal.pct)));
+
+            return (
+              <div
+                key={canal.id}
+                className={`transition-colors ${esLider
+                  ? "rounded-xl border border-[#001E50]/10 bg-[#001E50]/[0.035] px-3 py-2.5"
+                  : "border border-transparent px-2 py-1"
+                  }`}
+              >
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
+                      style={{ backgroundColor: `${canal.color}18`, color: canal.color }}
+                    >
+                      <Icono className="h-3.5 w-3.5" />
+                    </span>
+
+                    <span
+                      className={`truncate font-vw-head text-[#001E50] ${esLider ? "text-xs font-extrabold" : "text-[11px] font-bold"}`}
+                      title={canal.nombre}
+                    >
+                      {canal.nombre}
+                    </span>
+
+                    {esLider && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-vw-head font-bold uppercase tracking-wide text-amber-700">
+                        <Trophy className="h-2.5 w-2.5" />
+                        Más usado
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 items-baseline gap-1.5">
+                    <span className="font-vw-head text-sm font-extrabold text-[#001E50] tabular-nums">
+                      {entero(canal.total)}
+                    </span>
+                    <span
+                      className="font-vw-head text-[10px] font-bold tabular-nums"
+                      style={{ color: canal.color }}
+                    >
+                      {porcentaje(canal.pct)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full transition-all duration-700 ease-out"
+                    style={{
+                      width: `${ancho}%`,
+                      backgroundImage: `linear-gradient(90deg, ${canal.color}, ${canal.color}CC)`,
+                      boxShadow: esLider ? `0 0 8px ${canal.color}55` : "none"
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && lider && (
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-vw-text text-slate-500">
+            <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span className="truncate">
+              <strong className="font-vw-head text-[#001E50]">{lider.nombre}</strong> es el canal más utilizado
+            </span>
+          </div>
+
+          <span
+            className="shrink-0 font-vw-head text-xs font-extrabold tabular-nums"
+            style={{ color: lider.color }}
+          >
+            {porcentaje(lider.pct)}
+          </span>
+        </div>
+      )}
+    </Tarjeta>
+  );
+}
+
 function getBusinessProspecto(prospecto) {
   if (!prospecto) return "";
 
@@ -2015,7 +2281,10 @@ export default function ProspectosDigitales() {
 
   const negocio = data.negocio || {};
   const embudoOriginal = Array.isArray(negocio.embudo) ? negocio.embudo : [];
-  const canales = Array.isArray(negocio.canales) ? negocio.canales : [];
+  const canales = useMemo(
+    () => (Array.isArray(data.negocio?.canales) ? data.negocio.canales : []),
+    [data.negocio]
+  );
   const asesores = Array.isArray(negocio.asesores) ? negocio.asesores : [];
 
   const asesoresValidos = useMemo(() => {
@@ -2257,6 +2526,11 @@ export default function ProspectosDigitales() {
     return nuevoEmbudo;
   }, [embudoOriginal, contactadosReales, totalProspectos, citasTotales, citasEfectivasTotales]);
 
+  const canalesContacto = useMemo(
+    () => construirCanalesContacto(prospectosCohorte, canales),
+    [prospectosCohorte, canales]
+  );
+
   return (
     <div className="w-full min-h-screen bg-[#F1F5F9] text-[#1E293B] font-vw-text font-light p-3 md:p-5 space-y-5">
 
@@ -2411,6 +2685,11 @@ export default function ProspectosDigitales() {
       {/* 3. SECCIÓN: EMBUDO Y ORIGEN DIGITAL */}
       <Seccion titulo="Embudo Comercial Digital">
         <EmbudoComercial etapas={embudoOrdenadoYCalculado} canales={canales} pautas={data.pautas} loading={loadingCohorte} />
+      </Seccion>
+
+      {/* 4. SECCIÓN: CANALES DE CONTACTO */}
+      <Seccion titulo="Canales de Contacto" subtitulo="Identifica por qué medio se ha contactado a más clientes">
+        <CanalesContacto canales={canalesContacto} loading={loadingCohorte} />
       </Seccion>
 
     </div>
