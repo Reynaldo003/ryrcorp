@@ -6,6 +6,7 @@ import CONCESIONARIO from "/concesionario.png";
 import WAP from "/whatsapp.svg";
 import FB from "/facebook.svg";
 import PHONE from "/phone.svg";
+import DATABASE from "/database.svg";
 import { api } from "../../lib/apiPruebas";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -294,6 +295,7 @@ const origenMeta = {
     WhatsApp: { Icon: ImgIcon(WAP, "WhatsApp"), label: "WhatsApp" },
     Facebook: { Icon: ImgIcon(FB, "Facebook"), label: "Facebook" },
     "Llamada Entrante": { Icon: ImgIcon(PHONE, "Llamada Entrante"), label: "Llamada Entrante" },
+    "Base de Datos": { Icon: ImgIcon(DATABASE, "Base de Datos"), label: "Base de Datos" },
 };
 const ESTADOS_PROSPECTO = [
     "Contactado",

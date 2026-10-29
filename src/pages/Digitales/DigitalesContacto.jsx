@@ -130,7 +130,7 @@ const VEHICULOS = [
     "Avaluo", "Transporter", "Caddy", "Crafter"
 ];
 
-const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
+const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante", "Base de Datos"];
 
 const MOTIVOS_DESCALIFICACION = ["Sin respuesta", "Sin interés", "Documentacion no enviada", "Sin continuidad", "No Viable", ""];
 

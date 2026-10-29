@@ -7,7 +7,7 @@ import {
   Tag, CreditCard, KeyRound, Building2, ShieldCheck, Clock,
   BadgeCheck, PackageCheck, AlertCircle, UserCheck, Globe,
   MessageSquare, Shield, Mail, MessageCircle, Trophy,
-  FacebookIcon
+  FacebookIcon, Database
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis
@@ -87,6 +87,7 @@ const CANALES_CONTACTO_CONFIG = {
   llamada: { etiqueta: "Llamada", color: "#F97316", icono: Phone },
   correo: { etiqueta: "Correo electrónico", color: "#8B5CF6", icono: Mail },
   vw: { etiqueta: "VW Consesionario", color: "#001E50", icono: Building2 },
+  base_datos: { etiqueta: "Base de Datos", color: "#0891B2", icono: Database },
   sin_clasificar: { etiqueta: "Sin clasificar", color: "#94A3B8", icono: Globe }
 };
 
@@ -106,6 +107,7 @@ function clasificarCanalContacto(valor) {
   if (texto.includes("llamada") || texto.includes("telefono") || texto.startsWith("tel")) return "llamada";
   if (texto.includes("correo") || texto.includes("email") || texto.includes("mail")) return "correo";
   if (texto.includes("facebook") || texto.includes("meta")) return "facebook";
+  if (texto.includes("base de datos") || texto.includes("base_datos") || texto === "bdc" || texto === "database") return "base_datos";
 
   if (
     ["instagram", "redes", "social", "tiktok", "twitter", "linkedin", "youtube"]

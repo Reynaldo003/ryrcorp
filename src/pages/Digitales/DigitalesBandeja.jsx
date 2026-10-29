@@ -60,7 +60,7 @@ const DEALERS = [
     "VW Tuxpan",
 ];
 
-const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante"];
+const CANALES = ["VW-Concesionario", "WhatsApp", "Facebook", "Llamada Entrante", "Base de Datos"];
 
 const ESTADOS_BANDEJA = ESTADOS_OPCIONES_BANDEJA;
 
