@@ -193,6 +193,8 @@ function mapearEncuesta(item) {
         codigo_concesionaria: item.codigo_concesionaria || "",
         concesionaria: item.concesionaria || "Sin concesionaria",
         id_asesor: item.id_asesor || "Sin asesor",
+        asesor_nombre: item.asesor_nombre || "",
+        asesor_cruce: item.asesor_cruce || "sin_coincidencia",
         vwsf: item.vwsf || "",
         q1_satisfaccion_general: numeroSeguro(item.q1_satisfaccion_general),
         qr_2_1_proceso_entrega: numeroSeguro(item.qr_2_1_proceso_entrega),
@@ -543,7 +545,10 @@ function VistaTabla({ datos }) {
                                 </td>
 
                                 <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                                    {item.id_asesor}
+                                    {item.asesor_nombre || "Sin identificar"}
+                                    {item.id_asesor && item.id_asesor !== "Sin asesor" ? (
+                                        <span className="ml-2 text-xs text-gray-400">({item.id_asesor})</span>
+                                    ) : null}
                                 </td>
 
                                 <td className="max-w-[190px] truncate px-4 py-3 text-gray-600">
@@ -755,6 +760,31 @@ function VistaGraficas({ datos, labelPeriodo }) {
         [datos]
     );
 
+    const porAsesor = useMemo(() => {
+        const etiquetas = new Map();
+        const agrupados = agruparPor(datos, (item) => {
+            const nombre = String(item.asesor_nombre || "").trim();
+            const id = String(item.id_asesor || "").trim();
+            const clave = nombre
+                ? `nombre:${normalizarTexto(nombre).replace(/\s+/g, " ")}`
+                : `sin_nombre:${id || "sin_id"}`;
+            if (!etiquetas.has(clave)) {
+                etiquetas.set(
+                    clave,
+                    nombre || (id && id !== "Sin asesor" ? `Sin identificar · ID ${id}` : "Sin identificar · sin ID")
+                );
+            }
+            return clave;
+        }, Number.MAX_SAFE_INTEGER);
+        return agrupados.map((item) => ({ ...item, name: etiquetas.get(item.name) || "Sin identificar" }));
+    }, [datos]);
+
+    const totalIdentificadas = useMemo(
+        () => datos.filter((item) => Boolean(item.asesor_nombre)).length,
+        [datos]
+    );
+    const sinAutenticacion = datos.some((item) => item.asesor_cruce === "sin_autenticacion");
+
     const dimensiones = useMemo(() => {
         const campos = [
             ["Proceso entrega", "qr_2_1_proceso_entrega"],
@@ -930,6 +960,63 @@ function VistaGraficas({ datos, labelPeriodo }) {
                     </div>
                 </DashboardPanel>
             </div>
+
+            <ChartCard
+                title="Encuestas por asesor de ventas"
+                subtitle="Desempeño comercial por asesor según encuestas recibidas"
+            >
+                <div className="mb-3 text-sm text-gray-600">
+                    <span className="font-semibold">
+                        Total de asesores:
+                    </span>{" "}
+                    <span className="font-bold text-[#0B1F5E]">
+                        {numero(porAsesor.length)}
+                    </span>
+                </div>
+                {porAsesor.length ? (
+                    <div className="max-h-[380px] overflow-y-auto">
+                        <ResponsiveContainer width="100%" height={Math.max(280, porAsesor.length * 37)}>
+                            <BarChart
+                                data={porAsesor}
+                                layout="vertical"
+                                margin={{ top: 8, right: 55, left: 10, bottom: 8 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} />
+                                <YAxis
+                                    type="category"
+                                    dataKey="name"
+                                    width={210}
+                                    tickFormatter={(value) => recortar(value, 30)}
+                                    interval={0}
+                                    tick={{ fontSize: 11, fill: "#6b7280" }}
+                                />
+                                <Tooltip
+                                    contentStyle={TooltipStyle}
+                                    formatter={(value) => [numero(value), "Encuestas"]}
+                                    labelFormatter={(label) => label}
+                                />
+                                <Bar dataKey="encuestas" name="Encuestas" fill={NAVY_2} radius={[0, 5, 5, 0]}>
+                                    <LabelList
+                                        dataKey="encuestas"
+                                        position="right"
+                                        style={{ fontSize: 11, fontWeight: 700, fill: "#374151" }}
+                                    />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <p className="py-8 text-center text-sm text-gray-400">
+                        Sin encuestas para los filtros seleccionados.
+                    </p>
+                )}
+                {sinAutenticacion ? (
+                    <p className="mt-3 text-xs text-amber-700">
+                        Para consultar los nombres se requiere una sesión autenticada ante la API del CRM.
+                    </p>
+                ) : null}
+            </ChartCard>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                 <ChartCard
@@ -1315,6 +1402,21 @@ export default function JDPower() {
             .sort((a, b) => a - b);
     }, [anio, opciones.anio_mes, datosRaw]);
 
+    const nombresPorIdAsesor = useMemo(() => {
+        const nombres = new Map();
+        datosRaw.forEach((item) => {
+            const id = String(item.id_asesor || "").trim();
+            const nombre = String(item.asesor_nombre || "").trim();
+            if (!id || !nombre) return;
+            if (!nombres.has(id)) nombres.set(id, new Set());
+            nombres.get(id).add(nombre);
+        });
+        return new Map(
+            [...nombres.entries()].filter(([, valores]) => valores.size === 1)
+                .map(([id, valores]) => [id, [...valores][0]])
+        );
+    }, [datosRaw]);
+
     const datosFiltrados = useMemo(() => {
         let datos = [...datosRaw];
 
@@ -1331,6 +1433,7 @@ export default function JDPower() {
                     item.concesionaria,
                     item.codigo_concesionaria,
                     item.id_asesor,
+                    item.asesor_nombre,
                     item.ciudad,
                     item.estado,
                     item.q1_1_razones_calificacion,
@@ -1466,7 +1569,7 @@ export default function JDPower() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                     <button
+                    <button
                         onClick={abrirResumenIA}
                         className="flex items-center gap-2 rounded-lg border border-transparent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                         style={{ backgroundColor: NAVY }}
@@ -1598,7 +1701,9 @@ export default function JDPower() {
                         <option value="Todos">Todos</option>
                         {opciones.asesores.map((item) => (
                             <option key={item} value={item}>
-                                {item}
+                                {nombresPorIdAsesor.has(String(item))
+                                    ? `${nombresPorIdAsesor.get(String(item))} (${item})`
+                                    : item}
                             </option>
                         ))}
                     </SelectField>

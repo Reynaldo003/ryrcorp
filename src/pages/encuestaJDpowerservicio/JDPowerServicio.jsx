@@ -155,6 +155,7 @@ function mapearEncuestaServicio(item) {
         codigo_concesionaria:     item.codigo_concesionaria || "",
         concesionaria:            item.concesionaria || "Sin concesionaria",
         id_asesor:                item.id_asesor || "Sin asesor",
+        asesor_nombre:            item.asesor_nombre || "",
         s1_confirma_concesionario: item.s1_confirma_concesionario || "",
         // Q1
         q1_satisfaccion_general:  numeroSeguro(item.q1_satisfaccion_general),
@@ -456,7 +457,8 @@ function VistaTabla({ datos }) {
                                     {item.codigo_concesionaria || "—"}
                                 </td>
                                 <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                                    {item.id_asesor}
+                                    {item.asesor_nombre || (item.id_asesor && item.id_asesor !== "Sin asesor"
+                                        ? `Sin identificar · ID ${item.id_asesor}` : "Sin identificar")}
                                 </td>
                                 <td className="max-w-[190px] truncate px-4 py-3 text-gray-600">
                                     {item.modelo}
@@ -570,6 +572,39 @@ function VistaGraficas({ datos }) {
         () => agruparPor(datos, (i) => i.modelo, 10),
         [datos]
     );
+
+    // Agrupar por persona y agencia; nunca contar agencias como personas.
+    // Los registros sin nombre siguen visibles y cuentan para el total de encuestas.
+    const porAsesorServicio = useMemo(() => {
+        const grupos = new Map();
+        const variasAgencias = new Set(datos.map((i) => String(i.codigo_concesionaria || "").trim())).size > 1;
+
+        datos.forEach((item) => {
+            const nombre = String(item.asesor_nombre || "").trim();
+            const agencia = String(item.codigo_concesionaria || "").trim() || "sin código";
+            const nombreNormalizado = normalizarTexto(nombre).replace(/\s+/g, " ");
+            const identificado = Boolean(nombreNormalizado);
+            const clave = identificado
+                ? `nombre:${agencia}:${nombreNormalizado}`
+                : `sin-identificar:${agencia}`;
+            const etiqueta = identificado
+                ? (variasAgencias ? `${nombre} · ${agencia}` : nombre)
+                : `Sin identificar · Agencia ${agencia}`;
+
+            if (!grupos.has(clave)) {
+                grupos.set(clave, { name: etiqueta, encuestas: 0, identificado });
+            }
+            grupos.get(clave).encuestas += 1;
+        });
+
+        return [...grupos.values()].sort(
+            (a, b) => b.encuestas - a.encuestas || a.name.localeCompare(b.name, "es")
+        );
+    }, [datos]);
+    const asesoresIdentificados = porAsesorServicio.filter((i) => i.identificado).length;
+    const encuestasSinIdentificar = porAsesorServicio
+        .filter((i) => !i.identificado)
+        .reduce((total, i) => total + i.encuestas, 0);
 
     // Dimensiones propias de Servicio
     const dimensiones = useMemo(() => {
@@ -715,6 +750,59 @@ function VistaGraficas({ datos }) {
                     </div>
                 </DashboardPanel>
             </div>
+
+            {/* Encuestas por asesor de servicio */}
+            <ChartCard
+                title="Encuestas por asesor de servicio"
+                subtitle="Desempeño de atención por asesor según encuestas recibidas"
+            >
+                <p className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-sm font-semibold text-gray-600">
+                    <span>Asesores identificados: <span className="font-bold" style={{ color: NAVY }}>
+                        {numero(asesoresIdentificados)}
+                    </span></span>
+                    <span>Encuestas sin identificar: <span className="font-bold" style={{ color: NAVY }}>
+                        {numero(encuestasSinIdentificar)}
+                    </span></span>
+                </p>
+                {porAsesorServicio.length ? (
+                    <div className="max-h-[380px] overflow-y-auto">
+                        <ResponsiveContainer width="100%" height={Math.max(280, porAsesorServicio.length * 37)}>
+                            <BarChart
+                                data={porAsesorServicio}
+                                layout="vertical"
+                                margin={{ top: 8, right: 55, left: 10, bottom: 8 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} />
+                                <YAxis
+                                    type="category"
+                                    dataKey="name"
+                                    width={210}
+                                    tickFormatter={(value) => recortar(value, 30)}
+                                    interval={0}
+                                    tick={{ fontSize: 11, fill: "#6b7280" }}
+                                />
+                                <Tooltip
+                                    contentStyle={TooltipStyle}
+                                    formatter={(value) => [numero(value), "Encuestas"]}
+                                    labelFormatter={(label) => label}
+                                />
+                                <Bar dataKey="encuestas" name="Encuestas" fill={NAVY_2} radius={[0, 5, 5, 0]}>
+                                    <LabelList
+                                        dataKey="encuestas"
+                                        position="right"
+                                        style={{ fontSize: 11, fontWeight: 700, fill: "#374151" }}
+                                    />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <p className="py-8 text-center text-sm text-gray-400">
+                        Sin encuestas para los filtros seleccionados.
+                    </p>
+                )}
+            </ChartCard>
 
             {/* Fila 2: Tendencia / Estatus */}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -1050,7 +1138,7 @@ const [mostrarResumenIA, setMostrarResumenIA] = useState(false);
             const acumulado = [
                 item.id_encuesta, item.id_servicio, item.id_muestra,
                 item.chasis, item.modelo, item.concesionaria,
-                item.codigo_concesionaria, item.id_asesor, item.estado,
+                item.codigo_concesionaria, item.id_asesor, item.asesor_nombre, item.estado,
                 item.q1_1_razones_calificacion,
                 item.q4_comentarios_servicio,
                 item.p1_1_comentarios_auto,
