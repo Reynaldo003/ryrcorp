@@ -762,7 +762,11 @@ function VistaGraficas({ datos, labelPeriodo }) {
 
     const porAsesor = useMemo(() => {
         const etiquetas = new Map();
-        const agrupados = agruparPor(datos, (item) => {
+        const agrupados = agruparPor(datos.map((item) => ({
+            ...item,
+            // Unificar la escala Q1 antes de calcular el promedio por asesor.
+            q1_satisfaccion_general: normalizarEscalaCinco(item.q1_satisfaccion_general),
+        })), (item) => {
             const nombre = String(item.asesor_nombre || "").trim();
             const id = String(item.id_asesor || "").trim();
             const clave = nombre
@@ -776,7 +780,13 @@ function VistaGraficas({ datos, labelPeriodo }) {
             }
             return clave;
         }, Number.MAX_SAFE_INTEGER);
-        return agrupados.map((item) => ({ ...item, name: etiquetas.get(item.name) || "Sin identificar" }));
+        return agrupados.map((item) => ({
+            ...item,
+            name: etiquetas.get(item.name) || "Sin identificar",
+            etiqueta_grafica: item.satisfaccion_count
+                ? `${numero(item.encuestas)} · ★ ${item.satisfaccion_promedio.toFixed(2)}/5`
+                : `${numero(item.encuestas)} · Sin calif.`,
+        }));
     }, [datos]);
 
     const totalIdentificadas = useMemo(
@@ -963,7 +973,7 @@ function VistaGraficas({ datos, labelPeriodo }) {
 
             <ChartCard
                 title="Encuestas por asesor de ventas"
-                subtitle="Desempeño comercial por asesor según encuestas recibidas"
+                subtitle="Encuestas recibidas y calificación promedio de satisfacción Q1 (escala 1 a 5)"
             >
                 <div className="mb-3 text-sm text-gray-600">
                     <span className="font-semibold">
@@ -979,7 +989,7 @@ function VistaGraficas({ datos, labelPeriodo }) {
                             <BarChart
                                 data={porAsesor}
                                 layout="vertical"
-                                margin={{ top: 8, right: 55, left: 10, bottom: 8 }}
+                                margin={{ top: 8, right: 145, left: 10, bottom: 8 }}
                             >
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} />
@@ -993,12 +1003,17 @@ function VistaGraficas({ datos, labelPeriodo }) {
                                 />
                                 <Tooltip
                                     contentStyle={TooltipStyle}
-                                    formatter={(value) => [numero(value), "Encuestas"]}
+                                    formatter={(value, _name, entrada) => [
+                                        `${numero(value)} · ${entrada.payload?.satisfaccion_count
+                                            ? `Q1: ${entrada.payload.satisfaccion_promedio.toFixed(2)}/5 (${numero(entrada.payload.satisfaccion_count)} calificadas)`
+                                            : "Sin calificaciones Q1"}`,
+                                        "Encuestas",
+                                    ]}
                                     labelFormatter={(label) => label}
                                 />
                                 <Bar dataKey="encuestas" name="Encuestas" fill={NAVY_2} radius={[0, 5, 5, 0]}>
                                     <LabelList
-                                        dataKey="encuestas"
+                                        dataKey="etiqueta_grafica"
                                         position="right"
                                         style={{ fontSize: 11, fontWeight: 700, fill: "#374151" }}
                                     />

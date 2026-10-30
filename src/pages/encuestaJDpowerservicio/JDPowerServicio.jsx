@@ -592,14 +592,37 @@ function VistaGraficas({ datos }) {
                 : `Sin identificar · Agencia ${agencia}`;
 
             if (!grupos.has(clave)) {
-                grupos.set(clave, { name: etiqueta, encuestas: 0, identificado });
+                grupos.set(clave, {
+                    name: etiqueta,
+                    encuestas: 0,
+                    identificado,
+                    satisfaccion_total: 0,
+                    satisfaccion_count: 0,
+                });
             }
-            grupos.get(clave).encuestas += 1;
+            const grupo = grupos.get(clave);
+            grupo.encuestas += 1;
+            const calificacion = normalizarEscalaCinco(item.q1_satisfaccion_general);
+            if (calificacion > 0 && calificacion <= 5) {
+                grupo.satisfaccion_total += calificacion;
+                grupo.satisfaccion_count += 1;
+            }
         });
 
-        return [...grupos.values()].sort(
-            (a, b) => b.encuestas - a.encuestas || a.name.localeCompare(b.name, "es")
-        );
+        return [...grupos.values()]
+            .map((grupo) => {
+                const promedio = grupo.satisfaccion_count
+                    ? grupo.satisfaccion_total / grupo.satisfaccion_count
+                    : 0;
+                return {
+                    ...grupo,
+                    satisfaccion_promedio: promedio,
+                    etiqueta_grafica: grupo.satisfaccion_count
+                        ? `${numero(grupo.encuestas)} · ★ ${promedio.toFixed(2)}/5`
+                        : `${numero(grupo.encuestas)} · Sin calif.`,
+                };
+            })
+            .sort((a, b) => b.encuestas - a.encuestas || a.name.localeCompare(b.name, "es"));
     }, [datos]);
     const asesoresIdentificados = porAsesorServicio.filter((i) => i.identificado).length;
     const encuestasSinIdentificar = porAsesorServicio
@@ -754,7 +777,7 @@ function VistaGraficas({ datos }) {
             {/* Encuestas por asesor de servicio */}
             <ChartCard
                 title="Encuestas por asesor de servicio"
-                subtitle="Desempeño de atención por asesor según encuestas recibidas"
+                subtitle="Encuestas recibidas y calificación promedio de satisfacción Q1 (escala 1 a 5)"
             >
                 <p className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-sm font-semibold text-gray-600">
                     <span>Asesores identificados: <span className="font-bold" style={{ color: NAVY }}>
@@ -770,7 +793,7 @@ function VistaGraficas({ datos }) {
                             <BarChart
                                 data={porAsesorServicio}
                                 layout="vertical"
-                                margin={{ top: 8, right: 55, left: 10, bottom: 8 }}
+                                margin={{ top: 8, right: 145, left: 10, bottom: 8 }}
                             >
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} />
@@ -784,12 +807,17 @@ function VistaGraficas({ datos }) {
                                 />
                                 <Tooltip
                                     contentStyle={TooltipStyle}
-                                    formatter={(value) => [numero(value), "Encuestas"]}
+                                    formatter={(value, _name, entrada) => [
+                                        `${numero(value)} · ${entrada.payload?.satisfaccion_count
+                                            ? `Q1: ${entrada.payload.satisfaccion_promedio.toFixed(2)}/5 (${numero(entrada.payload.satisfaccion_count)} calificadas)`
+                                            : "Sin calificaciones Q1"}`,
+                                        "Encuestas",
+                                    ]}
                                     labelFormatter={(label) => label}
                                 />
                                 <Bar dataKey="encuestas" name="Encuestas" fill={NAVY_2} radius={[0, 5, 5, 0]}>
                                     <LabelList
-                                        dataKey="encuestas"
+                                        dataKey="etiqueta_grafica"
                                         position="right"
                                         style={{ fontSize: 11, fontWeight: 700, fill: "#374151" }}
                                     />
