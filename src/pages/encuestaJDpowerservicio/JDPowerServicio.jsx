@@ -783,9 +783,6 @@ function VistaGraficas({ datos }) {
                     <span>Asesores identificados: <span className="font-bold" style={{ color: NAVY }}>
                         {numero(asesoresIdentificados)}
                     </span></span>
-                    <span>Encuestas sin identificar: <span className="font-bold" style={{ color: NAVY }}>
-                        {numero(encuestasSinIdentificar)}
-                    </span></span>
                 </p>
                 {porAsesorServicio.length ? (
                     <div className="max-h-[380px] overflow-y-auto">
