@@ -242,6 +242,9 @@ export async function generarReporteVentas(config = {}, {
         nr_nota: reportFilters.nr_nota,
         producto_servicio: reportFilters.producto_servicio,
         venta_digital: reportFilters.venta_digital,
+        // El backend aplica antes de paginar el mismo criterio del dashboard:
+        // únicamente operaciones emitidas (Situacao = E).
+        solo_vendidas: condicionUso === "N" ? "1" : "",
         fecha_desde: buscarVIN ? "" : reportFilters.fecha_desde,
         fecha_hasta: buscarVIN ? "" : reportFilters.fecha_hasta,
     };
@@ -274,8 +277,6 @@ export async function generarReporteVentas(config = {}, {
         const incluyeTabla = config.sections?.includes("table") ?? true;
 
         progreso("Calculando totales y resumen ejecutivo...");
-        const filasVendidas = filasExportar.filter((row) => String(row.situacion || "").toUpperCase() === "E");
-        const baseTotales = filasVendidas.length ? filasVendidas : filasExportar;
         const ingresos = filasExportar.reduce((acc, row) => acc + numeroReporte(row.valor_factura_sin_iva) - numeroReporte(row.isan), 0);
         const costo = filasExportar.reduce((acc, row) => acc + numeroReporte(row.valor_compra), 0);
         const utilidad = ingresos - costo;
@@ -283,7 +284,7 @@ export async function generarReporteVentas(config = {}, {
         const digitales = filasExportar.filter((row) => row.es_venta_digital || row.tipo_venta === "Venta digital").length;
 
         const resumen = {
-            unidades: baseTotales.length,
+            unidades: filasExportar.length,
             operaciones: filasExportar.length,
             ingresos,
             costo,
