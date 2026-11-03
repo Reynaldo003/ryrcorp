@@ -174,6 +174,8 @@ function mapearCampana(c) {
     impresiones: numeroSeguro(c.impresiones),
     importe_gastado: decimalSeguro(c.importe_gastado),
     total_resultados: numeroSeguro(c.total_resultados),
+    inversion_indicador: decimalSeguro(c.inversion_indicador),
+    resultados_indicador: numeroSeguro(c.resultados_indicador),
     messaging_first_reply: numeroSeguro(c.messaging_first_reply),
     id_concesionaria: c.id_concesionaria,
     objetivo_campana: c.objetivo_campana,
@@ -701,8 +703,8 @@ function VistaGraficas({ datos, datosComp, modoComp, labelA, labelB, charts = nu
     }));
   }, [datos]);
 
-  const totResultados = datos.reduce((a, c) => a + c.total_resultados, 0);
-  const totGasto = datos.reduce((a, c) => a + c.importe_gastado, 0);
+  const totResultados = datos.reduce((a, c) => a + c.resultados_indicador, 0);
+  const totGasto = datos.reduce((a, c) => a + c.inversion_indicador, 0);
   const totAlcance = datos.reduce((a, c) => a + c.alcance, 0);
   const totImpresiones = datos.reduce((a, c) => a + c.impresiones, 0);
 
