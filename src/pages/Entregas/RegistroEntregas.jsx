@@ -37,6 +37,8 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import * as XLSX from "xlsx";
 import { FileDown } from "lucide-react";
+import CommercialFilterBars from "../../components/comercial/CommercialFilterBars";
+import CommercialDealerBar from "../../components/comercial/CommercialDealerBar";
 import {
     ResponsiveContainer,
     BarChart,
@@ -945,6 +947,8 @@ export default function RegistroEntregas() {
         rangoDesde: "",
         rangoHasta: "",
     });
+    const [anioFiltro, setAnioFiltro] = useState(() => new Date().getFullYear());
+    const [mesFiltro, setMesFiltro] = useState(() => new Date().getMonth() + 1);
 
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
@@ -1532,6 +1536,14 @@ export default function RegistroEntregas() {
         if (value) setCurrentWeekDate(parseYMDLocal(value));
     };
 
+    const aplicarPeriodoCalendario = (anio, mes) => {
+        const desde = mes === "todo" ? `${anio}-01-01` : `${anio}-${String(mes).padStart(2, "0")}-01`;
+        const hasta = mes === "todo" ? `${anio}-12-31` : toYMDLocal(new Date(anio, Number(mes), 0));
+        setPagina(1);
+        setCurrentWeekDate(parseYMDLocal(desde));
+        setFilters((prev) => ({ ...prev, rangoDesde: desde, rangoHasta: hasta }));
+    };
+
     const entregasPorDealer = Object.values(
         sorted.reduce((acc, item) => {
             const dealer = item.agencia || "Sin dealer";
@@ -1844,7 +1856,44 @@ export default function RegistroEntregas() {
                 </div>
             </div>
 
-            <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <CommercialDealerBar
+                value={filters.agencia}
+                dealers={isAdmin ? ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"] : dealers}
+                onChange={(agencia) => { setPagina(1); setFilters((prev) => ({ ...prev, agencia })); }}
+                secondaryLabel="Tipo de venta"
+                secondaryValue={filters.tipoVenta}
+                secondaryOptions={[
+                    { value: "Todos", label: "Todos" },
+                    { value: "nuevo", label: "Nuevo" },
+                    { value: "usado", label: "Usado" },
+                    { value: "comercial", label: "Comercial" },
+                ]}
+                onSecondaryChange={(tipoVenta) => {
+                    setPagina(1);
+                    setFilters((prev) => ({ ...prev, tipoVenta }));
+                }}
+            />
+
+            <CommercialFilterBars
+                from={filters.rangoDesde}
+                to={filters.rangoHasta}
+                search={filters.q}
+                year={anioFiltro}
+                month={mesFiltro}
+                onFromChange={(value) => onChangeDateFilter("rangoDesde", value)}
+                onToChange={(value) => onChangeDateFilter("rangoHasta", value)}
+                onSearchChange={(value) => { setPagina(1); setFilters((prev) => ({ ...prev, q: value })); }}
+                onClearDates={() => { setPagina(1); setFilters((prev) => ({ ...prev, rangoDesde: "", rangoHasta: "" })); }}
+                onYearChange={(anio) => { setAnioFiltro(anio); aplicarPeriodoCalendario(anio, mesFiltro); }}
+                onMonthChange={(mes) => { setMesFiltro(mes); aplicarPeriodoCalendario(anioFiltro, mes); }}
+                quickActions={[
+                    { label: "Hoy", action: setHoy }, { label: "Ayer", action: setAyer },
+                    { label: "Semana", action: setSemana }, { label: "7 días", action: setUltimos7Dias },
+                    { label: "30 días", action: setUltimos30Dias }, { label: "Este mes", action: setEsteMes },
+                ]}
+            />
+
+            <div className="hidden">
                 <div className="grid gap-3 md:grid-cols-12">
 
                     {/* FILA 1 */}

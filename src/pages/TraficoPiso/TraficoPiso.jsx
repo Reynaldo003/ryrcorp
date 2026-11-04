@@ -1815,6 +1815,16 @@ export default function TraficoPiso() {
 {/* FILTRO DE AÑO Y MESES */}
 <div className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#D9E2F2] bg-white px-4 py-4 shadow-sm">
 
+    <div className="flex min-w-[360px] items-center gap-2 rounded-xl border border-[#D9E2F2] bg-[#F8FAFF] px-3 py-2.5">
+        <Search className="h-4 w-4 shrink-0 text-[#061E45]" />
+        <input
+            value={filters.q}
+            onChange={(e) => { setPagina(1); setFilters((prev) => ({ ...prev, q: e.target.value })); }}
+            placeholder="Buscar cliente, teléfono, email, asesor, vehículo..."
+            className="min-w-0 flex-1 bg-transparent text-xs font-medium text-[#061E45] outline-none placeholder:text-slate-400"
+        />
+    </div>
+
     {/* Selector de año */}
     <select
         value={anioSeleccionado}

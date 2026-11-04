@@ -22,6 +22,8 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/AuthContext";
 import * as XLSX from "xlsx";
 import { FileDown } from "lucide-react";
+import CommercialFilterBars from "../../components/comercial/CommercialFilterBars";
+import CommercialDealerBar from "../../components/comercial/CommercialDealerBar";
 
 const BRAND_BLUE = "#131E5C";
 const API_BASE = import.meta.env.VITE_API_URL || "https://crm.grupoautomotrizryr.com";
@@ -756,6 +758,8 @@ export default function RegistroPruebaManejo() {
     }
 
     const [filters, setFilters] = useState({ q: "", agencia: "Todos", rangoDesde: "", rangoHasta: "" });
+    const [anioFiltro, setAnioFiltro] = useState(() => new Date().getFullYear());
+    const [mesFiltro, setMesFiltro] = useState(() => new Date().getMonth() + 1);
     const [openModal, setOpenModal] = useState(false);
     const [mode, setMode] = useState("create");
     const [draft, setDraft] = useState(null);
@@ -1228,6 +1232,13 @@ export default function RegistroPruebaManejo() {
         );
     };
 
+    const aplicarPeriodoCalendario = (anio, mes) => {
+        const desde = mes === "todo" ? `${anio}-01-01` : `${anio}-${String(mes).padStart(2, "0")}-01`;
+        const hasta = mes === "todo" ? `${anio}-12-31` : toYMDLocal(new Date(anio, Number(mes), 0));
+        setPagina(1);
+        setFilters((prev) => ({ ...prev, rangoDesde: desde, rangoHasta: hasta }));
+    };
+
     const totalPaginas = Math.max(
         1,
         Math.ceil(totalRegistros / PAGE_SIZE)
@@ -1334,8 +1345,33 @@ export default function RegistroPruebaManejo() {
                 </div>
             </div>
 
+            <CommercialDealerBar
+                value={filters.agencia}
+                dealers={isAdmin ? ["VW Cordoba", "VW Orizaba", "VW Poza Rica", "VW Tuxpan", "VW Tuxtepec"] : dealers}
+                onChange={(agencia) => { setPagina(1); setFilters((prev) => ({ ...prev, agencia })); }}
+            />
+
+            <CommercialFilterBars
+                from={filters.rangoDesde}
+                to={filters.rangoHasta}
+                search={filters.q}
+                year={anioFiltro}
+                month={mesFiltro}
+                onFromChange={(value) => { setPagina(1); setFilters((prev) => ({ ...prev, rangoDesde: value })); }}
+                onToChange={(value) => { setPagina(1); setFilters((prev) => ({ ...prev, rangoHasta: value })); }}
+                onSearchChange={(value) => { setPagina(1); setFilters((prev) => ({ ...prev, q: value })); }}
+                onClearDates={() => { setPagina(1); setFilters((prev) => ({ ...prev, rangoDesde: "", rangoHasta: "" })); }}
+                onYearChange={(anio) => { setAnioFiltro(anio); aplicarPeriodoCalendario(anio, mesFiltro); }}
+                onMonthChange={(mes) => { setMesFiltro(mes); aplicarPeriodoCalendario(anioFiltro, mes); }}
+                quickActions={[
+                    { label: "Hoy", action: setHoy }, { label: "Ayer", action: setAyer },
+                    { label: "Semana", action: setSemana }, { label: "7 días", action: setUltimos7Dias },
+                    { label: "30 días", action: setUltimos30Dias }, { label: "Este mes", action: setEsteMes },
+                ]}
+            />
+
             {vistaActiva === "tabla" && (
-                <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="hidden">
                     <div className="grid gap-3 md:grid-cols-12">
 
                         {/* FILA 1 */}
