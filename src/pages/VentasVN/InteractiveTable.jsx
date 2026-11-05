@@ -275,14 +275,14 @@ function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onCl
     ? values.filter(([labelValue]) => labelValue.toLowerCase().includes(query.toLowerCase()))
     : values;
 
-  const allSelected = values.length > 0 && values.every(([labelValue]) => selected.has(labelValue));
+  const allSelected = values.length > 0 && values.every(([, filterValue]) => selected.has(filterValue));
 
   function toggleAll() {
-    const noSeleccionados = values.filter(([labelValue]) => !selected.has(labelValue));
+    const noSeleccionados = values.filter(([, filterValue]) => !selected.has(filterValue));
     if (noSeleccionados.length === 0) {
-      values.forEach(([labelValue]) => { if (selected.has(labelValue)) onToggle(labelValue); });
+      values.forEach(([, filterValue]) => { if (selected.has(filterValue)) onToggle(filterValue); });
     } else {
-      noSeleccionados.forEach(([labelValue]) => onToggle(labelValue));
+      noSeleccionados.forEach(([, filterValue]) => onToggle(filterValue));
     }
   }
 
@@ -304,11 +304,11 @@ function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onCl
       <ul className="max-h-52 overflow-y-auto py-1">
         {filteredValues.length === 0 ? (
           <li className="px-3 py-4 text-center text-[11px] text-slate-400">Sin resultados</li>
-        ) : filteredValues.map(([labelValue]) => {
-          const check = selected.has(labelValue);
+        ) : filteredValues.map(([labelValue, filterValue]) => {
+          const check = selected.has(filterValue);
           return (
-            <li key={labelValue}>
-              <button type="button" onClick={() => onToggle(labelValue)} className="flex w-full items-center gap-2 px-2.5 py-1 text-left transition hover:bg-slate-50">
+            <li key={`${labelValue}-${filterValue}`}>
+              <button type="button" onClick={() => onToggle(filterValue)} className="flex w-full items-center gap-2 px-2.5 py-1 text-left transition hover:bg-slate-50">
                 <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition", check ? "border-[#131E5C] bg-[#131E5C] text-white" : "border-slate-300 bg-white")}>
                   {check && <Check className="h-2.5 w-2.5" />}
                 </span>
@@ -327,7 +327,8 @@ function ColumnFilterDropdown({ label, values, selected, onToggle, onClear, onCl
 }
 
 const STORAGE_COLUMNAS = "columnas_visibles";
-const STORAGE_FILTROS = "filtros_columnas";
+// v2 almacena los valores crudos que entiende el backend (no las etiquetas formateadas).
+const STORAGE_FILTROS = "filtros_columnas_v2";
 
 export default function InteractiveTable({
   rows,
@@ -348,6 +349,8 @@ export default function InteractiveTable({
   exportName = "Autos Nuevos",
   exportFile = `venta_autos_nuevos_${new Date().toISOString().slice(0, 10)}`,
   onColumnFilterChange,
+  columnFilterOptions = {},
+  onColumnFilterOptionsRequest,
 }) {
   const tableRows = data || rows || [];
   const keyColumnas = `${storageKey}_${STORAGE_COLUMNAS}`;
@@ -399,8 +402,8 @@ export default function InteractiveTable({
     if (activeFilters.length > 0) {
       result = result.filter((row) => activeFilters.every(([key, vals]) => {
         const col = (columns || []).find((c) => c.key === key);
-        const cellVal = formatCell(row[key], col?.tipo).trim().toLowerCase();
-        return vals.some((value) => cellVal === value.toLowerCase());
+        const cellVal = texto(rawValue(row, col)).trim().toLowerCase();
+        return vals.some((value) => cellVal === texto(value).trim().toLowerCase());
       }));
     }
     if (sort.key) {
@@ -433,16 +436,26 @@ export default function InteractiveTable({
 
   function uniqueValues(col) {
     const set = new Map();
-    (tableRows || []).forEach((row) => {
-      const v = formatCell(row[col.key], col.tipo).trim();
+    const tieneOpcionesRemotas = Object.prototype.hasOwnProperty.call(columnFilterOptions, col.key);
+    const valores = tieneOpcionesRemotas
+      ? (columnFilterOptions[col.key] || []).map((value) => ({ [col.key]: value }))
+      : (tableRows || []);
+    valores.forEach((row) => {
+      const raw = texto(rawValue(row, col)).trim();
+      const v = formatCell(raw, col.tipo).trim();
       const label = v || "(Vacío)";
-      if (!set.has(label)) set.set(label, v === "" ? "" : v);
+      if (!set.has(raw)) set.set(raw, [label, raw]);
     });
-    return Array.from(set.entries()).sort((a, b) => a[0].localeCompare(b[0], "es", { numeric: true }));
+    return Array.from(set.values()).sort((a, b) => a[0].localeCompare(b[0], "es", { numeric: true }));
   }
 
   const tol = ((k) => { const v = colFilters[k]; return Array.isArray(v) ? new Set(v) : new Set(); });
-  const activarFilter = (k) => setOpenFilter((prev) => (prev === k ? null : k));
+  const activarFilter = (k) => {
+    setOpenFilter((prev) => (prev === k ? null : k));
+    if (!Object.prototype.hasOwnProperty.call(columnFilterOptions, k)) {
+      onColumnFilterOptionsRequest?.(k);
+    }
+  };
 
   function toggleFilterValue(colKey, value) {
     setColFilters((prev) => {

@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import html2canvas from "html2canvas-pro";
 import { http, buildQuery } from "../../lib/apiClient";
-import { CONDICION_USO, getVentasVNDashboard, } from "../../lib/apiVentasVN";
+import { CONDICION_USO, getVentasVNDashboard, getVentasVNFilterOptions } from "../../lib/apiVentasVN";
 import ExportReportModal from "../../components/ExportReportModal";
 import InteractiveTable from "../VentasVN/InteractiveTable";
 
@@ -472,9 +472,8 @@ export default function VentasUsados() {
     const [filtros, setFiltros] = useState(() => ({
         ...FILTROS_INICIALES,
     }));
-    const filtrosRef = useRef(filtros);
-    filtrosRef.current = filtros;
     const [filtrosColumnas, setFiltrosColumnas] = useState({});
+    const [opcionesFiltrosColumnas, setOpcionesFiltrosColumnas] = useState({});
     const [qBuscado, setQBuscado] = useState("");
 
     useEffect(() => {
@@ -554,6 +553,9 @@ export default function VentasUsados() {
                 ? normalizarBusquedaVIN(textoBusqueda)
                 : textoBusqueda;
 
+            const hayFiltrosColumnas = Object.values(filtrosColumnas).some(
+                (values) => Array.isArray(values) && values.length > 0
+            );
             const query = buildQuery({
                 cond_uso: CONDICION_USO.USADO,
                 page: pagina,
@@ -568,9 +570,10 @@ export default function VentasUsados() {
                 producto_servicio: filtros.producto_servicio,
                 // Solo un VIN completo ignora el rango de fechas.
                 // Las búsquedas de texto y las consultas normales respetan el periodo.
-                fecha_desde: buscarVIN ? "" : filtros.fecha_desde,
-                fecha_hasta: buscarVIN ? "" : filtros.fecha_hasta,
+                fecha_desde: buscarVIN || hayFiltrosColumnas ? "" : filtros.fecha_desde,
+                fecha_hasta: buscarVIN || hayFiltrosColumnas ? "" : filtros.fecha_hasta,
                 venta_digital: filtros.venta_digital,
+                col_filters: hayFiltrosColumnas ? JSON.stringify(filtrosColumnas) : "",
             });
 
             const response = await http(`/ventas-vn/api/${query}`);
@@ -613,6 +616,7 @@ export default function VentasUsados() {
         filtros.fecha_desde,
         filtros.fecha_hasta,
         filtros.venta_digital,
+        filtrosColumnas,
     ]);
     useEffect(() => {
         cargarDashboard();
@@ -714,27 +718,40 @@ export default function VentasUsados() {
     const aplicarFiltroColumna = useCallback((filtrosActivos) => {
         setPagina(1);
         setFiltrosColumnas(filtrosActivos);
+        const hayActivos = Object.values(filtrosActivos).some(
+            (values) => Array.isArray(values) && values.length > 0
+        );
+        if (hayActivos) {
+            // Los filtros del encabezado consultan todo el historial.
+            setAnioSel("todos");
+            setMesSel("sin_filtro");
+            setFiltros((prev) => ({ ...prev, fecha_desde: "", fecha_hasta: "" }));
+        }
+    }, []);
 
-        const next = { ...filtrosRef.current };
-        // Mapear columnas de la tabla a parámetros del backend.
-        const mapeo = {
-            serie: "serie",
-            nr_nota: "nr_nota",
-            producto_servicio: "producto_servicio",
-            agencia: "agencia",
-            asesor: "asesor",
-            familia: "familia",
-            condicion_pago: "condicion_pago",
-        };
-        Object.entries(mapeo).forEach(([colKey, paramKey]) => {
-            const vals = filtrosActivos[colKey];
-            if (Array.isArray(vals) && vals.length > 0) {
-                next[paramKey] = vals[0];
-            } else {
-                next[paramKey] = "";
-            }
-        });
-        setFiltros(next);
+    const cargarOpcionesFiltroColumna = useCallback(async (columna) => {
+        setOpcionesFiltrosColumnas((prev) => (
+            Object.prototype.hasOwnProperty.call(prev, columna)
+                ? prev
+                : { ...prev, [columna]: [] }
+        ));
+        try {
+            const response = await getVentasVNFilterOptions({
+                cond_uso: CONDICION_USO.USADO,
+                column: columna,
+            });
+            setOpcionesFiltrosColumnas((prev) => ({
+                ...prev,
+                [columna]: Array.isArray(response?.values) ? response.values : [],
+            }));
+        } catch (error) {
+            console.error(`Error cargando valores del filtro ${columna}:`, error);
+            setOpcionesFiltrosColumnas((prev) => {
+                const next = { ...prev };
+                delete next[columna];
+                return next;
+            });
+        }
     }, []);
     function limpiarFiltros() {
         setPagina(1);
@@ -1970,6 +1987,8 @@ export default function VentasUsados() {
                             onPrev={() => setPagina((prev) => Math.max(1, prev - 1))}
                             onNext={() => setPagina((prev) => Math.min(totalPaginas, prev + 1))}
                             onColumnFilterChange={aplicarFiltroColumna}
+                            columnFilterOptions={opcionesFiltrosColumnas}
+                            onColumnFilterOptionsRequest={cargarOpcionesFiltroColumna}
                         />
                     </div>
                 )}

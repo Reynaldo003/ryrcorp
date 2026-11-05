@@ -47,3 +47,7 @@ export function getVentasVNDashboard(params = {}) {
 export function getVentasVNDetalle(params = {}) {
   return http(`/ventas-vn/api/${buildQuery(params)}`);
 }
+
+export function getVentasVNFilterOptions(params = {}) {
+  return http(`/ventas-vn/api/filter-options/${buildQuery(params)}`);
+}
