@@ -109,7 +109,8 @@ export default function RequirePermission({ anyOf = [], anyOfRoles = [], childre
     if (Array.isArray(interfaces)) {
         const interfazHabilitada = INTERFACES.some(
             (item) =>
-                interfaces.includes(item.key) &&
+                (interfaces.includes(item.key) ||
+                    item.interfacesEquivalentes?.some((key) => interfaces.includes(key))) &&
                 rutaPerteneceAInterfaz(location.pathname, item)
         );
 

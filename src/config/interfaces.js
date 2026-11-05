@@ -28,6 +28,7 @@ import {
     Settings2,
     ScrollText,
     BarChart3,
+    Database,
 } from "lucide-react";
 
 // Orden de las secciones tal como aparecen en el menú.
@@ -116,6 +117,15 @@ export const INTERFACES = [
         label: "Postventa",
         icon: ClipboardCheck,
         permisos: ["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER"],
+    },
+    {
+        key: "salesforce",
+        section: "Comercial",
+        to: "/salesforce",
+        label: "SalesForce",
+        icon: Database,
+        permisos: ["USUARIOS_ADMIN", "CRM_POSTVENTA", "CRM_CALIDAD", "CRM_CALL_CENTER"],
+        interfacesEquivalentes: ["postventa"],
     },
     {
         key: "retencion",
@@ -277,6 +287,7 @@ export function interfazVisible(item, permisos = [], interfaces = null, rol = ""
     if (permisos.includes("ALL")) return true;
     if (Array.isArray(interfaces)) {
         if (interfaces.includes(item.key)) return true;
+        if (item.interfacesEquivalentes?.some((key) => interfaces.includes(key))) return true;
 
         // Si tiene submódulos del catálogo activos, el módulo es visible.
         return submodulosDeInterfaz(item.key).some((sub) =>

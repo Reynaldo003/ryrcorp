@@ -72,6 +72,7 @@ import RegistroAvaluos from "./pages/Avaluos/RegistroAvaluos";
 
 import PostVentaLayout from "./pages/PostVenta/PostVentaLayout";
 import PostVentaIndex from "./pages/PostVenta/PostVentaIndex";
+import SalesForce from "./pages/SalesForce/SalesForce";
 
 import AdministrativosIndex from "./pages/Administrativos/AdministrativosIndex";
 import AdministrativosLayout from "./pages/Administrativos/AdministrativosLayout";
@@ -1072,6 +1073,21 @@ export const router = createBrowserRouter(
                             ],
                         },
 
+                        {
+                            path: "salesforce",
+                            element: (
+                                <RequirePermission
+                                    anyOf={[
+                                        "USUARIOS_ADMIN",
+                                        "CRM_POSTVENTA",
+                                        "CRM_CALIDAD",
+                                        "CRM_CALL_CENTER",
+                                    ]}
+                                >
+                                    <SalesForce />
+                                </RequirePermission>
+                            ),
+                        },
                         {
                             path: "postventa",
                             element: (
