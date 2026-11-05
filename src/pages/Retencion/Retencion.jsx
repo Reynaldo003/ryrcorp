@@ -1737,6 +1737,8 @@ export default function Retencion() {
     });
 
     const [loading, setLoading] = useState(true);
+    // Evita desmontar el buscador durante las consultas posteriores a la carga inicial.
+    const [cargaInicialCompleta, setCargaInicialCompleta] = useState(false);
     const [loadingOpciones, setLoadingOpciones] = useState(true);
     const [error, setError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -1957,6 +1959,8 @@ export default function Retencion() {
                     }),
                 ]);
 
+                if (controller.signal.aborted) return;
+
                 setDatosRaw(paginaData.datos);
                 setTotalRegistros(paginaData.total);
 
@@ -1969,12 +1973,13 @@ export default function Retencion() {
                 });
 
                 setPagina(1);
+                setCargaInicialCompleta(true);
             } catch (err) {
                 if (err.name !== "AbortError") {
                     setError(err.message);
                 }
             } finally {
-                setLoading(false);
+                if (!controller.signal.aborted) setLoading(false);
             }
         }
 
@@ -2490,7 +2495,7 @@ export default function Retencion() {
     }
 
 
-    if (loadingGeneral) {
+    if (loadingGeneral && !cargaInicialCompleta) {
         return (
             <div className="flex items-center justify-center py-24 text-sm text-slate-400">
                 <div className="flex flex-col items-center gap-3">
@@ -2501,7 +2506,7 @@ export default function Retencion() {
         );
     }
 
-    if (error) {
+    if (error && !cargaInicialCompleta) {
         return (
             <div className="flex items-center justify-center py-24">
                 <div className="max-w-md rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-center">
@@ -2514,6 +2519,11 @@ export default function Retencion() {
 
     return (
         <div className="space-y-5">
+            {error && cargaInicialCompleta ? (
+                <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    No se pudieron actualizar los resultados: {error}
+                </div>
+            ) : null}
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
